@@ -319,7 +319,11 @@ function removerNulosRecursivo(valor) {
       });
     }
     const completo = montarDadosCompletos();
-    const dados = removerNulosRecursivo(filtrarParaPapel(completo, usuario));
+    /* visão de executivo para o gestor (28/09/26) — a mesma regra da cockpit-dados do APP:
+       só quem já é gestor e tem dono no HubSpot; o recorte sai como o de executivo. */
+    const visaoExecutivo = usuario.role === 'manager' && !!usuario.ownerId && req.query && req.query.visao === 'executivo';
+    const quem = visaoExecutivo ? Object.assign({}, usuario, { role: 'rep' }) : usuario;
+    const dados = removerNulosRecursivo(filtrarParaPapel(completo, quem));
     /* AÇÃO DE CAMPO VAI PARA O APP (31/08/26). Decidido na reunião com o RPA: o Cockpit vira
        a aba de gestão dentro do app de campo, e o mapa é a aba operacional que fica aberta na
        rua. Ligar, mandar WhatsApp e navegar têm que entrar no app — é ele que sabe registrar
@@ -331,7 +335,7 @@ function removerNulosRecursivo(valor) {
       dados.pwa = { deepLink: pwaDeepLink };
     }
     return res.status(200).json({
-      sessao: { email: usuario.email, role: usuario.role, ownerId: usuario.ownerId, nome: usuario.nome, aComecar: !!usuario.aComecar },
+      sessao: Object.assign({ email: usuario.email, role: quem.role, ownerId: usuario.ownerId, nome: usuario.nome, aComecar: !!usuario.aComecar }, visaoExecutivo ? { visaoDeGestor: true } : {}),
       /* A ORIGEM VIAJA NA RESPOSTA. Nao e telemetria: e como se confere, em producao, se a
          virada funcionou — e como se descobre depois que a tela voltou a ser servida pelo
          arquivo sem ninguem perceber. */

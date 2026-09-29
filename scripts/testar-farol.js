@@ -43,7 +43,9 @@ conferir('o canal escuta snapshot_farol, e não o snapshot',
   'cockpit_snapshot tem RLS com zero política de propósito: 933 kB de CRM não vão para o navegador');
 
 conferir('o farol não traz dado de negócio: quem busca é /api/dados',
-  /fetch\('\/api\/dados'/.test(tpl),
+  // 28/09/26: o endereço vem de v5EnderecoDosDados() (visão de executivo do gestor), que
+  // devolve /api/dados — a busca continua no servidor.
+  (/fetch\('\/api\/dados'/.test(tpl) || (/fetch\(v5EnderecoDosDados\(\)/.test(tpl) && /'\/api\/dados'/.test(tpl))),
   'o corte por papel vive no servidor, com service_role; a linha do farol é só "mudou, vai buscar"');
 
 /* ── 2. NÃO BUSCAR A MESMA COISA SETE VEZES ──────────────────────────────────────── */
