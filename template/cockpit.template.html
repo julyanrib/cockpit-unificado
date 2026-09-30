@@ -41133,6 +41133,12 @@ async function gravarPassagemDeEtapa(opts) {
     aplicarProximoPassoNoDataLocal(lead.id, tarefaLocal);
   }
   if (typeof tpInvalidarCache === 'function') tpInvalidarCache();
+  /* O FUNIL ATRÁS DA FICHA TAMBÉM (30/09/26, Julyan: "movi pra reciclagem mas ele ainda
+     continua em aguardando pagamento no funil"). A ficha reabre por cima do kanban já com
+     a etapa nova, e o kanban atrás ficava com o cartão na coluna antiga até alguém trocar
+     de aba — o HubSpot já estava certo. É a mesma doença que o caminho do cartão curou em
+     08/09; esta porta (barra de etapas e "Mover de etapa" da ficha) tinha ficado sem. */
+  if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
   return saida;
 }
 
@@ -41629,10 +41635,17 @@ function aplicarEtapaNoDataLocal(leadId, novaEtapa, propriedades, diasForcado) {
       });
       ORDEM_ETAPAS_FUNIL.forEach(sid => { if (contagem[sid] != null || r.stages[sid] != null) r.stages[sid] = contagem[sid] || 0; });
     }
-    ['travados', 'quentes'].forEach(chave => {
+    /* criticos entrou em 30/09/26: meusNegociosAbertos também junta essa lista, e a cópia
+       com a etapa velha era a que sobrava quando o negócio saía do funilLeads */
+    ['travados', 'quentes', 'criticos'].forEach(chave => {
       (r[chave] || []).forEach(l => {
         if (String(l.id) === alvo) Object.assign(l, propriedades || {}, { stageId: novaEtapa, stage: STAGE_LABELS[novaEtapa] || '', dias: dias });
       });
+    });
+  });
+  ['quentes', 'frios'].forEach(chave => {
+    ((DATA.temperatura && DATA.temperatura[chave]) || []).forEach(l => {
+      if (String(l.id) === alvo) Object.assign(l, { stageId: novaEtapa, stage: STAGE_LABELS[novaEtapa] || '' });
     });
   });
 }
