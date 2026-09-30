@@ -11354,7 +11354,13 @@ const FN2_ETAPAS_ABERTAS = FN2_ETAPAS.filter(e => !e.saiu);
 function fn2PodeMover(de, para) {
   const d = String(de || ''), pr = String(para || '');
   if (!d || !pr || d === pr) return false;
+
+  if (pr === '1396006162') return false;
+
+  if (d === '1395880473') return pr === FN2_ETAPA_PERDIDO || pr === '1398311191';
   if (pr === FN2_ETAPA_PERDIDO || d === FN2_ETAPA_PERDIDO) return true;
+
+  if (pr === '1398311191' || d === '1398311191') return true;
   const iDe = ORDEM_ETAPAS_FUNIL.indexOf(d);
   const iPara = ORDEM_ETAPAS_FUNIL.indexOf(pr);
   if (iDe < 0 || iPara < 0) return false;
@@ -27575,9 +27581,12 @@ function fichaLeadFunilBodyHTML(l) {
          ganhou data-etapa-idx pra saber em qual etapa o clique caiu. -->
     <div class="ficha-trilha" data-lead-id="${l.id}" data-owner-id="${l.ownerId || ''}" style="display:grid;grid-template-columns:repeat(${ORDEM_FUNIL_FICHA.length},1fr);gap:4px;font-size:9px;text-align:center;color:var(--muted2);margin-bottom:16px;">
       ${ORDEM_FUNIL_FICHA.map((sid, i) => {
-        const bloqueado = i > idxAtual + 1;
+
+        const bloqueado = sid !== l.stageId && !fn2PodeMover(l.stageId, sid);
+        const porque = l.stageId === '1395880473' ? 'Cobrança emitida: daqui só Reciclagem ou Perdido'
+          : sid === '1396006162' ? 'Ganho só pelo ASAAS, quando o pagamento cai' : 'O HubSpot não permite pular fases';
         return `
-        <button type="button" class="ficha-trilha-seg" data-etapa-idx="${i}" data-etapa-id="${sid}" ${bloqueado ? 'disabled' : ''} title="${bloqueado ? 'O HubSpot não permite pular fases' : `Mover pra ${esc(STAGE_LABELS[sid] || '')}`}" style="background:none;border:none;padding:0;cursor:${bloqueado ? 'not-allowed' : 'pointer'};font:inherit;color:inherit;opacity:${bloqueado ? '.38' : '1'};">
+        <button type="button" class="ficha-trilha-seg" data-etapa-idx="${i}" data-etapa-id="${sid}" ${bloqueado ? 'disabled' : ''} title="${bloqueado ? porque : `Mover pra ${esc(STAGE_LABELS[sid] || '')}`}" style="background:none;border:none;padding:0;cursor:${bloqueado ? 'not-allowed' : 'pointer'};font:inherit;color:inherit;opacity:${bloqueado ? '.38' : '1'};">
           <span style="display:block;height:5px;background:${i < idxAtual ? 'var(--green)' : i === idxAtual ? (l.slaBreach ? 'var(--red)' : stageColor(sid)) : 'var(--sunk)'};border-radius:var(--r-xs);margin-bottom:3px;"></span>${i === idxAtual ? `<b style="color:${l.slaBreach ? 'var(--red)' : 'var(--ink)'};">${(STAGE_LABELS[sid] || '').split('/')[0].split(' ')[0]}</b>` : (STAGE_LABELS[sid] || '').split('/')[0].split(' ')[0]}
         </button>
       `; }).join('')}

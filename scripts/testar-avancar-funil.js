@@ -71,14 +71,21 @@ const escada = [
   ['visita', 'decisor'],
   ['decisor', 'demo'],
   ['demo', 'negociacao'],
-  ['negociacao', 'pagamento'],
-  ['pagamento', 'onboarding']
+  ['negociacao', 'pagamento']
 ];
 escada.forEach(([de, para]) => {
   const r = fn3ProximaEtapa(E[de]);
   checar('de ' + de + ' avança para ' + para, r === E[para],
     'devolveu ' + JSON.stringify(r) + ' — se virar null, o atalho desaparece de uma coluna inteira');
 });
+
+/* AG. PAGAMENTO NÃO TEM ATALHO DE AVANÇO (reancorado em 30/09/26). O passo seguinte é o
+   Ganho, que o ASAAS marca quando o pagamento cai; travaAgPagamento, no servidor, recusa
+   Ag. Pagamento → Onboarding. O atalho verde que propunha isso era um clique que o
+   servidor negava. Daqui só se sai por Reciclagem ou Perdido, pelo ⌄. */
+checar('de Ag. Pagamento NÃO se avança pelo atalho',
+  fn3ProximaEtapa(E.pagamento) === null,
+  'o servidor recusa Ag. Pagamento → Onboarding (travaAgPagamento)');
 
 /* ── 2. as duas exceções de natureza ─────────────────────────────────────────────── */
 // Este é o caso exato que estava quebrado. Um negócio ganho não "avança".
