@@ -98,7 +98,9 @@ checar('as portas da rota põem a parada na GRADE, não só na sessão',
     /* registrarAgendamentoLocal sozinho é espelho de sessão: resolve a faixa de agenda
        da Hoje e não resolve a Daily do gestor. As cinco portas têm de passar pelo
        espelho completo, que escreve no plano da semana. */
-    const portas = ['adicionarNaRotaDoRep', 'adicionarProspeccaoNaRota'];
+    /* adicionarNaRotaDoRep saiu em 01/10/26 com a gaveta da rota do gestor (fase 4): era
+       a porta do drawer de uma tela que ninguém alcançava. A porta viva é esta. */
+    const portas = ['adicionarProspeccaoNaRota'];
     return portas.every(function (fn) {
       const i = corpo.indexOf('function ' + fn);
       if (i < 0) return false;
