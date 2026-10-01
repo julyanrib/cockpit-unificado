@@ -2200,7 +2200,7 @@ async function main() {
   // filtrando por tempo parado, já que "resgatar" só faz sentido pra quem esfriou
   // de verdade, não pra quem acabou de cair ali.
   const reciclagemDealsRaw = await stageDealsTeamWide(STAGES.reciclagem);
-  const leadsReciclagem60 = reciclagemDealsRaw
+  const leadsReciclagem = reciclagemDealsRaw
     .map(d => {
       /* A COORDENADA VEM DO HUBSPOT (04/09/26). stageDealsTeamWide JA pede latitude e
          longitude; este mapeamento e que as descartava, e por isso as 48 contas de
@@ -2231,8 +2231,11 @@ async function main() {
         valor: Math.round(parseFloat(d.properties.amount) || 0)
       };
     })
-    .filter(l => l.dias >= 60)
     .sort((a, b) => b.dias - a.dias);
+  /* TODOS OS RECICLADOS (01/10/26, Julyan: "quero que fique mais visível os leads de
+     reciclagem"). O kanban ganhou a coluna Reciclagem e precisa de todos; os parados há
+     60+ dias continuam em leadsReciclagem60, para o resgate do Planejamento. */
+  const leadsReciclagem60 = leadsReciclagem.filter(l => l.dias >= 60);
   console.log(`Reciclagem: ${reciclagemDealsRaw.length} negócios no total, ${leadsReciclagem60.length} parados há 60+ dias (candidatos a resgate).`);
 
   // ---- Por executivo ----
@@ -2681,6 +2684,7 @@ async function main() {
       visiveis: perdidosRecentes.length
     },
     leadsReciclagem60,
+    leadsReciclagem,
     vendasMes,
     reps: repsData,
     agenda
