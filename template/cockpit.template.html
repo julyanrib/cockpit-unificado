@@ -18551,9 +18551,10 @@ function fn2Hero(r, itens, movimentos) {
             + 'padding:0 12px;cursor:pointer;font:800 10px Poppins,sans-serif;color:var(--muted);">filtrando ✕</button>'
           : '')
     +   '<small style="margin-left:auto;font:700 10px Poppins,sans-serif;color:var(--muted2);">'
-    +     '<b style="color:var(--ink);">arraste o cartão</b> — avança 1 degrau, volta livre, '
-    +     'Perdido sempre · soltar abre o registro · '
-    +     '<b style="color:var(--plum-ink);">nada muda de etapa sem registro</b></small>'
+    /* o texto do arraste do kanban v6 (01/10/26): volta pede motivo e há 5 s de Desfazer */
+    +     '<b style="color:var(--ink);">arraste o cartão</b> — avança 1 etapa, volta com motivo, '
+    +     'Perdido e Reciclagem sempre · pede só o que falta · '
+    +     '<b style="color:var(--plum-ink);">5 s para desfazer</b></small>'
     + '</div>'
     + '</div>';
 }
@@ -20844,7 +20845,7 @@ function kb7QuadroHTML(r, todos, acesos, laterais) {
     const q = kb7NaFila(x.lead.id);
     return q ? Object.assign({}, x, { stageId: q.para, naFila: true }) : x;
   });
-  if (!kb7SemSinal() && !KB7.subindo && kb7LerFila().length) setTimeout(kb7SubirFila, 0);
+  if (!KB7.filaTentou && !kb7SemSinal() && kb7LerFila().length) { KB7.filaTentou = true; setTimeout(kb7SubirFila, 0); }
   const filtros = [['todos', 'Todos'], ['regua', 'Passou da régua'], ['toque', 'Sem toque']];
   return '<section class="kb7" data-kb7-raiz="1">'
     + '<div class="kb7-topo"><div class="kb7-topo-txt"><h3>Kanban</h3>'
@@ -20942,8 +20943,8 @@ function kb7Card(item, acesos) {
   const sem = v5DiasSemToque(l);
   const toque = sem == null ? 'sem toque registrado' : sem === 0 ? 'tocado hoje' : sem + (sem === 1 ? ' dia' : ' dias') + ' sem toque';
   const prox = kb7Proxima(et);
-  const podeAvancar = prox && !kb7Pode(et, prox);
-  const arrasta = et !== KB7_ONB;
+  const podeAvancar = prox && !kb7Pode(et, prox) && !item.naFila;
+  const arrasta = et !== KB7_ONB && !item.naFila;
   const destaque = KB7.destaque.get(id);
   const aceso = !acesos || acesos.has(id);
   return '<article class="kb7-card' + (item.pendente || item.naFila ? ' is-pendente' : '') + (estaGravando(id) ? ' is-gravando' : '') + (destaque && Date.now() - destaque < 1500 ? ' is-destaque' : '') + (aceso ? '' : ' is-fora') + '"'
@@ -20954,7 +20955,7 @@ function kb7Card(item, acesos) {
     + passo
     + '<div class="kb7-pe"><span class="kb7-dias ' + kb7TomDaRegua(dias, regua) + '" title="' + (regua != null ? 'régua de ' + regua + ' dias' : '') + '">' + dias + (dias === 1 ? ' dia' : ' dias') + ' aqui</span>'
     + '<span class="kb7-toque">' + esc(toque) + '</span>'
-    + (et === KB7_GANHO
+    + (et === KB7_GANHO && !item.naFila
       ? '<button type="button" class="kb7-onb" data-kb7-onb="' + esc(id) + '">Enviar para onboarding</button>'
       : podeAvancar ? '<button type="button" class="kb7-avanca" data-kb7-avanca="' + esc(id) + '" title="Avançar para ' + esc(STAGE_LABELS[prox] || '') + '" aria-label="Avançar para ' + esc(STAGE_LABELS[prox] || '') + '">→</button>' : '')
     + '</div>'
@@ -21045,31 +21046,17 @@ document.addEventListener('dragend', function () {
 
 /* NO TOQUE, PRESSÃO LONGA DE 300 ms. touchmove não passivo: só depois que o arraste
    começou ele impede a rolagem — antes disso o dedo rola a página como sempre. */
-document.addEventListener('touchstart', function (ev) {
-  const card = ev.target.closest && ev.target.closest('[data-kb7-card][draggable]');
-  if (!card || ev.target.closest('button')) return;
-  const t = ev.touches[0];
-  const toque = { card: card, x0: t.clientX, y0: t.clientY, ativo: false, fantasma: null };
-  toque.timer = setTimeout(function () {
-    toque.ativo = true;
-    KB7.arraste = { id: card.getAttribute('data-kb7-card'), de: card.getAttribute('data-kb7-de') };
-    card.classList.add('is-origem');
-    const f = card.cloneNode(true);
-    f.classList.add('kb7-fantasma');
-    f.style.width = card.getBoundingClientRect().width + 'px';
-    document.body.appendChild(f);
-    toque.fantasma = f;
-    kb7MarcarDestinos(KB7.arraste.de);
-    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { /* sem vibração */ } }
-  }, 300);
-  KB7.toque = toque;
-}, { passive: true });
-document.addEventListener('touchmove', function (ev) {
+/* AUDITORIA DE 01/10/26: o touchmove era um ouvinte NÃO passivo no documento inteiro —
+   toda rolagem do app, mapa incluído, esperava por ele. Agora ele só existe do toque no
+   cartão até soltar. E o gesto que o sistema cancela (ligação, gesto de borda) ou um
+   segundo dedo limpam tudo: antes ficava o fantasma na tela e a rolagem seguinte travada. */
+function kb7AoMoverToque(ev) {
   const toque = KB7.toque;
   if (!toque) return;
   const t = ev.touches[0];
+  if (!t) return;
   if (!toque.ativo) {
-    if (Math.abs(t.clientX - toque.x0) > 8 || Math.abs(t.clientY - toque.y0) > 8) { clearTimeout(toque.timer); KB7.toque = null; }
+    if (Math.abs(t.clientX - toque.x0) > 8 || Math.abs(t.clientY - toque.y0) > 8) kb7FimDoToque(false);
     return;
   }
   ev.preventDefault();
@@ -21082,21 +21069,54 @@ document.addEventListener('touchmove', function (ev) {
   const alvo = sob && sob.closest && (sob.closest('[data-kb7-col]') || sob.closest('[data-kb7-alvo]'));
   if (alvo && !kb7Pode(KB7.arraste.de, kb7AlvoDe(alvo))) alvo.classList.add('is-sobre');
   toque.sob = sob;
-}, { passive: false });
-document.addEventListener('touchend', function () {
+}
+function kb7FimDoToque(soltar) {
   const toque = KB7.toque;
   KB7.toque = null;
-  if (!toque) return;
+  document.removeEventListener('touchmove', kb7AoMoverToque, { passive: false });
+  if (!toque) return false;
   clearTimeout(toque.timer);
-  if (!toque.ativo) return;
+  if (!toque.ativo) return false;
+  /* o clique sintético que o navegador manda depois da pressão longa não abre a ficha */
+  KB7.fimDoArraste = Date.now();
   if (toque.fantasma) toque.fantasma.remove();
   toque.card.classList.remove('is-origem');
   const a = KB7.arraste;
   KB7.arraste = null;
   kb7LimparDestinos();
-  const para = kb7AlvoDe(toque.sob);
+  const para = soltar ? kb7AlvoDe(toque.sob) : null;
   if (a && para) kb7Soltar(a.id, a.de, para);
+  return true;
+}
+document.addEventListener('touchstart', function (ev) {
+  if (KB7.toque) kb7FimDoToque(false);
+  if (ev.touches.length > 1) return;
+  const card = ev.target.closest && ev.target.closest('[data-kb7-card][draggable]');
+  if (!card || ev.target.closest('button')) return;
+  const t = ev.touches[0];
+  const toque = { card: card, x0: t.clientX, y0: t.clientY, ativo: false, fantasma: null };
+  toque.timer = setTimeout(function () {
+    if (KB7.toque !== toque) return;
+    toque.ativo = true;
+    KB7.arraste = { id: card.getAttribute('data-kb7-card'), de: card.getAttribute('data-kb7-de') };
+    card.classList.add('is-origem');
+    const f = card.cloneNode(true);
+    f.classList.add('kb7-fantasma');
+    f.style.width = card.getBoundingClientRect().width + 'px';
+    document.body.appendChild(f);
+    toque.fantasma = f;
+    kb7MarcarDestinos(KB7.arraste.de);
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { /* sem vibração */ } }
+  }, 300);
+  KB7.toque = toque;
+  document.addEventListener('touchmove', kb7AoMoverToque, { passive: false });
+}, { passive: true });
+document.addEventListener('touchend', function (ev) {
+  const ativo = !!(KB7.toque && KB7.toque.ativo);
+  kb7FimDoToque(true);
+  if (ativo && ev.cancelable) ev.preventDefault();
 });
+document.addEventListener('touchcancel', function () { kb7FimDoToque(false); });
 
 /* ── os cliques do quadro ───────────────────────────────────────────────────────── */
 document.addEventListener('click', function (ev) {
@@ -21130,6 +21150,7 @@ document.addEventListener('click', function (ev) {
   const onb = ev.target.closest('[data-kb7-onb]');
   if (onb) { ev.stopPropagation(); const l = KB7.itens[onb.getAttribute('data-kb7-onb')]; if (l) kb7JanelaOnboarding(l); return; }
   const card = ev.target.closest('[data-kb7-card]');
+  if (card && Date.now() - (KB7.fimDoArraste || 0) < 700) return;
   if (card && !ev.target.closest('button')) {
     const l = KB7.itens[card.getAttribute('data-kb7-card')];
     if (l && typeof abrirFichaLeadFunilDrawer === 'function') abrirFichaLeadFunilDrawer(l, null, null);
@@ -21154,6 +21175,7 @@ function kb7Soltar(id, de, para) {
   const motivo = kb7Pode(de, para);
   if (motivo) { mostrarToast(motivo + '.', 'atencao'); return; }
   if (estaGravando(id) || KB7.pendente[String(id)]) { mostrarToast('Espere a mudança anterior deste negócio terminar.', 'atencao'); return; }
+  if (kb7NaFila(id)) { mostrarToast('"' + (lead.name || 'Este negócio') + '" está na fila esperando sinal. Cancele no cartão para mudar de novo.', 'atencao'); return; }
   if (de === KB7_GANHO && para === KB7_ONB) { kb7JanelaOnboarding(lead); return; }
   if (para === FN2_ETAPA_PERDIDO || para === KB7_RECIC || kb7EhVolta(de, para)) { kb7Janela(lead, de, para); return; }
   /* AVANÇAR É O REGISTRO DE SEMPRE quando falta alguma coisa: fn3AbrirRegistro já mostra
@@ -21161,7 +21183,11 @@ function kb7Soltar(id, de, para) {
      de dinheiro de Ag. Pagamento que o RPA lê, e planta o próximo passo da régua. Duas
      janelas para o mesmo avanço seriam duas regras. Nada faltando: move direto, com o
      Desfazer de 5 s. */
-  if (kb7FaltaParaAvancar(lead, para)) { fn3AbrirRegistro(lead, para, kb7Redesenhar); return; }
+  if (kb7FaltaParaAvancar(lead, para)) {
+    if (kb7SemSinal()) { mostrarToast('Sem sinal: este avanço pede o registro no HubSpot. Faça quando a conexão voltar — Perdido, Reciclagem e volta entram na fila.', 'atencao'); return; }
+    fn3AbrirRegistro(lead, para, kb7Redesenhar);
+    return;
+  }
   kb7Confirmar(lead, de, para, {}, {});
 }
 function kb7EhVolta(de, para) {
@@ -21178,6 +21204,7 @@ function kb7CamposQueFaltam(lead, para) {
 function kb7FaltaParaAvancar(lead, para) {
   if (para === KB7_PAGTO) return true;
   if (kb7CamposQueFaltam(lead, para).length) return true;
+  /* o registro de sempre também é quem planta o próximo passo da régua */
   const pedePasso = typeof etapaPedeProximoPasso === 'function' && etapaPedeProximoPasso(para);
   return pedePasso && !(typeof fn3PassoAbertoDoLead === 'function' && fn3PassoAbertoDoLead(lead));
 }
@@ -21213,7 +21240,10 @@ function kb7Janela(lead, de, para) {
       + (chips.length ? '<div class="kb7-chips">' + chips.map(o => '<button type="button" class="kb7-chip" data-kb7-chip="' + esc(String(o)) + '">' + esc(String(o)) + '</button>').join('') + '</div>' : '')
       + (c.tipo === 'volta'
         ? '<input type="date" class="kb7-input" data-kb7-input="' + i + '" aria-label="Data de volta" min="' + kb7DataDaqui(1) + '">'
-        : '<input type="text" class="kb7-input" data-kb7-input="' + i + '" placeholder="ou escreva aqui" aria-label="' + esc(c.label) + '">')
+        /* SELEÇÃO NÃO TEM CAIXA LIVRE (auditoria de 01/10/26): motivo_do_perdido é lista
+           fechada no servidor, e o texto digitado ali voltava 400 depois do Desfazer. */
+        : c.tipo === 'selecao' ? ''
+        : '<input type="text" class="kb7-input" data-kb7-input="' + i + '" placeholder="' + (c.prop === '__motivo' ? 'o que mudou' : 'escreva aqui') + '" aria-label="' + esc(c.label) + '">')
       + '</div>';
   };
   veu.innerHTML = '<div class="kb7-janela" role="dialog" aria-modal="true" aria-label="Mudar etapa">'
@@ -21247,6 +21277,13 @@ function kb7Janela(lead, de, para) {
         if (inp) inp.value = valores[i];
       } else {
         valores[i] = chip.getAttribute('data-kb7-chip');
+        /* "Outros" e "Funcionalidade" pedem o texto: o rótulo diz, em vez de só travar */
+        if (c.prop === 'motivo_do_perdido') {
+          const rot = veu.querySelector('[data-kb7-campo="1"] .kb7-falta');
+          if (rot) rot.textContent = MOTIVOS_QUE_EXIGEM_TEXTO.indexOf(valores[i]) >= 0
+            ? 'Falta registrar: o que pesou (obrigatório para este motivo)'
+            : 'Falta registrar: o que pesou (opcional)';
+        }
       }
       atualizar();
       return;
@@ -21423,6 +21460,7 @@ function kb7Confirmar(lead, de, para, props, extra) {
 }
 
 async function kb7Gravar(lead, de, para, props, extra) {
+  if (KB7.ultimo) KB7.ultimo.set(String(lead.id), String(para));
   const r = await gravarPassagemOtimista({
     lead: lead, para: para, propriedades: props, nota: extra.nota || null,
     passoAcao: extra.passoAcao, passoData: extra.passoData, passoTipo: extra.passoTipo,
@@ -21444,12 +21482,22 @@ async function kb7Gravar(lead, de, para, props, extra) {
    tempo, o servidor recusa com o conflito e o cartão vai para onde o negócio está. */
 function kb7SemSinal() { return typeof navigator !== 'undefined' && navigator.onLine === false; }
 function kb7ChaveFila() { return 'kb7-fila:' + String((sessaoAtual && (sessaoAtual.ownerId || sessaoAtual.email)) || 'anon'); }
+/* A MEMÓRIA MANDA, o navegador é a cópia (auditoria de 01/10/26): com o armazenamento
+   cheio, setItem falhava, getItem devolvia a lista velha, e o item que saiu da fila
+   voltava a cada desenho — subida em laço. */
 function kb7LerFila() {
-  try { const v = JSON.parse(localStorage.getItem(kb7ChaveFila()) || '[]'); return Array.isArray(v) ? v : []; }
-  catch (e) { return KB7.filaMem || []; }
+  const chave = kb7ChaveFila();
+  if (!KB7.filaMem || KB7.filaChave !== chave) {
+    let v = [];
+    try { v = JSON.parse(localStorage.getItem(chave) || '[]'); } catch (e) { v = []; }
+    KB7.filaMem = Array.isArray(v) ? v : [];
+    KB7.filaChave = chave;
+  }
+  return KB7.filaMem.slice();
 }
 function kb7SalvarFila(lista) {
-  KB7.filaMem = lista;
+  KB7.filaMem = lista.slice();
+  KB7.filaChave = kb7ChaveFila();
   try { localStorage.setItem(kb7ChaveFila(), JSON.stringify(lista)); } catch (e) { /* sem armazenamento: fica na memória */ }
 }
 function kb7NaFila(id) { return kb7LerFila().find(x => String(x.id) === String(id)) || null; }
@@ -21470,7 +21518,11 @@ async function kb7SubirFila() {
          repetir sozinho uma escrita que talvez tenha ido é o que escreve duas vezes */
       kb7SalvarFila(kb7LerFila().filter(x => String(x.id) !== String(item.id)));
       const lead = (typeof buscarLeadFunilPorId === 'function' && buscarLeadFunilPorId(item.id)) || KB7.itens[String(item.id)];
-      if (!lead) continue;
+      if (!lead) {
+        mostrarToast('A mudança de "' + (item.nome || 'um negócio') + '" para ' + (STAGE_LABELS[item.para] || 'outra etapa')
+          + ' saiu da fila sem gravar: o negócio não está mais no seu funil.', 'atencao');
+        continue;
+      }
       if (String(lead.stageId) === String(item.para)) continue;
       await kb7Gravar(lead, item.de, item.para, item.props || {}, item.extra || {});
     }
@@ -21483,6 +21535,11 @@ if (typeof window !== 'undefined') window.addEventListener('online', function ()
 
 /* client_stage_changes com a origem e o motivo (0148). Complemento: se falhar, a etapa
    já mudou no HubSpot e o espelho já leva — o histórico do app só fica sem esta linha. */
+/* O NOME QUE O APP GRAVA, não o do Cockpit (auditoria de 01/10/26): as funções do banco
+   e o histórico do app comparam to_stage por texto, e três etapas têm nome diferente nas
+   duas telas. Medido em client_stage_changes dos últimos 30 dias. */
+const KB7_ROTULO_APP = { '1395880470': 'Conversa com decisor', '1395880473': 'Pagamento', '1396006163': 'Onboarding' };
+function kb7RotuloNoApp(id) { return KB7_ROTULO_APP[String(id)] || STAGE_LABELS[id] || String(id); }
 async function kb7RegistrarHistorico(lead, de, para, motivo) {
   try {
     if (typeof supa === 'undefined' || !supa) return;
@@ -21492,7 +21549,7 @@ async function kb7RegistrarHistorico(lead, de, para, motivo) {
     const { data: c } = await supa.from('clients').select('id').eq('id_hubspot', String(lead.id)).limit(1).maybeSingle();
     if (!c || !c.id) return;
     await supa.from('client_stage_changes').insert({
-      client_id: c.id, from_stage: STAGE_LABELS[de] || de, to_stage: STAGE_LABELS[para] || para, to_stage_id: para,
+      client_id: c.id, from_stage: kb7RotuloNoApp(de), to_stage: kb7RotuloNoApp(para), to_stage_id: para,
       created_by: u.id, created_by_email: u.email || null,
       created_by_name: (sessaoAtual && sessaoAtual.nome) || null,
       origem: 'cockpit-kanban', motivo: motivo
