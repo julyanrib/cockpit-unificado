@@ -11167,7 +11167,8 @@ const CAMPOS_POR_ETAPA = {
     { prop: 'cnpj_cpf', label: 'CNPJ', tipo: 'texto', obrigatorio: true },
     { prop: 'celular', label: 'Celular', tipo: 'tel', obrigatorio: true },
     { prop: 'cep', label: 'CEP', tipo: 'texto', obrigatorio: true },
-    { prop: 'numero', label: 'Número', tipo: 'texto', obrigatorio: true },
+
+    { prop: 'numero', label: 'Número', tipo: 'texto', obrigatorio: true, maxLen: 5 },
     { prop: 'pacote_contratado', label: 'Plano Contratado', tipo: 'selecao', opcoes: OP_PLANO_CONTRATADO, obrigatorio: true },
     { prop: 'adicional', label: 'Adicional', tipo: 'multiselecao', opcoes: OP_ADICIONAL, obrigatorio: true, largo: true },
     { prop: 'tipo_de_pagamento', label: 'Tipo de Pagamento', tipo: 'selecao', opcoes: ['À Vista', 'Crédito'], obrigatorio: true },
@@ -11261,7 +11262,8 @@ function campoPassagemHTML(campo, valor) {
   } else {
     const tipoInput = campo.tipo === 'numero' ? 'number' : campo.tipo === 'data' ? 'date' : campo.tipo === 'tel' ? 'tel' : campo.tipo === 'email' ? 'email' : 'text';
     const extra = campo.tipo === 'numero' ? ` step="1" inputmode="numeric"${campo.min != null ? ` min="${campo.min}"` : ''}` : '';
-    const input = `<input id="${id}" type="${tipoInput}"${extra} data-prop="${campo.prop}" data-tipo="${campo.tipo}" value="${esc(valor)}" autocomplete="off">`;
+    const limite = campo.maxLen ? ` maxlength="${campo.maxLen}" placeholder="até ${campo.maxLen} caracteres (ex.: 1520 ou S/N)"` : '';
+    const input = `<input id="${id}" type="${tipoInput}"${extra}${limite} data-prop="${campo.prop}" data-tipo="${campo.tipo}" value="${esc(valor)}" autocomplete="off">`;
 
     controle = campo.prop === 'cnpj_cpf'
       ? `<div class="pe-comlupa">${input}<button type="button" class="pe-lupa" data-cnpjbuscar="${id}" title="Buscar endereço na Receita" aria-label="Buscar endereço na Receita"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg></button></div><small class="pe-receita" data-cnpjaviso="${id}" hidden></small>`
@@ -11339,7 +11341,15 @@ async function buscarCnpjNaReceitaDoCampo(idDoCampo) {
         escritos.push(rotulo);
       };
       preencher('cep', r.cep, 'CEP');
-      preencher('numero', r.numero, 'número');
+
+      const numeroCurto = (function (n) {
+        const t = String(n || '').trim();
+        if (!t) return '';
+        if (/^s[\/.\s]*n/i.test(t)) return 'S/N';
+        const m = /\d{1,5}/.exec(t.replace(/\./g, ''));
+        return m ? m[0] : t.slice(0, 5);
+      })(r.numero);
+      preencher('numero', numeroCurto, 'número');
 
       const nome = r.nomeFantasia && r.nomeFantasia !== r.razaoSocial
         ? r.razaoSocial + ' (' + r.nomeFantasia + ')'
