@@ -110,7 +110,9 @@ conferir('o CSS da v3 saiu com ela',
    Agora mede no CORPO do render: a prancha, qualquer que seja o prefixo dela, e as
    leituras DEPOIS dela, na mesma atribuição. */
 conferir('o render desenha a prancha e mantém as seis leituras no fim',
-  /raiz[.]innerHTML = sm[0-9]TelaHTML[(]sm[0-9]Dados[(][)][)] [+] sm9LeiturasHTML[(]sm9Dados[(][)][)];/
+  /* 01/10/26 (T13, fase 5): o funil de porta entrou ENTRE a prancha e as leituras — elas
+     continuam por último, que é a regra; a expressão só passou a aceitar o que vem no meio. */
+  /raiz[.]innerHTML = sm[0-9]TelaHTML[(]sm[0-9]Dados[(][)][)][^;]{0,200}?[+] sm9LeiturasHTML[(]sm9Dados[(][)][)];/
     /* `render` só é declarada na seção 3, abaixo; aqui a leitura é direta. */
     .test(corpoDe('renderSemana')),
   'as leituras ficam no fim (decisão de 08/09): a aba Funil tem um botão que aterrissa numa delas');
