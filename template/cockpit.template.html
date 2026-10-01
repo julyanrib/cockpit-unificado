@@ -10537,7 +10537,9 @@ foi escrita para jogar o "0 de 27 resolvidos"
 .pt6-hoje em{font-style:normal;font-size:12px;font-weight:800;color:var(--ao-vivo);}
 .pt6-hoje em.is-zero{color:var(--amber-ink);}
 .pt6-faixa{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;}
-.pt6-dia{min-height:44px;border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:var(--panel2,var(--panel));font-variant-numeric:tabular-nums;}
+.pt6-dia{min-height:44px;border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:var(--panel2,var(--panel));font-variant-numeric:tabular-nums;font:inherit;color:inherit;padding:0;cursor:pointer;min-width:0;}
+.pt6-dia:hover{border-color:var(--ink);}
+.pt6-dia:focus-visible{outline:3px solid var(--acao);outline-offset:2px;}
 .pt6-dia i{font-style:normal;font-size:11px;color:var(--muted2);font-weight:700;}
 .pt6-dia b{font:800 13px var(--font-display);color:var(--ink);}
 .pt6-dia.is-futuro{border-style:dashed;background:transparent;}
@@ -57752,9 +57754,12 @@ function pt6FaixaHTML(r, d) {
     const ehHoje = r.semanaCorrente && i === r.idxHoje;
     const branco = pl === 0 && (futuro || ehHoje || fe === 0);
     const txt = futuro ? (pl || '—') : (pl || fe ? fe + '/' + pl : '—');
-    return '<span class="pt6-dia' + (futuro ? ' is-futuro' : '') + (ehHoje ? ' is-hoje' : '') + (branco ? ' is-branco' : '') + '"'
-      + ' title="' + v5Esc(dn + ' ' + pt6DDMM(x.dia) + ': ' + (futuro ? pl + ' planejadas' : fe + ' feitas de ' + pl + ' planejadas')) + '">'
-      + '<i>' + dn + '</i><b>' + txt + '</b></span>';
+    /* O DIA ABRE O DOSSIÊ NAQUELE DIA (01/10/26, Julyan: "eu consigo clicar nesses dias
+       anteriores e ver quem eles visitaram?"): quem visitou, a que horas, com que prova. */
+    const rotulo = dn + ' ' + pt6DDMM(x.dia) + ': ' + (futuro ? pl + ' planejadas' : fe + ' feitas de ' + pl + ' planejadas') + ' · abrir o dia';
+    return '<button type="button" class="pt6-dia' + (futuro ? ' is-futuro' : '') + (ehHoje ? ' is-hoje' : '') + (branco ? ' is-branco' : '') + '"'
+      + ' data-pt6="gdossie:' + v5Esc(r.e.ownerId) + '|' + v5Esc(x.dia || '') + '" title="' + v5Esc(rotulo) + '" aria-label="' + v5Esc(rotulo) + '">'
+      + '<i>' + dn + '</i><b>' + txt + '</b></button>';
   }).join('') + '</div>';
 }
 
@@ -58426,6 +58431,7 @@ document.addEventListener('click', async function (ev) {
   if (verbo === 'camada') { PT6.camada = arg; PT6.regiao = 0; pt6Pintar(); return; }
   if (verbo === 'regiao') { PT6.regiao = Number(arg) || 0; pt6Pintar(); return; }
   if (verbo === 'dossie') { pt6AbrirDossie(arg); return; }
+  if (verbo === 'gdossie') { const k = arg.indexOf('|'); pt6AbrirDossie(arg.slice(0, k), arg.slice(k + 1) || null); return; }
   if (verbo === 'fechar') { pt6FecharDossie(); return; }
   if (verbo === 'gdia') { PT6.dossieDia = arg; PT6.armado = null; if (PT6.dossieErro) { await pt6CarregarDossie(true); } pt6PintarDossie(); return; }
   if (verbo === 'filtro') { PT6.filtros[arg] = !PT6.filtros[arg]; pt6PintarDossie(); return; }
