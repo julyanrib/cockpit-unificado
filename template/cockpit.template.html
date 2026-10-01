@@ -17399,7 +17399,10 @@ const CAMPOS_POR_ETAPA = {
     { prop: 'cnpj_cpf', label: 'CNPJ', tipo: 'texto', obrigatorio: true },
     { prop: 'celular', label: 'Celular', tipo: 'tel', obrigatorio: true },
     { prop: 'cep', label: 'CEP', tipo: 'texto', obrigatorio: true },
-    { prop: 'numero', label: 'Número', tipo: 'texto', obrigatorio: true },
+    /* ATÉ 5 CARACTERES (01/10/26): é o limite da propriedade no HubSpot. O Jotta Bebidas
+       parou na ida para Ag. Pagamento com "Insira 5 caracteres ou menos" — o campo aceitava
+       qualquer coisa e o erro só aparecia depois do HubSpot recusar. */
+    { prop: 'numero', label: 'Número', tipo: 'texto', obrigatorio: true, maxLen: 5 },
     { prop: 'pacote_contratado', label: 'Plano Contratado', tipo: 'selecao', opcoes: OP_PLANO_CONTRATADO, obrigatorio: true },
     { prop: 'adicional', label: 'Adicional', tipo: 'multiselecao', opcoes: OP_ADICIONAL, obrigatorio: true, largo: true },
     { prop: 'tipo_de_pagamento', label: 'Tipo de Pagamento', tipo: 'selecao', opcoes: ['À Vista', 'Crédito'], obrigatorio: true },
@@ -17561,7 +17564,8 @@ function campoPassagemHTML(campo, valor) {
   } else {
     const tipoInput = campo.tipo === 'numero' ? 'number' : campo.tipo === 'data' ? 'date' : campo.tipo === 'tel' ? 'tel' : campo.tipo === 'email' ? 'email' : 'text';
     const extra = campo.tipo === 'numero' ? ` step="1" inputmode="numeric"${campo.min != null ? ` min="${campo.min}"` : ''}` : '';
-    const input = `<input id="${id}" type="${tipoInput}"${extra} data-prop="${campo.prop}" data-tipo="${campo.tipo}" value="${esc(valor)}" autocomplete="off">`;
+    const limite = campo.maxLen ? ` maxlength="${campo.maxLen}" placeholder="até ${campo.maxLen} caracteres (ex.: 1520 ou S/N)"` : '';
+    const input = `<input id="${id}" type="${tipoInput}"${extra}${limite} data-prop="${campo.prop}" data-tipo="${campo.tipo}" value="${esc(valor)}" autocomplete="off">`;
     /* A LUPA SÓ NO CNPJ (16/09/26). Botão de ícone e não de texto: "Buscar na Receita"
        ao lado do campo comeria a largura do input no grid de duas colunas, e este
        formulário já é apertado. 38px, que é o piso de toque desta casa para botão
@@ -17680,7 +17684,16 @@ async function buscarCnpjNaReceitaDoCampo(idDoCampo) {
         escritos.push(rotulo);
       };
       preencher('cep', r.cep, 'CEP');
-      preencher('numero', r.numero, 'número');
+      /* a Receita devolve "1520 LOJA 2", "KM 12", "S/N"…: o HubSpot só guarda 5 caracteres,
+         então entra o número da porta, e o complemento fica de fora */
+      const numeroCurto = (function (n) {
+        const t = String(n || '').trim();
+        if (!t) return '';
+        if (/^s[\/.\s]*n/i.test(t)) return 'S/N';
+        const m = /\d{1,5}/.exec(t.replace(/\./g, ''));
+        return m ? m[0] : t.slice(0, 5);
+      })(r.numero);
+      preencher('numero', numeroCurto, 'número');
 
       /* A CONFIRMAÇÃO DA EMPRESA é o que mais importa aqui: razão social na tela prova
          que o CNPJ digitado é quem o executivo pensa que é. E situação cadastral
