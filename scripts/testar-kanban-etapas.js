@@ -235,8 +235,10 @@ checar('existe UMA função de escrita de passagem de etapa',
   template.indexOf("async function gravarPassagemDeEtapa(opts) {") > 0);
 checar('existe UM lugar com a regra de reversão',
   template.indexOf("async function gravarPassagemOtimista(opts) {") > 0);
-checar('as duas telas chamam o motor otimista',
-  (template.split("await gravarPassagemOtimista({").length - 1) === 2,
+/* TRÊS DESDE 01/10/26: o kanban novo do Meu funil (kb7Confirmar, docs/09) é a terceira
+   tela, e entra pelo motor — o Desfazer de 5 s acontece ANTES dele, nada é gravado ali. */
+checar('as três telas chamam o motor otimista',
+  (template.split("await gravarPassagemOtimista({").length - 1) === 3,
   'achado ' + (template.split("await gravarPassagemOtimista({").length - 1));
 /* O NÚMERO É 1 E O 1 É O MOTOR. Se subir para 2, alguém escreveu no HubSpot por fora da
    reversão — e o card dele vai ficar numa etapa que o CRM recusou. */
