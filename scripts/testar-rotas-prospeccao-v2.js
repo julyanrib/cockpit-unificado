@@ -151,8 +151,12 @@ checar('score sem nota é "—", não um número inventado',
 
 /* 28/09: o cumprido passou a ser medido pelo mapa (paradas feitas × planejadas) no bloco
    "A rua de cada executivo · pelo mapa"; a linha do rt7 aponta para ele, e continua nunca sendo zero */
-checar('o cumprido da rua aponta para a medida do mapa, nunca como zero',
-  /cump: .no mapa ↓.,/.test(aba.replace(/'/g, '.'))
+/* REANCORADA EM 01/10/26 (fase 4, N10): o cumprido deixou de apontar para outro bloco e
+   passou a ser a medida do mapa na própria linha. A regra que importa continua: enquanto
+   não leu, a tela diz "lendo…"; se falhou, "não li" — nunca um zero. */
+checar('o cumprido da rua é a medida do mapa, nunca um zero de quem não leu',
+  aba.indexOf("cump: lendo ? 'lendo…' : erro ? 'não li'") > 0
+    && aba.indexOf('...rt7LinhaDaRua(oid, u.nome)') > 0
     && aba.indexOf('paradas feitas × planejadas') > 0,
   'zero aqui acusaria o time de não ter ido à rua quando o que falta é a medida');
 
@@ -319,9 +323,11 @@ checar('só o gestor desenha esta aba',
     .test(codigo.replace(/'/g, '.')),
   'a view é compartilhada com a hero de rotas do executivo — sem a porteira ele vê a tela do gestor');
 
-checar('e o bloco antigo é escondido por quem desenha a aba',
-  /const antigo = document\.getElementById\('rotasAntigo'\);/.test(codigo)
-    && /if \(antigo\) antigo\.style\.display = 'none';/.test(codigo),
+/* REANCORADA EM 01/10/26 (fase 4): o bloco antigo não é mais escondido — ele saiu. A
+   pergunta continua a mesma (o gestor vê tela de outra pessoa nesta aba?), e a resposta
+   agora é que essa tela não existe. */
+checar('e o bloco antigo saiu da aba',
+  codigo.indexOf('id="rotasAntigo"') < 0 && codigo.indexOf('id="rotaOverlay"') < 0,
   'há três caminhos que chegam nesta aba sem passar pelo ouvinte do botão; por eles o gestor via 222px de tela de outra pessoa');
 
 checar('uma leitura só na abertura da aba',
