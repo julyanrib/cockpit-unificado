@@ -3324,9 +3324,10 @@
     min-height:38px;cursor:pointer;color:var(--muted);font:inherit;}
   .fn3-alt button.is-ativo{background:var(--panel);color:var(--ink);box-shadow:var(--shadow-sm);}
 
-  .fn3-grade{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;
+  .fn3-grade{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:8px;
     align-items:start;}
 
+  .fn3-col.is-recic{outline:2px dashed var(--cor);outline-offset:3px;border-radius:12px;}
   .fn3-col{display:flex;flex-direction:column;gap:6px;min-width:0;
     background:var(--panel2);border:1.5px solid var(--creme-linha);
     border-top:4px solid var(--cor,var(--muted2));border-radius:12px;padding:9px 8px;
@@ -11508,9 +11509,26 @@ function fn2Memoria(lead) {
 }
 
 function fn2Leads(r) {
-  const idsDaEsteira = FN2_ETAPAS.map(e => e.id);
+  return fn2LeadsDasEtapas(r, FN2_ETAPAS.map(e => e.id));
+}
+
+const FN3_ETAPAS_LATERAIS = ['1396006162', '1396006163', '1398311191'];
+function fn2LeadsDasEtapas(r, ids) {
+  const idsDaEsteira = ids;
   const brutos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(r.ownerId) : [])
     .filter(l => idsDaEsteira.indexOf(String(l.stageId)) >= 0);
+
+  if (idsDaEsteira.indexOf('1398311191') >= 0) {
+    const vistos = new Set(brutos.map(l => String(l.id)));
+    const lista = Array.isArray(DATA.leadsReciclagem) ? DATA.leadsReciclagem
+      : (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : []);
+    lista.forEach(l => {
+      if (!l || !l.id || vistos.has(String(l.id))) return;
+      if (String(l.ownerId) !== String(r.ownerId)) return;
+      vistos.add(String(l.id));
+      brutos.push({ ...l, stageId: '1398311191', stage: STAGE_LABELS['1398311191'] || 'Reciclagem' });
+    });
+  }
 
   const quentes = new Set((typeof agendaQuentes === 'function' ? agendaQuentes([r]) : [])
     .map(l => String(l.id)));
@@ -12013,6 +12031,8 @@ function etapaPedeProximoPasso(etapaId) {
 }
 
 const FN3_COLUNAS = [
+
+  { id: '1398311191', rot: 'RECICLAGEM', pleno: 'Reciclagem — resgate', prazo: 'novo toque', recic: true },
   { id: '1395880469', rot: 'PROSPECÇÃO', pleno: 'Prospecção', prazo: '1º toque', curto: true },
   { id: '1396005401', rot: 'VISITA', pleno: 'Visita feita', prazo: 'follow-up', curto: true },
   { id: '1395880470', rot: 'DECISOR', pleno: 'Conversa com decisor', prazo: 'toque', curto: true },
@@ -12120,7 +12140,7 @@ function fn3Cabecalho(col, daEtapa) {
   const estourados = daEtapa.filter(x => x.est.estourou).length;
   const soma = daEtapa.reduce((a, x) => a + x.valor, 0);
 
-  const conv = (col.pagto || col.onb || col.ganho) ? null : fn2Conversao(col.id, fn2OwnerAtual);
+  const conv = (col.pagto || col.onb || col.ganho || col.recic) ? null : fn2Conversao(col.id, fn2OwnerAtual);
 
   const janela = col.onb ? DATA.onboardingVisivel : (col.ganho ? DATA.ganhoVisivel : null);
   const desdeCorte = janela
@@ -12128,7 +12148,7 @@ function fn3Cabecalho(col, daEtapa) {
         ? esc(fn2Quando(janela.corte) || janela.corte) : 'hoje')
     : '';
 
-  const chipRegua = col.ganho ? 'ASAAS' : col.onb ? 'espelho'
+  const chipRegua = col.ganho ? 'ASAAS' : col.onb ? 'espelho' : col.recic ? 'resgate'
     : (() => { const s = fn2Sla(col.id); return s == null ? 'sem régua' : 'régua ' + (s === 2 ? '48h' : s + 'd'); })();
   const reguaDica = col.ganho
     ? 'quem move para Ganho é o ASAAS, na confirmação do pagamento' + (desdeCorte ? ' · ' + desdeCorte : '')
@@ -12462,7 +12482,7 @@ function fn3Coluna(col, itens, idsAcesos) {
         jaPediu ? 'pedido na pauta ✓ · tirar' : '+ pedir contas ao Julyan ▸'}</button>`
     : '';
 
-  return `<div class="fn3-col${estourados ? ' is-aberta' : ''}" style="--cor:${stageColor(col.id)}"
+  return `<div class="fn3-col${estourados ? ' is-aberta' : ''}${col.recic ? ' is-recic' : ''}" style="--cor:${stageColor(col.id)}"
     data-fn3-alvo="${col.id}" data-fn3-viol="${estourados ? 1 : 0}">
     ${fn3Cabecalho(col, daEtapa)}
     ${corpo}
@@ -12471,6 +12491,10 @@ function fn3Coluna(col, itens, idsAcesos) {
 }
 
 function fn3ColunaVazia(col, itens) {
+  if (col.recic) {
+    return `<div class="fn3-slot is-neutro">nada em reciclagem.<br>
+      <b>Negócio parado que você jogar aqui</b> fica à vista para ganhar um toque novo — e sai daqui para qualquer etapa.</div>`;
+  }
   if (col.onb) {
     const corte = DATA.onboardingVisivel && DATA.onboardingVisivel.corte;
     return `<div class="fn3-slot is-neutro">nada enviado para onboarding
@@ -12483,8 +12507,10 @@ function fn3ColunaVazia(col, itens) {
       ? '<b>' + emNegociacao + ' em negociação</b> é de onde sai o próximo.'
       : '<b>e a negociação também está vazia</b> — o funil precisa de entrada.'}</div>`;
   }
-  const i = FN3_COLUNAS.findIndex(c => c.id === col.id);
-  const anterior = i > 0 ? FN3_COLUNAS[i - 1] : null;
+
+  const escada = FN3_COLUNAS.filter(c => !c.recic);
+  const i = escada.findIndex(c => c.id === col.id);
+  const anterior = i > 0 ? escada[i - 1] : null;
   const naAnterior = anterior ? itens.filter(x => x.stageId === anterior.id) : [];
   const prontos = naAnterior.filter(x => x.est.passo).length;
   return `<div class="fn3-slot is-neutro">${i === 0
@@ -12539,7 +12565,7 @@ function fn3Perdidos(perdidos) {
   </div>`;
 }
 
-function fn3EsteiraHTML(todos, acesos) {
+function fn3EsteiraHTML(todos, acesos, laterais) {
   const perdidos = todos.filter(x => x.stageId === FN2_ETAPA_PERDIDO);
   const ativos = todos.filter(x => x.stageId !== FN2_ETAPA_PERDIDO);
   const naEsteira = ativos.length;
@@ -12566,7 +12592,7 @@ function fn3EsteiraHTML(todos, acesos) {
       </span>
     </div>
     <div class="fn3-grade">
-      ${FN3_COLUNAS.map(c => fn3Coluna(c, ativos, acesos)).join('')}
+      ${FN3_COLUNAS.map(c => fn3Coluna(c, ativos.concat(laterais || []), acesos)).join('')}
     </div>
     ${fn3Perdidos(perdidos)}`;
 }
@@ -13345,7 +13371,7 @@ function fn2ShellHTML(r) {
       data-fn2-pulsa="${esc(pulsando)}">
     ${fn2Hero(r, itens, movimentos)}
     ${fn2Contexto(movimentos, itens.length)}
-    ${fn3EsteiraHTML(todos, acesos)}
+    ${fn3EsteiraHTML(todos, acesos, fn2LeadsDasEtapas(r, FN3_ETAPAS_LATERAIS))}
     ${fn2PosVenda(r)}
     <!-- OS TRES BLOCOS DA PRANCHA 12b, na proporcao dela (1.25fr 1fr 1fr): o Comando e
          mais largo porque tem sete barras com rotulo; os outros dois sao listas. -->
@@ -28583,6 +28609,15 @@ function aplicarEtapaNoDataLocal(leadId, novaEtapa, propriedades, diasForcado) {
       const i = lista.findIndex(l => String(l.id) === alvo);
       if (i >= 0) { movido = lista.splice(i, 1)[0]; break; }
     }
+
+    ['leadsReciclagem', 'leadsReciclagem60'].forEach(chave => {
+      const lista = Array.isArray(DATA[chave]) ? DATA[chave] : null;
+      if (!lista) return;
+      const i = lista.findIndex(l => String(l.id) === alvo);
+      if (i < 0) return;
+      const tirado = lista.splice(i, 1)[0];
+      if (!movido) movido = tirado;
+    });
     if (movido) {
       const atualizado = { ...movido, ...(propriedades || {}), stageId: novaEtapa, stage: STAGE_LABELS[novaEtapa] || '', dias: dias };
       if (!Array.isArray(DATA.funilLeads[novaEtapa])) DATA.funilLeads[novaEtapa] = [];

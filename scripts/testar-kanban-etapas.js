@@ -591,7 +591,9 @@ const grade = iGrade > 0 ? template.slice(iGrade, template.indexOf('];', iGrade)
    MEDIDO no CRM: o negócio ESTAVA em Ganho (o ASAAS moveu em 20 min) e o robô não trazia
    a etapa — a venda desaparecia do Cockpit no momento em que virava venda, e não havia de
    onde mandá-la para o Onboarding. */
-checar('a grade tem 8 colunas', (grade.match(/id: /g) || []).length === 8,
+/* NOVE COLUNAS DESDE 01/10/26: RECICLAGEM entrou, na frente. Julyan: "quero que fique mais
+   visível os leads de reciclagem" — o negócio jogado na reciclagem sumia do kanban. */
+checar('a grade tem 9 colunas', (grade.match(/id: /g) || []).length === 9,
   'achado ' + (grade.match(/id: /g) || []).length);
 checar('Perdido NÃO é coluna da grade', grade.length > 0 && grade.indexOf('1396006164') < 0);
 checar('Enviado Onboarding é a última coluna da grade',
@@ -624,7 +626,8 @@ checar('sem histórico suficiente o degrau não inventa etapa',
    taxa em cima de venda fechada é número que não responde pergunta nenhuma — o mesmo
    motivo de Ag. Pagamento e Onboarding já estarem de fora. */
 checar('a conversão não ocupa linha do header — vive no title do hover',
-  template.indexOf('const conv = (col.pagto || col.onb || col.ganho) ? null : fn2Conversao(col.id, fn2OwnerAtual);') > 0 &&
+  /* Reciclagem também fica fora (01/10/26): é balde de resgate, não degrau que converte */
+  template.indexOf('const conv = (col.pagto || col.onb || col.ganho || col.recic) ? null : fn2Conversao(col.id, fn2OwnerAtual);') > 0 &&
   template.indexOf('title="${dica}"') > 0);
 /* O card de Perdido dizia "31/08 (segunda)" para uma perda de 01/09 (terça): 'YYYY-MM-DD'
    é meia-noite UTC pela especificação, e em Brasília (UTC−3) isso é o dia anterior. Errava
@@ -1105,7 +1108,7 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
     && template.indexOf('.fn3-col[data-fn3-viol="0"]:not(.is-aberta)>*:not(.fn3-cab)') < 0,
     'a regra voltou a olhar data-fn3-viol — a coluna com estourado deixa de fechar');
   checar('quem tem estourado apenas NASCE aberta',
-    template.indexOf("class=\"fn3-col${estourados ? ' is-aberta' : ''}\"") > -1);
+    template.indexOf("class=\"fn3-col${estourados ? ' is-aberta' : ''}${col.recic ? ' is-recic' : ''}\"") > -1);
   checar('o cabeçalho fica no topo também no toque',
     template.indexOf('.fn3-col > .fn3-cab{position:sticky;top:0;z-index:3;}') > -1
     && template.indexOf('.fn3-col > .fn3-cab{position:static;}') < 0);

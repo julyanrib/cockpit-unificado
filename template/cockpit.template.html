@@ -5633,7 +5633,7 @@
      Fica registrado o que ainda dói: entre 760 e ~1250px de janela (notebook com uma
      janela ao lado) o cartão é esmagado. As saídas são rolar de lado ou mostrar menos
      colunas por vez — as duas trocam algo que ele já decidiu. */
-  .fn3-grade{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;
+  .fn3-grade{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:8px;
     align-items:start;}
 
   /* ══ A COLUNA ROLA, E O CABEÇALHO FICA ══════════════════════════════════════════
@@ -5643,6 +5643,7 @@
      (var(--ink)), então os cartões passam por baixo sem transparecer.
      A altura é em vh: a coluna tem de caber na TELA de quem olha, e px fixo é metade de
      um monitor e uma tela e meia de celular. */
+  .fn3-col.is-recic{outline:2px dashed var(--cor);outline-offset:3px;border-radius:12px;}
   .fn3-col{display:flex;flex-direction:column;gap:6px;min-width:0;
     background:var(--panel2);border:1.5px solid var(--creme-linha);
     border-top:4px solid var(--cor,var(--muted2));border-radius:12px;padding:9px 8px;
@@ -18093,9 +18094,34 @@ function fn2Memoria(lead) {
    Uma lista só, do acessor do projeto, com o estado já resolvido. Ordenada por RISCO:
    estourado antes de no prazo, e dentro de cada grupo o mais parado primeiro. */
 function fn2Leads(r) {
-  const idsDaEsteira = FN2_ETAPAS.map(e => e.id);
+  return fn2LeadsDasEtapas(r, FN2_ETAPAS.map(e => e.id));
+}
+/* GANHO, ONBOARDING E RECICLAGEM NO KANBAN (01/10/26, Julyan: "quero o funil com as
+   etapas ganho e enviado pra onboarding também, mantendo todas as travas e propriedades,
+   e que fique mais visível os leads de reciclagem"). As colunas Ganho e Onboarding já
+   existiam, mas fn2Leads só monta as etapas de venda: as duas nasciam sempre vazias, e o
+   negócio em Reciclagem sumia do funil. Os cartões delas vêm por aqui, à parte, e NÃO
+   entram em fn2Leads — o hero, o "em jogo" e o "Ativos · N" continuam medindo só venda. */
+const FN3_ETAPAS_LATERAIS = ['1396006162', '1396006163', '1398311191'];
+function fn2LeadsDasEtapas(r, ids) {
+  const idsDaEsteira = ids;
   const brutos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(r.ownerId) : [])
     .filter(l => idsDaEsteira.indexOf(String(l.stageId)) >= 0);
+  /* OS RECICLADOS VÊM DA LISTA DO ROBÔ: Reciclagem não está em funilLeads (é bucket
+     lateral). leadsReciclagem tem todos; até a próxima carga do robô, leadsReciclagem60
+     (os parados há 60+ dias). O que entrou na reciclagem nesta sessão já está em
+     funilLeads e passa primeiro — a lista não duplica. */
+  if (idsDaEsteira.indexOf('1398311191') >= 0) {
+    const vistos = new Set(brutos.map(l => String(l.id)));
+    const lista = Array.isArray(DATA.leadsReciclagem) ? DATA.leadsReciclagem
+      : (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : []);
+    lista.forEach(l => {
+      if (!l || !l.id || vistos.has(String(l.id))) return;
+      if (String(l.ownerId) !== String(r.ownerId)) return;
+      vistos.add(String(l.id));
+      brutos.push({ ...l, stageId: '1398311191', stage: STAGE_LABELS['1398311191'] || 'Reciclagem' });
+    });
+  }
   /* a ESCADA DE PRIORIDADE do projeto (ordenarMeuFunil + PRIORIDADE_FUNIL) entra aqui:
      ela sabe o que a minha conta de dias não sabe — que lead QUENTE sem próxima ação passa
      na frente de follow-up velho. Os quentes vêm de agendaQuentes, o mesmo acessor que a
@@ -18827,6 +18853,10 @@ function etapaPedeProximoPasso(etapaId) {
    Então o rótulo é o nome mais curto que ainda identifica a etapa, e a régua é telegráfica.
    O nome completo não se perde: vive no title do header, junto da conversão. */
 const FN3_COLUNAS = [
+  /* RECICLAGEM PRIMEIRO (01/10/26): é o balde de resgate — não é degrau, não pede SLA, e
+     sair dela nunca é recuo. Na frente da grade porque o pedido é "mais visível": no fim,
+     depois de Onboarding, ela cairia fora da tela. */
+  { id: '1398311191', rot: 'RECICLAGEM', pleno: 'Reciclagem — resgate', prazo: 'novo toque', recic: true },
   { id: '1395880469', rot: 'PROSPECÇÃO', pleno: 'Prospecção', prazo: '1º toque', curto: true },
   { id: '1396005401', rot: 'VISITA', pleno: 'Visita feita', prazo: 'follow-up', curto: true },
   { id: '1395880470', rot: 'DECISOR', pleno: 'Conversa com decisor', prazo: 'toque', curto: true },
@@ -19007,7 +19037,7 @@ function fn3Cabecalho(col, daEtapa) {
   const soma = daEtapa.reduce((a, x) => a + x.valor, 0);
   /* nem Ganho: não há próxima etapa para converter, e taxa em cima de venda fechada é
      número que não responde pergunta nenhuma. */
-  const conv = (col.pagto || col.onb || col.ganho) ? null : fn2Conversao(col.id, fn2OwnerAtual);
+  const conv = (col.pagto || col.onb || col.ganho || col.recic) ? null : fn2Conversao(col.id, fn2OwnerAtual);
 
   /* GANHO E ONBOARDING dizem DESDE QUANDO, não uma régua de SLA: os dois têm corte e
      nenhum dos dois tem prazo a cumprir. "enviar sem régua" foi o que a coluna disse
@@ -19024,7 +19054,7 @@ function fn3Cabecalho(col, daEtapa) {
      que impede a coluna de prometer um prazo que ninguém cobra ali.
      O verbo do prazo ("confirmar", "1º toque") e a data do corte não somem: vão para o
      title, que é onde a leitura de contexto cabe sem gastar linha da coluna. */
-  const chipRegua = col.ganho ? 'ASAAS' : col.onb ? 'espelho'
+  const chipRegua = col.ganho ? 'ASAAS' : col.onb ? 'espelho' : col.recic ? 'resgate'
     : (() => { const s = fn2Sla(col.id); return s == null ? 'sem régua' : 'régua ' + (s === 2 ? '48h' : s + 'd'); })();
   const reguaDica = col.ganho
     ? 'quem move para Ganho é o ASAAS, na confirmação do pagamento' + (desdeCorte ? ' · ' + desdeCorte : '')
@@ -19492,7 +19522,7 @@ function fn3Coluna(col, itens, idsAcesos) {
   /* NASCE ABERTA QUEM TEM SLA ESTOURADO (04/09/26): no toque toda coluna recolhe, entao
      "estourados primeiro" precisa de um estado inicial em vez da regra de CSS que impedia
      de fechar. No desktop a classe nao muda nada — la nada recolhe. */
-  return `<div class="fn3-col${estourados ? ' is-aberta' : ''}" style="--cor:${stageColor(col.id)}"
+  return `<div class="fn3-col${estourados ? ' is-aberta' : ''}${col.recic ? ' is-recic' : ''}" style="--cor:${stageColor(col.id)}"
     data-fn3-alvo="${col.id}" data-fn3-viol="${estourados ? 1 : 0}">
     ${fn3Cabecalho(col, daEtapa)}
     ${corpo}
@@ -19504,6 +19534,10 @@ function fn3Coluna(col, itens, idsAcesos) {
    dela: as de venda dizem o que falta atrás; Pagamento diz o que traria dinheiro; e
    Onboarding vazio é o estado normal, não um problema. */
 function fn3ColunaVazia(col, itens) {
+  if (col.recic) {
+    return `<div class="fn3-slot is-neutro">nada em reciclagem.<br>
+      <b>Negócio parado que você jogar aqui</b> fica à vista para ganhar um toque novo — e sai daqui para qualquer etapa.</div>`;
+  }
   if (col.onb) {
     const corte = DATA.onboardingVisivel && DATA.onboardingVisivel.corte;
     return `<div class="fn3-slot is-neutro">nada enviado para onboarding
@@ -19516,8 +19550,10 @@ function fn3ColunaVazia(col, itens) {
       ? '<b>' + emNegociacao + ' em negociação</b> é de onde sai o próximo.'
       : '<b>e a negociação também está vazia</b> — o funil precisa de entrada.'}</div>`;
   }
-  const i = FN3_COLUNAS.findIndex(c => c.id === col.id);
-  const anterior = i > 0 ? FN3_COLUNAS[i - 1] : null;
+  /* a escada é a da venda: Reciclagem fica na frente da grade, mas não é a etapa "anterior" de ninguém */
+  const escada = FN3_COLUNAS.filter(c => !c.recic);
+  const i = escada.findIndex(c => c.id === col.id);
+  const anterior = i > 0 ? escada[i - 1] : null;
   const naAnterior = anterior ? itens.filter(x => x.stageId === anterior.id) : [];
   const prontos = naAnterior.filter(x => x.est.passo).length;
   return `<div class="fn3-slot is-neutro">${i === 0
@@ -19585,7 +19621,7 @@ function fn3Perdidos(perdidos) {
 /* ── A ESTEIRA MONTADA ────────────────────────────────────────────────────────────────
    Substitui o bloco da v2. O resto da aba (hero, Comando de vendas, dinheiro, gaveta)
    continua igual: a prancha delimita o escopo a este bloco. */
-function fn3EsteiraHTML(todos, acesos) {
+function fn3EsteiraHTML(todos, acesos, laterais) {
   const perdidos = todos.filter(x => x.stageId === FN2_ETAPA_PERDIDO);
   const ativos = todos.filter(x => x.stageId !== FN2_ETAPA_PERDIDO);
   const naEsteira = ativos.length;
@@ -19617,7 +19653,7 @@ function fn3EsteiraHTML(todos, acesos) {
       </span>
     </div>
     <div class="fn3-grade">
-      ${FN3_COLUNAS.map(c => fn3Coluna(c, ativos, acesos)).join('')}
+      ${FN3_COLUNAS.map(c => fn3Coluna(c, ativos.concat(laterais || []), acesos)).join('')}
     </div>
     ${fn3Perdidos(perdidos)}`;
 }
@@ -20581,7 +20617,7 @@ function fn2ShellHTML(r) {
       data-fn2-pulsa="${esc(pulsando)}">
     ${fn2Hero(r, itens, movimentos)}
     ${fn2Contexto(movimentos, itens.length)}
-    ${fn3EsteiraHTML(todos, acesos)}
+    ${fn3EsteiraHTML(todos, acesos, fn2LeadsDasEtapas(r, FN3_ETAPAS_LATERAIS))}
     ${fn2PosVenda(r)}
     <!-- OS TRES BLOCOS DA PRANCHA 12b, na proporcao dela (1.25fr 1fr 1fr): o Comando e
          mais largo porque tem sete barras com rotulo; os outros dois sao listas. -->
@@ -41620,6 +41656,17 @@ function aplicarEtapaNoDataLocal(leadId, novaEtapa, propriedades, diasForcado) {
       const i = lista.findIndex(l => String(l.id) === alvo);
       if (i >= 0) { movido = lista.splice(i, 1)[0]; break; }
     }
+    /* O RECICLADO MORA NAS LISTAS DO ROBÔ (01/10/26): ao sair da Reciclagem ele sai delas
+       e entra no funilLeads da etapa nova — senão o cartão ficava na coluna Reciclagem
+       depois de movido, o mesmo defeito do Kadô ao contrário. */
+    ['leadsReciclagem', 'leadsReciclagem60'].forEach(chave => {
+      const lista = Array.isArray(DATA[chave]) ? DATA[chave] : null;
+      if (!lista) return;
+      const i = lista.findIndex(l => String(l.id) === alvo);
+      if (i < 0) return;
+      const tirado = lista.splice(i, 1)[0];
+      if (!movido) movido = tirado;
+    });
     if (movido) {
       const atualizado = { ...movido, ...(propriedades || {}), stageId: novaEtapa, stage: STAGE_LABELS[novaEtapa] || '', dias: dias };
       if (!Array.isArray(DATA.funilLeads[novaEtapa])) DATA.funilLeads[novaEtapa] = [];
