@@ -793,7 +793,9 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
   /* 4. O DESENHO NÃO DERRUBA A ESCRITA. Esta é a classe, não o caso: qualquer erro em
      qualquer tela chamada pelo redesenhar abortaria a gravação no CRM. */
   const iMotor = template.indexOf('async function gravarPassagemOtimista');
-  const motor = iMotor > 0 ? template.slice(iMotor, iMotor + 4200) : '';
+  /* 5200 desde 01/10/26: a etapaEsperada do conflito entrou antes da escrita e empurrou
+     o aviso de pintura para fora dos 4200 — o aviso continua lá, a janela é que encolheu. */
+  const motor = iMotor > 0 ? template.slice(iMotor, iMotor + 5200) : '';
   checar('o motor existe para ser medido', iMotor > 0);
   checar('o motor isola o desenho num try',
     motor.indexOf('try { opts.redesenhar(leadDepois); }') > -1,

@@ -10792,6 +10792,9 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .kb7-onb{flex:none;margin-left:auto;min-height:34px;border-radius:var(--r-pill);border:0;padding:0 12px;
     background:var(--green);color:#FFFDF8;font:800 11.5px var(--font-body);cursor:pointer;}
   .kb7-selo{font:700 10.5px var(--font-body);color:var(--amber);}
+  .kb7-selo.is-fila{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .kb7-selo.is-fila button{min-height:28px;border:1px solid var(--line);border-radius:var(--r-pill);background:none;
+    padding:0 10px;font:700 11px var(--font-body);color:var(--mute);cursor:pointer;}
   .kb7-mais{min-height:36px;border:1px dashed var(--line2);border-radius:10px;background:none;
     font:700 12px var(--font-body);color:var(--mute);cursor:pointer;}
   .kb7-mais:hover{border-color:var(--acao);color:var(--ink);}
@@ -10855,6 +10858,7 @@ foi escrita para jogar o "0 de 27 resolvidos"
   @media (max-width:760px){
     .kb7-col{flex-basis:84%;}
     .kb7-mais{min-height:44px;}
+    .kb7-selo.is-fila button{min-height:44px;}
     .kb7-leituras{grid-template-columns:minmax(0,1fr);}
     .kb7-seg button,.kb7-chip,.kb7-btn,.kb7-aviso button{min-height:44px;}
     .kb7-avanca{width:44px;height:44px;}
@@ -20836,8 +20840,11 @@ function kb7QuadroHTML(r, todos, acesos, laterais) {
   /* o que está na janela do Desfazer já aparece na coluna nova */
   const vistos = itens.map(x => {
     const p = KB7.pendente[String(x.lead.id)];
-    return p ? Object.assign({}, x, { stageId: p.para, pendente: true }) : x;
+    if (p) return Object.assign({}, x, { stageId: p.para, pendente: true });
+    const q = kb7NaFila(x.lead.id);
+    return q ? Object.assign({}, x, { stageId: q.para, naFila: true }) : x;
   });
+  if (!kb7SemSinal() && !KB7.subindo && kb7LerFila().length) setTimeout(kb7SubirFila, 0);
   const filtros = [['todos', 'Todos'], ['regua', 'Passou da régua'], ['toque', 'Sem toque']];
   return '<section class="kb7" data-kb7-raiz="1">'
     + '<div class="kb7-topo"><div class="kb7-topo-txt"><h3>Kanban</h3>'
@@ -20939,7 +20946,7 @@ function kb7Card(item, acesos) {
   const arrasta = et !== KB7_ONB;
   const destaque = KB7.destaque.get(id);
   const aceso = !acesos || acesos.has(id);
-  return '<article class="kb7-card' + (item.pendente ? ' is-pendente' : '') + (estaGravando(id) ? ' is-gravando' : '') + (destaque && Date.now() - destaque < 1500 ? ' is-destaque' : '') + (aceso ? '' : ' is-fora') + '"'
+  return '<article class="kb7-card' + (item.pendente || item.naFila ? ' is-pendente' : '') + (estaGravando(id) ? ' is-gravando' : '') + (destaque && Date.now() - destaque < 1500 ? ' is-destaque' : '') + (aceso ? '' : ' is-fora') + '"'
     + ' data-kb7-card="' + esc(id) + '" data-kb7-de="' + esc(et) + '"' + (arrasta ? ' draggable="true"' : '')
     + ' tabindex="0" role="button" aria-label="Abrir a ficha de ' + esc(l.name || 'negócio') + '">'
     + '<div class="kb7-l1"><div class="kb7-quem"><b>' + esc(l.name || 'sem nome') + '</b><span>' + esc(sub) + '</span></div>'
@@ -20952,6 +20959,7 @@ function kb7Card(item, acesos) {
       : podeAvancar ? '<button type="button" class="kb7-avanca" data-kb7-avanca="' + esc(id) + '" title="Avançar para ' + esc(STAGE_LABELS[prox] || '') + '" aria-label="Avançar para ' + esc(STAGE_LABELS[prox] || '') + '">→</button>' : '')
     + '</div>'
     + (item.pendente ? '<span class="kb7-selo">a gravar · Desfazer no aviso</span>' : '')
+    + (item.naFila ? '<span class="kb7-selo is-fila">na fila · sobe quando o sinal voltar <button type="button" data-kb7-desfila="' + esc(id) + '">cancelar</button></span>' : '')
     + '</article>';
 }
 
@@ -21096,6 +21104,14 @@ document.addEventListener('click', function (ev) {
   if (!raiz) return;
   const f = ev.target.closest('[data-kb7-filtro]');
   if (f) { KB7.filtro = f.getAttribute('data-kb7-filtro'); kb7Redesenhar(); return; }
+  const df = ev.target.closest('[data-kb7-desfila]');
+  if (df) {
+    ev.stopPropagation();
+    const alvo = df.getAttribute('data-kb7-desfila');
+    kb7SalvarFila(kb7LerFila().filter(x => String(x.id) !== String(alvo)));
+    kb7Redesenhar();
+    return;
+  }
   const m = ev.target.closest('[data-kb7-mais]');
   if (m) {
     const c = m.getAttribute('data-kb7-mais');
@@ -21396,16 +21412,74 @@ function kb7Confirmar(lead, de, para, props, extra) {
     host.remove();
     if (desfeito) return;
     delete KB7.pendente[id];
-    const r = await gravarPassagemOtimista({
-      lead: lead, para: para, propriedades: props, nota: extra.nota || null,
-      passoAcao: extra.passoAcao, passoData: extra.passoData, passoTipo: extra.passoTipo,
-      redesenhar: kb7Redesenhar
-    });
-    /* a recusa já tem aviso: o motor diz o motivo do servidor e devolve o cartão */
-    if (r && r.ok) kb7RegistrarHistorico(lead, de, para, extra.motivo || null);
-    kb7Redesenhar();
+    if (kb7SemSinal()) {
+      kb7Enfileirar({ id: id, nome: lead.name || '', de: de, para: para, props: props || {}, extra: extra || {} });
+      mostrarToast('Sem sinal: "' + (lead.name || 'o negócio') + '" ficou na fila e sobe sozinho quando a conexão voltar.', 'atencao');
+      kb7Redesenhar();
+      return;
+    }
+    await kb7Gravar(lead, de, para, props, extra);
   }, 5000);
 }
+
+async function kb7Gravar(lead, de, para, props, extra) {
+  const r = await gravarPassagemOtimista({
+    lead: lead, para: para, propriedades: props, nota: extra.nota || null,
+    passoAcao: extra.passoAcao, passoData: extra.passoData, passoTipo: extra.passoTipo,
+    etapaEsperada: de, redesenhar: kb7Redesenhar
+  });
+  /* a recusa e o conflito já têm aviso: o motor diz o motivo e põe o cartão no lugar */
+  if (r && r.ok) kb7RegistrarHistorico(lead, de, para, extra.motivo || null);
+  kb7Redesenhar();
+  return r;
+}
+
+/* ══ SEM SINAL, NA FILA (01/10/26, docs/09 §4 "sem sinal: selo na fila até subir") ══
+   O Cockpit no celular perde sinal na rua. Antes, a mudança feita sem rede caía no
+   "não consegui confirmar" do motor — a pior mensagem para quem não tem como conferir.
+   Agora ela espera: o cartão fica na coluna nova com o selo "na fila", e sobe sozinho
+   quando o navegador avisa que a rede voltou (ou na próxima vez que a aba abrir).
+   Guardada no navegador, por pessoa: é uma intenção dele, não um dado do time. Cada
+   item sobe com a etapa em que o cartão estava — se alguém mudou o negócio nesse meio
+   tempo, o servidor recusa com o conflito e o cartão vai para onde o negócio está. */
+function kb7SemSinal() { return typeof navigator !== 'undefined' && navigator.onLine === false; }
+function kb7ChaveFila() { return 'kb7-fila:' + String((sessaoAtual && (sessaoAtual.ownerId || sessaoAtual.email)) || 'anon'); }
+function kb7LerFila() {
+  try { const v = JSON.parse(localStorage.getItem(kb7ChaveFila()) || '[]'); return Array.isArray(v) ? v : []; }
+  catch (e) { return KB7.filaMem || []; }
+}
+function kb7SalvarFila(lista) {
+  KB7.filaMem = lista;
+  try { localStorage.setItem(kb7ChaveFila(), JSON.stringify(lista)); } catch (e) { /* sem armazenamento: fica na memória */ }
+}
+function kb7NaFila(id) { return kb7LerFila().find(x => String(x.id) === String(id)) || null; }
+function kb7Enfileirar(item) {
+  const lista = kb7LerFila().filter(x => String(x.id) !== String(item.id));
+  lista.push(Object.assign({ em: Date.now() }, item));
+  kb7SalvarFila(lista);
+}
+async function kb7SubirFila() {
+  if (KB7.subindo || kb7SemSinal()) return;
+  const lista = kb7LerFila();
+  if (!lista.length) return;
+  KB7.subindo = true;
+  try {
+    for (const item of lista) {
+      if (kb7SemSinal()) break;
+      /* sai da fila ANTES de subir: o motor já trata recusa, conflito e "não sei", e
+         repetir sozinho uma escrita que talvez tenha ido é o que escreve duas vezes */
+      kb7SalvarFila(kb7LerFila().filter(x => String(x.id) !== String(item.id)));
+      const lead = (typeof buscarLeadFunilPorId === 'function' && buscarLeadFunilPorId(item.id)) || KB7.itens[String(item.id)];
+      if (!lead) continue;
+      if (String(lead.stageId) === String(item.para)) continue;
+      await kb7Gravar(lead, item.de, item.para, item.props || {}, item.extra || {});
+    }
+  } finally {
+    KB7.subindo = false;
+    kb7Redesenhar();
+  }
+}
+if (typeof window !== 'undefined') window.addEventListener('online', function () { kb7SubirFila(); });
 
 /* client_stage_changes com a origem e o motivo (0148). Complemento: se falhar, a etapa
    já mudou no HubSpot e o espelho já leva — o histórico do app só fica sem esta linha. */
@@ -41821,6 +41895,10 @@ async function gravarPassagemOtimista(opts) {
   /* `finally` E NAO A LINHA SEGUINTE: qualquer saida daqui — inclusive um erro que eu
      nao previ — tem de soltar a tranca, senao o negocio fica bloqueado pelo resto da
      sessao. Foi exatamente o que aconteceu com o estouro da ficha. */
+  /* A ETAPA EM QUE O CARTÃO ESTAVA, para o servidor recusar se alguém mudou antes
+     (409, ver quemMoveuPorUltimo na rota). Só quando difere do destino: um chamador que
+     já mutou o lead mandaria o próprio destino como "esperada" e leria conflito falso. */
+  if (opts.etapaEsperada == null && antes.stageId && antes.stageId !== para) opts.etapaEsperada = antes.stageId;
   try {
     r = await gravarPassagemDeEtapa(opts);
   } catch (e) {
@@ -41850,6 +41928,26 @@ async function gravarPassagemOtimista(opts) {
      `gravarPassagemDeEtapa` escreve essa frase de propósito, e ela é a diferença entre
      "não gravou" e "não sei se gravou" — reverter no segundo caso apagaria da tela uma
      mudança que existe no CRM. */
+  /* ══ ALGUÉM MOVEU ANTES (01/10/26) ══════════════════════════════════════════════
+     O cartão não volta para onde estava: vai para onde o negócio ESTÁ. Voltar para a
+     etapa antiga seria a terceira versão do mesmo negócio na tela. */
+  if (r.conflito && r.conflito.etapa) {
+    const real = String(r.conflito.etapa);
+    if (typeof aplicarEtapaNoDataLocal === 'function') aplicarEtapaNoDataLocal(id, real, antes.props, 0);
+    FN3_RECEM.delete(id);
+    lead.stageId = real;
+    lead.stage = (typeof STAGE_LABELS !== 'undefined' ? STAGE_LABELS[real] : '') || lead.stage;
+    Object.keys(antes.props).forEach(function (k) { lead[k] = antes.props[k]; });
+    redesenhar();
+    if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
+    if (typeof mostrarToast === 'function') {
+      const quem = r.conflito.por ? String(r.conflito.por).split(' ')[0] : 'Alguém';
+      mostrarToast(quem + ' já moveu "' + (lead.name || 'o negócio') + '" para '
+        + ((typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[real]) || real)
+        + (r.conflito.onde ? ' ' + r.conflito.onde : '') + '. Não gravei a sua mudança — o cartão foi para onde o negócio está.', 'atencao');
+    }
+    return r;
+  }
   const naoSei = /não consegui confirmar|nao consegui confirmar/i.test(String(r.erro || ''));
   if (naoSei) {
     if (typeof mostrarToast === 'function') {
@@ -41920,7 +42018,8 @@ async function gravarPassagemDeEtapa(opts) {
   try {
     resp = await comPrazoGlobal(async signal => fetch('/api/negocio-acao', {
       method: 'POST', signal, headers: cab,
-      body: JSON.stringify({ op: 'mudar-etapa', dealId: lead.id, novaEtapa: para, propriedades })
+      body: JSON.stringify({ op: 'mudar-etapa', dealId: lead.id, novaEtapa: para, propriedades,
+        ...(opts.etapaEsperada ? { etapaEsperada: String(opts.etapaEsperada) } : {}) })
     }), 25000, 'mudar-etapa-negocio');
   } catch (e) {
     /* ABORT NAO E RESPOSTA. O pedido pode ter chegado e sido gravado — foi o que
@@ -41948,6 +42047,7 @@ async function gravarPassagemDeEtapa(opts) {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       saida.erro = (data && data.erro) || 'O HubSpot recusou a mudança.';
+      if (resp.status === 409 && data && data.conflito && data.conflito.etapa) saida.conflito = data.conflito;
       return saida;
     }
     saida.ok = true;
