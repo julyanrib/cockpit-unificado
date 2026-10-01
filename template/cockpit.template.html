@@ -9688,6 +9688,14 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .xv3-check:has(.xv3-check-txt){align-items:center;}
   .xv3-check-txt b{font-weight:800;}
   .xv3-check-txt span{color:var(--muted);}
+  /* T10 (fase 5): o portão em dois níveis — ver o comentário no markup */
+  .xv3-check.is-dois-niveis{align-items:flex-start;padding:8px 0;flex-wrap:nowrap;}
+  .xv3-check.is-dois-niveis .xv3-check-anel{margin-top:1px;}
+  .xv3-check-corpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}
+  .xv3-check-corpo .xv3-check-txt{white-space:normal;overflow:visible;text-overflow:clip;}
+  .xv3-check-corpo .xv3-check-txt b{display:block;}
+  .xv3-check-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+  .xv3-check-acoes .gate-cta{margin-left:0;max-width:100%;}
   /* T10 (handoff v6): a 1600 px a coluna do checklist é estreita, e selo + botão comiam
      a largura — o texto quebrava uma palavra por linha. Linha em dois níveis em qualquer
      largura: título e detalhe em cima, selo e botão embaixo, alinhados sob o texto. */
@@ -10338,9 +10346,23 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .v5-portao-num{display:flex;align-items:baseline;gap:6px;}
   .v5-portao-num b{font:800 34px/1 var(--font-display);color:var(--fg);font-variant-numeric:tabular-nums;}
   .v5-portao-num span{font:600 13px var(--font-body);color:var(--mute);}
-  .v5-portao-barra{height:8px;border-radius:4px;background:var(--line);overflow:hidden;}
-  .v5-portao-barra i{display:block;height:100%;background:var(--regua-ok);}
   .v5-portao small{font:500 12px var(--font-body);color:var(--dim);}
+  .v5-portao-tracos{display:flex;gap:4px;}
+  .v5-portao-tracos i{flex:1;height:8px;border-radius:2px;background:var(--line);}
+  .v5-portao-tracos i.is-feito{background:var(--acao);}
+  .v5-tag.is-regua-ok,.v5-tag.is-regua-perto,.v5-tag.is-regua-longe{gap:6px;background:var(--chip);color:var(--fg);}
+  .v5-tag.is-regua-ok::before,.v5-tag.is-regua-perto::before,.v5-tag.is-regua-longe::before{content:'';width:8px;height:8px;border-radius:50%;flex:none;}
+  .v5-tag.is-regua-ok::before{background:var(--regua-ok);}
+  .v5-tag.is-regua-perto::before{background:var(--regua-perto);}
+  .v5-tag.is-regua-longe::before{background:var(--regua-estourou);}
+  /* T12 (fase 5): a origem de cada número — "app · agora" ou "HubSpot · 14:30" */
+  .v5-origem{display:inline-flex;align-items:center;gap:5px;font:600 11px var(--font-body);color:var(--dim);white-space:nowrap;}
+  .v5-origem.is-app i{width:6px;height:6px;border-radius:50%;background:var(--ao-vivo);}
+  .sm5-placar .v5-origem{color:var(--dark-mut);}
+  .sm5-origem-linha{margin-top:6px;}
+  .sm5-l-origem{display:block;margin-top:2px;}
+  .sm5-rua{padding:20px 32px 0;}
+  @media (max-width:760px){ .sm5-rua{padding:16px 16px 0;} }
   .v5-portao .v5-tag{align-self:flex-start;}
   .rx-g-cobrar{margin-top:10px;align-self:flex-start;}
   .pb-mz-rola{overflow-x:auto;-webkit-overflow-scrolling:touch;}
@@ -11076,8 +11098,7 @@ foi escrita para jogar o "0 de 27 resolvidos"
        Dia sem linha de daily continua sendo "—" e nunca 0: é dia sem registro, não dia
        sem visita. -->
   <div id="sm9Raiz" style="width:min(1780px,100% - 64px);margin:0 auto;"></div>
-  <!-- v5 (28/09/26): o que a rua ensinou — funil de porta do time (v5PreencherCamadaDaRua) -->
-  <div id="v5RuaDaSemana" class="v5-camada-da-rua" style="width:min(1780px,100% - 64px);margin:16px auto 0;"></div>
+  <!-- "O que a rua ensinou" (#v5RuaDaSemana) mora dentro de #sm9Raiz desde 01/10/26 (T13) -->
 
   </div>
   <div class="view" id="viewDaily">
@@ -15433,11 +15454,15 @@ function buildGatesDoDiaHTML(r, diag) {
 
         <div style="margin-top:6px;">
           ${diag.gates.filter(g => !g.ok).map(g => `
-            <div class="xv3-check">
+            <!-- DOIS NÍVEIS (T10, fase 5, 01/10/26): a 1600 px a coluna da direita tem ~250 px,
+                 e anel + texto + selo + botão numa fileira deixavam o texto com uma palavra por
+                 linha. Título e detalhe em cima; o selo e o botão embaixo, em todas as larguras. -->
+            <div class="xv3-check is-dois-niveis">
               <span class="xv3-check-anel" aria-hidden="true">✓</span>
-              <span class="xv3-check-txt" title="${esc(g.rotulo)} · ${esc(g.detalhe)}"><b>${esc(g.rotulo)}</b> <span>· ${esc(g.detalhe)}</span></span>
-              ${gatePillHTML(g, cobravel)}
-              ${g.cta ? `<button class="xv3-ghost is-acao gate-cta" data-gate="${g.id}" style="flex:none;">${esc(g.cta)} →</button>` : ''}
+              <div class="xv3-check-corpo">
+                <span class="xv3-check-txt" title="${esc(g.rotulo)} · ${esc(g.detalhe)}"><b>${esc(g.rotulo)}</b> <span>${esc(g.detalhe)}</span></span>
+                <div class="xv3-check-acoes">${gatePillHTML(g, cobravel)}${g.cta ? `<button class="xv3-ghost is-acao gate-cta" data-gate="${g.id}" style="flex:none;">${esc(g.cta)} →</button>` : ''}</div>
+              </div>
             </div>
           `).join('')}
         </div>
@@ -56221,6 +56246,29 @@ function v5SeloDaRodada() {
   return v5Selo('rodada', 'rodada das ' + hh + (hoje ? '' : ' de ' + d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })));
 }
 
+/* ══ A ORIGEM DE CADA NÚMERO (T12, fase 5, 01/10/26) ══════════════════════════════════
+   A Semana mistura o que o app mede ao vivo (visitas, fichas de rua) com o que o robô do
+   HubSpot traz de 2 em 2 horas, e a tela não dizia qual era qual. Um marcador discreto por
+   linha: "app · agora" ou "HubSpot · 14:30" — a hora da última rodada (a mesma do selo da
+   rodada), com a data quando não é de hoje. */
+function v5HoraDaRodada() {
+  const quando = DATA && DATA.hubspotUpdatedAtISO;
+  const d = quando ? new Date(quando) : null;
+  if (!d || isNaN(d)) return null;
+  const tz = { timeZone: 'America/Sao_Paulo' };
+  const hh = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+  const hoje = new Date().toLocaleDateString('pt-BR', tz) === d.toLocaleDateString('pt-BR', tz);
+  return hoje ? hh : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }) + ' ' + hh;
+}
+function v5Origem(tipo, titulo) {
+  if (tipo === 'app') {
+    return '<span class="v5-origem is-app" title="' + v5Esc(titulo || 'medido pelo app, ao vivo') + '"><i></i>app · agora</span>';
+  }
+  const h = v5HoraDaRodada();
+  return '<span class="v5-origem" title="' + v5Esc(titulo || 'robô do HubSpot, de 2 em 2 horas no horário comercial') + '">HubSpot · '
+    + v5Esc(h || 'sem horário') + '</span>';
+}
+
 /* ── Estado não medido (bloco) ── */
 function v5NaoMedido(titulo, porque) {
   return '<div class="v5-nm">' + v5IconeLinha('relogio', 18)
@@ -56704,7 +56752,7 @@ function v5FunilDePortaHTML(r, titulo) {
   const caixa = function (rot, n, leg) {
     return '<div class="v5-porta is-medindo"><span class="v5-rotulo">' + rot + '</span><b>' + n + '</b><small>' + v5Esc(leg) + '</small></div>';
   };
-  return '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>' + v5Esc(titulo) + '</h2>' + v5Selo('medindo', 'medindo desde 25/09') + '</div>'
+  return '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>' + v5Esc(titulo) + '</h2>' + v5Selo('medindo', 'medindo desde 25/09') + v5Origem('app', 'fichas de rua e visitas do app') + '</div>'
     + '<p class="v5-bloco-leg">Últimos 30 dias, das fichas de rua do app. A primeira leitura comparável sai com 4 semanas (23/10).</p>'
     + '<div class="v5-portas">'
     + caixa('Portas', r.portas, 'com ficha de rua')
@@ -57132,10 +57180,24 @@ async function v5PreencherPortoes(tentativa) {
       meuId ? supa.rpc('meta_visitas', { p_pessoa: meuId, p_dia: hoje }) : nada,
       meuId ? supa.rpc('demos_com_decisor', { p_pessoa: meuId, p_de: hoje, p_ate: hoje }) : nada,
     ]);
-    const cartao = function (rot, numero, de, pct, tag, tagCls, leg) {
+    /* A PÍLULA DO APP (T11, fase 5, 01/10/26): "x/6" e um traço por visita, preenchido quando
+       feita — o mesmo desenho da pílula do mapa (FolhaDoMapa), para o executivo reconhecer
+       que é uma coisa só. E o semáforo é DE META (--regua-*): antes a etiqueta usava as
+       cores de "tempo sem toque", que dizem outra coisa. */
+    const tracos = function (feitas, meta) {
+      const n = Math.max(1, Math.min(meta, 10));
+      let h = '';
+      for (let k = 0; k < n; k++) h += '<i' + (k < feitas ? ' class="is-feito"' : '') + '></i>';
+      return '<div class="v5-portao-tracos" aria-hidden="true">' + h + '</div>';
+    };
+    const semaforo = function (feitas, meta) {
+      if (feitas >= meta) return 'is-regua-ok';
+      return (meta - feitas) <= Math.max(1, Math.ceil(meta / 3)) ? 'is-regua-perto' : 'is-regua-longe';
+    };
+    const cartao = function (rot, numero, de, meta, feitas, tag, tagCls, leg) {
       return '<div class="v5-portao"><span class="v5-rotulo">' + rot + '</span>'
         + '<div class="v5-portao-num"><b>' + numero + '</b>' + (de ? '<span>' + de + '</span>' : '') + '</div>'
-        + (pct != null ? '<div class="v5-portao-barra"><i style="width:' + Math.min(100, Math.round(pct)) + '%;"></i></div>' : '')
+        + (meta != null ? tracos(feitas, meta) : '')
         + '<span class="v5-tag ' + tagCls + '">' + tag + '</span>'
         + (leg ? '<small>' + leg + '</small>' : '') + '</div>';
     };
@@ -57158,11 +57220,11 @@ async function v5PreencherPortoes(tentativa) {
     if (!agora) return;
     agora.innerHTML = '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>Portões do dia</h2>' + v5Selo('vivo') + '</div><div class="v5-portoes">'
       + (plano.error ? v5NaoMedido('Plano da semana', 'não consegui ler o plano agora')
-        : cartao('Plano da semana', fechado ? 'Validado' : 'Aberto', '', null, fechado ? 'o gestor já vê na Daily' : 'a semana ainda não foi fechada', fechado ? 'is-toque-hoje' : 'is-nm', fechado ? 'fechado ' + hh : ''))
+        : cartao('Plano da semana', fechado ? 'Validado' : 'Aberto', '', null, 0, fechado ? 'o gestor já vê na Daily' : 'a semana ainda não foi fechada', fechado ? 'is-regua-ok' : 'is-nm', fechado ? 'fechado ' + hh : ''))
       + (vis.error ? v5NaoMedido('Visitas de hoje', 'não consegui ler os check-ins agora')
-        : cartao('Visitas hoje', nv, 'de ' + metaV, (nv / metaV) * 100, nv >= metaV ? 'meta do dia batida' : 'faltam ' + (metaV - nv), nv >= metaV ? 'is-toque-hoje' : 'is-toque-dias', legVis))
+        : cartao('Visitas hoje', nv, '/' + metaV, metaV, nv, nv >= metaV ? 'meta do dia batida' : 'faltam ' + (metaV - nv), semaforo(nv, metaV), legVis))
       + (fichas.error ? v5NaoMedido('Demos com decisor', 'não consegui ler as fichas de rua agora')
-        : cartao('Demos com decisor', nd, 'de ' + V5_META_DEMOS, (nd / V5_META_DEMOS) * 100, nd >= V5_META_DEMOS ? 'meta do dia batida' : 'faltam ' + (V5_META_DEMOS - nd), nd >= V5_META_DEMOS ? 'is-toque-hoje' : 'is-toque-dias', 'ficha de rua ou reunião agendada no app · medindo desde 25/09'))
+        : cartao('Demos com decisor', nd, '/' + V5_META_DEMOS, V5_META_DEMOS, nd, nd >= V5_META_DEMOS ? 'meta do dia batida' : 'faltam ' + (V5_META_DEMOS - nd), semaforo(nd, V5_META_DEMOS), 'ficha de rua ou reunião agendada no app · medindo desde 25/09'))
       + '</div></section>';
     /* só guarda leitura inteira: um bloco com "não consegui ler" tenta de novo na próxima */
     if (!plano.error && !vis.error && !fichas.error) V5_HTML_CACHE.portoes = { em: Date.now(), html: agora.innerHTML };
@@ -68662,6 +68724,7 @@ function sm5TelaHTML(d) {
         : '<span style="color:var(--dark-mut);">série começa nesta semana</span>')
       +   (k.nota ? ' · <span style="color:var(--amber);">' + esc(k.nota) + '</span>' : '')
       + '</div>'
+      + '<div class="sm5-origem-linha">' + v5Origem('hubspot', 'robô do HubSpot (weekly-raw), de 2 em 2 horas') + '</div>'
       + '</div>';
   }).join('');
 
@@ -68930,6 +68993,7 @@ function sm5BoardHTML(d) {
            aviso assim que deixou a Kelly com 26 travados (reais: 5) por cinco dias. */
         +       (r.estadoFresco ? '' : ' · <b style="color:var(--amber);">travados e mês do'
         +         ' último domingo</b>') + '</span>'
+        +     '<span class="sm5-l-origem">' + v5Origem('hubspot', 'criados, reuniões, ganhos, travados e mês: robô do HubSpot, de 2 em 2 horas') + '</span>'
         +   '</span>'
         +   '<span class="sm5-l-num" style="display:flex;gap:18px;'
         +     'font-variant-numeric:tabular-nums;font-size:12px;min-width:270px;">'
@@ -69207,8 +69271,16 @@ function renderSemana() {
      A CARGA DAS ANÁLISES É ASSÍNCRONA e a tela não espera por ela: pinta com o que tem
      (números do snapshot, que já estão em memória) e repinta quando os roteiros chegam.
      Travar a aba num await deixaria o gestor olhando tela branca por causa de um texto. */
-  raiz.innerHTML = sm5TelaHTML(sm5Dados()) + sm9LeiturasHTML(sm9Dados());
+  /* O FUNIL DE PORTA NA CAMADA 2 (T13, fase 5, 01/10/26): "O que a rua ensinou" ficava
+     pendurado depois das seis "Mais leituras", fora das camadas. Agora mora logo depois do
+     dinheiro parado, antes da camada 3. O conteúdo continua vindo de v5PreencherCamadaDaRua
+     (cache de 60 s: repintar a Semana não relê o banco). */
+  raiz.innerHTML = sm5TelaHTML(sm5Dados())
+    + '<div id="v5RuaDaSemana" class="v5-camada-da-rua sm5-rua"></div>'
+    + sm9LeiturasHTML(sm9Dados());
   sm5Ligar(raiz);
+  const vSemana = document.getElementById('viewResumo');
+  if (vSemana && vSemana.classList.contains('active') && typeof v5PreencherCamadaDaRua === 'function') v5PreencherCamadaDaRua();
   if (!SM5_ANALISES) {
     sm5CarregarAnalises().then(function () {
       /* repinta com os roteiros na mão. `renderSemana` relê a raiz sozinho, então não há
