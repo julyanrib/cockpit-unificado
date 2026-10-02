@@ -65,7 +65,9 @@ checar('não sei → manda conferir ANTES de repetir',
   'repetir uma escrita que talvez tenha acontecido é o que grava duas vezes');
 
 /* ── 3. o prazo da escrita da etapa ──────────────────────────────────────────────── */
-const mPrazo = /'mudar-etapa', dealId: lead\.id[\s\S]{0,200}?\}\), (\d+), 'mudar-etapa-negocio'\)/.exec(corpoG);
+/* 02/10/26: com o cardápio anexado o prazo é outro (o servidor sobe o arquivo antes); o
+   número medido aqui continua sendo o do caminho normal, o segundo da expressão */
+const mPrazo = /'mudar-etapa', dealId: lead\.id[\s\S]{0,260}?\}\), (?:opts\.anexos \? \d+ : )?(\d+), 'mudar-etapa-negocio'\)/.exec(corpoG);
 checar('o prazo da escrita da etapa está declarado', !!mPrazo);
 if (mPrazo) {
   const ms = Number(mPrazo[1]);
