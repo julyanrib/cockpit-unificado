@@ -504,7 +504,7 @@ const REPS = (function () {
   const reps = lista
     /* foraDoTime (02/10/26): login que existe só para mexer, sem contar como executivo — o
        Julyan como rep de teste. Fora daqui, os negócios dele não entram no funil do time. */
-    .filter(u => u && u.role === 'rep' && !u.foraDoTime && u.ownerId && !String(u.ownerId).startsWith('pendente_'))
+    .filter(u => u && u.role === 'rep' && !u.foraDoTime && !u.desligado && u.ownerId && !String(u.ownerId).startsWith('pendente_'))
     .map(u => ({ ownerId: String(u.ownerId), name: u.nome }));
   if (!reps.length) {
     /* SEM REPS, NAO RODA. Um snapshot com zero rep sobrescreveria o funil do time por um
@@ -523,7 +523,7 @@ const FORA_DO_TIME = (function () {
   const lista = Array.isArray(arq) ? arq : (arq.usuarios || []);
   const vistos = new Set();
   return lista
-    .filter(u => u && u.role === 'rep' && u.foraDoTime && u.ownerId && !String(u.ownerId).startsWith('pendente_'))
+    .filter(u => u && u.role === 'rep' && u.foraDoTime && !u.desligado && u.ownerId && !String(u.ownerId).startsWith('pendente_'))
     .filter(u => !vistos.has(String(u.ownerId)) && vistos.add(String(u.ownerId)))
     .map(u => ({ ownerId: String(u.ownerId), name: u.nome }));
 })();

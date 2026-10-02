@@ -96,11 +96,13 @@ conferir('Guarulhos routeia, e para as duas metades certas',
    também da busca semanal, porque ela lê os municípios deste mesmo arquivo. O bloco
    inteiro (com os 94 bairros do Rio) está em _fora_de_rota_historico, para voltar num
    colar só quando ele quiser. */
-conferir('Nova Iguaçu é do Luiz, e o resto da Baixada saiu da rota',
-  quem('nova iguacu', 'centro') === 'Luiz'
+/* 02/10/26: o Luiz saiu do time e o Julyan decidiu deixar o território SEM DONO até
+   atribuir (territorios.json, ativo:false). Nova Iguaçu passa a cair em ninguém. */
+conferir('Nova Iguaçu fica sem dono com a saída do Luiz, e o resto da Baixada segue fora da rota',
+  quem('nova iguacu', 'centro') === null
   && ['duque de caxias', 'sao joao de meriti', 'nilopolis', 'mesquita']
     .every(c => quem(c, 'centro') === null),
-  'ele pediu o Luiz só em Nova Iguaçu; as outras quatro não podem cair em quem não as pediu');
+  'território de quem saiu não pode cair em ninguém sozinho: é o gestor que atribui');
 
 conferir('o Alto Tietê vai para a Renata',
   ['mogi das cruzes', 'suzano', 'salesopolis', 'biritiba mirim']
@@ -278,7 +280,8 @@ conferir('a praça declarada por município inteiro não foi afetada',
    certa em 09/09, e ela não mudou. O Rio saiu dessa lista por decisão de território, não
    por defeito de código. */
 conferir('e a sobra do município continua existindo onde há um dono só',
-  !!quem('nova iguacu', 'um bairro inventado qualquer')
+  /* era Nova Iguaçu (Luiz, saiu em 02/10/26); Mogi das Cruzes é da Renata inteira */
+  !!quem('mogi das cruzes', 'um bairro inventado qualquer')
   && !!quem('vila velha', 'um bairro inventado qualquer'),
   'bairro novo sem regra tem que cair em alguém conhecido, senão fica invisível para sempre');
 
