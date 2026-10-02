@@ -70,6 +70,7 @@ function lerJson() {
       role: u.role,
       ownerId: u.ownerId,
       aComecar: !!u.aComecar,
+      foraDoTime: !!u.foraDoTime,
       nome: u.nome
     };
   });
@@ -142,7 +143,9 @@ if (!fs.existsSync(narrPath)) {
   if (narr && narr.reps) {
     const noNarr = Object.keys(narr.reps);
     const repsDoJson = Object.keys(tela)
-      .filter(function (e) { return tela[e].role === 'rep' && tela[e].ownerId; })
+      /* foraDoTime (02/10/26): o login de teste do Julyan como executivo continua, mas por
+         decisão dele não existe nas telas do time — não ter narrativa é o certo, não defeito */
+      .filter(function (e) { return tela[e].role === 'rep' && tela[e].ownerId && !tela[e].foraDoTime; })
       .map(function (e) { return String(tela[e].ownerId); });
     repsDoJson.forEach(function (id) {
       if (noNarr.indexOf(id) > -1) return;
