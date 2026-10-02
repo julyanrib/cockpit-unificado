@@ -516,6 +516,17 @@ const REPS = (function () {
     reps.map(r => r.name).join(', ') + ')');
   return reps;
 })();
+/* quem tem login de executivo mas está FORA DO TIME (foraDoTime): o funil dele vem à parte,
+   em funilForaDoTime, para a visão de executivo dele — e não entra em nada do time */
+const FORA_DO_TIME = (function () {
+  const arq = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'usuarios.json'), 'utf8'));
+  const lista = Array.isArray(arq) ? arq : (arq.usuarios || []);
+  const vistos = new Set();
+  return lista
+    .filter(u => u && u.role === 'rep' && u.foraDoTime && u.ownerId && !String(u.ownerId).startsWith('pendente_'))
+    .filter(u => !vistos.has(String(u.ownerId)) && vistos.add(String(u.ownerId)))
+    .map(u => ({ ownerId: String(u.ownerId), name: u.nome }));
+})();
 
 // BUG REAL corrigido aqui (30/07): todo cálculo de "hoje"/"mês corrente" abaixo usava
 // now.getUTCFullYear()/Month()/Date() direto — isso é a data em UTC, não em Brasília.
@@ -1685,13 +1696,13 @@ async function repOpenDeals(ownerId) {
    SE ALGUEM PRECISAR DO NUMERO OUTRA VEZ: e um search no HubSpot com
    hubspot_owner_id NOT_IN os donos do time, nas OPEN_STAGES do pipeline Field Sales.
    Fica escrito aqui para nao ter de ser descoberto de novo. */
-async function stageDealsTeamWide(stageId) {
+async function stageDealsTeamWide(stageId, donos) {
   const todos = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
         { propertyName: 'dealstage', operator: 'EQ', value: stageId },
-        { propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) }
+        { propertyName: 'hubspot_owner_id', operator: 'IN', values: donos || REPS.map(r => r.ownerId) }
       ]
     }],
     properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'notes_next_activity_date', 'amount', 'hs_lastmodifieddate', 'latitude', 'longitude',
@@ -2066,6 +2077,29 @@ async function main() {
     funilLeads[stageId] = deals
       .map(d => montarLeadDoFunil(d, stageId, { ownerNameById, tarefas: tarefasPorDeal[d.id] || [], configTemperatura: CONFIG_TEMPERATURA }))
       .sort((a, b) => b.dias - a.dias);
+  }
+
+  /* ══ O FUNIL DE QUEM ESTÁ FORA DO TIME (02/10/26) ═══════════════════════════════
+     Julyan: "quero que libere minha visão de executivo" — o funil dele, mas fora das
+     listas e números do time. Uma gaveta à parte, que NÃO entra em funilLeads nem em
+     nenhum total: o servidor só a junta na visão de executivo do próprio dono. */
+  const funilForaDoTime = {};
+  for (const fora of FORA_DO_TIME) {
+    const porEtapa = {};
+    const nomes = { [fora.ownerId]: fora.name };
+    for (const stageId of OPEN_STAGES) {
+      try {
+        const deals = await stageDealsTeamWide(stageId, [fora.ownerId]);
+        const tarefas = await hsTarefasAbertasDosNegocios(deals.map(d => d.id));
+        porEtapa[stageId] = deals
+          .map(d => montarLeadDoFunil(d, stageId, { ownerNameById: nomes, tarefas: tarefas[d.id] || [], configTemperatura: CONFIG_TEMPERATURA }))
+          .sort((a, b) => b.dias - a.dias);
+      } catch (e) {
+        console.error('Funil fora do time (' + fora.name + ', etapa ' + stageId + '):', e.message);
+      }
+    }
+    funilForaDoTime[fora.ownerId] = porEtapa;
+    console.log('Funil fora do time: ' + fora.name + ' com ' + Object.values(porEtapa).reduce((t, l) => t + l.length, 0) + ' negócio(s) abertos.');
   }
 
   // ---- A coluna PERDIDO do kanban: só as perdas dentro do corte + janela ----
@@ -2656,6 +2690,7 @@ async function main() {
       labels: STAGE_LABELS
     },
     funilLeads,
+    funilForaDoTime,
     /* ══ PLANEJAMENTO v7 — OS PROPÓSITOS (23/09/26) ═══════════════════════════════
        Ver planejamentoPorProposito(), logo acima do payload. Três propósitos saem
        daqui; `nova` fica no navegador porque leads_prospeccao é do Supabase. */

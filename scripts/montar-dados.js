@@ -447,6 +447,8 @@ function montarDadosCompletos() {
     funil: hubspot.funil,
     /* SEM ISTO A TRILHA DE ETAPAS DA FICHA NAO DESENHA — ver comEtapaNoLead. */
     funilLeads: comEtapaNoLead(hubspot.funilLeads),
+    /* o funil de quem está fora do time (02/10/26): só a visão de executivo do dono o recebe */
+    funilForaDoTime: hubspot.funilForaDoTime || null,
     /* o numero de quem saiu do time viaja DENTRO de kpisHub, que a tela ja recebe
        inteiro — passar de novo no topo era um caminho que a lista branca do recorte por
        papel descartava em silencio. */
@@ -615,7 +617,12 @@ function resumoDeColega(r) {
 }
 
 function filtrarParaPapel(dados, usuario) {
-  if (!usuario || usuario.role === 'manager') return dados;
+  if (!usuario || usuario.role === 'manager') {
+    /* a gaveta de quem está fora do time não desce para o gestor: ele vê o time */
+    if (!dados || !dados.funilForaDoTime) return dados;
+    const { funilForaDoTime, ...semGaveta } = dados;
+    return semGaveta;
+  }
 
   const meuId = String(usuario.ownerId);
   const soMeu = lista => (lista || []).filter(x => String(x.ownerId) === meuId);
@@ -657,6 +664,15 @@ function filtrarParaPapel(dados, usuario) {
   Object.entries(dados.funilLeads || {}).forEach(([stage, leads]) => {
     funilLeads[stage] = soMeu(leads);
   });
+  /* QUEM ESTÁ FORA DO TIME (02/10/26) vê o próprio funil pela gaveta à parte; os ids já
+     vistos não se repetem, caso o mesmo negócio também esteja no funil do time */
+  const daGaveta = (dados.funilForaDoTime || {})[meuId];
+  if (daGaveta) {
+    Object.entries(comEtapaNoLead(daGaveta)).forEach(([stage, leads]) => {
+      const ja = new Set((funilLeads[stage] || []).map(l => String(l.id)));
+      funilLeads[stage] = (funilLeads[stage] || []).concat((leads || []).filter(l => !ja.has(String(l.id))));
+    });
+  }
   /* O corte de Perdido nao tem nome de ninguem: e a data em que o Cockpit passou a
      registrar perda. Vai inteiro para o executivo. */
   const perdidoVisivel = dados.perdidoVisivel || null;
@@ -722,6 +738,9 @@ function filtrarParaPapel(dados, usuario) {
 
   return {
     ...dados,
+    /* a gaveta de quem está fora do time nunca desce inteira para um executivo: o dono
+       a recebe já costurada em funilLeads, acima (02/10/26) */
+    funilForaDoTime: null,
     habitosTime,
     /* SEM ESTA LINHA o spread acima entregaria cadenciaDiaria.porOwner INTEIRO ao
        executivo — a atividade diária de cada colega no payload dele. Declarar
