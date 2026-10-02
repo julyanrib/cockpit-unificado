@@ -10851,6 +10851,10 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .kb7-input.is-data{width:auto;flex:1 1 160px;}
   .kb7-dica-campo{font:500 11.5px/1.4 var(--font-body);color:var(--dim);}
   .kb7-faltam{margin:0;font:700 12px var(--font-body);color:var(--acao);min-height:1em;}
+  .kb7-secao{display:block;margin-top:4px;padding-top:10px;border-top:1px solid var(--line);font:800 11px var(--font-body);
+    letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+  .kb7-input.is-arquivo{padding:9px 11px;min-height:44px;}
+  .kb7-dica-campo.is-erro{color:var(--acao);font-weight:700;}
   .kb7-janela-acoes{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
   .kb7-btn{min-height:40px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--panel);
     padding:0 16px;font:800 12.5px var(--font-body);color:var(--ink);cursor:pointer;}
@@ -21317,34 +21321,62 @@ function kb7Janela(lead, de, para) {
   if (primeiro) primeiro.focus();
 }
 
-/* ── Ganho → Onboarding: a janela completa (01/10/26, docs/09 §4) ─────────────────────
-   Conferido no HubSpot antes de escrever (só leitura do esquema), e decidido com o Julyan
-   o que fazer com o que não tem propriedade:
-   · Plano (pacote_contratado), MRR, Sistema atual (nome_do_sistema) e Módulos (adicional,
-     "Módulos Adicionais", preenchido em Ag. Pagamento): SÓ LEITURA. Os módulos são o que a
-     cobrança usou; se estiverem errados, o executivo escreve no recado.
-   · Responsável na loja, Telefone e Instalação: OBRIGATÓRIOS, e vão para a NOTA do
-     negócio. Não existe propriedade de responsável nem de data de instalação, e não existe
-     agenda do onboarding de onde tirar horário livre — a janela pede a preferência, e
-     quem marca é o onboarding. O telefone não regrava `celular`: depois do Ganho nada de
-     contato se mexe por aqui (o RPA do Asaas parte do contato).
-   · Cardápio: grava em `cliente_vai_montar_ou_clonar_cardapio_`, a propriedade que o
-     onboarding já lê, com as quatro opções dela. Opcional.
-   · Recado: opcional, nasce com a dor que ele registrou no Decisor. */
-const KB7_CARDAPIO = [
-  ['Não, onboarding montará', 'Onboarding monta'],
-  ['Vai montar sozinho', 'Cliente monta sozinho'],
-  ['Será clonado', 'Clonar de outra loja'],
-  ['Clone de Multilojas', 'Clone de multilojas']
+/* ── Ganho → Onboarding: a janela completa (02/10/26, Julyan: "o card de onboarding não
+   está mandando todas as etapas que precisa, como anexar cardápio, criar grupo… isso é
+   essencial") ────────────────────────────────────────────────────────────────────────
+   OS MESMOS CAMPOS DO APP (src/constants/stages.ts, etapa 1396006163), com os mesmos
+   obrigatórios e as opções conferidas no HubSpot em 02/10/26 — o onboarding recebe o
+   negócio igual, venha ele do app ou do Cockpit. Mais o que o app não tinha:
+   · o ANEXO do cardápio: o arquivo sobe para o HubSpot pela rota de etapa e o id vai em
+     cardapio_da_loja; o link vai em links_dos_cardapios; formato_do_cardapio sai sozinho
+     do que foi preenchido.
+   · responsável, telefone, instalação e recado continuam na NOTA (não têm propriedade).
+   Plano, MRR, sistema e módulos seguem só para leitura. */
+const KB7_ONB_CAMPOS = [
+  { p: 'estrutura_do_cliente', r: 'Estrutura do cliente', t: 'chips', ob: true, op: [['Loja Única', 'Loja única'], ['Rede Própria (múltiplas lojas)', 'Rede própria'], ['Franquia', 'Franquia']] },
+  { p: 'quando_vai_comecar_a_usar', r: 'Quando vai começar a usar', t: 'data', ob: true },
+  { p: 'perfil_do_cliente', r: 'Perfil do cliente', t: 'chips', ob: true, op: [['lead_low', 'P'], ['lead_mid', 'M'], ['lead_high', 'G'], ['GG', 'GG'], ['Isento', 'Isento'], ['Revendedor', 'Revendedor']] },
+  { p: 'instagram', r: 'Instagram', t: 'texto', ob: true, ph: '@daloja' },
+  { p: 'criar_grupo_automaticamente_', r: 'Criar grupo de WhatsApp automaticamente?', t: 'chips', ob: true, op: [['true', 'Sim'], ['false', 'Não']] },
+  { p: 'multilojas_', r: 'Multilojas?', t: 'chips', ob: true, op: [['true', 'Sim'], ['false', 'Não']] },
+  { p: 'cliente_vai_montar_ou_clonar_cardapio_', r: 'Cliente vai montar ou clonar cardápio?', t: 'chips', ob: true, op: [['Não, onboarding montará', 'Onboarding monta'], ['Vai montar sozinho', 'Cliente monta'], ['Será clonado', 'Clonar de outra loja'], ['Clone de Multilojas', 'Clone de multilojas']] },
+  { p: 'regime_fiscal', r: 'Regime fiscal', t: 'chips', op: [['Não contratou', 'Não contratou'], ['Simples Nacional', 'Simples'], ['Lucro Real', 'Lucro Real'], ['Lucro Presumido', 'Lucro Presumido']] },
+  { p: 'quantidade_de_mesas_e_sequencia', r: 'Qtd. e sequência das mesas', t: 'texto', ph: 'ex.: 20 mesas, 1 a 20' },
+  { p: 'quantidade_e_sequencia_das_comandas', r: 'Qtd. e sequência das comandas', t: 'texto', ph: 'ex.: 100 comandas, 1 a 100' },
+  { p: 'senha_do_certificado_digital', r: 'Senha do certificado digital', t: 'texto' },
+  { p: 'numero_csc', r: 'Número CSC', t: 'texto' },
+  { p: 'stonecode', r: 'Stonecode (maquininha Stone)', t: 'texto' },
+  { p: 'observacoes', r: 'Observações', t: 'area', ph: 'detalhes do onboarding' }
 ];
+const KB7_ANEXO_MAX = 6 * 1024 * 1024;
 const KB7_INSTALACAO = ['Manhã', 'Tarde', 'Noite', 'Combinar com o onboarding'];
 function kb7Digitos(v) { return String(v || '').replace(/[^0-9]/g, ''); }
+function kb7LerArquivo(arq) {
+  return new Promise(function (ok, erro) {
+    const fr = new FileReader();
+    fr.onload = function () { const s = String(fr.result || ''); ok(s.slice(s.indexOf(',') + 1)); };
+    fr.onerror = function () { erro(new Error('não consegui ler ' + arq.name)); };
+    fr.readAsDataURL(arq);
+  });
+}
 function kb7JanelaOnboarding(lead) {
   const valor = typeof fn2Valor === 'function' ? fn2Valor(lead) : 0;
   const dor = [lead.gargalo_operacional, lead.informacoes_sobre_o_maior_desafio].filter(kb7Preenchido).join(' · ');
   const leitura = function (rot, v, vazio) {
     return '<div class="kb7-ler"><span>' + esc(rot) + '</span><b' + (kb7Preenchido(v) ? '' : ' class="is-vazio"') + '>'
       + esc(kb7Preenchido(v) ? String(v).split(';').join(' · ') : vazio) + '</b></div>';
+  };
+  const campoHTML = function (c) {
+    const rot = '<b class="kb7-falta' + (c.ob ? '' : ' is-livre') + '" data-kb7-ob="' + c.p + '">' + esc(c.r) + (c.ob ? ' · obrigatório' : ' (opcional)') + '</b>';
+    const atual = lead[c.p];
+    if (c.t === 'chips') {
+      return '<div class="kb7-campo">' + rot + '<div class="kb7-chips" data-kb7-grupo="' + c.p + '">'
+        + c.op.map(function (o) { return '<button type="button" class="kb7-chip" data-kb7-chip="' + esc(o[0]) + '" aria-pressed="' + (String(atual) === o[0]) + '">' + esc(o[1]) + '</button>'; }).join('')
+        + '</div></div>';
+    }
+    if (c.t === 'area') return '<div class="kb7-campo">' + rot + '<textarea class="kb7-input is-area" rows="2" data-kb7-onb-campo="' + c.p + '" placeholder="' + esc(c.ph || '') + '">' + esc(atual || '') + '</textarea></div>';
+    return '<div class="kb7-campo">' + rot + '<input type="' + (c.t === 'data' ? 'date' : 'text') + '" class="kb7-input" data-kb7-onb-campo="' + c.p + '"'
+      + (c.t === 'data' ? ' min="' + kb7DataDaqui(0) + '"' : ' placeholder="' + esc(c.ph || '') + '"') + ' value="' + esc(atual || '') + '"></div>';
   };
   const veu = document.createElement('div');
   veu.className = 'kb7-veu';
@@ -21357,26 +21389,36 @@ function kb7JanelaOnboarding(lead) {
     +   leitura('Sistema atual · migração', lead.nome_do_sistema, 'não registrado')
     +   leitura('Módulos contratados', lead.adicional, 'nenhum registrado')
     + '</div>'
+    + '<span class="kb7-secao">O que o onboarding precisa · vai para o negócio no HubSpot</span>'
+    + KB7_ONB_CAMPOS.map(campoHTML).join('')
+    + '<span class="kb7-secao">Cardápio</span>'
+    + '<div class="kb7-campo"><b class="kb7-falta is-livre">Anexar o cardápio (opcional · .zip, .rar, .pdf ou imagem, até 6 MB)</b>'
+    +   '<input type="file" class="kb7-input is-arquivo" data-kb7-anexo multiple accept=".zip,.rar,.pdf,.png,.jpg,.jpeg,.webp">'
+    +   '<span class="kb7-dica-campo" data-kb7-anexo-info>De preferência uma pasta compactada só. Arquivo maior: mande o link abaixo.</span></div>'
+    + '<div class="kb7-campo"><b class="kb7-falta is-livre">Link(s) do cardápio (opcional)</b>'
+    +   '<input type="text" class="kb7-input" data-kb7-onb-campo="links_dos_cardapios" placeholder="https://… (iFood, Drive, site)" value="' + esc(lead.links_dos_cardapios || '') + '"></div>'
+    + '<span class="kb7-secao">Para o onboarding chegar na loja · vai na nota</span>'
     + '<div class="kb7-campo"><b class="kb7-falta" data-kb7-ob="resp">Responsável na loja · obrigatório</b>'
-    +   '<input type="text" class="kb7-input" data-kb7-onb-campo="resp" placeholder="quem o onboarding procura na loja" aria-label="Responsável na loja"></div>'
+    +   '<input type="text" class="kb7-input" data-kb7-onb-campo="resp" placeholder="quem o onboarding procura na loja"></div>'
     + '<div class="kb7-campo"><b class="kb7-falta" data-kb7-ob="tel">Telefone do responsável · obrigatório</b>'
-    +   '<input type="tel" inputmode="tel" class="kb7-input" data-kb7-onb-campo="tel" placeholder="(21) 99999-9999" aria-label="Telefone do responsável" value="' + esc(lead.celular || '') + '"></div>'
+    +   '<input type="tel" inputmode="tel" class="kb7-input" data-kb7-onb-campo="tel" placeholder="(21) 99999-9999" value="' + esc(lead.celular || '') + '"></div>'
     + '<div class="kb7-campo"><b class="kb7-falta" data-kb7-ob="inst">Instalação · obrigatório</b>'
     +   '<div class="kb7-chips" data-kb7-grupo="inst">' + KB7_INSTALACAO.map(o => '<button type="button" class="kb7-chip" data-kb7-chip="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div>'
-    +   '<label class="kb7-sub">a partir de (opcional) <input type="date" class="kb7-input is-data" data-kb7-onb-campo="data" min="' + kb7DataDaqui(0) + '"></label>'
     +   '<span class="kb7-dica-campo">É a preferência do cliente. Quem marca o horário é o onboarding.</span></div>'
-    + '<div class="kb7-campo"><b class="kb7-falta is-livre">Cardápio (opcional)</b>'
-    +   '<div class="kb7-chips" data-kb7-grupo="card">' + KB7_CARDAPIO.map(o => '<button type="button" class="kb7-chip" data-kb7-chip="' + esc(o[0]) + '">' + esc(o[1]) + '</button>').join('') + '</div></div>'
     + '<div class="kb7-campo"><b class="kb7-falta is-livre">Recado para o onboarding (opcional)</b>'
-    +   '<textarea class="kb7-input is-area" data-kb7-onb-campo="recado" rows="3" placeholder="dor do cliente, melhor horário, o que combinou">' + esc(dor ? 'Dor: ' + dor : '') + '</textarea></div>'
+    +   '<textarea class="kb7-input is-area" data-kb7-onb-campo="recado" rows="2" placeholder="dor do cliente, melhor horário, o que combinou">' + esc(dor ? 'Dor: ' + dor : '') + '</textarea></div>'
     + '<p class="kb7-faltam" data-kb7-faltam></p>'
     + '<div class="kb7-janela-acoes"><button type="button" class="kb7-btn" data-kb7-j="cancelar">Cancelar</button>'
     + '<button type="button" class="kb7-btn is-acao" data-kb7-j="ok" disabled>Enviar para onboarding</button></div></div>';
   document.body.appendChild(veu);
-  const escolha = { inst: '', card: '' };
+  const escolha = {};
+  KB7_ONB_CAMPOS.forEach(function (c) { if (c.t === 'chips' && c.op.some(function (o) { return o[0] === String(lead[c.p]); })) escolha[c.p] = String(lead[c.p]); });
+  let anexos = [];
   const campo = k => String((veu.querySelector('[data-kb7-onb-campo="' + k + '"]') || {}).value || '').trim();
+  const valorDe = function (c) { return c.t === 'chips' ? (escolha[c.p] || '') : campo(c.p); };
   const faltas = function () {
     const f = [];
+    KB7_ONB_CAMPOS.forEach(function (c) { if (c.ob && !valorDe(c)) f.push([c.p, c.r.toLowerCase().replace('?', '')]); });
     if (!campo('resp')) f.push(['resp', 'responsável']);
     if (kb7Digitos(campo('tel')).length < 10) f.push(['tel', 'telefone com DDD']);
     if (!escolha.inst) f.push(['inst', 'instalação']);
@@ -21393,6 +21435,26 @@ function kb7JanelaOnboarding(lead) {
   const aoEsc = function (e) { if (e.key === 'Escape') fechar(); };
   document.addEventListener('keydown', aoEsc);
   veu.addEventListener('input', atualizar);
+  veu.addEventListener('change', async function (e) {
+    const inp = e.target.closest && e.target.closest('[data-kb7-anexo]');
+    if (!inp) return;
+    const info = veu.querySelector('[data-kb7-anexo-info]');
+    const arqs = Array.from(inp.files || []);
+    const total = arqs.reduce(function (t, a) { return t + a.size; }, 0);
+    if (total > KB7_ANEXO_MAX) {
+      anexos = []; inp.value = '';
+      info.textContent = 'Os arquivos somam ' + (total / 1048576).toFixed(1) + ' MB e o limite é 6 MB. Compacte, ou mande o link abaixo.';
+      info.classList.add('is-erro');
+      return;
+    }
+    info.classList.remove('is-erro');
+    try {
+      anexos = await Promise.all(arqs.map(async function (a) { return { nome: a.name, tipo: a.type || 'application/octet-stream', base64: await kb7LerArquivo(a) }; }));
+      info.textContent = arqs.length ? arqs.map(a => a.name).join(', ') + ' · sobe para o HubSpot ao enviar' : 'De preferência uma pasta compactada só. Arquivo maior: mande o link abaixo.';
+    } catch (err) {
+      anexos = []; info.textContent = (err && err.message) || 'não consegui ler o arquivo'; info.classList.add('is-erro');
+    }
+  });
   veu.addEventListener('click', function (e) {
     if (e.target === veu || e.target.closest('[data-kb7-j="cancelar"]')) { fechar(); return; }
     const chip = e.target.closest('[data-kb7-chip]');
@@ -21406,26 +21468,28 @@ function kb7JanelaOnboarding(lead) {
       return;
     }
     if (e.target.closest('[data-kb7-j="ok"]') && !faltas().length) {
-      const data = campo('data');
+      const props = {};
+      KB7_ONB_CAMPOS.forEach(function (c) { const v = valorDe(c); if (v) props[c.p] = v; });
+      const links = campo('links_dos_cardapios');
+      if (links) props.links_dos_cardapios = links;
+      if (anexos.length || links) props.formato_do_cardapio = anexos.length && links ? 'Anexo(s) + Link(s)' : anexos.length ? 'Anexo(s)' : 'Link(s)';
       const recado = campo('recado');
-      const card = KB7_CARDAPIO.find(o => o[0] === escolha.card);
       const partes = [
         'Responsável: ' + campo('resp'),
         'Telefone: ' + campo('tel'),
-        'Instalação: ' + escolha.inst + (data ? ', a partir de ' + data.split('-').reverse().join('/') : ''),
-        card ? 'Cardápio: ' + card[1] : '',
+        'Instalação: ' + escolha.inst,
         kb7Preenchido(lead.adicional) ? 'Módulos (conferidos): ' + String(lead.adicional).split(';').join(', ') : '',
         recado ? 'Recado: ' + recado : ''
       ].filter(Boolean);
       fechar();
-      kb7Confirmar(lead, KB7_GANHO, KB7_ONB,
-        card ? { cliente_vai_montar_ou_clonar_cardapio_: card[0] } : {},
+      kb7Confirmar(lead, KB7_GANHO, KB7_ONB, props,
         { nota: 'Enviado ao onboarding pelo Cockpit · ' + partes.join(' · '), motivo: partes.join(' · '),
-          aviso: ' enviado ao onboarding · o recado entra como nota do negócio' });
+          anexos: anexos.length ? anexos : null,
+          aviso: ' enviado ao onboarding' + (anexos.length ? ' · o cardápio sobe junto' : '') + ' · o recado entra como nota' });
     }
   });
   atualizar();
-  const primeiro = veu.querySelector('[data-kb7-onb-campo="resp"]');
+  const primeiro = veu.querySelector('.kb7-chip, .kb7-input');
   if (primeiro) primeiro.focus();
 }
 
@@ -21451,6 +21515,13 @@ function kb7Confirmar(lead, de, para, props, extra) {
     host.remove();
     if (desfeito) return;
     delete KB7.pendente[id];
+    /* com anexo não há fila: o arquivo não cabe guardado no navegador, e subir sem sinal
+       não sobe. O cartão volta, e o aviso diz o que fazer. */
+    if (kb7SemSinal() && extra && extra.anexos) {
+      mostrarToast('Sem sinal: o envio ao onboarding com o cardápio anexado precisa de conexão. Tente de novo quando o sinal voltar.', 'atencao');
+      kb7Redesenhar();
+      return;
+    }
     if (kb7SemSinal()) {
       kb7Enfileirar({ id: id, nome: lead.name || '', de: de, para: para, props: props || {}, extra: extra || {} });
       mostrarToast('Sem sinal: "' + (lead.name || 'o negócio') + '" ficou na fila e sobe sozinho quando a conexão voltar.', 'atencao');
@@ -21466,7 +21537,7 @@ async function kb7Gravar(lead, de, para, props, extra) {
   const r = await gravarPassagemOtimista({
     lead: lead, para: para, propriedades: props, nota: extra.nota || null,
     passoAcao: extra.passoAcao, passoData: extra.passoData, passoTipo: extra.passoTipo,
-    etapaEsperada: de, redesenhar: kb7Redesenhar
+    etapaEsperada: de, anexos: extra.anexos || null, redesenhar: kb7Redesenhar
   });
   /* a recusa e o conflito já têm aviso: o motor diz o motivo e põe o cartão no lugar */
   if (r && r.ok) kb7RegistrarHistorico(lead, de, para, extra.motivo || null);
@@ -42070,8 +42141,11 @@ async function gravarPassagemDeEtapa(opts) {
     resp = await comPrazoGlobal(async signal => fetch('/api/negocio-acao', {
       method: 'POST', signal, headers: cab,
       body: JSON.stringify({ op: 'mudar-etapa', dealId: lead.id, novaEtapa: para, propriedades,
-        ...(opts.etapaEsperada ? { etapaEsperada: String(opts.etapaEsperada) } : {}) })
-    }), 25000, 'mudar-etapa-negocio');
+        ...(opts.etapaEsperada ? { etapaEsperada: String(opts.etapaEsperada) } : {}),
+        ...(opts.anexos ? { anexos: opts.anexos } : {}) })
+    /* com o cardápio anexado o servidor sobe o arquivo para o HubSpot antes de mudar a
+       etapa: a espera cresce junto */
+    }), opts.anexos ? 90000 : 25000, 'mudar-etapa-negocio');
   } catch (e) {
     /* ABORT NAO E RESPOSTA. O pedido pode ter chegado e sido gravado — foi o que
        aconteceu com a Kelly. Perguntar e a unica forma de nao chutar. */
