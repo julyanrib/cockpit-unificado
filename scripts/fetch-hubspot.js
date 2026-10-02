@@ -612,13 +612,17 @@ async function hsSearchTipoAll(objectType, body) {
   let todos = [];
   let after = undefined;
   let seguraLoop = 0;
-  while (seguraLoop < 20) {
+  /* AUDITORIA 02/10/26: o teto era 20 páginas (2.000) para o time inteiro e todos os estados
+     — 1.331 tarefas na janela hoje, e crescendo. Ao bater o teto, o fim da janela (o futuro)
+     sumia calado do Cockpit enquanto o app o mostrava. Teto em 60 páginas, e o corte avisa. */
+  while (seguraLoop < 60) {
     seguraLoop++;
     const data = await hsSearchTipo(objectType, { ...body, limit: 100, after });
     todos = todos.concat(data.results || []);
     after = data.paging && data.paging.next ? data.paging.next.after : null;
     if (!after) break;
   }
+  if (after) console.warn('ATENÇÃO: busca de ' + objectType + ' cortada em ' + todos.length + ' itens — o resto não entrou no snapshot.');
   return todos;
 }
 

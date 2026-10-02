@@ -10988,6 +10988,7 @@ foi escrita para jogar o "0 de 27 resolvidos"
     border-radius:var(--r-pill);padding:1px 7px;font:800 11px var(--font-body);color:var(--ink);font-variant-numeric:tabular-nums;}
   .kb7-temp i{width:7px;height:7px;border-radius:50%;}
   .kb7-passo{display:flex;gap:7px;align-items:flex-start;background:var(--chip);border-radius:10px;padding:8px 10px;}
+  .kb7-sempino{display:block;margin-top:6px;padding:4px 8px;border-radius:8px;background:var(--amber-soft);color:var(--amber);font:700 10.5px var(--font-body);}
   .kb7-passo > div{display:flex;flex-direction:column;gap:1px;min-width:0;}
   .kb7-passo b{font:600 12px/1.35 var(--font-body);color:var(--ink);overflow-wrap:anywhere;}
   .kb7-passo span{font:600 11px/1.35 var(--font-body);color:var(--muted);}
@@ -12542,6 +12543,7 @@ async function aoVivoAplicar() {
     if (AOVIVO_FILA.negocios.size && !AOVIVO_TIMER) AOVIVO_TIMER = setTimeout(aoVivoAplicar, 800);
   }
   if (tipos.has('visita') || tipos.has('parada')) { visitasAppCache.em = 0; mudou = true; }
+  if (tipos.has('visita')) { try { await carregarVisitasDoApp(true); } catch (e) { /* fica a anterior */ } }
   /* Planejamento do time (0144): recarrega só o que está aberto, pelo tipo do sinal */
   if (typeof pt6AoVivo === 'function') pt6AoVivo(tipos);
   if (['visita', 'parada', 'plano', 'ficha', 'foto', 'daily', 'pino', 'pino-novo', 'tarefa', 'agenda'].some(function (t) { return tipos.has(t); }) && typeof V5_HTML_CACHE !== 'undefined') V5_HTML_CACHE = {};
@@ -14791,6 +14793,12 @@ function indicadoresDoExecutivo(r) {
   const inicioSemana = inicioDaSemanaISO();
   const daSemana = eventos.filter(e => isoDate(e.inicio) >= inicioSemana && e.inicio.getTime() <= Date.now());
   const realizadas = daSemana.filter(e => e.desfecho === 'COMPLETED' || e.registro);
+  let visitasSemana = realizadas.length;
+  if (typeof vaCobre === 'function' && vaCobre(ownerId)) {
+    visitasSemana = 0;
+    const fimDia = vaHojeBRT();
+    for (let d = inicioSemana; d <= fimDia; d = addDays(d, 1)) visitasSemana += vaDoDia(ownerId, d).n;
+  }
   const fila = filaDeFollowUp(ownerId);
   const leads = meusNegociosAbertos(ownerId);
   const estados = leads.map(estadoDoNegocio);
@@ -14824,7 +14832,8 @@ function indicadoresDoExecutivo(r) {
   const comDesfechoCount = estados.filter(s => s.desfechos && s.desfechos.length > 0).length;
 
   return [
-    { id: 'visitas', rotulo: 'Visitas realizadas', valor: realizadas.length, sufixo: 'na semana', bom: realizadas.length > 0 },
+    /* visita é o check-in do app, a mesma das outras telas (02/10/26) */
+    { id: 'visitas', rotulo: 'Visitas realizadas', valor: visitasSemana, sufixo: 'na semana', bom: visitasSemana > 0 },
     { id: 'sem_registro', rotulo: 'Visitas sem registro', valor: semRegistro, total: daSemana.length, sufixo: 'na semana', bom: semRegistro === 0,
       nota: 'compromisso cujo horário passou e ninguém fechou no HubSpot' },
     // Agora é medível: o parser do bloco DESFECHO_VISITA lê o que o Cockpit (e, em
@@ -21050,6 +21059,9 @@ function kb7QuadroHTML(r, todos, acesos, laterais, opts) {
   const itens = ativos.concat(laterais || []);
   KB7.itens = {};
   itens.forEach(x => { KB7.itens[String(x.lead.id)] = x.lead; });
+  /* etapas ativas: Ganho e Onboarding não precisam de pino na rua */
+  kb7CarregarPinos(itens.filter(x => KB7_ESCADA.indexOf(String(x.stageId)) >= 0 || String(x.stageId) === KB7_RECIC)
+    .map(x => String(x.lead.id)));
   /* O CARTÃO QUE ANDOU SOZINHO ACENDE 1 s: mudou de coluna entre um desenho e outro sem
      ser por este quadro (o app, outra aba, a carga do espelho). */
   const antes = KB7.ultimo;
@@ -21175,6 +21187,7 @@ function kb7Card(item, acesos) {
     + '<div class="kb7-l1"><div class="kb7-quem"><b>' + esc(l.name || 'sem nome') + '</b><span>' + esc(sub) + '</span></div>'
     + '<span class="kb7-temp" title="' + (l.temp != null ? 'nota ' + nota : 'temperatura não medida') + '"><i style="background:' + corTemp + '"></i>' + nota + '</span></div>'
     + passo
+    + (KB7_ESCADA.indexOf(et) >= 0 && kb7SemPino(id) ? '<span class="kb7-sempino" title="O negócio não tem endereço com rua no HubSpot (ou parece duplicar outro pino): ele não aparece no mapa do app. Ponha o endereço e o pino nasce sozinho.">sem pino no mapa · falta endereço</span>' : '')
     + '<div class="kb7-pe"><span class="kb7-dias ' + kb7TomDaRegua(dias, regua) + '" title="' + (regua != null ? 'régua de ' + regua + ' dias' : '') + '">' + dias + (dias === 1 ? ' dia' : ' dias') + ' aqui</span>'
     + '<span class="kb7-toque">' + esc(toque) + '</span>'
     + (et === KB7_GANHO && !item.naFila
@@ -21194,6 +21207,35 @@ function kb7NomeDoDono(ownerId) {
 function kb7Raiz() {
   return document.querySelector('.view.active [data-kb7-raiz]') || document.querySelector('[data-kb7-raiz]');
 }
+/* ══ NEGÓCIO SEM PINO NO MAPA (auditoria de 02/10/26) ═════════════════════════════════
+   Medido: 43 negócios em etapa ativa estão no funil do Cockpit e não estão no mapa do app
+   — 39 sem endereço com rua no HubSpot, 4 marcados como possível duplicado pelo
+   negocio-vira-ponto. O executivo não os encontra na rua, e nada dizia por quê. O cartão
+   avisa. Leitura só (clients.id_hubspot); o pino nasce sozinho quando o endereço entra. */
+const KB7_PINOS = { com: null, voo: null, pedidos: '' };
+function kb7SemPino(id) { return !!(KB7_PINOS.com && !KB7_PINOS.com.has(String(id))); }
+function kb7CarregarPinos(ids) {
+  const chave = ids.slice().sort().join(',');
+  if (!ids.length || KB7_PINOS.pedidos === chave || KB7_PINOS.voo || typeof supa === 'undefined' || !supa) return;
+  KB7_PINOS.voo = (async function () {
+    try {
+      const com = new Set();
+      for (let i = 0; i < ids.length; i += 150) {
+        const r = await supa.from('clients').select('id_hubspot').in('id_hubspot', ids.slice(i, i + 150));
+        if (r.error) throw r.error;
+        (r.data || []).forEach(function (c) { if (c.id_hubspot) com.add(String(c.id_hubspot)); });
+      }
+      KB7_PINOS.com = com;
+      KB7_PINOS.pedidos = chave;
+      kb7Redesenhar();
+    } catch (e) {
+      /* sem a leitura, nenhum cartão diz "sem pino" de mentira */
+      console.log('[kanban] não conferi os pinos:', e && e.message);
+      KB7_PINOS.pedidos = chave;
+    }
+  })().finally(function () { KB7_PINOS.voo = null; });
+}
+
 function kb7Redesenhar() {
   if (document.querySelector('#viewRaioX.active [data-kb7-raiz]') && typeof rx1Iniciar === 'function') {
     if (typeof redesenharPreservandoRolagem === 'function') return redesenharPreservandoRolagem(rx1Iniciar);
@@ -32726,7 +32768,10 @@ function agendaNormalizar(raw) {
       // de largura, ~44px, e o nome do cliente sumia. Agora registro sai da grade e vai
       // pra faixa própria embaixo do dia, onde tem largura inteira pro nome.
       // 90s de folga porque a gravação e a criação do registro não são atômicas.
-      e.registro = !!(e.inicio && e.criadoEm && Math.abs(e.inicio - e.criadoEm) < 90000);
+      /* AUDITORIA 02/10/26: tarefa ainda ABERTA no HubSpot não é registro feito, mesmo criada
+         na hora — o app a mostra como aberta, e as duas telas têm de dizer o mesmo */
+      const statusDaTarefa = it.hs_task_status || (it.properties && it.properties.hs_task_status) || null;
+      e.registro = !!(e.inicio && e.criadoEm && Math.abs(e.inicio - e.criadoEm) < 90000) && statusDaTarefa !== 'NOT_STARTED';
       if (it.lead_nome) { e.cliente = it.lead_nome; e.leadDoNegocio = true; }
       if (!e.ownerId && it.lead_owner_id) { e.ownerId = String(it.lead_owner_id); e.donoDoNegocio = true; }
       if (it.lead_deal_id) e.dealId = String(it.lead_deal_id);
@@ -44279,6 +44324,8 @@ async function carregarDailies() {
   if (error) { console.error('Erro ao carregar dailies:', error.message); return; }
   dailiesCache = {};
   (data || []).forEach(row => { dailiesCache[`${row.owner_id}_${row.data}`] = row; });
+  /* a visita do dia é o check-in do app (02/10/26) — mesma espera, para a tela já nascer certa */
+  try { await carregarVisitasDoApp(); } catch (e) { /* cai na agenda do HubSpot */ }
 }
 
 function getDaily(ownerId, dataISO) {
@@ -47391,7 +47438,66 @@ function visitasInformadasTexto(ownerId) {
 // aqui, direto de DATA.agenda.itens — a mesma fonte que já é reconferida a cada carga
 // da tela e que PROVEI estar correta. Não depende de nenhuma escrita separada acontecer
 // com sucesso pra mostrar o número certo.
+/* ══ VISITA É O CHECK-IN DO APP, EM TODA TELA (auditoria de 02/10/26) ══════════════════
+   Julyan: "tudo do app e cockpit tem que bater". Medido: a pílula do mapa, a faixa da rua,
+   os Portões e Visitas com prova contavam o check-in do app (visitas_com_prova); a Daily, o
+   placar e Pessoas contavam as tarefas de visita concluídas no HubSpot — Bruno 6 numa tela
+   e 5 na outra, Sérgio 1 e 0, no mesmo dia. A fonte passa a ser UMA: visitas_com_prova, a
+   mesma função do app. Para o gestor ela devolve o time; para o executivo, só as dele —
+   por isso, para o executivo, só a linha DELE sai daqui, e a dos colegas segue pela agenda
+   (ver "medir a linha do colega"). Sem a leitura (Cockpit fora do APP, rede), tudo cai na
+   agenda do HubSpot como antes, em vez de virar zero. */
+let VISITAS_DO_APP = { porDonoDia: null, nomes: {}, em: 0, voo: null, todos: false };
+function vaHojeBRT() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); }
+async function carregarVisitasDoApp(forcar) {
+  if (typeof supa === 'undefined' || !supa || !sessaoAtual) return null;
+  if (!forcar && VISITAS_DO_APP.porDonoDia && Date.now() - VISITAS_DO_APP.em < 60000) return VISITAS_DO_APP.porDonoDia;
+  if (VISITAS_DO_APP.voo) return VISITAS_DO_APP.voo;
+  VISITAS_DO_APP.voo = (async function () {
+    const hoje = vaHojeBRT();
+    const de = addDays(hoje, -42);
+    try {
+      const r = await supa.rpc('visitas_com_prova', { p_de: de, p_ate: hoje });
+      if (r.error || !Array.isArray(r.data)) return VISITAS_DO_APP.porDonoDia;
+      const porDonoDia = {};
+      const clientes = new Set();
+      r.data.forEach(function (v) {
+        if (!v || !v.owner_id || !v.dia) return;
+        const d = porDonoDia[v.owner_id] || (porDonoDia[v.owner_id] = {});
+        const c = d[v.dia] || (d[v.dia] = { n: 0, clientes: [] });
+        c.n++;
+        if (v.client_id) { c.clientes.push(v.client_id); clientes.add(v.client_id); }
+      });
+      /* os nomes dos chips "visitou X" saem do pino visitado, não da tarefa do HubSpot */
+      const ids = Array.from(clientes).filter(function (id) { return !VISITAS_DO_APP.nomes[id]; });
+      for (let i = 0; i < ids.length; i += 150) {
+        const q = await supa.from('clients').select('id, nome, empresa').in('id', ids.slice(i, i + 150));
+        (q.data || []).forEach(function (c) { VISITAS_DO_APP.nomes[c.id] = (c.empresa && String(c.empresa).trim()) || c.nome || ''; });
+      }
+      VISITAS_DO_APP.porDonoDia = porDonoDia;
+      VISITAS_DO_APP.todos = !!(sessaoAtual && sessaoAtual.role === 'manager');
+      VISITAS_DO_APP.em = Date.now();
+      return porDonoDia;
+    } catch (e) {
+      console.log('[visitas do app] não li — fica a agenda do HubSpot:', e && e.message);
+      return VISITAS_DO_APP.porDonoDia;
+    }
+  })().finally(function () { VISITAS_DO_APP.voo = null; });
+  return VISITAS_DO_APP.voo;
+}
+/* a linha desta pessoa sai do app? gestor: todas; executivo: só a própria */
+function vaCobre(ownerId) {
+  if (!VISITAS_DO_APP.porDonoDia || ownerId == null) return false;
+  if (VISITAS_DO_APP.todos) return true;
+  return !!(sessaoAtual && String(sessaoAtual.ownerId) === String(ownerId));
+}
+function vaDoDia(ownerId, dataISO) {
+  const d = VISITAS_DO_APP.porDonoDia && VISITAS_DO_APP.porDonoDia[String(ownerId)];
+  return (d && d[dataISO]) || { n: 0, clientes: [] };
+}
+
 function visitasReaisDoOwnerNoDia(ownerId, dataISO) {
+  if (vaCobre(ownerId)) return vaDoDia(ownerId, dataISO).n;
   if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return null; // sem dado — não é o mesmo que zero
   let eventos;
   try { eventos = agendaNormalizar(DATA.agenda); } catch (e) { return null; }
@@ -47407,6 +47513,9 @@ function visitasReaisDoOwnerNoDia(ownerId, dataISO) {
 // chips verdes com o nome do restaurante". Mesmo filtro de visitasReaisDoOwnerNoDia,
 // mas devolvendo os NOMES em vez da contagem — pra render dos chips no card do gestor.
 function visitasNomesDoOwnerNoDia(ownerId, dataISO) {
+  if (vaCobre(ownerId)) {
+    return vaDoDia(ownerId, dataISO).clientes.map(function (id) { return VISITAS_DO_APP.nomes[id] || ''; }).filter(Boolean);
+  }
   if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return [];
   let eventos;
   try { eventos = agendaNormalizar(DATA.agenda); } catch (e) { return []; }
@@ -54196,9 +54305,10 @@ async function renderDaily() {
       const pctOntem = promOntem > 0 ? Math.round((realOntem / promOntem) * 100) : null;
       const corOntem = pctOntem === null ? 'var(--muted2)' : pctOntem >= 100 ? 'var(--green)' : pctOntem >= 70 ? 'var(--amber)' : 'var(--red)';
       const fechouHoje = ehHojeViewPlacar ? (r.fechamentosHubspotHoje || 0) : null;
-      const visitasRealHoje = ehHojeViewPlacar ? r.visitasHubspotHoje : (() => {
+      const visitasRealHoje = (() => {
         const d = visitasReaisDoOwnerNoDia(r.ownerId, dailyRefDate);
-        return d != null ? d : rowHoje.realizado_visitas;
+        if (d != null) return d;
+        return ehHojeViewPlacar ? r.visitasHubspotHoje : rowHoje.realizado_visitas;
       })();
       const metricasHoje = [
         [rowHoje.prometido_visitas, visitasRealHoje],
@@ -54721,7 +54831,7 @@ async function renderDaily() {
     // visitas reais no HubSpot, 0 gravado ali). Prefere sempre a contagem derivada de
     // DATA.agenda.itens, que é reconferida a cada carga da tela e já provei correta.
     const realVisitasDerivado = visitasReaisDoOwnerNoDia(r.ownerId, dailyRefDate);
-    const realVisitas = ehHojeView ? r.visitasHubspotHoje : (realVisitasDerivado != null ? realVisitasDerivado : hoje.realizado_visitas);
+    const realVisitas = realVisitasDerivado != null ? realVisitasDerivado : (ehHojeView ? r.visitasHubspotHoje : hoje.realizado_visitas);
     const realFechamentos = ehHojeView ? r.fechamentosHubspotHoje : hoje.realizado_fechamentos;
     const realPropostas = ehHojeView ? r.propostasHubspotHoje : hoje.realizado_propostas;
     // Fechamentos e propostas NÃO têm como ser recalculados aqui (dependem de
@@ -56218,7 +56328,8 @@ async function renderDaily() {
     repsDaily.forEach(r => {
       const atual = getDaily(r.ownerId, dailyRefDate) || {};
       const campos = {};
-      [['realizado_visitas', r.visitasHubspotHoje ?? 0],
+      /* o realizado do dia grava a visita do APP quando ela foi lida (02/10/26) */
+      [['realizado_visitas', vaCobre(r.ownerId) ? vaDoDia(r.ownerId, dailyRefDate).n : (r.visitasHubspotHoje ?? 0)],
        ['realizado_avancos', r.avancosHubspotHoje ?? 0],
        ['realizado_propostas', r.propostasHubspotHoje ?? 0],
        ['realizado_fechamentos', r.fechamentosHubspotHoje ?? 0]
@@ -63091,7 +63202,9 @@ function ps6Evidencia(rep) {
   if (rep.ganhosSemana) partes.push(rep.ganhosSemana + ' ganho(s) na semana');
   if (rep.avancosHubspotHoje) partes.push(rep.avancosHubspotHoje + ' avanço(s) hoje');
   if (rep.propostasHubspotHoje) partes.push(rep.propostasHubspotHoje + ' proposta(s) hoje');
-  if (rep.visitasHubspotHoje) partes.push(rep.visitasHubspotHoje + ' visita(s) hoje');
+  /* visita é o check-in do app, a mesma das outras telas (02/10/26) */
+  const visitasHojeApp = vaCobre(rep.ownerId) ? vaDoDia(rep.ownerId, vaHojeBRT()).n : rep.visitasHubspotHoje;
+  if (visitasHojeApp) partes.push(visitasHojeApp + ' visita(s) hoje');
   const travados = (rep.travados || []).length;
   partes.push(travados + ' negócio(s) ainda acima da régua');
   return 'no HubSpot: ' + partes.join(' · ');
