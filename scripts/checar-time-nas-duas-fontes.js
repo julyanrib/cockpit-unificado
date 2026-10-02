@@ -153,8 +153,13 @@ if (!fs.existsSync(narrPath)) {
         + 'data/narrativas.json — DATA.reps sai das chaves de narrativas, então essa '
         + 'pessoa não existe no cockpit e a tela dela diz "não encontrei seu cadastro".');
     });
+    /* quem está fora do time pode ter narrativa: é ela que abre a visão de executivo dele
+       (02/10/26) — o servidor o tira das listas do time */
+    const foraDoTime = Object.keys(tela)
+      .filter(function (e) { return tela[e].role === 'rep' && tela[e].ownerId && tela[e].foraDoTime; })
+      .map(function (e) { return String(tela[e].ownerId); });
     noNarr.forEach(function (id) {
-      if (repsDoJson.indexOf(id) > -1) return;
+      if (repsDoJson.indexOf(id) > -1 || foraDoTime.indexOf(id) > -1) return;
       problemas.push('o owner ' + id + ' está em data/narrativas.json e NÃO é rep em '
         + 'data/usuarios.json — ou é alguém que saiu, ou um placeholder que sobrou.');
     });
