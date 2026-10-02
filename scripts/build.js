@@ -40,7 +40,8 @@ function contarTimeNoField() {
     return null;
   }
   const lista = Array.isArray(arq) ? arq : (arq.usuarios || []);
-  const reps = lista.filter(function (u) { return u && u.role === 'rep' && !u.foraDoTime; });
+  /* desligado (02/10/26): saiu do time — não conta em nada, e o acesso foi cortado no banco */
+  const reps = lista.filter(function (u) { return u && u.role === 'rep' && !u.foraDoTime && !u.desligado; });
   const emPreparacao = reps.filter(function (u) { return u.aComecar; }).length;
   return { ativos: reps.length - emPreparacao, emPreparacao: emPreparacao };
 }

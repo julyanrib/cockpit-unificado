@@ -70,7 +70,9 @@ function lerJson() {
       role: u.role,
       ownerId: u.ownerId,
       aComecar: !!u.aComecar,
-      foraDoTime: !!u.foraDoTime,
+      /* desligado (02/10/26) vale como fora do time para a guarda: o login ainda existe na
+         mapa_usuarios do banco antigo, mas a pessoa não é executivo em tela nenhuma */
+      foraDoTime: !!u.foraDoTime || !!u.desligado,
       nome: u.nome
     };
   });

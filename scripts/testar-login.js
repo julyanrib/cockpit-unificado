@@ -73,7 +73,7 @@ checar('o tamanho do time entra como dois inteiros, e não como lista',
   catch (e) { checar('a contagem do time bate com a do cabeçalho', false, 'não li usuarios.json: ' + e.message); return; }
   const lista = Array.isArray(arq) ? arq : (arq.usuarios || []);
   /* foraDoTime (02/10/26): login de rep que não conta como executivo — a mesma regra do build */
-  const reps = lista.filter(function (u) { return u && u.role === 'rep' && !u.foraDoTime; });
+  const reps = lista.filter(function (u) { return u && u.role === 'rep' && !u.foraDoTime && !u.desligado; });
   const emPrep = reps.filter(function (u) { return u.aComecar; }).length;
   const esperado = reps.length - emPrep;
   /* roda a função do build de verdade, em vez de reimplementá-la aqui */
