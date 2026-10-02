@@ -533,15 +533,15 @@ checar('o piso de toque desta aba vence o estilo inline',
        cliente, a barra virou uma faixa de 397px empurrando o cartao para fora da tela.
    MEDIDO em 12/09/26, com a cadeia descartada por um erro de sintaxe: body rolando,
    pagina de 1246px numa janela de 900 e a peca em tamanho natural. */
-checar('a cadeia que prende a aba em 100vh esta inteira',
-  /body:has\(#viewPrecificacao\.active\)\{overflow:hidden;\}/.test(template)
-    && /#appRoot:has\(#viewPrecificacao\.active\) > div\{height:100vh;min-height:0;\}/.test(template)
-    && /\.app-main > #viewPrecificacao\.active\{flex:1 1 0;min-height:0;/.test(template)
-    && /#viewPrecificacao\.active > #precificacaoContent\{flex:1 1 0;min-height:0;/.test(template)
-    && /#viewPrecificacao\.active \.prc-shell\{flex:1 1 0;min-height:0;/.test(template)
-    && /#viewPrecificacao\.active \.p4-grid\{flex:1 1 0;min-height:0;\}/.test(template),
-  'sem um dos elos a aba volta a rolar e a peca sai em tamanho natural — e o navegador '
-    + 'nao reclama: foi assim que a cadeia inteira desapareceu em silencio hoje');
+/* 02/10/26: O INVERSO. A Calculadora de Planos é mais alta que a janela; com a cadeia de
+   100vh ela ficava cortada e sem rolagem (print do Julyan). Esta checagem impede a trava de
+   voltar: nenhum elo prende a aba, e a proposta é sticky para acompanhar a rolagem. */
+checar('a aba Propostas rola como as outras (nada a prende em 100vh)',
+  template.indexOf('body:has(#viewPrecificacao.active){overflow:hidden;}') === -1
+    && template.indexOf('#appRoot:has(#viewPrecificacao.active) > div{height:100vh') === -1
+    && template.indexOf('.app-main:has(> #viewPrecificacao.active){max-width:none;padding:6px 18px 6px;') === -1
+    && /\.pc9-dir\{flex:none;width:540px;position:sticky;/.test(template),
+  'com a cadeia de 100vh a calculadora fica cortada e o executivo não alcança os adicionais nem o envio');
 
 
 /* ══ 19. A LARGURA DE DESENHO SEGUE O PALCO, MEDIDA ═══════════════════════════════
