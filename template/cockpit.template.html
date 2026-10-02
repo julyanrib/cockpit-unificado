@@ -7717,6 +7717,27 @@
      para texto, 70px caros aqui: cada pixel que sobra e altura do cartao, e o cartao
      encolhe na razao direta do que sobra. Medido a 1907x880: o palco tinha 418px e o
      cartao saia a 0,416 de escala. */
+  /* ══ A FAIXA DA RUA (02/10/26) — fixa no topo do Hoje do executivo ══ */
+  .v5-faixa-rua{position:sticky;z-index:15;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    margin:0 0 14px;padding:12px 16px;border-radius:14px;border:1px solid var(--line);background:var(--panel);
+    box-shadow:var(--shadow-sm);}
+  .v5-faixa-rua[hidden]{display:none;}
+  .v5-faixa-rua.is-alerta{background:var(--red-soft);border-color:var(--red);}
+  .v5-faixa-rua.is-andando{background:var(--amber-soft);border-color:var(--amber-line);}
+  .v5-faixa-rua.is-ok{background:var(--green-soft);border-color:var(--green);}
+  .v5-faixa-txt{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .v5-faixa-txt b{font:800 16px/1.3 var(--font-display);color:var(--ink);}
+  .v5-faixa-rua.is-alerta .v5-faixa-txt b{color:var(--red);}
+  .v5-faixa-txt small{font:600 12px/1.4 var(--font-body);color:var(--muted);}
+  .v5-faixa-tracos{display:flex;gap:4px;margin-top:6px;}
+  .v5-faixa-tracos i{flex:1 1 0;max-width:28px;height:5px;border-radius:999px;background:var(--line);}
+  .v5-faixa-tracos i.is-feito{background:var(--green);}
+  .v5-faixa-ir{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;
+    border-radius:999px;background:var(--red);color:#fff;font:800 14px var(--font-body);text-decoration:none;}
+  .v5-faixa-rua.is-ok .v5-faixa-ir{background:var(--green);}
+  .v5-faixa-ir.is-sem{background:transparent;color:var(--muted);font-weight:600;font-size:12px;min-height:0;padding:0;}
+  @media (max-width:640px){ .v5-faixa-ir{flex:1 1 100%;} }
+
   /* ══ CALCULADORA DE PLANOS (02/10/26) — a tela /inside-sales/precificacao do Takeat OS ══
      A configuração usa os tokens do Cockpit (claro e escuro); a proposta (.pc9-prop) tem
      cor própria e fixa, porque é a imagem que vai para o cliente. */
@@ -16936,6 +16957,7 @@ async function renderMeuPainel() {
      dia com a fila ordenada — uma fonte, e a mesma que o delegado busca. */
 
   el.innerHTML = `
+    <div id="v5FaixaRua" class="v5-faixa-rua" hidden></div>${(setTimeout(function () { v5PreencherFaixaRua(); }, 0), "")}
     <!-- ══ O QUADRO ÚNICO (04/09/26, prancha final) ══════════════════════════════════
          O motivo desta versão está no handoff: "o problema da versão anterior era
          desalinhamento". Hero, grade e duas seções soltas eram irmãos no fluxo, cada um
@@ -58193,6 +58215,66 @@ function v5DoCache(chave, alvo) {
   return true;
 }
 let V5_PORTOES_DE_NOVO = false;
+/* ══ A FAIXA DA RUA (02/10/26) ═══════════════════════════════════════════════════════
+   Julyan: "eu preciso que eles visitem, coloque sempre na aba hoje do executivo e no app
+   deles pra gente ir pra rua". Uma faixa fixa no topo do Hoje, a mesma do mapa no app:
+   visitas de hoje contra a meta do dia, e o botão que leva para a rua. Os números saem de
+   meu_placar() — a mesma função que o app lê — então o 2 de 8 daqui é o 2 de 8 de lá.
+   Vermelha se ainda não houve visita depois das 10h; verde quando bate a meta. Só para o
+   executivo e só em dia útil (field sales é seg–sex). */
+let V5_FAIXA_VOO = null;
+function v5TomDaFaixa(feitas, meta, hora) {
+  if (feitas != null && meta > 0 && feitas >= meta) return 'is-ok';
+  if ((feitas == null || feitas === 0) && hora >= 10) return 'is-alerta';
+  return 'is-andando';
+}
+function v5TextoDaFaixa(feitas, meta, hora) {
+  if (feitas == null) return { titulo: 'Meta de hoje: ' + meta + (meta === 1 ? ' visita' : ' visitas'), sub: 'o placar de hoje não carregou — a meta continua valendo' };
+  const faltam = Math.max(0, meta - feitas);
+  if (faltam === 0) return { titulo: 'Meta batida: ' + feitas + ' de ' + meta + ' visitas', sub: 'cada porta a mais hoje é funil da semana que vem' };
+  if (feitas === 0) return { titulo: 'Nenhuma visita ainda hoje · meta ' + meta, sub: hora >= 10 ? 'o dia já começou — a primeira porta é a mais difícil' : 'monte a rota e saia: a manhã é a melhor hora' };
+  return { titulo: 'Visitas hoje: ' + feitas + ' de ' + meta, sub: 'faltam ' + faltam + (faltam === 1 ? ' porta' : ' portas') + ' para a meta' };
+}
+async function v5PreencherFaixaRua() {
+  const alvo = document.getElementById('v5FaixaRua');
+  if (!alvo) return;
+  const agoraBR = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  const diaSemana = agoraBR.getDay();
+  if (!supa || !sessaoAtual || sessaoAtual.role !== 'rep' || diaSemana === 0 || diaSemana === 6) { alvo.hidden = true; return; }
+  if (V5_FAIXA_VOO) return V5_FAIXA_VOO;
+  V5_FAIXA_VOO = (async function () {
+    let feitas = null, meta = null;
+    try {
+      const r = await supa.rpc('meu_placar');
+      if (!r.error && r.data) {
+        feitas = r.data.visitas_hoje != null ? Number(r.data.visitas_hoje) : null;
+        meta = Number(r.data.meta_hoje) > 0 ? Number(r.data.meta_hoje) : null;
+      }
+    } catch (e) { /* sem placar: a faixa mostra a meta e o botão, sem número inventado */ }
+    if (!meta) {
+      const metas = (typeof v5CarregarMetas === 'function') ? await v5CarregarMetas().catch(function () { return null; }) : null;
+      meta = (metas && metas.padrao) || (typeof V5_META_VISITAS !== 'undefined' ? V5_META_VISITAS : 6);
+    }
+    const hora = agoraBR.getHours();
+    const t = v5TextoDaFaixa(feitas, meta, hora);
+    const el = document.getElementById('v5FaixaRua');
+    if (!el) return;
+    const tracos = feitas == null ? '' : '<span class="v5-faixa-tracos" aria-hidden="true">'
+      + Array.from({ length: Math.max(1, Math.min(meta, 12)) }, function (_, k) { return '<i' + (k < feitas ? ' class="is-feito"' : '') + '></i>'; }).join('') + '</span>';
+    const botao = (typeof v5NoPwa === 'function' && v5NoPwa())
+      ? '<a class="v5-faixa-ir" href="/"' + (window.innerWidth >= 900 ? ' target="_blank" rel="noopener"' : '') + '>Ir pra rua →</a>'
+      : '<span class="v5-faixa-ir is-sem">abra o app no celular para ir pra rua</span>';
+    el.className = 'v5-faixa-rua ' + v5TomDaFaixa(feitas, meta, hora);
+    el.innerHTML = '<div class="v5-faixa-txt"><b>' + esc(t.titulo) + '</b><small>' + esc(t.sub) + '</small>' + tracos + '</div>' + botao;
+    /* presa logo abaixo do cabeçalho, que também é sticky e muda de altura com a largura */
+    const cab = document.querySelector('.app-header');
+    const cabFixo = cab && getComputedStyle(cab).position === 'sticky';
+    el.style.top = (cabFixo ? cab.offsetHeight : 0) + 'px';
+    el.hidden = false;
+  })().finally(function () { V5_FAIXA_VOO = null; });
+  return V5_FAIXA_VOO;
+}
+
 async function v5PreencherPortoes(tentativa) {
   const alvo = document.getElementById('v5Portoes');
   if (!alvo) {
