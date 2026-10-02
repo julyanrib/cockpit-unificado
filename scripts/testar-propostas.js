@@ -204,20 +204,25 @@ checar('ela se atualiza a cada clique, e não congela no primeiro estado',
    com ela embaixo do cartao o palco tinha 299px para uma peca de 687 e a escala caia
    para 0,43 (cartao de 185x295); com ela na coluna da esquerda, 521px de palco, escala
    0,75 e cartao de 324x517 — tres vezes a area. */
-checar('a mensagem nao mora na coluna da peca (nem dentro do cartao)', (function () {
-  const i = template.indexOf('function prcCartaoHTML()');
+/* CALCULADORA DE PLANOS (02/10/26): a tela virou a do Takeat OS e os extras foram para o
+   bloco "Enviar ao cliente", embaixo. As duas regras de antes continuam: a mensagem nunca
+   entra na proposta (que é a imagem) e nunca divide a coluna dela. */
+function corpoDe(nome) {
+  const i = template.indexOf('function ' + nome + '(');
   const f = template.indexOf(NL + '}', i);
-  const foraDoCartao = i > -1 && f > i && template.slice(i, f).indexOf('prcMensagemJunto') === -1;
-  /* e fora da coluna da peca: o trecho entre <div class="p4-peca"> e o fim dela */
-  const ip = template.indexOf('<div class="p4-peca">');
-  const fp = template.indexOf('</div>' + NL + '    </div>', ip);
-  const foraDaColuna = ip > -1 && fp > ip && template.slice(ip, fp).indexOf('prcMensagemJunto') === -1;
-  return foraDoCartao && foraDaColuna;
-}()),
-  'dentro do cartao ela vira parte do que o dono recebe; na coluna do cartao ela come a '
-    + 'altura da peca — 299px de palco em vez de 521, e o cartao cai para 0,43 de escala');
+  return i > -1 && f > i ? template.slice(i, f) : '';
+}
+const telaPc9 = corpoDe('pc9TelaHTML');
+checar('a mensagem nao mora na coluna da peca (nem dentro do cartao)',
+  corpoDe('pc9PropostaHTML').length > 0 && corpoDe('pc9PropostaHTML').indexOf('prcMensagemJunto') === -1
+    && telaPc9.indexOf('prcMensagemJuntoHTML()') > telaPc9.indexOf("pc9-envio")
+    && telaPc9.indexOf("pc9-envio") > telaPc9.indexOf("class=\"pc9-dir\""),
+  'dentro da proposta ela vira parte da imagem que o dono recebe; na coluna da proposta ela come a altura dela');
+/* virado para o cliente, o véu cobre a tela inteira e mostra SÓ a proposta e os dois botões */
+const veu = telaPc9.slice(telaPc9.indexOf("pc9-cliente\""));
 checar('e ela some quando a tela vira para o cliente',
-  template.indexOf("${prcModoCliente ? '' : prcMensagemJuntoHTML()}") > -1,
+  /\.pc9-cliente\{position:fixed;inset:0;/.test(template) && veu.length > 0
+    && veu.indexOf('prcMensagemJuntoHTML') === -1 && veu.indexOf('prcCaixaObjecoesHTML') === -1,
   'é o texto que o executivo manda, não parte da proposta que o dono lê');
 
 /* Os cinco chips do handoff, pelo que o DONO diz — não pelo nome da função que os
@@ -240,7 +245,8 @@ const PRC_CHIPS = ['está caro', 'já tenho sistema', 'meu cliente é tradiciona
      3. a resposta e a âncora do playbook saem do MESMO bloco — uma regra, um lugar. */
 checar('as cinco objeções existem e são só do executivo',
   PRC_CHIPS.every(c => template.indexOf(c) > -1)
-  && template.indexOf("${prcModoCliente ? '' : prcCaixaObjecoesHTML()}") > -1,
+  && telaPc9.indexOf('prcCaixaObjecoesHTML()') > telaPc9.indexOf('pc9-envio')
+  && corpoDe('pc9PropostaHTML').indexOf('prcCaixaObjecoesHTML') === -1,
   'no modo cliente elas têm de sumir — é a resposta às objeções DELE, virada para ele');
 checar('abrir a resposta não empurra a coluna',
   /\.p4-so-voce-resp\{[^}]*max-height:\d+px/.test(template)
@@ -253,7 +259,7 @@ checar('a resposta e a âncora saem do mesmo bloco do playbook',
 /* O AVISO DA DOR NÃO FOI JUNTO: "o plano na tela não cobre X" é aviso sobre a proposta
    montada agora, não resposta a objeção — atrás de um botão ele deixa de ser aviso. */
 checar('o aviso da dor continua visível na coluna',
-  template.indexOf("${prcModoCliente ? '' : prcBlocoDorHTML()}") > -1);
+  telaPc9.indexOf('prcBlocoDorHTML()') > -1);
 
 /* ── 10. O PALCO — as três coisas que quebraram na tela do Julyan ────────────────
    Ele abriu a aba e viu duas: a peça pequena no meio de um palco largo, e o modo
@@ -269,43 +275,27 @@ checar('o aviso da dor continua visível na coluna',
    pintor saiu. Não há mais proporção para conferir — há uma coisa só. A guarda passa a
    prender exatamente isso, que é mais forte do que o que ela media antes. */
 checar('o PNG é a foto do MESMO nó que a prévia mostra',
-  /const node = document\.getElementById\('cartao-proposta'\);/.test(template)
+  template.indexOf("const nova = document.getElementById('pc9Proposta');") > -1
   && /const clone = node\.cloneNode\(true\);/.test(template)
-  /* O NOME APARECE NO COMENTARIO QUE EXPLICA A REMOCAO (12/09/26): a primeira versao
-     desta checagem procurava a string e reprovou por causa da propria prosa que
-     documenta a saida do pintor. Guarda que le codigo tem de medir CODIGO — aqui, a
-     ATRIBUICAO que criava o pintor, e nao a mencao ao nome dele. */
   && template.indexOf('window.TakeatPropostaPNG = {') === -1
   && template.indexOf('function prcDadosDaPeca(') === -1,
   'com um segundo desenho da peça (o pintor de canvas), o que o dono recebe diverge do '
     + 'que o executivo conferiu na tela — e a divergência só aparece depois de enviada');
-/* REESCRITA EM 12/09/26: a checagem exigia o clone a 430px cravados. A largura de
-   desenho passou a SEGUIR o palco (430 a 600, escolhida por area medida) porque a 430
-   fixos o cartao ocupava 67% da largura da coluna no notebook do Julyan. A intencao
-   nunca foi o numero: e que a captura aconteca SEM o transform da previa e na largura de
-   desenho DO NO — clonar numa constante faria o PNG divergir do que ele conferiu. */
-checar('a captura é sem o transform da prévia, na largura de desenho do nó, em scale 3',
+/* 02/10/26: a captura da proposta nova segue a SPEC do Takeat OS — 2x, fundo branco — na
+   largura real do nó e sem transform. */
+checar('a captura é sem o transform da prévia, na largura do nó, em 2x e fundo branco',
   /clone\.style\.transform = 'none';/.test(template)
-    && /clone\.style\.width = \(node\.style\.width \|\| '430px'\);/.test(template)
-    && /html2canvas\(clone, \{ scale: 3/.test(template),
-  'capturar o nó com transform rasteriza o tamanho escalado e sai borrado; clonar numa '
-    + 'largura fixa faz o PNG divergir da prévia; sem scale 3 chega pixelado no celular');
-/* O cartão continua ABSOLUTO e centrado no palco — devolvê-lo ao fluxo empurrava a
-   grade com 900px de peça. Agora a posição é inline (é o nó que o PNG fotografa), e o
-   que a folha guarda é só a origem do transform. */
-/* a largura deixou de ser 430 cravado e virou ${prcLarguraDesenho} — o que a checagem
-   tem de garantir e que o cartao siga ABSOLUTO e centrado no palco, que e o que impede
-   a peca de ~700px de empurrar a grade e devolver a rolagem da aba. */
-checar('o cartão do palco continua absoluto e centrado',
-  /id="cartao-proposta" style="position:absolute;top:50%;left:50%;width:\$\{prcLarguraDesenho\}px/.test(template)
-    && /\.p4-palco > #cartao-proposta\{transform-origin:center center;\}/.test(template),
-  'no fluxo, a peça de ~700px empurra a grade e a aba volta a rolar');
-checar('o cartão existe UMA vez no DOM, e o overlay não redigita uma segunda versão',
-  /\$\{prcModoCliente \? '' : `<div id="cartao-proposta"/.test(template)
-  && (template.match(/id="cartao-proposta"/g) || []).length === 2
-  && (template.match(/prcCartaoHTML\(\)/g) || []).length >= 3,
-  'foi uma segunda versão redigitada que fez o cartão sair "parecido mas não igual" — '
-    + 'o handoff proíbe isso em letra maiúscula');
+    && template.indexOf("clone.style.width = nova ? (node.offsetWidth + 'px')") > -1
+    && template.indexOf("nova ? { scale: 2, backgroundColor: '#ffffff', useCORS: true }") > -1,
+  'capturar com transform rasteriza o tamanho escalado e sai borrado; largura fixa faz o PNG divergir da tela');
+checar('a proposta fica fixa ao lado no desktop e desce para baixo da configuração no celular',
+  /\.pc9-dir\{flex:none;width:540px;position:sticky;top:16px;\}/.test(template)
+    && /\.pc9-dir\{width:100%;position:static;\}/.test(template),
+  'sem sticky ela some ao rolar os adicionais; com sticky no celular ela cobre a configuração');
+checar('a proposta é desenhada por UMA função, e o modo cliente não redigita uma segunda versão',
+  (template.match(/class="pc9-prop" id="pc9Proposta"/g) || []).length === 1
+    && telaPc9.indexOf("pc9PropostaHTML().replace('id=\"pc9Proposta\"', 'id=\"pc9PropostaCliente\"')") > -1,
+  'foi uma segunda versão redigitada que fez o cartão sair "parecido mas não igual"');
 
 /* Grade sem template de linhas divide a SOBRA entre as fileiras automáticas. Fora do
    modo cliente não há sobra e ninguém vê; com os controles escondidos, a barra de
@@ -319,9 +309,13 @@ checar('a casca diz quais fileiras crescem',
    de 335px e cada cartão de plano ficava com 68px — "Profissional" transbordava 39px,
    "R$ 549" 32px, "14 funcionalidades" 32px. Dividir a largura não cria espaço: troca
    altura por corte. Estas duas travam o par de regras que resolve. */
-checar('os cinco passos ficam num cartão só, na largura inteira',
-  /\.p4-controles\{display:flex;flex-direction:column/.test(template),
-  'em duas colunas o cartão de plano fica com 68px e o nome do plano corta');
+/* 02/10/26: na Calculadora de Planos a regra é a mesma com outro desenho — a coluna da
+   configuração fica com a sobra (min-width:0) e planos e períodos vão em 2 colunas que
+   encolhem, como no Takeat OS, nunca em 4. */
+checar('a configuração fica com a sobra, e planos e períodos em 2 colunas que encolhem',
+  /\.pc9-esq\{flex:1 1 0;min-width:0;/.test(template)
+    && /\.pc9-g2\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\);/.test(template),
+  'em colunas demais o cartão de plano fica com 68px e o nome do plano corta');
 /* As grades de plano e período agora são inline (a prancha), então a checagem mede o
    par que resolve o corte onde ele está: quatro trilhas com piso ZERO e min-width:0 no
    cartão. Sem esse par, dividir a largura não cria espaço — troca altura por corte. */
@@ -567,11 +561,9 @@ checar('a largura de desenho e escolhida por area medida, e nao cravada',
     && template.indexOf('area > melhor.area') > -1,
   'com largura cravada, um terco da coluna fica vazio no notebook (medido) ou a peca nao '
     + 'usa a altura da tela grande');
-checar('e o cartao do overlay usa a MESMA largura da previa',
-  template.indexOf('width:${prcLarguraDesenho}px;background:#1E2228') > -1
-    && template.indexOf('let prcLarguraDesenho = 430;') > -1,
-  'larguras diferentes nos dois lugares fazem o PNG sair diferente dependendo de onde foi '
-    + 'capturado — mesma proposta, duas imagens');
+checar('e a proposta do modo cliente tem a MESMA largura da do desktop',
+  /\.pc9-cliente-peca\{width:min\(540px,100%\);\}/.test(template),
+  'larguras diferentes nos dois lugares fazem a mesma proposta aparecer de dois jeitos');
 
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
