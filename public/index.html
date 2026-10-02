@@ -24262,7 +24262,10 @@ function pl6ItensDoDia(coluna, porId) {
     const id = pl6SlotId(v);
     if (!id) continue;
     const l = porId ? (porId.get(id) || null) : null;
-    itens.push({ si: si, hora: hora, id: id, tipo: l ? 'visita' : 'orfa', lead: l, p: p, r: r });
+    itens.push({ si: si, hora: hora, id: id, tipo: l ? 'visita' : 'orfa', lead: l, p: p, r: r,
+
+      fora: !!(v && typeof v === 'object' && v.fora),
+      semPino: !!(PL6_SEM_PINO && PL6_SEM_PINO.has(String(id))) });
   }
 
   itens.sort(pl6PorHora);
@@ -24402,7 +24405,60 @@ async function pl6Carregar(rep, segundaPedida) {
     return { ok: false, motivo: error.message || 'o banco recusou a leitura' };
   }
   pl6Plano = (data && data[0]) ? data[0] : null;
+  await pl6CarregarPinos();
   return { ok: true, tinhaLinha: !!pl6Plano };
+}
+
+let PL6_SEM_PINO = null;
+async function pl6CarregarPinos() {
+  PL6_SEM_PINO = null;
+  const g = pl6Plano && Array.isArray(pl6Plano.grade) ? pl6Plano.grade : null;
+  if (!g || !supa) return;
+  const ids = new Set();
+  g.forEach(function (col) { (Array.isArray(col) ? col : []).forEach(function (v) { const id = pl6SlotId(v); if (id) ids.add(String(id)); }); });
+  if (!ids.size) { PL6_SEM_PINO = new Set(); return; }
+  const deals = [], leads = [];
+  ids.forEach(function (id) {
+    const resto = id.slice(2);
+    if (id.indexOf('c-') === 0 || id.indexOf('r-') === 0) deals.push(resto);
+    else if (id.indexOf('n-') === 0 && /^[0-9a-f-]{36}$/i.test(resto)) leads.push(resto);
+  });
+  try {
+    const comPino = new Set();
+    if (deals.length) {
+      const r = await supa.from('clients').select('id_hubspot').in('id_hubspot', deals.slice(0, 300));
+      if (r.error) throw r.error;
+      (r.data || []).forEach(function (c) { comPino.add('c-' + c.id_hubspot); comPino.add('r-' + c.id_hubspot); });
+    }
+    if (leads.length) {
+      const r1 = await supa.from('clients').select('lead_prospeccao_id').in('lead_prospeccao_id', leads.slice(0, 300));
+      if (r1.error) throw r1.error;
+      (r1.data || []).forEach(function (c) { comPino.add('n-' + c.lead_prospeccao_id); });
+
+      const faltam = leads.filter(function (l) { return !comPino.has('n-' + l); });
+      if (faltam.length) {
+        const r2 = await supa.from('leads_prospeccao').select('id, hubspot_deal_id').in('id', faltam.slice(0, 300));
+        if (r2.error) throw r2.error;
+        const porDeal = {};
+        (r2.data || []).forEach(function (l) { if (l.hubspot_deal_id) porDeal[l.hubspot_deal_id] = l.id; });
+        const ds = Object.keys(porDeal);
+        if (ds.length) {
+          const r3 = await supa.from('clients').select('id_hubspot').in('id_hubspot', ds);
+          if (r3.error) throw r3.error;
+          (r3.data || []).forEach(function (c) { comPino.add('n-' + porDeal[c.id_hubspot]); });
+        }
+      }
+    }
+    const sem = new Set();
+    ids.forEach(function (id) {
+      const medido = id.indexOf('c-') === 0 || id.indexOf('r-') === 0 || id.indexOf('n-') === 0;
+      if (medido && !comPino.has(id)) sem.add(id);
+    });
+    PL6_SEM_PINO = sem;
+  } catch (e) {
+    console.warn('Planejamento: não consegui conferir os pinos —', e && e.message);
+    PL6_SEM_PINO = null;
+  }
 }
 
 function pl6MesclarGrade(base, nova, fresca) {
@@ -25068,7 +25124,9 @@ function pl6DadosFinal(rep) {
           const sub = bl ? bl.sub
             : (it.tipo === 'bloqueado' ? 'compromisso fora da rua'
               : [it.lead.etapa || (it.lead.tipo === 'n' ? 'sem negócio' : null),
-                it.lead.regiaoNome || null].filter(Boolean).join(' · '));
+                it.lead.regiaoNome || null,
+                it.fora ? 'feita fora do plano' : null,
+                it.semPino ? 'sem pino no mapa — não vai para a rota do app' : null].filter(Boolean).join(' · '));
 
           const propId = it.p || (it.lead && typeof pl6PropositoDoLead === 'function'
             ? pl6PropositoDoLead(it.lead) : null);
