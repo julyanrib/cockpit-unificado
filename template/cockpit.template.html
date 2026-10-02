@@ -10453,6 +10453,14 @@ foi escrita para jogar o "0 de 27 resolvidos"
 .pt6-hoje span{font-size:13px;color:var(--muted);}
 .pt6-hoje em{font-style:normal;font-size:12px;font-weight:800;color:var(--ao-vivo);}
 .pt6-hoje em.is-zero{color:var(--amber-ink);}
+.pt6-ontem{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;border:1px dashed var(--line);border-radius:10px;padding:6px 10px;min-height:40px;font-size:12.5px;color:var(--ink);}
+.pt6-ontem i{font-style:normal;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+.pt6-ontem b{font-variant-numeric:tabular-nums;}
+.pt6-ontem.is-abaixo b{color:var(--amber-ink);}
+.pt6-ontem.is-vazio span,.pt6-ontem.is-lendo span{color:var(--muted);}
+.pt6-ontem button{margin-left:auto;min-height:36px;border:1px solid var(--line);border-radius:999px;background:var(--panel);padding:0 12px;font:inherit;font-weight:800;font-size:12px;color:var(--ink);cursor:pointer;}
+.pt6-ontem button:hover{border-color:var(--ink);}
+@media (max-width:760px){ .pt6-ontem button{min-height:44px;margin-left:0;} }
 .pt6-faixa{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;}
 .pt6-dia{min-height:44px;border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:var(--panel2,var(--panel));font-variant-numeric:tabular-nums;font:inherit;color:inherit;padding:0;cursor:pointer;min-width:0;}
 .pt6-dia:hover{border-color:var(--ink);}
@@ -57712,6 +57720,37 @@ async function pt6Carregar(forcar) {
   }
 }
 
+/* ══ O DIA ANTERIOR NO CARTÃO (02/10/26, Julyan: "tenho que ver também os dados de visita
+   do dia anterior à daily, pra eu saber e poder perguntar a eles") ═══════════════════════
+   Na segunda, o dia anterior útil é a sexta da semana passada, que a leitura da semana não
+   traz: uma leitura a mais, só nesse caso, com cache de 5 min. */
+async function pt6CarregarSemanaAnterior() {
+  if (PT6.semanaAtras || typeof supa === 'undefined' || !supa) return false;
+  const seg = pt6Segunda(), hoje = pt6Hoje();
+  if (!seg || hoje !== seg) return false;
+  const segAnt = addDays(seg, -7);
+  const a = PT6.anterior;
+  if (a && a.seg === segAnt && Date.now() - a.em < 300000) return false;
+  if (a && a.voo) return a.voo;
+  const elenco = pt6Elenco();
+  const voo = (async function () {
+    try {
+      const { data, error } = await supa.rpc('planejamento_do_time', {
+        p_segunda: segAnt, p_donos: elenco.map(function (e) { return e.ownerId; }), p_dia: addDays(segAnt, 4)
+      });
+      if (error) throw error;
+      const porDono = {};
+      ((data && data.pessoas) || []).forEach(function (p) { porDono[String(p.ownerId)] = p; });
+      PT6.anterior = { seg: segAnt, em: Date.now(), porDono: porDono, erro: null };
+    } catch (e) {
+      PT6.anterior = { seg: segAnt, em: Date.now(), porDono: null, erro: (e && e.message) || 'erro' };
+    }
+    return true;
+  })();
+  PT6.anterior = { seg: segAnt, em: 0, porDono: null, voo: voo };
+  return voo;
+}
+
 /* ── o retrato de cada executivo, calculado UMA vez por carga ─────────────────────── */
 function pt6Retratos(d) {
   const elenco = pt6Elenco();
@@ -57736,6 +57775,17 @@ function pt6Retratos(d) {
       ? dias.slice(idxHoje + 1).map(function (x, i) { return { i: idxHoje + 1 + i, x: x }; }).filter(function (o) { return Number(o.x.planejadas) === 0; })
       : [];
     const ontemAbaixo = !!(ontemD && Number(ontemD.feitas) < Number(ontemD.meta || 0));
+    /* o dia anterior ÚTIL: de terça a sexta é a véspera; no fim de semana, a sexta; na
+       segunda, a sexta passada (pt6CarregarSemanaAnterior) */
+    let ontem = null;
+    if (semanaCorrente && idxHoje >= 1 && idxHoje <= 4) ontem = { dia: addDays(seg, idxHoje - 1), x: dias[idxHoje - 1] || null, outraSemana: false };
+    else if (semanaCorrente && idxHoje >= 5) ontem = { dia: sexta, x: dias[4] || null, outraSemana: false };
+    else if (semanaCorrente && idxHoje === 0) {
+      const ant = PT6.anterior && PT6.anterior.seg === addDays(seg, -7) ? PT6.anterior : null;
+      ontem = { dia: addDays(seg, -3), outraSemana: true,
+        lendo: !ant || (!ant.porDono && !ant.erro), erro: ant && ant.erro,
+        x: ant && ant.porDono ? (((ant.porDono[e.ownerId] || {}).dias) || [])[4] || null : null };
+    }
     const puladas = dias.reduce(function (t, x, i) {
       return i < Math.max(0, idxHoje) ? t + Math.max(0, (Number(x.planejadas) || 0) - (Number(x.feitasDoPlano) || 0)) : t;
     }, 0);
@@ -57750,7 +57800,7 @@ function pt6Retratos(d) {
     }
     return {
       e: e, p: p, dias: dias, idxHoje: idxHoje, semanaCorrente: semanaCorrente, hojeD: hojeD,
-      semPlanoHoje: semPlanoHoje, brancosAdiante: brancosAdiante, ontemAbaixo: ontemAbaixo, puladas: puladas,
+      semPlanoHoje: semPlanoHoje, brancosAdiante: brancosAdiante, ontemAbaixo: ontemAbaixo, puladas: puladas, ontem: ontem,
       feitas: soma('feitas', ate < 0 ? -1 : ate), provadas: soma('provadas', ate < 0 ? -1 : ate),
       provadasLeadNovo: soma('provadasLeadNovo', ate < 0 ? -1 : ate),
       planejadas: soma('planejadas'), contatos: soma('contatos'), fora: soma('fora', ate < 0 ? -1 : ate),
@@ -57791,7 +57841,8 @@ function pt6Montar() {
   if (!raiz) return;
   if (!PT6.dados) raiz.innerHTML = '<div class="pt6-estado"><b>Lendo o plano do time…</b>as paradas, os check-ins e a palavra de cada um</div>';
   else pt6Pintar();
-  pt6Carregar(false).then(function () { pt6Pintar(); pt6AbrirPedidoDoEndereco(); });
+  pt6Carregar(false).then(function () { pt6Pintar(); pt6AbrirPedidoDoEndereco(); return pt6CarregarSemanaAnterior(); })
+    .then(function (mudou) { if (mudou) pt6Pintar(); });
 }
 
 function pt6Pintar() {
@@ -57888,6 +57939,28 @@ function pt6LeadNovoHTML(r) {
       : 'nenhuma provada da semana em lead que criou no app, na hora') + '</span>';
 }
 
+function pt6OntemHTML(r, d) {
+  const o = r.ontem;
+  if (!o) return '';
+  const dn = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][new Date(o.dia + 'T12:00:00Z').getUTCDay()];
+  const rot = (addDays(d.hoje, -1) === o.dia ? 'Ontem' : 'Último dia útil') + ' · ' + dn + ' ' + pt6DDMM(o.dia);
+  if (o.lendo) return '<div class="pt6-ontem is-lendo"><i>' + v5Esc(rot) + '</i><span>lendo a semana passada…</span></div>';
+  if (o.erro) return '<div class="pt6-ontem is-vazio"><i>' + v5Esc(rot) + '</i><span>não consegui ler a semana passada</span></div>';
+  const x = o.x || {};
+  const feitas = Number(x.feitas) || 0, meta = Number(x.meta) || 0, prov = Number(x.provadas) || 0;
+  const pl = Number(x.planejadas) || 0, fp = Number(x.feitasDoPlano) || 0, fora = Number(x.fora) || 0;
+  if (!feitas && !pl) return '<div class="pt6-ontem is-vazio"><i>' + v5Esc(rot) + '</i><span>nenhuma visita e nada planejado</span></div>';
+  const partes = [
+    prov + ' com prova',
+    pl ? 'plano ' + fp + '/' + pl : 'sem plano',
+    fora ? fora + ' fora do plano' : ''
+  ].filter(Boolean);
+  const acao = (o.outraSemana ? 'odossie:' : 'gdossie:') + r.e.ownerId + '|' + o.dia;
+  return '<div class="pt6-ontem' + (meta && feitas < meta ? ' is-abaixo' : '') + '"><i>' + v5Esc(rot) + '</i>'
+    + '<span><b>' + feitas + (meta ? '/' + meta : '') + '</b> visitas · ' + v5Esc(partes.join(' · ')) + '</span>'
+    + '<button type="button" data-pt6="' + v5Esc(acao) + '" title="Abrir o dossiê de ' + v5Esc(pt6PrimeiroNome(r.e.nome)) + ' neste dia: quem visitou, a que horas, com que prova">ver quem visitou →</button></div>';
+}
+
 function pt6CartoesHTML(d, rs) {
   return '<section class="pt6-bloco" style="background:transparent;border:0;padding:0">'
     + '<div class="pt6-camada"><b>1</b><span>O time</span><em>na ordem da rodada: quem precisa de você primeiro</em></div>'
@@ -57917,6 +57990,7 @@ function pt6CartoesHTML(d, rs) {
         + '<b>' + v5Esc(r.e.nome) + '</b><span>' + v5Esc(r.e.praca || 'sem praça') + '</span></button>'
         + '<span class="pt6-st is-' + r.tom + '">' + v5Esc(r.st) + '</span></div>'
         + '<div class="pt6-hoje">' + vis + '</div>'
+        + pt6OntemHTML(r, d)
         + pt6LeadNovoHTML(r)
         + pt6FaixaHTML(r, d) + palavra
         + '<div class="pt6-prox">' + prox + sinal + '</div>'
@@ -58546,6 +58620,19 @@ document.addEventListener('click', async function (ev) {
   if (verbo === 'regiao') { PT6.regiao = Number(arg) || 0; pt6Pintar(); return; }
   if (verbo === 'dossie') { pt6AbrirDossie(arg); return; }
   if (verbo === 'gdossie') { const k = arg.indexOf('|'); pt6AbrirDossie(arg.slice(0, k), arg.slice(k + 1) || null); return; }
+  /* a sexta passada, aberta na segunda: o Planejamento vai para a semana anterior (o
+     seletor de semana traz de volta) e o dossiê abre naquele dia */
+  if (verbo === 'odossie') {
+    const k = arg.indexOf('|');
+    const oid = arg.slice(0, k), dd = arg.slice(k + 1);
+    PT6.semanaAtras = 1; PT6.dia = dd; PT6.dados = null;
+    pt6Montar();
+    await pt6Carregar(false);
+    await new Promise(function (r) { setTimeout(r, 0); });
+    pt6Pintar();
+    if (PT6.dados) pt6AbrirDossie(oid, dd);
+    return;
+  }
   if (verbo === 'fechar') { pt6FecharDossie(); return; }
   if (verbo === 'gdia') { PT6.dossieDia = arg; PT6.armado = null; if (PT6.dossieErro) { await pt6CarregarDossie(true); } pt6PintarDossie(); return; }
   if (verbo === 'filtro') { PT6.filtros[arg] = !PT6.filtros[arg]; pt6PintarDossie(); return; }
