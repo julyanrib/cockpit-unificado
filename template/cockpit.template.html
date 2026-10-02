@@ -7696,7 +7696,9 @@
      devolver a barra de rolagem que este trabalho inteiro veio tirar.
      :has(#viewPrecificacao.active) prende tudo a esta view — as outras sete abas
      continuam rolando como sempre, e voltam ao normal no clique da navegação. */
-  body:has(#viewPrecificacao.active){overflow:hidden;}
+  /* 02/10/26: A CADEIA SAIU. Ela prendia a aba em 100vh para a casca v4 caber sem rolar; a
+     Calculadora de Planos é mais alta que a janela e ficava cortada sem rolagem ("sem
+     scroll não dá", Julyan). Agora a aba rola como as outras e a proposta fica sticky. */
   /* AS DUAS FOLGAS DA CASCA, medidas nesta tela: a linha "HubSpot atualizado" reserva
      24px embaixo e o rodapé da fonte reserva 28px em cima. São 52px que, em qualquer
      outra aba, são respiro — aqui viram altura do cartão, que encolhe na razão direta
@@ -7711,16 +7713,10 @@
      nenhum numero vem do HubSpot — preco e tabela oficial, e a fonte disso esta escrita
      no rodape da propria aba. Sao 29px medidos, e nesta tela 29px sao altura de cartao. */
   body:has(#viewPrecificacao.active) #footerText{display:none;}
-  #appRoot:has(#viewPrecificacao.active) > div{height:100vh;min-height:0;}
-  #appRoot:has(#viewPrecificacao.active) > div > div{min-height:0;}
   /* O PADDING DO .app-main VIRA PALCO. Ele reserva 26px em cima e 44 embaixo — folga boa
      para texto, 70px caros aqui: cada pixel que sobra e altura do cartao, e o cartao
      encolhe na razao direta do que sobra. Medido a 1907x880: o palco tinha 418px e o
      cartao saia a 0,416 de escala. */
-  .app-main:has(> #viewPrecificacao.active){max-width:none;padding:6px 18px 6px;
-    min-height:0;overflow:hidden;}
-  .app-main > #viewPrecificacao.active{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
-  #viewPrecificacao.active > #precificacaoContent{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
   /* ══ CALCULADORA DE PLANOS (02/10/26) — a tela /inside-sales/precificacao do Takeat OS ══
      A configuração usa os tokens do Cockpit (claro e escuro); a proposta (.pc9-prop) tem
      cor própria e fixa, porque é a imagem que vai para o cliente. */
@@ -23869,7 +23865,20 @@ function pc9Redesenhar() {
   renderPrecificacaoConfigurador();
 }
 
+/* A PROPOSTA FIXA AO LADO (02/10/26): sticky com top 16 prende o TOPO dela. Quando ela é mais
+   alta que a janela (Enterprise, muitos adicionais) isso esconderia o Investimento enquanto o
+   executivo rola a configuração. O top negativo faz ela rolar junto até o fim aparecer, e só
+   então prender — o topo volta ao subir. */
+let PC9_FIXA_LIGADA = false;
+function pc9AjustarFixa() {
+  const d = document.querySelector('.pc9-dir');
+  if (!d) return;
+  if (getComputedStyle(d).position !== 'sticky') { d.style.top = ''; return; }
+  d.style.top = Math.min(16, window.innerHeight - d.offsetHeight - 16) + 'px';
+}
 function pc9Ligar(slot) {
+  pc9AjustarFixa();
+  if (!PC9_FIXA_LIGADA) { PC9_FIXA_LIGADA = true; window.addEventListener('resize', pc9AjustarFixa); }
   const e = PC9.estado, cfg = PC9.cfg;
   slot.querySelectorAll('[data-pc9-tipo]').forEach(function (b) { b.addEventListener('click', function () {
     e.tipoPlano = b.getAttribute('data-pc9-tipo');
