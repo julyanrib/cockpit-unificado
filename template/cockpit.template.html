@@ -11804,6 +11804,18 @@ function mostrarApp() {
     carregarComunicados();
     carregarPerfis();
   }
+  umAppAbrirAbaEmbutida();
+}
+
+/* EMBUTIDO NO APP: a aba é a do endereço, sempre. Sem isto o Cockpit reabria a última aba
+   usada (medido: ?embutido=planejamento abria Desenvolvimento). Repete depois da carga,
+   porque a restauração da última aba roda mais tarde. */
+function umAppAbrirAbaEmbutida() {
+  if (!UMAPP_EMBUTIDO) return;
+  const alvo = { planejamento: '#/planejamento', funil: '#/funil', propostas: '#/propostas', desenvolvimento: '#/desenvolvimento' }[UMAPP_EMBUTIDO];
+  if (!alvo) return;
+  if (String(location.hash || '').toLowerCase().split('?')[0] !== alvo && history.replaceState) history.replaceState(null, '', location.pathname + location.search + alvo);
+  [150, 800, 2000].forEach(function (ms) { setTimeout(function () { if (typeof v5AbrirAbaDoEndereco === 'function') v5AbrirAbaDoEndereco(); }, ms); });
 }
 
 function mostrarLogin(mensagem, estado) {
@@ -60337,10 +60349,12 @@ function v5AbrirAbaDoEndereco() {
   const id = V5_ABA_DO_ENDERECO[base];
   if (!id) return;
   const btn = document.getElementById(id);
-  if (btn && btn.offsetParent !== null) { btn.click(); return; }
+  /* embutido no app o cabeçalho (e as abas) fica escondido: aí vale o botão que o papel tem */
+  const disponivel = function (b) { return !!b && (b.offsetParent !== null || (UMAPP_EMBUTIDO && b.style.display !== 'none')); };
+  if (disponivel(btn)) { btn.click(); return; }
   /* o gestor não tem a aba Planejamento do executivo: o Planejamento dele é o do time */
   const doTime = base === '#/planejamento' && document.getElementById('tabBtnDaily');
-  if (doTime && doTime.offsetParent !== null) { if (typeof PT6 !== 'undefined') PT6.pedido = pt6LerPedidoDoEndereco(); doTime.click(); }
+  if (disponivel(doTime)) { if (typeof PT6 !== 'undefined') PT6.pedido = pt6LerPedidoDoEndereco(); doTime.click(); }
 }
 /* (sem ouvinte próprio: v5AbrirSistemaSePedido, abaixo, já chama v5AbrirAbaDoEndereco a cada
    hashchange — com os dois, a aba abria duas vezes e o render pesado rodava em dobro) */
