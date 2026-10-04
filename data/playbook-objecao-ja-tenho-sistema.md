@@ -148,7 +148,7 @@ Três fatos que sustentam essa frase, e você pode falar todos:
 - **4.9 de nota em +130 mil avaliações**
 - **Suporte 7 dias por semana**, inclusive sábado e domingo — que é quando ele fatura
 
-> **Honestidade comercial:** nunca prometa PDV offline. O módulo está em desenvolvimento (ver [FAQ](playbook:faq)). Prometer offline fecha contrato e gera churn na primeira queda de internet.
+> **Honestidade comercial:** o PDV funciona offline e sincroniza quando a internet volta (ver [FAQ](playbook:faq)) — prometa isso, não a operação inteira sem internet. Para o resto, a contingência é 4G/5G nas Maquininhas Smart + 50mb de fibra dedicados.
 
 ***
 
