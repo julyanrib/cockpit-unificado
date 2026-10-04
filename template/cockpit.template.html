@@ -7872,6 +7872,14 @@
   .pc9-qtd{display:flex;align-items:center;gap:4px;margin-top:4px;}
   .pc9-qtd button{width:20px;height:20px;display:flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--line);border-radius:4px;background:var(--panel);font:500 12px var(--font-body);color:var(--ink);cursor:pointer;}
   .pc9-qtd button:hover{background:var(--panel2);}
+  /* Auditoria 04/10/26: alvo de toque de 44px sem mexer no desenho. O ::before invisível
+     estende a área clicável do elemento; o clique nele cai no próprio botão ou link. */
+  [data-alvo44]{position:relative;}
+  [data-alvo44]::before{content:'';position:absolute;inset:-12px;}
+  [data-alvo44="v"]::before{inset:-13px -2px;}
+  @media (max-width:640px){
+    #tm2Raiz button[data-tm2-acao][style*="min-height"]{min-height:44px !important;}
+  }
   .pc9-qtd input{width:40px;padding:2px 4px;border:1px solid var(--line);border-radius:4px;background:var(--panel);font:500 12px var(--font-body);color:var(--ink);text-align:center;}
   .pc9-alertas{display:flex;flex-direction:column;gap:8px;}
   .pc9-alerta{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:8px;font:500 12px/1.5 var(--font-body);}
@@ -7974,7 +7982,7 @@
     .pc9-ad{padding:10px 12px;gap:8px;}
     .pc9-ad-nome{font-size:12px;}
     .pc9-caixa{margin:-6px;padding:6px;}
-    .pc9-qtd button{width:32px;height:32px;font-size:14px;}
+    .pc9-qtd button{width:44px;height:44px;font-size:14px;}
     .pc9-qtd input{padding:6px 4px;}
     .pc9-p-plano,.pc9-p-bloco,.pc9-p-inv-in,.pc9-p-rodape{padding-left:16px;padding-right:16px;}
     .pc9-p-cols{grid-template-columns:minmax(0,1fr);}
@@ -23864,6 +23872,7 @@ async function pc9Carregar(forcar) {
     const r = await supa.from('pricing_config').select('*').eq('id', 'current').maybeSingle();
     if (r.error) throw new Error('A tabela de preços não carregou: ' + r.error.message);
     if (!r.data) throw new Error('A tabela de preços ainda não existe no banco.');
+    if (!r.data.planos || !Object.keys(r.data.planos).length || !Array.isArray(r.data.periodicidades)) throw new Error('A tabela de preços está incompleta no banco (faltam planos ou periodicidades). Avise a gestão.');
     PC9.cfg = r.data;
     precificacaoCache = pc9ParaCacheAntigo(r.data);
     if (!PC9.estado) PC9.estado = pc9EstadoInicial(r.data);
@@ -29225,7 +29234,7 @@ function tm10NomeLead(id, nome) {
    mesmo lugar. */
 function tm10Dono(ownerId, nome, cor) {
   if (!ownerId) return '<span style="font:700 9px \'Poppins\',sans-serif;color:' + cor + ';">' + esc(nome) + '</span>';
-  return '<button type="button" data-tm2-acao="sel:' + esc(ownerId) + '" data-tm2-hv="0"'
+  return '<button type="button" data-tm2-acao="sel:' + esc(ownerId) + '" data-tm2-hv="0" data-alvo44="v"'
     + ' title="Abrir o dossiê de ' + esc(nome) + '"'
     + ' style="border:0;background:transparent;padding:0;cursor:pointer;'
     + 'font:700 9px \'Poppins\',sans-serif;color:' + cor + ';text-decoration:underline;'
@@ -31315,7 +31324,7 @@ function pv6LinhaCadenciaHTML(l) {
     + '<span style="font-size:10px;font-weight:800;color:' + st.cor + ';text-align:right;">'
     +   esc(st.rot) + '</span>'
     + '<a href="' + hsUrl(l.id) + '" target="_blank" rel="noopener"'
-    +   ' style="font-size:11px;font-weight:700;text-align:right;color:var(--amber);">abrir →</a>'
+    +   ' data-alvo44="v" style="font-size:11px;font-weight:700;text-align:right;color:var(--amber);">abrir →</a>'
     + '</div>';
 }
 
@@ -31395,7 +31404,7 @@ function pv6DrillHTML(d) {
       + '<span style="font-size:10px;font-weight:800;color:' + x.cor + ';text-align:right;">'
       +   esc(x.fim) + '</span>'
       + '<a href="' + hsUrl(x.id) + '" target="_blank" rel="noopener"'
-      +   ' style="font-size:11px;font-weight:700;text-align:right;color:var(--amber);">abrir →</a>'
+      +   ' data-alvo44="v" style="font-size:11px;font-weight:700;text-align:right;color:var(--amber);">abrir →</a>'
       + '</div>';
   }).join('') + '</div>';
 }
@@ -31844,7 +31853,7 @@ function tm2SobreviventesHTML(d) {
                     <button data-tm2-acao="${dUm1}" style="display:inline-flex;align-items:center;min-height:34px;padding:0 14px;border:1px solid #8E3B5C;border-radius:999px;background:var(--panel);font:800 10.5px 'Poppins',sans-serif;color:var(--plum-ink);cursor:pointer;white-space:nowrap;" data-tm2-hv="7">${dUm1Rot}</button>
                   </div>
                 ` : ''}
-                <button data-tm2-acao="${dFechar}" style="flex:none;width:28px;height:28px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted2);font:800 14px 'Poppins',sans-serif;cursor:pointer;line-height:1;padding:0;" data-tm2-hv="3">✕</button>
+                <button data-tm2-acao="${dFechar}" aria-label="Fechar" data-alvo44 style="flex:none;width:28px;height:28px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted2);font:800 14px 'Poppins',sans-serif;cursor:pointer;line-height:1;padding:0;" data-tm2-hv="3">✕</button>
               </div>
               <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;">
                 ${(dCols||[]).map(fc => `
@@ -31915,7 +31924,7 @@ function tm2SobreviventesHTML(d) {
                 <b style="font:900 17px 'Poppins',sans-serif;letter-spacing:-.01em;color:#FFFDF8;">${dlNome}</b>
                 <span style="font:800 9px 'Poppins',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#16181D;background:${dlEtapaCor};border-radius:6px;padding:3px 9px;white-space:nowrap;">${dlEtapa}</span>
                 <span style="font:700 10.5px 'Poppins',sans-serif;color:var(--ter);">${dlDono}</span>
-                <button data-tm2-acao="${dlFechar}" style="margin-left:auto;flex:none;width:28px;height:28px;border:1px solid #3A3F4A;border-radius:999px;background:transparent;color:var(--ter);font:800 14px 'Poppins',sans-serif;cursor:pointer;line-height:1;padding:0;" data-tm2-hv="8">✕</button>
+                <button data-tm2-acao="${dlFechar}" aria-label="Fechar" data-alvo44 style="margin-left:auto;flex:none;width:28px;height:28px;border:1px solid #3A3F4A;border-radius:999px;background:transparent;color:var(--ter);font:800 14px 'Poppins',sans-serif;cursor:pointer;line-height:1;padding:0;" data-tm2-hv="8">✕</button>
               </div>
               <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr);gap:14px;">
                 <div style="display:flex;flex-direction:column;gap:9px;">
@@ -65636,7 +65645,7 @@ function rt7TelaHTML(d) {
               ${(d.fila||[]).map(f => `
                 <div style="background:${f.bg};border:1px solid ${f.borda};border-radius:10px;padding:7px 11px;min-width:0;">
                   <div style="display:flex;align-items:center;gap:9px;min-width:0;">
-                    <button type="button" data-rt7-acao="${f.marcar}" style="flex:none;width:20px;height:20px;border-radius:6px;border:1.5px solid ${f.ckBorda};background:${f.ckBg};color:#FFFDF8;font:900 11px 'Poppins',sans-serif;cursor:pointer;line-height:1;padding:0;">${f.ck}</button>
+                    <button type="button" data-rt7-acao="${f.marcar}" aria-label="Marcar para a rota" data-alvo44 style="flex:none;width:20px;height:20px;border-radius:6px;border:1.5px solid ${f.ckBorda};background:${f.ckBg};color:#FFFDF8;font:900 11px 'Poppins',sans-serif;cursor:pointer;line-height:1;padding:0;">${f.ck}</button>
                     <span style="flex:none;width:34px;text-align:center;"><b style="display:block;font:900 14px 'Poppins',sans-serif;color:${f.scCor};font-variant-numeric:tabular-nums;line-height:1;">${f.score}</b><span style="font:900 6.5px 'Poppins',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">score</span></span>
                     <button type="button" data-rt7-acao="${f.abrir}" data-rt7-hv="3" style="text-align:left;border:0;background:transparent;cursor:pointer;padding:0;min-width:0;flex:1;"><b style="font:800 11.5px 'Poppins',sans-serif;color:var(--ink);">${f.nome}</b> <span style="font:700 9.5px 'Poppins',sans-serif;color:var(--muted2);">· ${f.tipo} ${f.seta}</span><span style="display:block;font:700 9px/1.4 'Poppins',sans-serif;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.motivo}</span></button>
                     <span style="flex:none;font:800 10px 'Poppins',sans-serif;color:var(--amber);white-space:nowrap;">★ ${f.nota} <span style="color:var(--muted2);">· ${f.avals}</span></span>
