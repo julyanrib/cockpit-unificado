@@ -59360,7 +59360,7 @@ function pt6Palavra(r, d) {
   const num = function (v) { return v == null || v === '' || isNaN(Number(v)) ? null : Number(v); };
   const mets = [
     { k: 'visitas', l: 'Visitas', f: r.feitas, p: dada ? num(pr.visitas) : null },
-    { k: 'demos', l: 'Demos marcadas', f: r.p ? Number(r.p.demos) || 0 : null, p: dada ? num(pr.demos) : null },
+    { k: 'demos', l: 'Demos realizadas', f: r.p ? Number(r.p.demosRealizadas) || 0 : null, p: dada ? num(pr.demos) : null },
     { k: 'fechamentos', l: 'Fechamentos', f: cumprido ? cumprido.fechamentos.v : null, p: dada ? num(pr.fechamentos) : null },
     { k: 'prospeccao', l: 'Contas novas', f: cumprido && cumprido.prospeccao.medido ? cumprido.prospeccao.v : null, p: dada ? num(pr.prospeccao) : null }
   ];
@@ -59417,7 +59417,9 @@ function pt6TopoHTML(d, rs) {
   const provadas = rs.reduce(function (t, r) { return t + r.provadas; }, 0);
   const leadNovo = rs.reduce(function (t, r) { return t + (r.provadasLeadNovo || 0); }, 0);
   const planejadas = rs.reduce(function (t, r) { return t + r.planejadas; }, 0);
-  const demos = rs.reduce(function (t, r) { return t + (r.p ? Number(r.p.demos) || 0 : 0); }, 0);
+  /* DEMOS REALIZADAS (Julyan, 04/10/26): o topo dizia "Demos marcadas" ao lado da Semana, que conta as
+     realizadas. Agora é o livro da temporada (negócio entrou em Demo/Proposta) — o mesmo da Semana e do app. */
+  const demos = rs.reduce(function (t, r) { return t + (r.p ? Number(r.p.demosRealizadas != null ? r.p.demosRealizadas : 0) || 0 : 0); }, 0);
   const contatos = rs.reduce(function (t, r) { return t + r.contatos; }, 0);
   const faltam = rs.filter(function (r) { return !(r.p && r.p.plano && r.p.plano.promessaDadaEm); }).map(function (r) { return pt6PrimeiroNome(r.e.nome); });
   const pct = feitas ? Math.round(provadas / feitas * 100) : null;
@@ -59441,7 +59443,7 @@ function pt6TopoHTML(d, rs) {
     + kpi('Paradas planejadas', planejadas, '', 'seg a sex, marcadas no Planejamento ou no mapa')
     + kpi('Visitas feitas', feitas, '', hoje >= seg && hoje <= sexta ? 'na semana, até agora' : 'na semana')
     + kpi('Com prova', pct == null ? '—' : pct + '%', '', pct == null ? 'nenhuma visita ainda' : provadas + ' com GPS no ponto ou foto' + (leadNovo ? ' · ' + leadNovo + ' em lead criado no app, na hora' : ''), pct == null ? '' : pct >= 80 ? 'ok' : 'aviso')
-    + kpi('Demos marcadas', demos, '', 'com decisor, na semana: ficha de rua ou reunião agendada')
+    + kpi('Demos realizadas', demos, '', 'negócio entrou em Demo/Proposta na semana · a mesma conta da Semana')
     + (contatoMedido
       ? kpi('Pontos de contato', contatos, '', 'ligações e WhatsApp registrados' + (desde > seg ? ' · medindo desde ' + pt6DDMM(desde) : ''))
       : kpi('Pontos de contato', '—', '', desde ? 'medindo desde ' + pt6DDMM(desde) : 'medindo a partir do próximo registro no app'))
@@ -59566,7 +59568,7 @@ function pt6PalavraHTML(d, rs) {
   const semDemos = linhas.every(function (x) { return x.pw.mets[1].p == null; });
   return '<section class="pt6-bloco" style="background:transparent;border:0;padding:0">'
     + '<div class="pt6-camada"><b>2</b><span>Prometido × cumprido</span><em>a palavra que cada um deu na segunda · o traço é onde o ritmo pede estar hoje</em></div>'
-    + '<div class="pt6-tabela"><div class="pt6-linha is-cab"><span>Executivo</span><span>Visitas</span><span>Demos marcadas</span><span>Fechamentos</span><span>Contas novas</span><span style="text-align:right">Palavra</span></div>'
+    + '<div class="pt6-tabela"><div class="pt6-linha is-cab"><span>Executivo</span><span>Visitas</span><span>Demos realizadas</span><span>Fechamentos</span><span>Contas novas</span><span style="text-align:right">Palavra</span></div>'
     + linhas.map(function (x) {
       const r = x.r, pw = x.pw;
       const sub = pw.dada ? 'fechou ' + v5Esc(pt6DiaSemana(pw.quando)) : 'não fechou a semana';
@@ -59978,7 +59980,7 @@ function pt6PintarDossie() {
     + kpi('Com prova', Number(x.provadas) || 0, ((Number(x.feitas) || 0) - (Number(x.provadas) || 0)) + ' sem prova', Number(x.provadas) ? 'ok' : '')
     + kpi('Fotos', fotosDia == null ? '…' : fotosDia, 'da fachada')
     + (desde && desde <= dia ? kpi('Contatos', nContatos, 'ligações e WhatsApp') : kpi('Contatos', '—', desde ? 'medindo desde ' + pt6DDMM(desde) : 'medindo a partir do próximo registro'))
-    + kpi('Demos marcadas', r.p ? Number(r.p.demos) || 0 : 0, 'na semana, com decisor')
+    + kpi('Demos realizadas', (r.p ? Number(r.p.demosRealizadas != null ? r.p.demosRealizadas : 0) || 0 : 0), 'na semana · entrou em Demo/Proposta')
     + '</div>';
   let corpo;
   if (!dd && PT6.dossieErro) {
