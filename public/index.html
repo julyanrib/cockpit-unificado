@@ -18846,7 +18846,9 @@ function pbPlaybookDoTimeHTML(res) {
   });
 
   const pessoas = Object.keys(porPessoa).map(k => porPessoa[k]).sort((a, b) => b.leituras - a.leituras);
-  const total = paginas.length || 1;
+
+  const maisLidas = Math.max(1, ...Object.keys(porPessoa).map(k => porPessoa[k].leituras));
+  const total = paginas.length || maisLidas;
   const linhas = pessoas.map(p => {
     const larg = Math.max(2, Math.round((p.leituras / total) * 100));
     return '<div class="gx-forma-linha">' +
@@ -18863,7 +18865,9 @@ function pbPlaybookDoTimeHTML(res) {
     ? '<b>' + ninguemLeu.length + ' de ' + paginas.length + ' guias ninguém leu ainda</b>' +
       (nomesNinguem ? ': ' + nomesNinguem + (ninguemLeu.length > 6 ? ' e outros ' + (ninguemLeu.length - 6) : '') + '.' : '.') +
       ' Guia que ninguém abriu é pauta de Daily ou material que não serve — as duas conclusões valem mais do que o guia parado.'
-    : '<b>Todos os ' + paginas.length + ' guias já foram lidos por alguém.</b>';
+    : paginas.length
+      ? '<b>Todos os ' + paginas.length + ' guias já foram lidos por alguém.</b>'
+      : '<span class="gi-nm">não medido</span> <b>A lista de guias não carregou agora</b> — as leituras acima valem; o que ninguém leu aparece quando a biblioteca abrir.';
 
   const semNada = pessoas.filter(p => p.leituras === 0);
   const notaSemNada = semNada.length
@@ -18881,7 +18885,7 @@ function pbPlaybookDoTimeHTML(res) {
 
   return '<div class="gx-secao">' +
     '<div class="gx-secao-cab"><b>O que o time estudou</b>' +
-      '<span>guias marcados como lidos, de ' + paginas.length + ' no repertório · quem lê, marca — o gestor não marca no lugar de ninguém</span></div>' +
+      '<span>guias marcados como lidos' + (paginas.length ? ', de ' + paginas.length + ' no repertório' : '') + ' · quem lê, marca — o gestor não marca no lugar de ninguém</span></div>' +
     (nenhumaLinha ? '' : '<div class="gx-forma">' + linhas + '</div>') +
     '<div class="gx-secao-nota">' + corpo + '</div>' +
   '</div>' + (nenhumaLinha ? '' : pbMatrizHTML(pessoas, paginas, cat.categorias));
@@ -18917,6 +18921,10 @@ async function renderPlaybookDoTime() {
   if (!el) return;
   if (!(sessaoAtual && sessaoAtual.role === 'manager')) { el.innerHTML = ''; return; }
   el.innerHTML = '<div class="gx-secao"><div class="gx-secao-nota">Lendo o progresso do time…</div></div>';
+
+  if (typeof carregarPlaybookProtegido === 'function' && !playbookDados()) {
+    try { await carregarPlaybookProtegido(); } catch (e) {   }
+  }
   const res = await pbProgressoDoTime();
   el.innerHTML = pbPlaybookDoTimeHTML(res);
 }
