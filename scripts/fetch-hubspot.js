@@ -1873,10 +1873,13 @@ async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
 // Alimenta o quadro "Vendas do mês" do Cockpit — usa exatamente o mesmo critério
 // (closedate + as 2 etapas de ganho + filtro de teste/exceções) do KPI fechadosNoMes,
 // então a contagem daqui bate com o número que já aparece no topo do painel.
-async function vendasDoMesDetalhe() {
+/* `desdeMesAnterior` (04/10/26): o livro de pontos da temporada (0153) só recebia os
+   contratos do mês corrente, e o ranking do Mês comparava outubro com um setembro vazio
+   ("quem mais evoluiu" inflado). vendasLivro leva o mês anterior junto; vendasMes não muda. */
+async function vendasDoMesDetalhe(desdeMesAnterior) {
   const now = new Date();
   const b = agoraBrasilia();
-  const inicioMes = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1, 3, 0, 0));
+  const inicioMes = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth() - (desdeMesAnterior ? 1 : 0), 1, 3, 0, 0));
   const results = await hsSearchAll({
     filterGroups: [{
       filters: [
@@ -1948,7 +1951,10 @@ async function demosRealizadasByOwner(ownerId) {
   const b = agoraBrasilia();
   const inicioMes = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1, 3, 0, 0);
   const inicioSemana = inicioSemanaBrasilia();
-  const desde = Math.min(inicioMes, inicioSemana);
+  /* a lista vai desde o mês ANTERIOR (04/10/26): o livro de pontos precisa da base de
+     comparação do ranking do Mês. Os contadores semana/mes continuam filtrando abaixo. */
+  const inicioMesAnterior = Date.UTC(b.getUTCFullYear(), b.getUTCMonth() - 1, 1, 3, 0, 0);
+  const desde = Math.min(inicioMesAnterior, inicioSemana);
   const prop = 'hs_v2_date_entered_' + STAGES.demoProposta;
   const results = await hsSearchAll({
     filterGroups: [{
@@ -2100,6 +2106,8 @@ async function main() {
   // Detalhe dos fechados do mês (nome + dono + MRR) — pro quadro "Vendas do mês".
   const vendasMes = await vendasDoMesDetalhe();
   console.log(`Vendas do mês: ${vendasMes.length} negócios fechados no mês corrente (com MRR).`);
+  let vendasLivro = vendasMes;
+  try { vendasLivro = await vendasDoMesDetalhe(true); } catch (e) { console.warn('vendasLivro falhou, segue com o mês corrente:', e.message); }
 
   // ---- Leads por etapa, time inteiro (pro clique no funil) ----
   const ownerNameById = {};
@@ -2769,6 +2777,7 @@ async function main() {
     leadsReciclagem60,
     leadsReciclagem,
     vendasMes,
+    vendasLivro,
     reps: repsData,
     agenda
   };
