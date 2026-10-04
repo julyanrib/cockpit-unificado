@@ -1966,7 +1966,9 @@ async function demosRealizadasByOwner(ownerId) {
   const mes = validos.filter(d => em(d) >= inicioMes);
   return {
     semana: semana.length, semanaNomes: semana.map(d => d.properties.dealname).slice(0, 12),
-    mes: mes.length
+    mes: mes.length,
+    /* o livro de pontos da temporada (0153) pontua cada demo UMA vez por negócio: precisa do id e da data */
+    lista: validos.map(d => ({ id: String(d.id), nome: d.properties.dealname, em: new Date(em(d)).toISOString() }))
   };
 }
 
@@ -2570,7 +2572,7 @@ async function main() {
     // Fechados no MÊS desse executivo (pra coluna "Meta do mês" da tabela Por executivo)
     const fechadosNoMesRep = await stageTotalThisMonthByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
     // Demos realizadas (entrou em Demo/Proposta) — o ranking do time pontua só estas
-    let demosRealizadas = { semana: 0, semanaNomes: [], mes: 0 };
+    let demosRealizadas = { semana: 0, semanaNomes: [], mes: 0, lista: [] };
     try { demosRealizadas = await demosRealizadasByOwner(rep.ownerId); }
     catch (e) { console.warn('Demos realizadas de ' + rep.name + ' não lidas:', e.message); }
 
@@ -2601,6 +2603,7 @@ async function main() {
       demosRealizadasSemana: demosRealizadas.semana,
       demosRealizadasSemanaNomes: demosRealizadas.semanaNomes,
       demosRealizadasMes: demosRealizadas.mes,
+      demosRealizadasLista: demosRealizadas.lista,
       // BLOCO 15: os nomes ao lado das contagens do dia. Teto de 12 pelo mesmo motivo
       // de plotaveis: este objeto vai inteiro pro navegador de todo gestor.
       avancosHojeNomes: avancosHojeNomes.slice(0, 12),
