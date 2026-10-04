@@ -2592,6 +2592,8 @@
 
   footer{margin-top:28px;color:var(--muted2);font-size:11px;border-top:1px solid var(--line);padding-top:14px;}
 
+  html.is-embutido .app-header{display:none !important;}
+  html.is-embutido body{padding-top:0 !important;}
   .app-header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);padding:0 22px;display:flex;align-items:center;gap:12px;height:56px;flex:none;}
 
   /* CORREÇÃO (28/08/26, achada navegando em 1024px) — a topbar estourava 241px e a
@@ -11759,6 +11761,26 @@ const METRICAS_INVERTIDAS = ['perdidos', 'emReciclagem'];
 // ============ LOGIN / AUTENTICAÇÃO (Supabase) ============
 let supa = null;
 let sessaoAtual = null; // { email, role, ownerId, nome }
+/* UM APP SÓ (04/10/26): o app de campo abre uma aba do Cockpit DENTRO dele (?embutido=<aba>) —
+   o editor da semana do Planejamento e o kanban no computador. Sem cabeçalho nem abas: o
+   app já tem os dele. E o executivo embutido nunca é mandado de volta para o app. */
+const UMAPP_EMBUTIDO = (function () { try { return new URLSearchParams(location.search).get('embutido') || ''; } catch (e) { return ''; } })();
+if (UMAPP_EMBUTIDO) document.documentElement.classList.add('is-embutido');
+/* O EXECUTIVO COM A CHAVE um_app (feature_flags, 0156) usa o app: /gestao manda para a aba
+   equivalente (Hoje e Propostas → Tarefas, Meu funil → Funil, Planejamento → Agenda,
+   Desenvolvimento e Playbook → menu). ?nav=antiga no app (takeat-nav-antiga) é a saída. */
+async function umAppTalvezLevarAoApp() {
+  try {
+    if (UMAPP_EMBUTIDO || !sessaoAtual || sessaoAtual.role !== 'rep' || !supa) return;
+    if (localStorage.getItem('takeat-nav-antiga') === '1') return;
+    const r = await supa.rpc('meus_recursos');
+    if (r.error || !r.data || r.data.um_app !== true) return;
+    const h = String(location.hash || '').toLowerCase().split('?')[0];
+    const aba = h === '#/funil' ? 'funil' : (h === '#/planejamento' || h === '#/agenda') ? 'agenda'
+      : h === '#/desenvolvimento' ? 'desenvolvimento' : h === '#/playbook' ? 'playbook' : 'tarefas';
+    location.replace('/?aba=' + aba);
+  } catch (e) { /* sem resposta: fica no Cockpit */ }
+}
 
 // Escape de HTML pra conteúdo que vem de fora do repo (notas do HubSpot, comunicados,
 // sugestões de coaching e anexos do Supabase) antes de ir pra innerHTML — evita que um
@@ -12075,6 +12097,7 @@ async function hidratarSessao(email) {
     if (typeof aoVivoLigar === 'function') aoVivoLigar();
     reidratarPosLogin();
     mostrarApp();
+    void umAppTalvezLevarAoApp();
     /* a página interna de componentes do v5 abre por /gestao#sistema */
     if (typeof v5AbrirSistemaSePedido === 'function') v5AbrirSistemaSePedido();
     /* a camada da rua da aba que abriu sozinha (segunda: a Semana) */
@@ -58735,7 +58758,9 @@ async function v5PreencherPortoes(tentativa) {
       supa.from('fichas_de_rua').select('como_foi, proximo').eq('owner_id', String(sessaoAtual.ownerId)).gte('ocorrido_em', ini),
       meuId ? supa.rpc('visitas_do_dia', { p_pessoa: meuId, p_dia: hoje }) : nada,
       meuId ? supa.rpc('meta_visitas', { p_pessoa: meuId, p_dia: hoje }) : nada,
-      meuId ? supa.rpc('demos_com_decisor', { p_pessoa: meuId, p_de: hoje, p_ate: hoje }) : nada,
+      /* UMA DEFINIÇÃO SÓ (Um app só, 04/10/26): demo é a REALIZADA (o negócio entrou em
+         Demo/Proposta), contada na semana da temporada — a mesma do placar do app. */
+      supa.rpc('placar_executivo'),
     ]);
     /* A PÍLULA DO APP (T11, fase 5, 01/10/26): "x/6" e um traço por visita, preenchido quando
        feita — o mesmo desenho da pílula do mapa (FolhaDoMapa), para o executivo reconhecer
@@ -58768,8 +58793,8 @@ async function v5PreencherPortoes(tentativa) {
     const nv = vddOk ? Number(vdd.data.feitas) || 0 : (vis.data || []).length;
     const nprov = vddOk ? Number(vdd.data.provadas) || 0 : null;
     const decl = (vis.data || []).filter(function (x) { return x.declarada; }).length;
-    const nd = !demosSrv.error && demosSrv.data != null ? Number(demosSrv.data) || 0
-      : (fichas.data || []).filter(function (f) { return f.como_foi === 'falou_com_decisor' && f.proximo === 'reuniao'; }).length;
+    const placarOk = !demosSrv.error && demosSrv.data && demosSrv.data.semana;
+    const nd = placarOk ? Number(demosSrv.data.semana.demos) || 0 : 0;
     /* D1: a meta conta a visita feita; a prova vem com o mesmo peso, igual à pílula do mapa */
     const legVis = nprov != null && nv ? (nprov + (nprov === 1 ? ' provada' : ' provadas') + (nv - nprov ? ' · ' + (nv - nprov) + ' sem prova' : ''))
       : (decl ? decl + ' sem GPS (declarada)' : 'check-ins do mapa');
@@ -58780,11 +58805,11 @@ async function v5PreencherPortoes(tentativa) {
         : cartao('Plano da semana', fechado ? 'Validado' : 'Aberto', '', null, 0, fechado ? 'o gestor já vê na Daily' : 'a semana ainda não foi fechada', fechado ? 'is-regua-ok' : 'is-nm', fechado ? 'fechado ' + hh : ''))
       + (vis.error ? v5NaoMedido('Visitas de hoje', 'não consegui ler os check-ins agora')
         : cartao('Visitas hoje', nv, '/' + metaV, metaV, nv, nv >= metaV ? 'meta do dia batida' : 'faltam ' + (metaV - nv), semaforo(nv, metaV), legVis))
-      + (fichas.error ? v5NaoMedido('Demos com decisor', 'não consegui ler as fichas de rua agora')
-        : cartao('Demos com decisor', nd, '/' + V5_META_DEMOS, V5_META_DEMOS, nd, nd >= V5_META_DEMOS ? 'meta do dia batida' : 'faltam ' + (V5_META_DEMOS - nd), semaforo(nd, V5_META_DEMOS), 'ficha de rua ou reunião agendada no app · medindo desde 25/09'))
+      + (!placarOk ? v5NaoMedido('Demos realizadas', 'não consegui ler o placar agora')
+        : cartao('Demos realizadas', nd, '/1', 1, nd, nd >= 1 ? 'piso da semana batido' : 'falta 1 para o piso', semaforo(nd, 1), 'negócio entrou em Demo/Proposta · na semana'))
       + '</div></section>';
     /* só guarda leitura inteira: um bloco com "não consegui ler" tenta de novo na próxima */
-    if (!plano.error && !vis.error && !fichas.error) V5_HTML_CACHE.portoes = { em: Date.now(), html: agora.innerHTML };
+    if (!plano.error && !vis.error && placarOk) V5_HTML_CACHE.portoes = { em: Date.now(), html: agora.innerHTML };
   })();
   try { await V5_PORTOES_VOO; } catch (e) { console.log('[portões do dia]', e && e.message); } finally { V5_PORTOES_VOO = null; }
   if (V5_PORTOES_DE_NOVO) { V5_PORTOES_DE_NOVO = false; return v5PreencherPortoes(0); }
