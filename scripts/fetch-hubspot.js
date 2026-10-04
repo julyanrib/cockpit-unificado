@@ -1938,6 +1938,38 @@ async function stageDealsHojeByOwner(stageIdOuLista, ownerId, diaISO) {
   return (data.results || []).filter(d => !isExcludedDeal(d)).length;
 }
 
+/* DEMO REALIZADA (03/10/26, ranking do time). Julyan: "pode pontuar só a demo realizada".
+   Reunião marcada não conta: em 60 dias, as 132 reuniões do app estavam todas "agendada" —
+   ninguém marca realizada à mão. O sinal que só existe quando a demo aconteceu é o negócio
+   ENTRAR em Demo/Proposta: o HubSpot exige plano apresentado, MRR e data da reunião para
+   entrar. Conta por hs_v2_date_entered_<Demo> (confiável desde julho/26), qualquer que
+   seja a etapa de hoje — quem já avançou para Negociação ou fechou continua contando. */
+async function demosRealizadasByOwner(ownerId) {
+  const b = agoraBrasilia();
+  const inicioMes = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1, 3, 0, 0);
+  const inicioSemana = inicioSemanaBrasilia();
+  const desde = Math.min(inicioMes, inicioSemana);
+  const prop = 'hs_v2_date_entered_' + STAGES.demoProposta;
+  const results = await hsSearchAll({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'hubspot_owner_id', operator: 'EQ', value: ownerId },
+        { propertyName: prop, operator: 'GTE', value: String(desde) }
+      ]
+    }],
+    properties: ['dealname', prop]
+  });
+  const validos = results.filter(d => !isExcludedDeal(d));
+  const em = d => Date.parse(d.properties[prop] || '') || Number(d.properties[prop]) || 0;
+  const semana = validos.filter(d => em(d) >= inicioSemana);
+  const mes = validos.filter(d => em(d) >= inicioMes);
+  return {
+    semana: semana.length, semanaNomes: semana.map(d => d.properties.dealname).slice(0, 12),
+    mes: mes.length
+  };
+}
+
 async function stageDealsLast7DaysByOwner(stageIdOuLista, ownerId) {
   // Semana civil (segunda 00:00 Brasília → agora), mesmo critério do time inteiro —
   // e agora com paginação completa (hsSearchAll) em vez de 1 página de 50, pra
@@ -2537,6 +2569,10 @@ async function main() {
     const ganhosSemanaDeals = await stageDealsLast7DaysByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
     // Fechados no MÊS desse executivo (pra coluna "Meta do mês" da tabela Por executivo)
     const fechadosNoMesRep = await stageTotalThisMonthByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
+    // Demos realizadas (entrou em Demo/Proposta) — o ranking do time pontua só estas
+    let demosRealizadas = { semana: 0, semanaNomes: [], mes: 0 };
+    try { demosRealizadas = await demosRealizadasByOwner(rep.ownerId); }
+    catch (e) { console.warn('Demos realizadas de ' + rep.name + ' não lidas:', e.message); }
 
     repsData[rep.ownerId] = {
       name: rep.name,
@@ -2562,6 +2598,9 @@ async function main() {
       leadsTravados,
       ganhosSemana: ganhosSemanaDeals.length,
       ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name),
+      demosRealizadasSemana: demosRealizadas.semana,
+      demosRealizadasSemanaNomes: demosRealizadas.semanaNomes,
+      demosRealizadasMes: demosRealizadas.mes,
       // BLOCO 15: os nomes ao lado das contagens do dia. Teto de 12 pelo mesmo motivo
       // de plotaveis: este objeto vai inteiro pro navegador de todo gestor.
       avancosHojeNomes: avancosHojeNomes.slice(0, 12),
