@@ -36,7 +36,9 @@ const tpl = tplCru.replace(/\/\*[\s\S]*?\*\//g, ' ');
 
 /* ── 1 · A TELA: o campo existe e é lido ────────────────────────────────────────────── */
 checar('a ficha do negócio tem campo de hora ao lado do dia',
-  /<input type="time" class="ficha-passo-hora"/.test(tpl)
+  /* 06/10/26: o campo virou texto com lista (digita "940" ou escolhe) — o mesmo do
+     Planejamento e do Meu funil; continua sendo o .ficha-passo-hora que o salvar lê */
+  /<input type="text" class="ficha-passo-hora" list="fpHorasLista"/.test(tpl)
     && /const campoHora = container\.querySelector\('\.ficha-passo-hora'\);/.test(tpl),
   'sem o campo, o resto da cadeia nunca recebe hora');
 
@@ -57,7 +59,7 @@ checar('a hora viaja no corpo do pedido, e só quando ele escolheu uma',
    clicar em "próximo passo" num cartão do Meu funil abria `.fn3-passo-in` (type=date) e
    mais nada. Dois lugares para a mesma ação é como um conserto cobre metade do pedido. */
 checar('o cartão do Meu funil também tem hora ao lado do dia',
-  /<input type="time" step="900" class="fn3-passo-in" data-fn3-passo-hora=/.test(tpl)
+  /<input type="text" list="fpHorasLista" inputmode="numeric" autocomplete="off" placeholder="hora" class="fn3-passo-in fn3-passo-hora" data-fn3-passo-hora=/.test(tpl)
     && /const campoH = el\.querySelector\('\[data-fn3-passo-hora="' \+ id \+ '"\]'\);/.test(tpl),
   'era o formulário de que ele reclamou; o da ficha era o outro');
 

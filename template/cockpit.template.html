@@ -5791,6 +5791,8 @@
     border-radius:var(--r-sm);background:var(--panel);color:var(--ink);
     font:800 9.5px var(--font-body);flex:1 1 100%;width:100%;min-width:0;}
   .fn3-passo-in:focus{outline:none;border-color:var(--green);}
+  /* o campo de hora digitável (06/10/26): números alinhados e a letra legível ao digitar */
+  .fn3-passo-hora{font-size:12px;font-variant-numeric:tabular-nums;padding:0 8px;}
   .fn3-passo-ok{min-height:30px;padding:0 10px;border:1px solid var(--green);
     border-radius:var(--r-pill);background:var(--green);color:var(--dark-ink);cursor:pointer;
     font:800 10.5px var(--font-body);flex:1 1 100%;}
@@ -9654,6 +9656,13 @@
   body.exec-v3 #stageOverlay .ficha-qualif-gargalo,
   body.exec-v3 #stageOverlay .ficha-passo-texto,
   body.exec-v3 #stageOverlay .ficha-passo-data{min-height:38px;}
+  /* os atalhos do próximo passo (06/10/26): o mesmo chip de hora do Planejamento */
+  .fp-atalhos{display:flex;flex-direction:column;gap:5px;margin-top:8px;}
+  .fp-linha{display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
+  .fp-chip{min-height:32px;min-width:38px;padding:0 9px;border:1px solid var(--line-soft);border-radius:7px;background:var(--panel);color:var(--ink);font:800 11px 'Poppins',sans-serif;font-variant-numeric:tabular-nums;cursor:pointer;}
+  .fp-chip:hover{border-color:var(--ink);}
+  .fp-chip[aria-pressed="true"]{background:var(--dark);border-color:var(--ink);color:#FFFDF8;}
+  @media (max-width:760px){ .fp-chip{min-height:40px;} }
   @media (pointer:coarse){
     body.exec-v3 #stageOverlay .ficha-trilha-seg,body.exec-v3 #stageOverlay .ficha-edit-tab,
     body.exec-v3 #stageOverlay .ficha-passo-tipo,body.exec-v3 #stageOverlay .ficha-passo-salvar,
@@ -19842,8 +19851,9 @@ function fn3ChipPasso(l, e) {
     /* A HORA (11/09/26). Opcional, do mesmo jeito que na ficha: vazia, o servidor põe
        09:00, que é a convenção de "compromisso do dia" desta casa. Preenchida, a reunião
        das 15h nasce às 15h no CRM e cai na faixa das 15h do Planejamento e da Daily. */
-    +   '<input type="time" step="900" class="fn3-passo-in" data-fn3-passo-hora="' + id + '"'
-    +     ' title="hora (opcional) — sem ela o compromisso entra às 9h">'
+    /* 06/10/26: o mesmo campo de hora da ficha e do Planejamento — digita (940, 14h) ou escolhe da lista */
+    +   '<input type="text" list="fpHorasLista" inputmode="numeric" autocomplete="off" placeholder="hora" class="fn3-passo-in fn3-passo-hora" data-fn3-passo-hora="' + id + '"'
+    +     ' title="hora (opcional) — digite (9:40, 940, 14h) ou escolha; sem ela o compromisso entra às 9h">'
     +   '<button type="button" class="fn3-passo-ok" data-fn3-passo-ok="' + id + '">datar ▸</button>'
     + '</span>'
     + '<span class="fn3-passo-pe">cria a tarefa de ' + esc(FN3_PASSO_TIPO[et])
@@ -20885,8 +20895,9 @@ function fn3Ligar(el, redesenhar) {
     const campo = el.querySelector('[data-fn3-passo-in="' + id + '"]');
     /* e a HORA tambem na hora do clique, pelo mesmo motivo (11/09/26) */
     const campoH = el.querySelector('[data-fn3-passo-hora="' + id + '"]');
+    const horaDig = campoH ? String(campoH.value || '').trim() : '';
     await gravarPasso(id, campo ? String(campo.value || '').trim() : '', btn,
-      campoH ? String(campoH.value || '').trim() : '');
+      (typeof horaLivre === 'function' && horaLivre(horaDig)) || horaDig);
   }));
 
   el.querySelectorAll('[data-fn3-valor]').forEach(btn => btn.addEventListener('click', ev => {
@@ -36086,6 +36097,124 @@ const PF_MINS_OPT = ['00', '15', '30', '45'];
    dela. A fiação é de cada tela, o desenho é um.
 
    `d` é o contrato: { horaRot, horasOpt:[{rot,on,bg,cor,borda}], minsOpt:[…], agendar }. */
+/* ══ A HORA DIGITADA, UMA REGRA SÓ (06/10/26) ═══════════════════════════════════════
+   Julyan: "pode colocar um horário livre, onde o executivo pode digitar e selecionar
+   facilmente" — no Planejamento e no próximo passo da ficha, do mesmo jeito. Aceita como
+   se escreve no WhatsApp: "9", "9h", "9:40", "9h40", "940", "1430", "14.30". Hora fora de
+   0–23 ou minuto fora de 0–59 não vira compromisso: devolve null e a tela avisa. */
+function horaLivre(txt) {
+  const t = String(txt == null ? '' : txt).trim().toLowerCase().split(' ').join('');
+  if (!t) return null;
+  let h = null, m = 0;
+  const soDigitos = /^[0-9]+$/.test(t);
+  if (soDigitos && (t.length === 3 || t.length === 4)) {
+    h = Number(t.slice(0, t.length - 2)); m = Number(t.slice(-2));
+  } else {
+    const p = /^([0-9]{1,2})(?:[:h.,]([0-9]{0,2}))?(?:min)?$/.exec(t);
+    if (!p) return null;
+    h = Number(p[1]);
+    m = p[2] ? Number(p[2].length === 1 ? p[2] + '0' : p[2]) : 0;
+  }
+  if (!(h >= 0 && h <= 23 && m >= 0 && m <= 59)) return null;
+  return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+}
+/* O CAMPO "ou digite" do relógio: Enter ou sair do campo aplica. Não aplica a cada tecla —
+   a tela repinta ao escolher, e repintar no meio da digitação tiraria o foco do campo. */
+document.addEventListener('keydown', function (ev) {
+  const el = ev.target && ev.target.closest ? ev.target.closest('[data-relogio-livre]') : null;
+  if (!el || ev.key !== 'Enter') return;
+  ev.preventDefault();
+  el.blur();
+});
+document.addEventListener('change', function (ev) {
+  const el = ev.target && ev.target.closest ? ev.target.closest('[data-relogio-livre]') : null;
+  if (!el) return;
+  const v = horaLivre(el.value);
+  if (!v) {
+    if (String(el.value || '').trim()) { el.style.borderColor = 'var(--red)'; el.title = 'Escreva como 9:40, 940 ou 14h'; }
+    return;
+  }
+  /* a escolha passa pelo MESMO verbo da tela, num botão de passagem — a fiação é dela */
+  const caixa = el.closest('[data-pl6-relogio]') || el.parentNode;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.hidden = true;
+  b.setAttribute(el.getAttribute('data-relogio-livre'), 'horalivre:' + v);
+  caixa.appendChild(b);
+  b.click();
+  if (b.parentNode) b.parentNode.removeChild(b);
+});
+
+/* ══ O PRÓXIMO PASSO DA FICHA: UM CAMPO DE HORA SÓ (06/10/26) ═══════════════════════
+   Julyan: "pode colocar um horário livre, onde o executivo pode digitar e selecionar
+   facilmente" — e logo depois: "mas precisa de tanto relógio assim?". Então um campo só:
+   ele digita como fala ("940", "14h", "9:40") ou escolhe da lista que abre no campo
+   (de 07:00 a 20:00, de meia em meia hora). Os atalhos de DIA ficam: são data, não
+   relógio, e "amanhã" é o próximo passo mais comum. */
+function fpHorasDaLista() {
+  let h = '';
+  for (let x = 7 * 60; x <= 20 * 60; x += 30) {
+    const t = (Math.floor(x / 60) < 10 ? '0' : '') + Math.floor(x / 60) + ':' + (x % 60 === 0 ? '00' : '30');
+    h += '<option value="' + t + '"></option>';
+  }
+  return h;
+}
+/* A LISTA DE HORAS É UMA SÓ NA PÁGINA: a ficha e o cartão do Meu funil apontam para ela */
+(function () {
+  const criar = function () {
+    if (document.getElementById('fpHorasLista')) return;
+    const dl = document.createElement('datalist');
+    dl.id = 'fpHorasLista';
+    dl.innerHTML = fpHorasDaLista();
+    document.body.appendChild(dl);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', criar); else criar();
+})();
+function fpAtalhosHTML() {
+  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const dias = [{ iso: hoje, rot: 'Hoje' }, { iso: addDays(hoje, 1), rot: 'Amanhã' }];
+  let d = addDays(hoje, 1);
+  const nomes = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  while (dias.length < 5) {
+    d = addDays(d, 1);
+    const w = new Date(d + 'T12:00:00Z').getUTCDay();
+    if (w === 0 || w === 6) continue;
+    dias.push({ iso: d, rot: nomes[w] + ' ' + d.slice(8, 10) + '/' + d.slice(5, 7) });
+  }
+  return '<div class="fp-atalhos"><div class="fp-linha">'
+    + dias.map(function (x) { return '<button type="button" class="fp-chip" data-fp-dia="' + x.iso + '">' + x.rot + '</button>'; }).join('')
+    + '</div></div>';
+}
+/* acende o dia que bate com o campo de data (vale também quando ele usa o calendário) */
+function fpSincronizar(container) {
+  const cd = container.querySelector('.ficha-passo-data');
+  const data = cd ? cd.value : '';
+  container.querySelectorAll('[data-fp-dia]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-fp-dia') === data)); });
+}
+function fpLigar(container) {
+  if (!container || container.dataset.fpLigado) return;
+  container.dataset.fpLigado = '1';
+  container.addEventListener('click', function (ev) {
+    const b = ev.target.closest && ev.target.closest('[data-fp-dia]');
+    if (!b || !container.contains(b)) return;
+    const cd = container.querySelector('.ficha-passo-data');
+    if (cd) cd.value = b.getAttribute('data-fp-dia');
+    fpSincronizar(container);
+  });
+  /* a hora digitada vira HH:MM ao sair do campo (a mesma regra do Planejamento); o salvar
+     continua conferindo o formato, então hora errada nunca vira compromisso */
+  container.addEventListener('change', function (ev) {
+    const t = ev.target;
+    if (!t || !t.matches) return;
+    if (t.matches('.ficha-passo-data')) fpSincronizar(container);
+    if (t.matches('.ficha-passo-hora')) {
+      const v = horaLivre(t.value);
+      if (v) { t.value = v; t.style.borderColor = ''; t.title = ''; }
+      else if (String(t.value || '').trim()) { t.style.borderColor = 'var(--amber)'; t.title = 'Escreva como 9:40, 940 ou 14h'; }
+    }
+  });
+}
+
 function pfRelogioHTML(d, attr, rotBotao, variante) {
   const dia = variante === 'dia';
   const alt = dia ? '26px' : '24px';
@@ -36137,6 +36266,12 @@ function pfRelogioHTML(d, attr, rotBotao, variante) {
     + '</span>'
     + caixaHoras
     + '<div style="display:flex;gap:3px;margin-top:5px;">' + mins + confirmar + '</div>'
+    /* qualquer hora, digitada: os botões são o atalho, não o limite */
+    + '<input type="text" inputmode="numeric" autocomplete="off" ' + 'data-relogio-livre="' + attr + '"'
+    +   ' placeholder="ou digite a hora · ex.: 9:40" aria-label="Digitar a hora"'
+    +   ' style="display:block;width:100%;box-sizing:border-box;margin-top:6px;min-height:34px;padding:0 10px;'
+    +   'border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink);'
+    +   'font:700 12px \'Poppins\',sans-serif;font-variant-numeric:tabular-nums;">'
     + abaixo
     + '</div>';
 }
@@ -38884,6 +39019,12 @@ function pl6Ligar(box, rep) {
 
       if (verbo === 'hora') { s.hSel = arg; return redesenhar(); }
       if (verbo === 'min') { s.mSel = arg; return redesenhar(); }
+      /* a hora digitada (horaLivre já validou): pode ser 07:40 ou 20:10, fora dos botões */
+      if (verbo === 'horalivre') {
+        const hm = horaLivre(arg);
+        if (hm) { s.hSel = hm.slice(0, 2); s.mSel = hm.slice(3, 5); }
+        return redesenhar();
+      }
 
       /* O DIA CHEIO responde dizendo o que fazer. São 15 casas no array (o que as outras
          três telas leem por posição); a prancha não mostra teto nenhum, e ninguém planeja
@@ -42901,8 +43042,9 @@ function fichaLeadFunilBodyHTML(l) {
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <input type="text" class="ficha-passo-texto" placeholder="Ex.: ligar cobrando a proposta" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;">
           <input type="date" class="ficha-passo-data" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;">
-          <input type="time" class="ficha-passo-hora" step="900" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;font-variant-numeric:tabular-nums;">
+          <input type="text" class="ficha-passo-hora" list="fpHorasLista" inputmode="numeric" autocomplete="off" placeholder="hora · ex.: 9:40" aria-label="Hora do próximo passo — digite ou escolha" style="width:130px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;font-variant-numeric:tabular-nums;">
         </div>
+        ${fpAtalhosHTML()}
         <div style="font-size:10px;color:var(--muted2);margin-top:6px;line-height:1.5;">A hora é opcional — sem ela o compromisso entra às 9h, como sempre. Com ela, ele cai na faixa daquele horário no seu Planejamento e na sua Daily.</div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:7px;">
           <button type="button" class="ficha-passo-salvar btn-prim" style="padding:8px 16px;">Salvar próximo passo</button>
@@ -44414,6 +44556,8 @@ function wireFichaLeadFunilEdicao(container, l) {
     });
   });
   const btnPasso = container.querySelector('.ficha-passo-salvar');
+  /* os atalhos de dia e hora (o mesmo jeito do Planejamento) preenchem os campos de cima */
+  if (typeof fpLigar === 'function') fpLigar(container);
   if (btnPasso) btnPasso.addEventListener('click', async () => {
     const campoTexto = container.querySelector('.ficha-passo-texto');
     const campoData = container.querySelector('.ficha-passo-data');
@@ -44425,7 +44569,9 @@ function wireFichaLeadFunilEdicao(container, l) {
     /* A HORA É OPCIONAL, e por isso ela só passa daqui quando está NO FORMATO. O input
        `type="time"` já entrega HH:MM ou vazio, mas navegador antigo cai para texto livre —
        e hora inventada num compromisso com cliente é pior do que hora nenhuma. */
-    const horaCrua = String((campoHora && campoHora.value) || '').trim();
+    /* o campo aceita "940" ou "14h" (06/10/26): a mesma regra do Planejamento põe em HH:MM */
+    const horaDigitada = String((campoHora && campoHora.value) || '').trim();
+    const horaCrua = (typeof horaLivre === 'function' && horaLivre(horaDigitada)) || horaDigitada;
     const horaEscolhida = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(horaCrua) ? horaCrua : '';
     if (horaCrua && !horaEscolhida) {
       statusEl.textContent = 'A hora precisa estar no formato HH:MM.';
