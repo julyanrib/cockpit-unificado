@@ -10872,6 +10872,7 @@ foi escrita para jogar o "0 de 27 resolvidos"
 .pt6-it > i{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:800 11px var(--font-display);font-style:normal;background:var(--ao-vivo);color:var(--panel);}
 .pt6-it > i.is-sem{background:var(--muted2);} .pt6-it > i.is-pend{background:transparent;border:2px dashed var(--ink);color:var(--ink);} .pt6-it > i.is-pulada{background:transparent;border:2px dashed var(--red);color:var(--red);} .pt6-it > i.is-contato{background:var(--amber);color:var(--ink);border-radius:6px;}
 .pt6-it div{min-width:0;} .pt6-it div b{display:block;font-size:13px;color:var(--ink);font-weight:800;overflow-wrap:anywhere;} .pt6-it div span{display:block;font-size:12px;color:var(--muted);}
+.pt6-it.is-abre{cursor:pointer;} .pt6-it.is-abre:hover{border-color:var(--ink);} .pt6-it.is-abre:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
 .pt6-it.is-pulada div b{text-decoration:line-through;text-decoration-color:var(--red);}
 .pt6-prova{font:800 11px var(--font-display);border-radius:var(--r-pill);padding:4px 9px;white-space:nowrap;}
 .pt6-prova.is-gps{background:var(--green-bg);color:var(--green-ink);} .pt6-prova.is-foto{background:var(--green-bg);color:var(--green-ink);} .pt6-prova.is-sem{background:var(--sunk,var(--panel2));color:var(--muted);} .pt6-prova.is-pulada{background:var(--red-bg);color:var(--red-ink);} .pt6-prova.is-pend{border:1px dashed var(--line);color:var(--muted);}
@@ -59920,6 +59921,7 @@ function pt6MarcaElemento(p) {
     : p.tipo === 'contato' ? 'is-contato'
     : (p.provada ? '' : 'is-sem') + (p.foto ? ' is-foto' : '') + (p.fora ? ' is-fora' : ''));
   if (p.dono) el.setAttribute('data-pt6', 'dossie:' + p.dono);
+  else if (p.lead) el.setAttribute('data-pt6', 'lead:' + p.lead);
   if (p.titulo) { el.title = p.titulo; el.setAttribute('aria-label', p.titulo); }
   if (p.rotulo && (p.tipo === 'avatar' || p.tipo === 'plano')) el.textContent = p.rotulo;
   return el;
@@ -59955,10 +59957,30 @@ function pt6DesenharGoogle(el, m, pts, chave) {
   g.marcas = pts.map(function (p) {
     return new maps.marker.AdvancedMarkerElement({ map: g.mapa, position: { lat: p.lat, lng: p.lng }, content: pt6MarcaElemento(p), zIndex: p.tipo === 'avatar' ? 3 : p.tipo === 'calor' ? 0 : 1 });
   });
-  const b = new maps.LatLngBounds();
-  pts.forEach(function (p) { b.extend({ lat: p.lat, lng: p.lng }); });
-  if (pts.length === 1) { g.mapa.setCenter(b.getCenter()); g.mapa.setZoom(16); }
-  else g.mapa.fitBounds(b, 48);
+  /* ENQUADRAR DEPOIS QUE A CAIXA TEM TAMANHO (05/10/26: "por que eu não vejo todas as paradas
+     deles?"). O dossiê abre numa gaveta que ainda está entrando: o fitBounds rodava com a caixa
+     sem largura e o Google parava colado numa parada só. Enquadra agora, de novo quando a gaveta
+     assenta, e a cada mudança de tamanho da caixa — até a pessoa mexer no mapa. */
+  g.pts = pts;
+  g.mexeu = false;
+  const enquadrar = function () {
+    if (g.mexeu || !el.clientWidth || !el.clientHeight) return;
+    const b = new maps.LatLngBounds();
+    g.pts.forEach(function (p) { b.extend({ lat: p.lat, lng: p.lng }); });
+    if (g.pts.length === 1) { g.mapa.setCenter(b.getCenter()); g.mapa.setZoom(16); }
+    else g.mapa.fitBounds(b, 48);
+  };
+  enquadrar();
+  setTimeout(enquadrar, 350);
+  if (!g.ouvindo) {
+    g.ouvindo = true;
+    g.mapa.addListener('dragstart', function () { g.mexeu = true; });
+    if (typeof ResizeObserver === 'function') {
+      let t = null;
+      new ResizeObserver(function () { clearTimeout(t); t = setTimeout(function () { if (g.enquadrar) g.enquadrar(); }, 120); }).observe(g.div);
+    }
+  }
+  g.enquadrar = enquadrar;
 }
 
 function pt6DesenharMapa(el, m, chave) {
@@ -60002,7 +60024,7 @@ function pt6DesenharMapa(el, m, chave) {
       : p.tipo === 'plano' ? 'is-plano' + (p.feita ? ' is-feita' : p.pulada ? ' is-pulada' : '')
       : p.tipo === 'contato' ? 'is-contato'
       : (p.provada ? '' : 'is-sem') + (p.foto ? ' is-foto' : '') + (p.fora ? ' is-fora' : '');
-    const acao = p.dono ? ' data-pt6="dossie:' + v5Esc(p.dono) + '"' : '';
+    const acao = p.dono ? ' data-pt6="dossie:' + v5Esc(p.dono) + '"' : p.lead ? ' data-pt6="lead:' + v5Esc(p.lead) + '"' : '';
     return '<button type="button" class="pt6-pt ' + cls + '" style="' + pos + '"' + acao + ' title="' + v5Esc(p.titulo || '') + '" aria-label="' + v5Esc(p.titulo || '') + '">'
       + (p.rotulo && (p.tipo === 'avatar' || p.tipo === 'plano') ? v5Esc(p.rotulo) : '') + '</button>';
   }).join('');
@@ -60131,6 +60153,33 @@ function pt6PintarDossie() {
   pt6DesenharMapas('dia');
 }
 
+/* A FICHA DO LEAD POR CIMA DO DOSSIÊ (05/10/26). A ficha do negócio é a mesma do funil
+   (abrirFichaLeadFunilDrawer), mas mora na camada dos painéis (z 50) e o dossiê está na 1200:
+   o véu do dossiê sai da frente enquanto houver painel aberto e volta quando o último fecha.
+   Cliente da base ('r-') e conta-alvo sem negócio ('n-') não estão no funil: abrem o cartão do
+   pino no app. */
+function pt6AbrirLead(item) {
+  const m = /^[cr]-([0-9]+)$/.exec(String(item || ''));
+  const deal = m ? m[1] : null;
+  const l = deal && typeof buscarLeadFunilPorId === 'function' ? buscarLeadFunilPorId(deal) : null;
+  if (l && typeof abrirFichaLeadFunilDrawer === 'function') {
+    const veu = document.querySelector('.pt6-veu');
+    if (veu) veu.hidden = true;
+    abrirFichaLeadFunilDrawer(l, null, null);
+    const volta = setInterval(function () {
+      if (document.querySelector('.overlay.show')) return;
+      clearInterval(volta);
+      if (veu && PT6.dossie) veu.hidden = false;
+    }, 300);
+    return;
+  }
+  if (deal && typeof v5NoPwa === 'function' && v5NoPwa()) {
+    window.open('/mapa?pino=' + encodeURIComponent(deal) + '&cartao=aberto', window.innerWidth >= 900 ? '_blank' : '_self');
+    return;
+  }
+  if (typeof mostrarToast === 'function') mostrarToast(deal ? 'Este negócio não está no funil desta carga: abra pelo app (Mapa).' : 'Conta-alvo ainda sem negócio: o cartão dela está no app.', 'atencao');
+}
+
 function pt6TextoCobranca(r) {
   if (r.semPlanoHoje) return 'Seu plano de hoje está vazio: monte no Planejamento até 10h';
   if (r.brancosAdiante.length) return 'Plano de ' + pt6Lista(r.brancosAdiante.map(function (o) { return PT6_DIAS[o.i]; })) + ' em branco: feche no Planejamento hoje';
@@ -60158,9 +60207,13 @@ function pt6DiaDoDossieHTML(r, dd) {
   const lista = itens.map(function (it) {
     if (it.tipo === 'parada') {
       n++;
+      it.p._n = n;
       const est = it.p.estado;
       const ic = est === 'feita' ? (it.v && it.v.provada ? '' : 'is-sem') : est === 'pulada' ? 'is-pulada' : 'is-pend';
-      return '<div class="pt6-it' + (est === 'pulada' ? ' is-pulada' : '') + '"><time>' + v5Esc(it.h) + '</time><i class="' + ic + '">' + n + '</i><div><b>' + v5Esc(it.p.nome) + '</b><span>parada do plano · '
+      /* 05/10/26 (Julyan: "eu como gestor tenho que poder clicar nesses leads e abrir o card"):
+         a parada abre a ficha do negócio, por cima do dossiê */
+      const abre = it.p.item ? ' role="button" tabindex="0" data-pt6="lead:' + v5Esc(it.p.item) + '" title="Abrir a ficha de ' + v5Esc(it.p.nome) + '"' : '';
+      return '<div class="pt6-it' + (it.p.item ? ' is-abre' : '') + (est === 'pulada' ? ' is-pulada' : '') + '"' + abre + '><time>' + v5Esc(it.h) + '</time><i class="' + ic + '">' + n + '</i><div><b>' + v5Esc(it.p.nome) + '</b><span>parada do plano · '
         + (est === 'feita' ? 'feita' + (it.v && !it.v.provada && it.v.motivo ? ' · ' + v5Esc(it.v.motivo) : '') : est === 'pulada' ? 'pulada, sem check-in' : 'pendente') + (it.p.lat == null ? ' · sem pino no mapa' : '') + '</span></div>'
         + (est === 'feita' ? provaChip(it.v) : est === 'pulada' ? '<span class="pt6-prova is-pulada">Pulada</span>' : '<span class="pt6-prova is-pend">Pendente</span>') + '</div>';
     }
@@ -60173,7 +60226,7 @@ function pt6DiaDoDossieHTML(r, dd) {
   const pts = [];
   if (f.planejadas) (dd.paradas || []).forEach(function (p, i) {
     if (p.lat == null) return;
-    pts.push({ lat: Number(p.lat), lng: Number(p.lng), tipo: 'plano', feita: p.estado === 'feita', pulada: p.estado === 'pulada', rotulo: String(i + 1), titulo: p.nome + (p.hora ? ' · ' + p.hora : '') + ' · ' + p.estado });
+    pts.push({ lat: Number(p.lat), lng: Number(p.lng), tipo: 'plano', feita: p.estado === 'feita', pulada: p.estado === 'pulada', rotulo: String(p._n || i + 1), lead: p.item || null, titulo: p.nome + (p.hora ? ' · ' + p.hora : '') + ' · ' + p.estado });
   });
   const incluiVisita = function (v) { return v && v.lat != null && ((v.provada && !v.foto && f.gps) || (v.provada && v.foto && f.foto) || (!v.provada && f.sem)); };
   (dd.paradas || []).forEach(function (p) { if (incluiVisita(p.visita)) pts.push({ lat: Number(p.visita.lat), lng: Number(p.visita.lng), tipo: 'checkin', provada: p.visita.provada, foto: !!p.visita.foto, titulo: p.nome + ' · ' + pt6Hora(p.visita.em) }); });
@@ -60306,6 +60359,7 @@ document.addEventListener('click', async function (ev) {
     return;
   }
   if (verbo === 'fechar') { pt6FecharDossie(); return; }
+  if (verbo === 'lead') { pt6AbrirLead(arg); return; }
   if (verbo === 'gdia') { PT6.dossieDia = arg; PT6.armado = null; if (PT6.dossieErro) { await pt6CarregarDossie(true); } pt6PintarDossie(); return; }
   if (verbo === 'filtro') { PT6.filtros[arg] = !PT6.filtros[arg]; pt6PintarDossie(); return; }
   if (verbo === 'pessoas') { const aba = document.getElementById('tabBtnPDIs'); if (aba) aba.click(); return; }
