@@ -154,10 +154,18 @@ checar('score sem nota é "—", não um número inventado',
 /* REANCORADA EM 01/10/26 (fase 4, N10): o cumprido deixou de apontar para outro bloco e
    passou a ser a medida do mapa na própria linha. A regra que importa continua: enquanto
    não leu, a tela diz "lendo…"; se falhou, "não li" — nunca um zero. */
-checar('o cumprido da rua é a medida do mapa, nunca um zero de quem não leu',
-  aba.indexOf("cump: lendo ? 'lendo…' : erro ? 'não li'") > 0
-    && aba.indexOf('...rt7LinhaDaRua(oid, u.nome)') > 0
-    && aba.indexOf('paradas feitas × planejadas') > 0,
+/* REANCORADA DE NOVO EM 05/10/26 (revisão geral): a linha antiga saiu da tela, e no lugar
+   dela entrou a grade da Rua da semana, lida de planejamento_do_time (a mesma do Time e da
+   Agenda do app). A regra é a mesma, agora medida em quem desenha: lendo, ou "não li",
+   nunca uma grade de zeros. */
+const ruaSemana = aba.slice(aba.indexOf('function rt7RuaDaSemanaHTML(')  , aba.indexOf("document.addEventListener('click', function (ev) {\n  const b = ev.target.closest && ev.target.closest('[data-rt7r]');"));
+checar('o cumprido da rua é a medida do plano, nunca um zero de quem não leu',
+  ruaSemana.length > 200
+    && ruaSemana.indexOf('Lendo a rua do time…') > 0
+    && ruaSemana.indexOf('Não li a rua do time agora') > 0
+    && /if \(!c \|\| \(!c\.d && !c\.erro\)\)/.test(ruaSemana)
+    && ruaSemana.indexOf("t10Ler(seg)") > 0
+    && aba.indexOf("${rt7SegAtual() === 'rua' ? `<div style=\"padding:0 22px 16px;\">${rt7RuaDaSemanaHTML()}</div>` : ''}") > 0,
   'zero aqui acusaria o time de não ter ido à rua quando o que falta é a medida');
 
 checar('os chips do radar saem da ficha, e não de review que ninguém coleta',

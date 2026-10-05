@@ -74,26 +74,19 @@ function recortarConst(nome) {
   return html.slice(i, fim);
 }
 
-const CONSTS = ['RX1_FUNDO', 'RX1_TOPO', 'RX1_URGENCIA', 'RX1_ACOES_TETO'].map(recortarConst);
+const CONSTS = ['RX1_FUNDO', 'RX1_TOPO', 'RX1_URGENCIA'].map(recortarConst);
 
 const FNS = ['rx1Etapa', 'rx1Leads', 'rx1Mrr', 'rx1Quentes', 'rx1Dados',
-  'rx1Gargalos', 'rx1Acoes', 'rx1FiltroFn', 'cadenciaMinimoToques', 'tm10Rs'];
-
-/* RX1_FILTROS é um array multilinha — recorte por delimitador, e com conferência de que
-   ele tem os cinco que a tela mostra. */
-const iFil = html.indexOf('const RX1_FILTROS = [');
-const fFil = html.indexOf('];', iFil) + 2;
-const FILTROS_SRC = html.slice(iFil, fFil);
+  'rx1Gargalos', 'rx1ProblemaDe', 'rx1ContextoDe', 'rx1ListaHTML', 'cadenciaMinimoToques', 'tm10Rs'];
 
 /* AS CONSTANTES PRECISAM DE UMA PONTE. Declaração const no topo de um contexto de vm
    NÃO vira propriedade do objeto de contexto — só var vira. Sem esta linha,
    ctx.RX1_FILTROS é undefined e a suíte ESTOURA em vez de reprovar, que é o pior dos
    dois: harness que quebra não diz qual guarda pegou o quê. */
 const NL = String.fromCharCode(10);
-const codigo = CONSTS.join(NL) + NL + FILTROS_SRC + NL
+const codigo = CONSTS.join(NL) + NL + 'var RX1_GARG = null;' + NL
   + FNS.map(recortarFn).join(NL)
-  + NL + 'var __rx = { FILTROS: RX1_FILTROS, TETO: RX1_ACOES_TETO,'
-  + ' FUNDO: RX1_FUNDO, TOPO: RX1_TOPO };';
+  + NL + 'var __rx = { FUNDO: RX1_FUNDO, TOPO: RX1_TOPO };';
 
 /* ── O ENTORNO ───────────────────────────────────────────────────────────────────── */
 const AGORA = Date.UTC(2026, 8, 19, 15, 0, 0);   /* 19/09/26, meio-dia BRT */
@@ -126,6 +119,10 @@ function rodar(fixture) {
     tm10Tq: function (id) { return tq[String(id)] || { n: 0, ultimo: null, abertos: 0 }; },
     tm10Ultimo: function (ms) { return ms == null ? 'sem toque' : 'há Nd'; },
     tm10TqRot: function (n) { return n === 1 ? '1 toque' : n + ' toques'; },
+    esc: function (v) { return String(v == null ? '' : v); },
+    fn2Quando: function (v) { return String(v).slice(0, 10); },
+    v5CobrancaDoLote: function () { return null; },
+    sessaoAtual: { role: 'manager' },
     sm5RitmoDoMes: function () {
       return fixture.ritmo || { uteis: 22, decorridos: 14, fracao: 14 / 22 };
     },
@@ -135,7 +132,14 @@ function rodar(fixture) {
   vm.createContext(ctx);
   vm.runInContext(codigo, ctx);
   const d = ctx.rx1Dados();
-  return { ctx: ctx, d: d, g: ctx.rx1Gargalos(d), a: ctx.rx1Acoes(d) };
+  const g = ctx.rx1Gargalos(d);
+  /* a lista desenhada, na ordem em que a tela mostra: o id de cada linha, de cima para baixo */
+  const listaIds = function (garg) {
+    ctx.RX1_GARG = garg || null;
+    const h = ctx.rx1ListaHTML(d, g);
+    return (h.match(/data-rx1-acao="ficha:([^"]+)"/g) || []).map(function (m) { return m.slice('data-rx1-acao="ficha:'.length, -1); });
+  };
+  return { ctx: ctx, d: d, g: g, listaIds: listaIds };
 }
 
 /* Um negócio do funil no formato que o front recebe — conferido no navegador com o
@@ -268,8 +272,10 @@ const REPS = [{ ownerId: '86100506', name: 'Bruno Martins' },
       '1395880473': [neg(3, { valor_de_mrr: '100' })]     /* Ag. Pagamento, MRR baixo */
     }
   });
+  /* A LISTA ÚNICA (revisão geral, 05/10/26): a fila "Ações a fazer" saiu porque repetia os
+     negócios da lista de baixo. A ordem dela continua sendo lei, agora na lista. */
   igual('Ag. Pagamento vem antes, mesmo com MRR muito menor',
-    r.a.lista.map(function (x) { return x.id; }), ['3', '2', '1'],
+    r.listaIds(), ['3', '2', '1'],
     'R$ 100 a um passo do ganho fecha antes de R$ 9.000 em Demo');
 
   const muitos = {};
@@ -277,31 +283,37 @@ const REPS = [{ ownerId: '86100506', name: 'Bruno Martins' },
   for (let i = 1; i <= 20; i++) lista.push(neg(i));
   muitos['1395880472'] = lista;
   const r2 = rodar({ reps: REPS, funil: muitos });
-  igual('a fila é cortada no teto', r2.a.lista.length, r2.ctx.__rx.TETO,
-    'fila de 20 itens não é fila, é outra lista');
-  igual('e o total continua sendo dito', r2.a.total, 20,
-    'sem o total, o corte esconde o tamanho do problema');
+  const ids2 = r2.listaIds();
+  igual('cada negócio do fundo aparece na lista', ids2.length, 20);
+  igual('e aparece UMA vez só', new Set(ids2).size, ids2.length,
+    'o mesmo negócio em dois blocos da tela foi o defeito que a revisão geral veio tirar');
+  checar('a fila "Ações a fazer" não volta', html.indexOf('Ações a fazer</span>') < 0 && html.indexOf('function rx1Acoes(') < 0);
 }());
 
 /* ══ 6. O VERBO DIZ O GESTO ════════════════════════════════════════════════════════ */
 (function () {
   const r = rodar({
     reps: REPS,
-    funil: { '1395880472': [neg(1), neg(2), neg(3, { name: 'X' }), neg(4, { name: 'X' })] },
+    funil: { '1395880472': [neg(1), neg(2), neg(3, { name: 'X', proximaAtividade: '2026-09-25T12:00:00Z' }),
+      neg(4, { name: 'X', proximaAtividade: '2026-09-25T12:00:00Z' })] },
     toques: {
       '1': { n: 0, ultimo: null, abertos: 4 },
-      '2': { n: 2, ultimo: AGORA - 10 * 86400000, abertos: 0 }
+      '2': { n: 2, ultimo: AGORA - 10 * 86400000, abertos: 0 },
+      '3': { n: 2, ultimo: AGORA, abertos: 0 },
+      '4': { n: 2, ultimo: AGORA, abertos: 0 }
     }
   });
+  /* O PROBLEMA MAIS GRAVE, EM TEXTO: no lugar de 4 a 6 chips por negócio, uma frase */
   const por = {};
-  r.a.lista.forEach(function (x) { por[x.id] = x; });
-  igual('marcou e não foi vira COBRAR', por['1'].verbo, 'cobrar');
-  checar('e o motivo diz quantos compromissos', /4 compromissos marcados/.test(por['1'].por),
-    'veio: ' + por['1'].por);
-  igual('sem próximo passo vira DATAR', por['2'].verbo, 'datar');
-  igual('duplicata vira CONFERIR', por['3'].verbo, 'conferir');
-  checar('e conferir é verbo calmo, não vermelho', por['3'].calmo === true,
+  r.d.itens.forEach(function (i) { por[i.id] = r.ctx.rx1ProblemaDe(i); });
+  checar('marcou e não foi: o texto diz quantos compromissos', /4 compromissos marcados/.test(por['1'].t),
+    'veio: ' + por['1'].t);
+  checar('e é grave', por['1'].grave === true);
+  checar('sem próximo passo diz isso', /sem próximo passo datado/.test(por['2'].t), 'veio: ' + por['2'].t);
+  checar('duplicata manda conferir', /conferir/.test(por['3'].t), 'veio: ' + por['3'].t);
+  checar('e conferir não é grave', por['3'].grave === false,
     'duplicata é higiene, não cobrança de vendedor');
+  checar('a linha não tem mais chip', recortarFn('rx1ListaHTML').indexOf('rx-chip') < 0);
 }());
 
 /* ══ 7. O PLACAR DO MÊS ════════════════════════════════════════════════════════════ */
@@ -407,15 +419,18 @@ const REPS = [{ ownerId: '86100506', name: 'Bruno Martins' },
     },
     toques: { '2': { n: 3, ultimo: AGORA, abertos: 0 } }
   });
-  const conta = function (id) { return r.d.itens.filter(r.ctx.rx1FiltroFn(id)).length; };
-  igual('o filtro de todos conta tudo', conta('todos'), 3);
-  igual('sem próximo passo conta os dois sem data', conta('sem'), 2);
-  igual('zero toque conta os dois sem toque', conta('zero'), 2);
-  igual('Ag. Pagamento conta um', conta('pag'), 1);
-  igual('com MRR ignora o de valor zero', conta('mrr'), 2);
-  igual('filtro desconhecido cai em todos', r.d.itens.filter(r.ctx.rx1FiltroFn('xpto')).length, 3,
-    'um id novo na tela não pode esvaziar a lista em silêncio');
-  igual('a tela oferece os cinco filtros', r.ctx.__rx.FILTROS.length, 5);
+  /* O GARGALO É O FILTRO (revisão geral, 05/10/26): o número do gargalo e a lista que ele
+     abre são a MESMA contagem */
+  const conta = function (k) { return r.listaIds(k).length; };
+  igual('sem gargalo escolhido, a lista é o fundo inteiro', conta(null), 3);
+  igual('sem próximo passo mostra os dois sem data', conta('sem'), 2);
+  igual('zero toque mostra os dois sem toque', conta('zero'), 2);
+  igual('Ag. Pagamento mostra um', conta('pag'), 1);
+  igual('gargalo desconhecido cai no fundo inteiro', conta('xpto'), 3,
+    'uma chave nova na tela não pode esvaziar a lista em silêncio');
+  r.g.forEach(function (x) {
+    if (x.ids) igual('o número do gargalo "' + x.t + '" é o tamanho da lista dele', conta(x.k), x.ids.length);
+  });
 }());
 
 /* ══ 11. O PISO DE TOQUES VEM DA RÉGUA, NÃO DE UM 4 ════════════════════════════════ */
@@ -492,8 +507,8 @@ const REPS = [{ ownerId: '86100506', name: 'Bruno Martins' },
   checar('o ouvinte é UM, delegado na raiz',
     /raiz\.addEventListener\('click'/.test(html.slice(html.indexOf('function rx1Ligar('))),
     '29 linhas e 12 ações com ouvinte por elemento morrem a cada repintura');
-  checar('e o filtro repinta a aba inteira',
-    /RX1_FILTRO = filtro\.getAttribute\('data-rx1-filtro'\);[\s\S]{0,400}rx1Iniciar\(\)/.test(html),
+  checar('e o gargalo escolhido repinta a aba inteira',
+    /RX1_GARG = RX1_GARG === k \? null : k;[\s\S]{0,200}rx1Iniciar\(\)/.test(html),
     'os contadores dos próprios filtros são derivados; repintar meia tela deixaria o '
       + 'botão marcado sem o resto concordar');
 }());
@@ -557,12 +572,12 @@ const REPS = [{ ownerId: '86100506', name: 'Bruno Martins' },
 
 /* AS DUAS DERIVAS DE BORDA, medidas no arquivo inteiro: #EEC9C9 existia UMA vez (só aqui)
    contra 27 de #E3C6C6, e #BFE3D6 duas contra 48 de #CBE8DD. Um tom por papel. */
-checar('os chips usam os tons de borda da casa',
-  /* v5: o tom de borda da casa virou token (--red-line / --green-line): um tom por papel,
-     agora garantido pelo nome e não pela repetição do hex. */
-  html.indexOf('.rx-chip.ruim{background:var(--red-soft);color:var(--red-dk);border-color:var(--red-line);}') > -1
-    && html.indexOf('.rx-chip.bom{background:var(--green-soft);color:var(--green-ink);border-color:var(--green-line);}') > -1,
-  'tom que existe uma vez no arquivo inteiro é deriva, não decisão');
+/* O ORÇAMENTO DE VERMELHO (revisão geral, 05/10/26): o vermelho é dos gargalos. O problema
+   da linha é âmbar, e o ok é verde, os dois por token. */
+checar('o problema grave da linha é âmbar, por token',
+  html.indexOf('#rx1Raiz .rx-l2-prob.is-grave{color:var(--amber-ink);}') > -1
+    && html.indexOf('#rx1Raiz .rx-l2-prob.is-ok{color:var(--green-ink);}') > -1,
+  'linha vermelha em todo negócio foi o papel de parede que a revisão tirou');
 
 /* NENHUM LITERAL DE COR SOBRA NA ABA. O bloco já era quase todo var(); a revisão fechou
    os cinco que faltavam apontando para tokens — três deles nomeados agora. */
