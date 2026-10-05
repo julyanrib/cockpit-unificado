@@ -98,7 +98,7 @@ const ctx = {
     cadencias: cadencias,
     reps: [{ ownerId: '91477292', name: 'Kelly Travieso', abertos: ABERTOS, open: 6,
       compromissos: ['Zerar os sem toque', 'Destravar os 2 da Negociação', 'Fechar o Booze'],
-      compromissosPrazo: ['2026-09-15', '2099-09-25', null] }],
+      compromissosPrazo: ['2026-09-15', '2026-09-25', null] }],
     vendasMes: { porRep: [{ ownerId: '91477292', clientes: [
       { id: 'v1', nome: 'Coco e Tiny', mrr: 0, receita: 3144 }
     ] }] },
@@ -118,7 +118,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 [
-  'cadenciaConfig', 'cadenciaMinimoToques', 'cadenciaDoLead', 'cadenciaMotivosDeSaida', 'cadDiaBRT', 'cadEhUtil', 'cadSomarUteis', 'cadUteisEntre', 'estadoDaCadencia',
+  'cadenciaConfig', 'cadenciaMinimoToques', 'cadenciaDoLead', 'estadoDaCadencia',
   'pv6Abertos', 'pv6AbaixoDoPiso', 'pv6Piso', 'pv6PassosDa', 'pv6Cadencia', 'pv6UmAUmDoMes',
   'pv6Combinados', 'pv6ListaDoCard', 'pv6Funil', 'pv6Pct', 'pv6CorDoPace', 'pv6DataCurta'
 ].forEach(function (f) { vm.runInContext(recortar(tpl, f), ctx); });
@@ -266,7 +266,7 @@ igual('o piso vem da configuração, não do código', ctx.cadenciaMinimoToques(
   ];
   const c = ctx.pv6Combinados({ ownerId: '91477292' }, v4);
   igual('o prazo chega pelo array irmão, no mesmo índice',
-    c.map(function (x) { return x.prazo; }), ['2026-09-15', '2099-09-25', null]);
+    c.map(function (x) { return x.prazo; }), ['2026-09-15', '2026-09-25', null]);
   igual('o de prazo passado, ainda pendente, está vencido', c[0].vencido, true);
   igual('o de prazo futuro não está', c[1].vencido, false);
   igual('e sem prazo NÃO se inventa vencido', c[2].vencido, false,

@@ -173,8 +173,7 @@ checar('o executivo que chega na rota antiga cai no Planejamento',
   'hash salvo, link antigo em conversa e aba restaurada pelo navegador caem todos em '
     + 'renderDaily — sem a porta, veriam uma tela que ninguém mais mantém');
 checar('e a aba some do menu dele',
-  /* desde 05/10/26 a aba sai da barra de TODOS (o gestor abre o Planejamento do time pelo Time) */
-  /document\.getElementById\('tabBtnDaily'\)\.style\.display = (?:'none'|\(emOnboarding \|\| souRep\) \? 'none' : 'flex');/.test(codigo),
+  /\(emOnboarding \|\| souRep\) \? 'none' : 'flex'/.test(codigo),
   'aba visível que redireciona é pior que aba ausente: ele clica e a tela pula');
 
 console.log('');
