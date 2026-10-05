@@ -111,9 +111,12 @@ conferir('o Alto Tietê vai para a Renata',
 
 /* ── 3 · A DECLARAÇÃO GANHA DAS LISTAS ANTIGAS ──────────────────────────────────────
    As três trocas de hoje, uma a uma. Sem a precedência, o lead ia para quem saiu da zona. */
-conferir('Copacabana é do Sandro, que mudou para a Zona Sul',
-  quem('rio de janeiro', 'copacabana') === 'Sandro' && via('rio de janeiro', 'copacabana') === 'declarado',
-  'a lista antiga a dava ao André, que saiu da Zona Sul hoje');
+/* 05/10/26: a rota do Sandro trocou de Zona Sul para Vila Valqueire, Cascadura, Méier, Engenho
+   de Dentro, Piedade, Abolição e Madureira. Copacabana deixou de ter dono; Madureira prova a mesma
+   coisa (estava na lista antiga do Luiz e a declaração a dá ao Sandro). */
+conferir('Madureira é do Sandro, pela rota de 05/10',
+  quem('rio de janeiro', 'madureira') === 'Sandro' && via('rio de janeiro', 'madureira') === 'declarado',
+  'a lista antiga a dava ao Luiz; sem a precedência da declaração, o lead ia para quem não cobre mais');
 
 /* Cachambi era do Luiz por declaração; com ele fora do Rio, ela não é de ninguém — e
    NÃO PODE voltar para o Sandro pela lista de 01/09, que é o mapa antigo. É isto que
@@ -183,7 +186,7 @@ conferir('bairro não casa por pedaço do nome de outro',
 conferir('o bairro é extraído do endereço grudado',
   quem('rio de janeiro', 'Lj B - Tijuca') === 'Bruno'
   && quem('rio de janeiro', 'Loja A B C D - Barra da Tijuca') === 'Bruno'
-  && quem('rio de janeiro', 'Lj D - Copacabana') === 'Sandro',
+  && quem('rio de janeiro', 'Lj D - Madureira') === 'Sandro',
   'o que vem depois do último " - " é o bairro; o resto é número de loja');
 
 /* ══ O EXTREMO OESTE VOLTOU, COM DONO ════════════════════════════════════════════════
@@ -256,7 +259,7 @@ conferir('cidade sem herdeiro para o bairro não nomeado está declarada',
   + 'troca de território; e declarar uma que TEM dono deixa a lista mentir ao contrário');
 
 conferir('e a sobra NÃO atropela o bairro nomeado de ninguém',
-  quem('rio de janeiro', 'copacabana') === 'Sandro'
+  quem('rio de janeiro', 'madureira') === 'Sandro'
   && quem('rio de janeiro', 'taquara') === 'Bruno'
   && quem('rio de janeiro', 'anil') === 'André',
   'se a sobra entrasse antes do bairro nomeado, o dono dela levaria a cidade inteira');
@@ -355,7 +358,7 @@ conferir('o roteador lê data/territorios.json',
   'era a quarta cópia da regra; sem ler a declaração ela volta a divergir na próxima rota nova');
 
 conferir('e a declaração é consultada ANTES das listas antigas',
-  via('rio de janeiro', 'copacabana') === 'declarado',
+  via('rio de janeiro', 'madureira') === 'declarado',
   'se a lista antiga vier primeiro, a decisão de hoje não chega ao lead');
 
 /* ── 8 · A SOBRA DA CIDADE DE UM DONO SÓ (09/09/26) ─────────────────────────────────

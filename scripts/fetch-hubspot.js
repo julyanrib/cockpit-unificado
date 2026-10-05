@@ -2005,7 +2005,37 @@ async function stageDealsLast7DaysByOwner(stageIdOuLista, ownerId) {
     .map(d => ({ name: d.properties.dealname }));
 }
 
+/* A VISITA DO APP CONTA COMO TOQUE (Julyan, 05/10/26: "fizeram visita no cliente e mesmo assim
+   aparece como estourado, isso não pode acontecer"). A visita vira tarefa concluída no HubSpot, que
+   não mexe em notes_last_updated — a Sayuri Sushi visitada em 01/10 seguia estourada com 8 dias
+   úteis. A última visita por negócio (view 0164, só service_role) entra em
+   globalThis.__ULTIMA_VISITA_APP e daysInCurrentStage (lib/lead-do-funil.js) a usa como mais um
+   toque. Sem Supabase, ou falhando, a conta segue a de antes. */
+async function carregarUltimaVisitaPorNegocio() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return null;
+  const mapa = {};
+  for (let ini = 0; ini < 50000; ini += 1000) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ultima_visita_por_negocio?select=deal_id,ultima_visita&order=deal_id`, {
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, Range: `${ini}-${ini + 999}`, 'Range-Unit': 'items' }
+    });
+    if (!res.ok) throw new Error('ultima_visita_por_negocio ' + res.status);
+    const linhas = await res.json();
+    linhas.forEach(l => { if (l && l.deal_id) mapa[String(l.deal_id)] = l.ultima_visita; });
+    if (linhas.length < 1000) break;
+  }
+  return mapa;
+}
+
 async function main() {
+  try {
+    const visitas = await carregarUltimaVisitaPorNegocio();
+    if (visitas) {
+      globalThis.__ULTIMA_VISITA_APP = visitas;
+      console.log(`Visitas do app: última visita de ${Object.keys(visitas).length} negócios entra nos dias parados.`);
+    }
+  } catch (e) {
+    console.log('Aviso: visitas do app não vieram — os dias parados seguem só com o HubSpot. ' + String(e.message).slice(0, 120));
+  }
   // Agenda primeiro e à prova de falha: se o token não tiver os escopos de
   // tasks/meetings (crm.objects.tasks.read + crm.objects.meetings.read no Private App),
   // isso loga o aviso e o refresh segue — o cockpit cai no rascunho, nada quebra.
