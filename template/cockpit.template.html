@@ -12819,9 +12819,11 @@ function farolPodeAplicar() {
   return true;
 }
 
-async function farolBuscarEAplicar() {
+async function farolBuscarEAplicar(pedido) {
   if (FAROL_BUSCANDO) { FAROL_PENDENTE = true; return; }
-  if (!farolPodeAplicar() || telaDePlanejarAberta()) { FAROL_PENDENTE = true; farolAviso(true); return; }
+  /* pedido = a pessoa clicou no aviso (auditoria 05/10/26): na tela de planejar o dado novo
+     espera o clique, e o clique tem de passar — antes ele caía na mesma espera e morria */
+  if (!farolPodeAplicar() || (telaDePlanejarAberta() && !pedido)) { FAROL_PENDENTE = true; farolAviso(true); return; }
   FAROL_BUSCANDO = true;
   try {
     const { data } = await supa.auth.getSession();
@@ -12926,7 +12928,7 @@ function farolAviso(mostrar) {
   el.addEventListener('click', function () {
     if (FAROL_DADO_ESPERANDO) { farolAplicar(FAROL_DADO_ESPERANDO); return; }
     FAROL_PENDENTE = false;
-    farolBuscarEAplicar();
+    farolBuscarEAplicar(true);
   });
   const linha = document.getElementById('updatedLine');
   if (linha && linha.parentNode) {
@@ -59562,8 +59564,15 @@ function pt6Pintar() {
   /* a marca fica no próprio nó e a raiz tem de estar mostrando o plano: depois de
      "Lendo…" ou do erro (que escrevem outra coisa nela), repinta mesmo com HTML igual */
   const naTela = raiz.firstElementChild;
-  if (naTela && naTela.className === 'pt6' && raiz.__pt6Html === html) return;
+  /* os pontos do mapa não estão no HTML: check-in novo com a tela igual redesenha só o mapa */
+  let pontos = '';
+  try { pontos = JSON.stringify(PT6.mapas || {}); } catch (e) { pontos = String(Date.now()); }
+  if (naTela && naTela.className === 'pt6' && raiz.__pt6Html === html) {
+    if (raiz.__pt6Pontos !== pontos) { raiz.__pt6Pontos = pontos; pt6DesenharMapas(); }
+    return;
+  }
   raiz.__pt6Html = html;
+  raiz.__pt6Pontos = pontos;
   raiz.innerHTML = html;
   pt6DesenharMapas();
 }
@@ -60098,7 +60107,13 @@ function pt6FecharDossie() {
   document.body.style.overflow = '';
   PT6.dossie = null;
 }
-document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && PT6.dossie) pt6FecharDossie(); });
+document.addEventListener('keydown', function (ev) {
+  /* Esc com a ficha do lead aberta por cima (o véu do dossiê escondido) fecha só a ficha */
+  const veu = document.querySelector('.pt6-veu');
+  if (ev.key === 'Escape' && PT6.dossie && !(veu && veu.hidden)) pt6FecharDossie();
+  /* linha que abre a ficha (role=button) também abre pelo teclado */
+  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target && ev.target.matches && ev.target.matches('[data-pt6][role="button"]')) { ev.preventDefault(); ev.target.click(); }
+});
 
 async function pt6CarregarDossie(forcar) {
   const oid = PT6.dossie, d = PT6.dados;
