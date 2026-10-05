@@ -8003,12 +8003,37 @@ function aoVivoRepintarComCalma(tudo) {
     AOVIVO_REPINTE_ADIADO = null;
 
     if (document.hidden || !farolPodeAplicar()) { AOVIVO_REPINTE_ADIADO = setTimeout(function () { AOVIVO_REPINTE_ADIADO = null; aoVivoRepintarComCalma(false); }, 5000); return; }
+
+    if (telaDePlanejarAberta()) { aoVivoAviso(true); return; }
+    aoVivoRepintarAgora();
+  }, falta);
+}
+function aoVivoRepintarAgora() {
+    aoVivoAviso(false);
     AOVIVO_ULTIMO_REPINTE = Date.now();
     const tp = new Set(AOVIVO_PT6_TIPOS); AOVIVO_PT6_TIPOS.clear();
     const tudoAgora = AOVIVO_REPINTAR_TUDO; AOVIVO_REPINTAR_TUDO = false;
     if (tp.size && typeof pt6AoVivo === 'function') pt6AoVivo(tp);
     if (tudoAgora) aoVivoRepintar();
-  }, falta);
+}
+const TELAS_DE_PLANEJAR = ['viewAgenda', 'viewDaily', 'viewRotas'];
+function telaDePlanejarAberta() {
+  let ativa = null;
+  try { ativa = document.querySelector('.view.active'); } catch (e) { ativa = null; }
+  return !!(ativa && TELAS_DE_PLANEJAR.indexOf(ativa.id) >= 0);
+}
+function aoVivoAviso(mostrar) {
+  let el = document.getElementById('aoVivoAviso');
+  if (!mostrar) { if (el) el.remove(); return; }
+  if (el || document.getElementById('farolAviso')) return;
+  el = document.createElement('button');
+  el.id = 'aoVivoAviso';
+  el.type = 'button';
+  el.className = 'farol-aviso';
+  el.title = 'O time mexeu em algo desde que esta tela foi desenhada. Clique para atualizar — nada do que você está fazendo é perdido.';
+  el.innerHTML = '<b>dados novos do time</b><span>atualizar ▸</span>';
+  el.addEventListener('click', function () { aoVivoRepintarAgora(); });
+  document.body.appendChild(el);
 }
 
 function aoVivoAplicarNegocio(n) {
@@ -8086,7 +8111,7 @@ function farolPodeAplicar() {
 
 async function farolBuscarEAplicar() {
   if (FAROL_BUSCANDO) { FAROL_PENDENTE = true; return; }
-  if (!farolPodeAplicar()) { FAROL_PENDENTE = true; farolAviso(true); return; }
+  if (!farolPodeAplicar() || telaDePlanejarAberta()) { FAROL_PENDENTE = true; farolAviso(true); return; }
   FAROL_BUSCANDO = true;
   try {
     const { data } = await supa.auth.getSession();
@@ -8116,7 +8141,7 @@ async function farolBuscarEAplicar() {
     console.log('[farol] não consegui buscar o dado novo:', e && e.message);
   }
   FAROL_BUSCANDO = false;
-  if (FAROL_PENDENTE && farolPodeAplicar()) { FAROL_PENDENTE = false; farolBuscarEAplicar(); }
+  if (FAROL_PENDENTE && farolPodeAplicar() && !telaDePlanejarAberta()) { FAROL_PENDENTE = false; farolBuscarEAplicar(); }
 }
 
 function farolAplicar(dados) {
