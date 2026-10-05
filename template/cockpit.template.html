@@ -16884,6 +16884,75 @@ function inicioDaSemanaISO() {
    `seletorInterno` é para as listas que rolam por dentro (a fila da Hoje, a munição do
    Planejamento): restaurar só a página deixaria a lista no topo e a linha clicada fora de
    vista — o mesmo defeito, uma camada abaixo. */
+/* ══ A ROLAGEM DE DENTRO SOBREVIVE À REPINTURA, EM TODA TELA (06/10/26) ═══════════════
+   Medido na produção, como executivo: a fila da Hoje rola por dentro (560 px de caixa,
+   6.611 px de conteúdo, 48 itens). Ele desce até o 25º, marca Feito, a Hoje repinta — e a
+   fila volta ao 1º. O mesmo vale para o kanban (que rola de lado), a munição do
+   Planejamento e as listas do gestor. redesenharPreservandoRolagem resolvia isso só nos 8
+   lugares que a chamam; as repinturas ao vivo e as das ações não passavam por ela.
+
+   O VIGIA É ÚNICO E NÃO DEPENDE DE QUEM REPINTA. Ele anota a posição de cada caixa que a
+   pessoa rola (pela tela, pela classe e pela ordem), e quando uma repintura troca aquela
+   caixa por outra igual, devolve a posição. Três travas para nunca brigar com a mão:
+     · só caixa NOVA (a antiga saiu do documento) — a caixa viva, que a pessoa rola, nunca;
+     · só se a nova nasceu no topo (0, 0);
+     · só até 3 s depois da troca — voltar a uma tela minutos depois começa no topo. */
+const ROLA = { pos: {}, voo: false };
+function rolaAssinatura(el) {
+  const raiz = (el.closest && el.closest('.view, [role="dialog"], .pt6-veu, .t10-veu')) || document.body;
+  let sel = null;
+  const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/)[0] : '';
+  if (cls) sel = '.' + CSS.escape(cls);
+  else {
+    const dado = Array.from(el.attributes || []).map(function (a) { return a.name; }).filter(function (n) { return n.indexOf('data-') === 0; })[0];
+    if (dado) sel = '[' + dado + ']';
+  }
+  if (!sel) return null;
+  const irmaos = Array.prototype.slice.call(raiz.querySelectorAll(sel));
+  const i = irmaos.indexOf(el);
+  if (i < 0) return null;
+  return { k: (raiz.id || raiz.className || 'doc') + '|' + sel + '|' + i, raiz: raiz, sel: sel, i: i };
+}
+document.addEventListener('scroll', function (ev) {
+  const el = ev.target;
+  if (!el || el === document || el === document.documentElement || el === document.body || !el.closest) return;
+  const a = rolaAssinatura(el);
+  if (!a) return;
+  ROLA.pos[a.k] = { top: el.scrollTop, left: el.scrollLeft, el: el, a: a, saiu: 0 };
+}, true);
+function rolaDevolver() {
+  ROLA.voo = false;
+  const agora = Date.now();
+  Object.keys(ROLA.pos).forEach(function (k) {
+    const p = ROLA.pos[k];
+    if (p.el && p.el.isConnected) return;
+    if (!p.saiu) p.saiu = agora;
+    if (agora - p.saiu > 3000) { delete ROLA.pos[k]; return; }
+    const raiz = p.a.raiz && p.a.raiz.isConnected ? p.a.raiz : null;
+    if (!raiz) return;
+    const novo = raiz.querySelectorAll(p.a.sel)[p.a.i];
+    if (!novo || novo.scrollTop || novo.scrollLeft) return;
+    novo.scrollTop = p.top;
+    novo.scrollLeft = p.left;
+    p.el = novo; p.saiu = 0;
+  });
+}
+(function () {
+  const ligar = function () {
+    /* o documento inteiro: o dossiê e o Cobrar do gestor vivem fora do appRoot. Sai na hora
+       quando ninguém rolou nada, então o custo por repintura é uma checagem. */
+    new MutationObserver(function () {
+      if (ROLA.voo) return;
+      for (const k in ROLA.pos) { if (!ROLA.pos[k].el.isConnected) { ROLA.voo = true; break; } }
+      if (!ROLA.voo) return;
+      /* setTimeout e não requestAnimationFrame: o rAF não roda em aba escondida, e escrever no
+         scrollTop já força o navegador a calcular a altura nova antes de rolar */
+      setTimeout(rolaDevolver, 0);
+    }).observe(document.body, { childList: true, subtree: true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ligar); else ligar();
+})();
+
 async function redesenharPreservandoRolagem(desenhar, seletorInterno) {
   const y = window.scrollY;
   const interno = seletorInterno ? document.querySelector(seletorInterno) : null;
