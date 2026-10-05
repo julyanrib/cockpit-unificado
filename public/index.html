@@ -24905,11 +24905,16 @@ function pfRelogioHTML(d, attr, rotBotao, variante) {
       + ' style="display:block;width:100%;margin-top:8px;border:0;border-radius:999px;'
       + 'background:#E51A31;color:#FFFDF8;min-height:34px;font:800 11.5px \'Poppins\',sans-serif;'
       + 'cursor:pointer;">' + esc(rotBotao) + ' ' + esc(d.horaRot) + ' ▸</button>';
-  return '<div style="border:1.5px solid #E51A31;border-radius:12px;background:var(--panel);'
+
+  const cancelar = '<button type="button" ' + attr + '="soltar:" title="Desistir desta conta (Esc)"'
+    + ' style="border:0;background:none;padding:2px 4px;font:800 10px Poppins,sans-serif;'
+    + 'color:var(--muted2);cursor:pointer;text-decoration:underline;">cancelar</button>';
+  return '<div data-pl6-relogio="1" style="border:1.5px solid #E51A31;border-radius:12px;background:var(--panel);'
     + 'padding:11px;box-shadow:0 10px 26px rgba(229,26,49,.14);">'
     + '<span style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">'
     +   '<span style="font:900 8.5px \'Poppins\',sans-serif;letter-spacing:.07em;'
     +     'text-transform:uppercase;color:#E51A31;">que horas?</span>'
+    +   cancelar
     +   '<b style="margin-left:auto;font:900 20px \'Poppins\',sans-serif;color:var(--ink);'
     +     'font-variant-numeric:tabular-nums;letter-spacing:-.01em;">' + esc(d.horaRot) + '</b>'
     + '</span>'
@@ -26351,6 +26356,13 @@ function pl6Ligar(box, rep) {
     }, '[data-pl6-municao]');
   };
 
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape' || !pl6UI.sel || !box.isConnected || !box.offsetParent) return;
+    if (document.querySelector('.overlay.show, #stageOverlay.show')) return;
+    pl6UI.sel = null; pl6UI.diaAtivo = null; pl6UI.toast = null;
+    redesenhar();
+  });
+
   const mutar = async (campos, toastOk) => {
     if (pl6UI.salvando) return false;
     pl6UI.salvando = true;
@@ -26508,7 +26520,14 @@ function pl6Ligar(box, rep) {
       || ev.target.closest('[data-pl6-novo-fonte]')
       || ev.target.closest('[data-pl6-novo-gravar]')
       || ev.target.closest('[data-pl6-semana]');
-    if (!alvo || !box.contains(alvo)) return;
+    if (!alvo || !box.contains(alvo)) {
+
+      if (pl6UI.sel && !ev.target.closest('[data-pl6-relogio]') && !ev.target.closest('input,select,textarea,a,button,label')) {
+        pl6UI.sel = null; pl6UI.diaAtivo = null; pl6UI.toast = null;
+        redesenhar();
+      }
+      return;
+    }
     ev.preventDefault();
     ev.stopPropagation();
     const d = alvo.dataset;
