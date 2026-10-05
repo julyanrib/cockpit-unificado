@@ -8110,9 +8110,10 @@ function farolPodeAplicar() {
   return true;
 }
 
-async function farolBuscarEAplicar() {
+async function farolBuscarEAplicar(pedido) {
   if (FAROL_BUSCANDO) { FAROL_PENDENTE = true; return; }
-  if (!farolPodeAplicar() || telaDePlanejarAberta()) { FAROL_PENDENTE = true; farolAviso(true); return; }
+
+  if (!farolPodeAplicar() || (telaDePlanejarAberta() && !pedido)) { FAROL_PENDENTE = true; farolAviso(true); return; }
   FAROL_BUSCANDO = true;
   try {
     const { data } = await supa.auth.getSession();
@@ -8186,7 +8187,7 @@ function farolAviso(mostrar) {
   el.addEventListener('click', function () {
     if (FAROL_DADO_ESPERANDO) { farolAplicar(FAROL_DADO_ESPERANDO); return; }
     FAROL_PENDENTE = false;
-    farolBuscarEAplicar();
+    farolBuscarEAplicar(true);
   });
   const linha = document.getElementById('updatedLine');
   if (linha && linha.parentNode) {
@@ -41724,8 +41725,15 @@ function pt6Pintar() {
   const html = '<div class="pt6">' + pt6TopoHTML(d, rs) + pt6CartoesHTML(d, rs) + pt6PalavraHTML(d, rs) + pt6RuaHTML(d, rs) + '</div>';
 
   const naTela = raiz.firstElementChild;
-  if (naTela && naTela.className === 'pt6' && raiz.__pt6Html === html) return;
+
+  let pontos = '';
+  try { pontos = JSON.stringify(PT6.mapas || {}); } catch (e) { pontos = String(Date.now()); }
+  if (naTela && naTela.className === 'pt6' && raiz.__pt6Html === html) {
+    if (raiz.__pt6Pontos !== pontos) { raiz.__pt6Pontos = pontos; pt6DesenharMapas(); }
+    return;
+  }
   raiz.__pt6Html = html;
+  raiz.__pt6Pontos = pontos;
   raiz.innerHTML = html;
   pt6DesenharMapas();
 }
@@ -42235,7 +42243,13 @@ function pt6FecharDossie() {
   document.body.style.overflow = '';
   PT6.dossie = null;
 }
-document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && PT6.dossie) pt6FecharDossie(); });
+document.addEventListener('keydown', function (ev) {
+
+  const veu = document.querySelector('.pt6-veu');
+  if (ev.key === 'Escape' && PT6.dossie && !(veu && veu.hidden)) pt6FecharDossie();
+
+  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target && ev.target.matches && ev.target.matches('[data-pt6][role="button"]')) { ev.preventDefault(); ev.target.click(); }
+});
 
 async function pt6CarregarDossie(forcar) {
   const oid = PT6.dossie, d = PT6.dados;
