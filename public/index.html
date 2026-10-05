@@ -8250,6 +8250,26 @@ function cadenciaMotivosDeSaida() {
   return (cfg && Array.isArray(cfg.motivosDeSaida)) ? cfg.motivosDeSaida : [];
 }
 
+function cadDiaBRT(ms) { return new Date(ms - 3 * 3600000).toISOString().slice(0, 10); }
+function cadEhUtil(iso) { const d = new Date(iso + 'T12:00:00Z').getUTCDay(); return d !== 0 && d !== 6; }
+function cadSomarUteis(iso, n) {
+  const d = new Date(iso + 'T12:00:00Z');
+  let k = 0;
+  while (k < n) { d.setUTCDate(d.getUTCDate() + 1); if (cadEhUtil(d.toISOString().slice(0, 10))) k++; }
+  while (!cadEhUtil(d.toISOString().slice(0, 10))) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function cadUteisEntre(a, b) {
+  if (a === b) return 0;
+  const sinal = a < b ? 1 : -1;
+  const d = new Date((sinal > 0 ? a : b) + 'T12:00:00Z');
+  const fim = sinal > 0 ? b : a;
+  let n = 0;
+  while (d.toISOString().slice(0, 10) < fim) { d.setUTCDate(d.getUTCDate() + 1); if (cadEhUtil(d.toISOString().slice(0, 10))) n++; }
+  return sinal * n;
+}
+
 function estadoDaCadencia(lead, toques, ultimoDesfecho, proximoPasso) {
   const regua = cadenciaDoLead(lead, ultimoDesfecho);
   if (!regua) return null;
@@ -8258,8 +8278,9 @@ function estadoDaCadencia(lead, toques, ultimoDesfecho, proximoPasso) {
 
   const feitos = Math.max(0, toques.total || 0);
   const ultimo = toques.ultimo ? new Date(toques.ultimo) : null;
+  const hojeCad = cadDiaBRT(Date.now());
   const diasDesdeUltimo = ultimo && !Number.isNaN(ultimo.getTime())
-    ? Math.floor((Date.now() - ultimo.getTime()) / 86400000) : null;
+    ? Math.max(0, cadUteisEntre(cadDiaBRT(ultimo.getTime()), hojeCad)) : null;
 
   const proximo = passos.find(p => p.toque > feitos) || null;
   const encerrou = !proximo;
@@ -8268,9 +8289,10 @@ function estadoDaCadencia(lead, toques, ultimoDesfecho, proximoPasso) {
   if (proximo && ultimo && !Number.isNaN(ultimo.getTime())) {
     const passoAnterior = passos.filter(p => p.toque <= feitos).slice(-1)[0];
     const deltaDias = Math.max(0, (proximo.dia || 0) - ((passoAnterior && passoAnterior.dia) || 0));
-    const venc = new Date(ultimo.getTime() + deltaDias * 86400000);
-    vencimentoEm = venc;
-    atrasoDias = Math.floor((Date.now() - venc.getTime()) / 86400000);
+
+    const vencISO = cadSomarUteis(cadDiaBRT(ultimo.getTime()), deltaDias);
+    vencimentoEm = new Date(vencISO + 'T12:00:00-03:00');
+    atrasoDias = cadUteisEntre(vencISO, hojeCad);
   }
 
   const temPlanoFuturo = !!(proximoPasso && proximoPasso.quando &&
@@ -23778,7 +23800,8 @@ function pl6AtrasoDoPasso(l) {
 
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   const alvoISO = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-  const dif = Math.round((Date.parse(hojeISO) - Date.parse(alvoISO)) / 864e5);
+
+  const dif = /^\d{4}-\d{2}-\d{2}$/.test(hojeISO) && /^\d{4}-\d{2}-\d{2}$/.test(alvoISO) ? cadUteisEntre(alvoISO, hojeISO) : NaN;
   return isNaN(dif) ? null : dif;
 }
 
