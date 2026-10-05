@@ -40893,6 +40893,37 @@ function v5TextoDaFaixa(feitas, meta, hora) {
   if (feitas === 0) return { titulo: 'Nenhuma visita ainda hoje · meta ' + meta, sub: hora >= 10 ? 'o dia já começou — a primeira porta é a mais difícil' : 'monte a rota e saia: a manhã é a melhor hora' };
   return { titulo: 'Visitas hoje: ' + feitas + ' de ' + meta, sub: 'faltam ' + faltam + (faltam === 1 ? ' porta' : ' portas') + ' para a meta' };
 }
+
+async function v5PlanoDeHoje(hojeIso) {
+  try {
+    const ses = await supa.auth.getSession();
+    const uid = ses && ses.data && ses.data.session && ses.data.session.user && ses.data.session.user.id;
+    if (!uid) return null;
+    const r = await supa.from('field_routes').select('route_date, stops:field_route_stops(status, client:clients(visited_at))')
+      .eq('seller_id', uid).eq('route_date', hojeIso);
+    if (r.error) return null;
+    const dia = function (ts) { return ts ? new Date(ts).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) : null; };
+    let total = 0, feitas = 0;
+    (r.data || []).forEach(function (rota) {
+      (rota.stops || []).forEach(function (st) {
+        if (st.status !== 'planned' && st.status !== 'done') return;
+        total++;
+        if (st.status === 'done' || (st.client && dia(st.client.visited_at) === hojeIso)) feitas++;
+      });
+    });
+    return { total: total, feitas: feitas };
+  } catch (e) { return null; }
+}
+function v5TextoDaFaixaPlano(plano, visitas, meta, hora) {
+  const faltam = Math.max(0, plano.total - plano.feitas);
+  const tom = faltam === 0 ? 'is-ok' : (plano.feitas === 0 && !visitas && hora >= 10) ? 'is-alerta' : 'is-andando';
+  return {
+    tom: tom,
+    titulo: faltam === 0 ? 'Plano de hoje feito: ' + plano.feitas + ' de ' + plano.total : 'Plano de hoje: ' + plano.feitas + ' de ' + plano.total,
+    sub: (faltam ? 'faltam ' + faltam + (faltam === 1 ? ' parada' : ' paradas') : 'cada porta a mais é funil da semana que vem')
+      + ' · ' + (visitas != null ? visitas + (visitas === 1 ? ' visita' : ' visitas') + ' no dia · meta ' + meta : 'meta ' + meta),
+  };
+}
 async function v5PreencherFaixaRua() {
   const alvo = document.getElementById('v5FaixaRua');
   if (!alvo) return;
@@ -40914,15 +40945,19 @@ async function v5PreencherFaixaRua() {
       meta = (metas && metas.padrao) || (typeof V5_META_VISITAS !== 'undefined' ? V5_META_VISITAS : 6);
     }
     const hora = agoraBR.getHours();
-    const t = v5TextoDaFaixa(feitas, meta, hora);
+    const hojeIso = agoraBR.getFullYear() + '-' + String(agoraBR.getMonth() + 1).padStart(2, '0') + '-' + String(agoraBR.getDate()).padStart(2, '0');
+    const plano = await v5PlanoDeHoje(hojeIso);
+    const comPlano = !!(plano && plano.total > 0);
+    const t = comPlano ? v5TextoDaFaixaPlano(plano, feitas, meta, hora) : v5TextoDaFaixa(feitas, meta, hora);
     const el = document.getElementById('v5FaixaRua');
     if (!el) return;
-    const tracos = feitas == null ? '' : '<span class="v5-faixa-tracos" aria-hidden="true">'
-      + Array.from({ length: Math.max(1, Math.min(meta, 12)) }, function (_, k) { return '<i' + (k < feitas ? ' class="is-feito"' : '') + '></i>'; }).join('') + '</span>';
+    const nTracos = comPlano ? plano.total : meta, nFeitos = comPlano ? plano.feitas : feitas;
+    const tracos = nFeitos == null ? '' : '<span class="v5-faixa-tracos" aria-hidden="true">'
+      + Array.from({ length: Math.max(1, Math.min(nTracos, 15)) }, function (_, k) { return '<i' + (k < nFeitos ? ' class="is-feito"' : '') + '></i>'; }).join('') + '</span>';
     const botao = (typeof v5NoPwa === 'function' && v5NoPwa())
       ? '<a class="v5-faixa-ir" href="/"' + (window.innerWidth >= 900 ? ' target="_blank" rel="noopener"' : '') + '>Ir pra rua →</a>'
       : '<span class="v5-faixa-ir is-sem">abra o app no celular para ir pra rua</span>';
-    el.className = 'v5-faixa-rua ' + v5TomDaFaixa(feitas, meta, hora);
+    el.className = 'v5-faixa-rua ' + (comPlano ? t.tom : v5TomDaFaixa(feitas, meta, hora));
     el.innerHTML = '<div class="v5-faixa-txt"><b>' + esc(t.titulo) + '</b><small>' + esc(t.sub) + '</small>' + tracos + '</div>' + botao;
 
     const cab = document.querySelector('.app-header');
