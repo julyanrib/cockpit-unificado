@@ -163,9 +163,11 @@ igual('fração arredonda para baixo', ctx.comissaoTotalDe(6.9), 1800,
   ctx.DATA.comissionamento = guardado;
 }());
 
-checar('e a tela não desenha a caixa sem o quadro',
-  /const cm = \(typeof comissaoDe === 'function'\)/.test(tpl)
-    && /if \(!cm\) return '';/.test(tpl),
+/* REVISÃO GERAL (05/10/26): a faixa do variável virou o número "+R$ na próxima venda" do
+   herói do Hoje. A regra é a mesma: sem o quadro, nada é desenhado. */
+checar('e a tela não desenha o número sem o quadro',
+  /const cmHero = \(typeof comissaoDe === 'function'/.test(tpl)
+    && /\$\{cmHero \? '<div class="h10-num"/.test(tpl),
   'sem esta saída, a caixa apareceria com undefined onde vai o valor');
 
 checar('a tabela do gestor também não aparece sem config',
@@ -235,7 +237,9 @@ function regraCss(sel) {
   const j = tpl.indexOf('}', i);
   return j < 0 ? null : tpl.slice(i, j + 1);
 }
-const REGRAS = { '.cmt': regraCss('.cmt'), '.cm1': regraCss('.cm1') };
+/* .cm1 saiu em 05/10/26 (revisão geral): o variável do executivo virou o número "+R$ na
+   próxima venda" do herói do Hoje. Fica a seção do time (.cmt), que continua no card. */
+const REGRAS = { '.cmt': regraCss('.cmt') };
 
 /* A ÂNCORA VIVA PRIMEIRO: sem isto, um rename faria as três checagens abaixo medirem o
    vazio e passarem em verde — o modo mais comum de uma guarda morrer calada. */
@@ -260,7 +264,7 @@ Object.keys(REGRAS).forEach(function (sel) {
 const PALETA_DO_CARD = ['#E7E3DA', '#FBFAF6', '#FDFEFF', '#2B3440', '#7A8494', '#8B93A3',
   '#5B667A', '#E4E0D6'];
 const iCmt = tpl.indexOf('\n  .cmt{');
-const iFimCmt = tpl.indexOf('\n  .cm1{', iCmt);
+const iFimCmt = tpl.indexOf('\n  .h9-grade{', iCmt);
 checar('o bloco de css do variável do time foi encontrado inteiro',
   iCmt > -1 && iFimCmt > iCmt,
   'sem o recorte a checagem de paleta abaixo não mede nada');
