@@ -242,12 +242,32 @@ teste('recusa explícita tira o negócio da cadência', () => {
   verdade(sug.motivos.length > 0, 'recusa oferece motivos de saída');
 });
 
-teste('toque 1 dado há 2 dias => próximo é o toque 2, atrasado 1 dia', () => {
+/* A régua conta DIA ÚTIL (05/10/26): "há 2 dias" depende do dia em que a suíte roda — numa
+   segunda, dois dias atrás é sábado. Volta 2 dias úteis a partir do último dia útil até hoje
+   (em Brasília), e o atraso esperado continua 1 em qualquer dia da semana. */
+function diasUteisAtras(n) {
+  const d = new Date(Date.now() - 3 * 3600000);
+  d.setUTCHours(12, 0, 0, 0);
+  const util = (x) => x.getUTCDay() !== 0 && x.getUTCDay() !== 6;
+  while (!util(d)) d.setUTCDate(d.getUTCDate() - 1);
+  let k = 0;
+  while (k < n) { d.setUTCDate(d.getUTCDate() - 1); if (util(d)) k++; }
+  return new Date(d.getTime() + 3 * 3600000);
+}
+teste('toque 1 dado há 2 dias úteis => próximo é o toque 2, atrasado 1 dia', () => {
   const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
-  const est = c.estadoDaCadencia(lead({ stageId: '1395880469' }), { total: 1, ultimo: diasAtras(2).toISOString() }, null);
+  const est = c.estadoDaCadencia(lead({ stageId: '1395880469' }), { total: 1, ultimo: diasUteisAtras(2).toISOString() }, null);
   igual(est.proximo.toque, 2, 'número do próximo toque');
   igual(est.status, 'atrasada', 'status');
   igual(est.atrasoDias, 1, 'dias de atraso');
+});
+
+teste('fim de semana não conta na régua: toque na sexta, D+1 vence na segunda', () => {
+  const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
+  igual(c.cadSomarUteis('2026-10-02', 1), '2026-10-05', 'sexta + 1 dia útil');
+  igual(c.cadSomarUteis('2026-10-03', 0), '2026-10-05', 'vencimento no sábado vai para a segunda');
+  igual(c.cadUteisEntre('2026-10-02', '2026-10-05'), 1, 'de sexta a segunda é 1 dia útil, não 3');
+  igual(c.cadUteisEntre('2026-10-06', '2026-10-05'), -1, 'vencimento amanhã é -1');
 });
 
 teste('cadência completa fica encerrada, não em dia', () => {
