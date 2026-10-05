@@ -139,6 +139,23 @@ checar('Planejamento e Semana saem da barra (abrem pelo Time)',
 checar('a tela v10 só aparece no Mês, em Mais leituras',
   template.indexOf('<div id="tm2Raiz" data-tm2-raiz="1" hidden') > -1);
 
+/* 6 · O DIA NO MAPA ABRE NA SEMANA DELE (05/10/26). O dossiê pinta com a semana carregada
+   no Planejamento do time: a sexta aberta numa segunda mostrava a semana errada, e sem
+   semana nenhuma a gaveta abria vazia. */
+{
+  const ab = template.slice(template.indexOf('async function t10AbrirDia('), template.indexOf('function t10UmAUm('));
+  checar('o Mapa passa pela porta que carrega a semana do dia',
+    /verbo === 'mapa'\) \{[^}]*t10AbrirDia\(/.test(template));
+  checar('e a porta lê a semana do DIA, e não a corrente',
+    /const seg = t10Seg\(dia\);/.test(ab) && /await t10Ler\(seg\)/.test(ab) && /PT6\.dados = d;/.test(ab)
+      && ab.indexOf('pt6AbrirDossie(oid, dia)') > ab.indexOf('PT6.dados = d;'));
+}
+
+/* 7 · O LINK ANTIGO DO APP CONTINUA CHEGANDO (05/10/26). /gestao/#/daily escolhia a aba pelo
+   botão, e o botão saiu da barra: sem isto, o link do app abria a última aba usada. */
+checar('#/daily e #/semana abrem o Time no modo certo',
+  /base === '#\/daily' \|\| base === '#\/semana'\) && typeof T10 !== 'undefined'\) \{\s*T10\.modo = base === '#\/daily' \? 'hoje' : 'semana';/.test(template));
+
 console.log('');
 console.log('time do gestor: ' + ok + ' verificações');
 if (falhas.length) {
