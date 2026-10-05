@@ -12642,7 +12642,7 @@ async function aoVivoAplicar() {
   if (tipos.has('visita') || tipos.has('parada')) { visitasAppCache.em = 0; mudou = true; }
   if (tipos.has('visita')) { try { await carregarVisitasDoApp(true); } catch (e) { /* fica a anterior */ } }
   /* Planejamento do time (0144): recarrega só o que está aberto, pelo tipo do sinal */
-  if (typeof pt6AoVivo === 'function') pt6AoVivo(tipos);
+  aoVivoGuardarPlanejamento(tipos);
   if (['visita', 'parada', 'plano', 'ficha', 'foto', 'daily', 'pino', 'pino-novo', 'tarefa', 'agenda'].some(function (t) { return tipos.has(t); }) && typeof V5_HTML_CACHE !== 'undefined') V5_HTML_CACHE = {};
   /* contrato 24 (handoff v6): a promessa feita no app chega à Daily sem recarregar */
   if (tipos.has('daily') && typeof carregarDailies === 'function') {
@@ -12674,7 +12674,38 @@ async function aoVivoAplicar() {
   if (tipos.has('comunicado') && typeof carregarComunicados === 'function') {
     try { await carregarComunicados(); if (typeof atualizarSinoAvisos === 'function') atualizarSinoAvisos(); } catch (e) { /* o sino fica como estava */ }
   }
-  if (mudou) aoVivoRepintar();
+  aoVivoRepintarComCalma(mudou);
+}
+
+/* CALMA NO REDESENHO (Julyan, 05/10/26: "o cockpit tá carregando e piscando toda hora, tanto
+   mapa e gestão"). Com o time na rua chega sinal quase todo minuto (medido: rajada em 20 dos
+   25 minutos), e cada rajada redesenhava a aba aberta inteira — o Mapa relia a rua toda, o
+   Planejamento recriava os mapas. O DADO continua entrando na hora (DATA, caches); a TELA
+   aberta se redesenha na primeira mudança e, depois, no máximo uma vez a cada 2 min. Aba
+   escondida não redesenha: espera a pessoa voltar. */
+const AOVIVO_CALMA_MS = 120000;
+let AOVIVO_ULTIMO_REPINTE = 0;
+let AOVIVO_REPINTE_ADIADO = null;
+let AOVIVO_REPINTAR_TUDO = false;
+const AOVIVO_PT6_TIPOS = new Set();
+function aoVivoGuardarPlanejamento(tipos) {
+  (tipos || []).forEach(function (t) { AOVIVO_PT6_TIPOS.add(t); });
+}
+function aoVivoRepintarComCalma(tudo) {
+  if (tudo) AOVIVO_REPINTAR_TUDO = true;
+  if (!AOVIVO_REPINTAR_TUDO && !AOVIVO_PT6_TIPOS.size) return;
+  if (AOVIVO_REPINTE_ADIADO) return;
+  const falta = Math.max(0, AOVIVO_CALMA_MS - (Date.now() - AOVIVO_ULTIMO_REPINTE));
+  AOVIVO_REPINTE_ADIADO = setTimeout(function () {
+    AOVIVO_REPINTE_ADIADO = null;
+    /* escondida, ou com a pessoa no meio de um gesto: tenta de novo daqui a pouco */
+    if (document.hidden || !farolPodeAplicar()) { AOVIVO_REPINTE_ADIADO = setTimeout(function () { AOVIVO_REPINTE_ADIADO = null; aoVivoRepintarComCalma(false); }, 5000); return; }
+    AOVIVO_ULTIMO_REPINTE = Date.now();
+    const tp = new Set(AOVIVO_PT6_TIPOS); AOVIVO_PT6_TIPOS.clear();
+    const tudoAgora = AOVIVO_REPINTAR_TUDO; AOVIVO_REPINTAR_TUDO = false;
+    if (tp.size && typeof pt6AoVivo === 'function') pt6AoVivo(tp);
+    if (tudoAgora) aoVivoRepintar();
+  }, falta);
 }
 
 /* Troca UM negócio no DATA. `fora` (saiu do Field Sales, virou teste, não é mais meu)

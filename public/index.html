@@ -7952,7 +7952,7 @@ async function aoVivoAplicar() {
   if (tipos.has('visita') || tipos.has('parada')) { visitasAppCache.em = 0; mudou = true; }
   if (tipos.has('visita')) { try { await carregarVisitasDoApp(true); } catch (e) {   } }
 
-  if (typeof pt6AoVivo === 'function') pt6AoVivo(tipos);
+  aoVivoGuardarPlanejamento(tipos);
   if (['visita', 'parada', 'plano', 'ficha', 'foto', 'daily', 'pino', 'pino-novo', 'tarefa', 'agenda'].some(function (t) { return tipos.has(t); }) && typeof V5_HTML_CACHE !== 'undefined') V5_HTML_CACHE = {};
 
   if (tipos.has('daily') && typeof carregarDailies === 'function') {
@@ -7983,7 +7983,32 @@ async function aoVivoAplicar() {
   if (tipos.has('comunicado') && typeof carregarComunicados === 'function') {
     try { await carregarComunicados(); if (typeof atualizarSinoAvisos === 'function') atualizarSinoAvisos(); } catch (e) {   }
   }
-  if (mudou) aoVivoRepintar();
+  aoVivoRepintarComCalma(mudou);
+}
+
+const AOVIVO_CALMA_MS = 120000;
+let AOVIVO_ULTIMO_REPINTE = 0;
+let AOVIVO_REPINTE_ADIADO = null;
+let AOVIVO_REPINTAR_TUDO = false;
+const AOVIVO_PT6_TIPOS = new Set();
+function aoVivoGuardarPlanejamento(tipos) {
+  (tipos || []).forEach(function (t) { AOVIVO_PT6_TIPOS.add(t); });
+}
+function aoVivoRepintarComCalma(tudo) {
+  if (tudo) AOVIVO_REPINTAR_TUDO = true;
+  if (!AOVIVO_REPINTAR_TUDO && !AOVIVO_PT6_TIPOS.size) return;
+  if (AOVIVO_REPINTE_ADIADO) return;
+  const falta = Math.max(0, AOVIVO_CALMA_MS - (Date.now() - AOVIVO_ULTIMO_REPINTE));
+  AOVIVO_REPINTE_ADIADO = setTimeout(function () {
+    AOVIVO_REPINTE_ADIADO = null;
+
+    if (document.hidden || !farolPodeAplicar()) { AOVIVO_REPINTE_ADIADO = setTimeout(function () { AOVIVO_REPINTE_ADIADO = null; aoVivoRepintarComCalma(false); }, 5000); return; }
+    AOVIVO_ULTIMO_REPINTE = Date.now();
+    const tp = new Set(AOVIVO_PT6_TIPOS); AOVIVO_PT6_TIPOS.clear();
+    const tudoAgora = AOVIVO_REPINTAR_TUDO; AOVIVO_REPINTAR_TUDO = false;
+    if (tp.size && typeof pt6AoVivo === 'function') pt6AoVivo(tp);
+    if (tudoAgora) aoVivoRepintar();
+  }, falta);
 }
 
 function aoVivoAplicarNegocio(n) {
