@@ -1945,8 +1945,6 @@
   .h8-fila{display:flex;flex-direction:column;gap:8px;}
   .h8-ver-mais{margin-top:10px;width:100%;min-height:44px;border:1px dashed var(--line-btn);border-radius:var(--r-md);background:transparent;color:var(--ink);font:800 13px var(--font-body);cursor:pointer;}
   .h8-ver-mais:hover{background:var(--sunk);}
-  .h8-bt.is-mais{min-width:44px;padding:0 10px;font-weight:900;letter-spacing:.08em;}
-  .h8-mais{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;padding-top:6px;border-top:1px dashed var(--line);margin-top:4px;}
 
   .h8-fila::-webkit-scrollbar,[data-pl6-municao]::-webkit-scrollbar{width:9px;}
   .h8-fila::-webkit-scrollbar-track,[data-pl6-municao]::-webkit-scrollbar-track{
@@ -10211,7 +10209,6 @@ const H8_DESFECHOS_RAPIDOS = [
 let h8Filtro = 'todas';
 let h8Painel = null;
 
-let h8Mais = null;
 let h8Ver = 7;
 let h8Feitas = {};
 
@@ -10240,11 +10237,11 @@ function h8LinhaHTML(item, i, ins) {
   const pn = h8Painel && String(h8Painel.id) === String(lead.id) ? h8Painel : null;
 
   const tel = String(lead.celular || lead.telefone || '').replace(/[^0-9]/g, '');
-
   const bt = function (chave, rot, attr) {
     const eMelhor = ins.melhor === chave;
-    return { melhor: eMelhor, html: '<button type="button" class="h8-bt' + (eMelhor ? ' is-melhor' : '') + '"'
-      + ' ' + attr + '>' + esc(rot) + '</button>' };
+    return '<button type="button" class="h8-bt' + (eMelhor ? ' is-melhor' : '') + '"'
+      + ' ' + attr + '>' + (eMelhor ? '★ ' : '') + esc(rot)
+      + (eMelhor ? ' <i>— melhor ação</i>' : '') + '</button>';
   };
 
   const selo = item.agendado
@@ -10261,22 +10258,14 @@ function h8LinhaHTML(item, i, ins) {
       + ' · feche os que já não valem</span>'
     : '';
 
-  const lista = ins.melhor === 'criar'
-    ? [bt('criar', 'criar negócio + gravar visita', 'data-h8-criar="' + id + '"'),
-      bt('visitar', 'agendar retorno', 'data-h8-datar="' + id + '" data-h8-como="visita"')]
-    : [bt('ligar', 'ligar', 'data-h8-desfecho="' + id + '" data-h8-como="ligação"'),
-      bt('whats', 'WhatsApp', 'data-h8-desfecho="' + id + '" data-h8-como="WhatsApp"'),
-      bt('visitar', 'agendar visita', 'data-h8-datar="' + id + '" data-h8-como="visita"')];
+  const botoes = ins.melhor === 'criar'
+    ? bt('criar', 'criar negócio + gravar visita ▸', 'data-h8-criar="' + id + '"')
+      + bt('visitar', 'agendar retorno ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
+    : bt('ligar', 'ligar', 'data-h8-desfecho="' + id + '" data-h8-como="ligação"')
+      + bt('whats', 'WhatsApp', 'data-h8-desfecho="' + id + '" data-h8-como="WhatsApp"')
+      + bt('visitar', 'agendar visita ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
 
-  const principal = lista.filter(function (b) { return b.melhor; })[0] || lista[0];
-  const outras = lista.filter(function (b) { return b !== principal; }).map(function (b) { return b.html; }).join('')
-
-    + '<button type="button" class="h8-bt is-fraco" data-h8-decidir="' + id + '">decidir</button>';
-  const maisAberto = h8Mais === String(lead.id);
-  const botoes = principal.html.replace('class="h8-bt', 'class="h8-bt is-melhor')
-    + '<button type="button" class="h8-bt is-mais" data-h8-mais="' + id + '" aria-expanded="' + maisAberto + '"'
-    + ' aria-label="Outras ações para ' + esc(lead.name || 'este negócio') + '">⋯</button>'
-    + (maisAberto ? '<div class="h8-mais">' + outras + '</div>' : '');
+      + '<button type="button" class="h8-bt is-fraco" data-h8-decidir="' + id + '">decidir ⌄</button>';
 
   let painel = '';
   if (pn && pn.fase === 'desfecho') {
@@ -10337,7 +10326,7 @@ function h8LinhaHTML(item, i, ins) {
           return '<div class="h8-motivo"><b>' + esc(partes[0]) + '</b>'
             + (partes.length > 1 ? ' — ' + esc(partes.slice(1).join(' — ')) : '') + '</div>';
         }())
-    +   (maisAberto ? '<div class="h8-ultimo">' + esc(ins.ultimo) + (tel ? '' : ' · sem telefone no CRM') + '</div>' : '')
+    +   '<div class="h8-ultimo">' + esc(ins.ultimo) + (tel ? '' : ' · sem telefone no CRM') + '</div>'
     +   '<div class="h8-botoes">' + botoes + '</div>'
     +   painel
     + '</div>'
@@ -10489,14 +10478,13 @@ function h8LigarFila(el, r, redesenhar) {
     const alvo = ev.target.closest('[data-h8-filtro],[data-h8-desfecho],[data-h8-op],'
       + '[data-h8-datar],[data-h8-quando],[data-h8-criar],[data-h8-completo],'
       + '[data-h8-desfazer],[data-h8-fechar],'
-      + '[data-h8-decidir],[data-h8-avancar],[data-h8-perder],[data-h8-ficha],[data-h8-mais],[data-h8-ver]');
+      + '[data-h8-decidir],[data-h8-avancar],[data-h8-perder],[data-h8-ficha],[data-h8-ver]');
     if (!alvo || !card.contains(alvo)) return;
     ev.preventDefault();
     ev.stopPropagation();
     const d = alvo.dataset;
 
-    if (d.h8Filtro) { h8Filtro = d.h8Filtro; h8Painel = null; h8Ver = 7; h8Mais = null; return redesenhar(); }
-    if (d.h8Mais) { h8Mais = h8Mais === d.h8Mais ? null : d.h8Mais; return redesenhar(); }
+    if (d.h8Filtro) { h8Filtro = d.h8Filtro; h8Painel = null; h8Ver = 7; return redesenhar(); }
     if (d.h8Ver) { h8Ver += 7; return redesenhar(); }
     if (d.h8Fechar) { h8Painel = null; return redesenhar(); }
     if (d.h8Desfecho) {
@@ -23583,16 +23571,113 @@ function pl6RotuloDoGrupo(chave, itens) {
   return 'CEP ' + String(chave).slice(2) + (cidade ? ' · ' + pl6RotuloBairro(cidade) : '');
 }
 
+let PL6_PINO = null;
+let PL6_PINO_VOO = null;
+function pl6PinoDe(c) {
+  const lat = c.latitude != null ? Number(c.latitude) : null;
+  const lng = c.longitude != null ? Number(c.longitude) : null;
+  return { clientId: c.id, lat: lat, lng: lng, bairro: c.bairro || null, cidade: c.cidade || null, cep: c.cep || null,
+    logradouro: c.endereco || null, nome: (c.empresa && String(c.empresa).trim()) || c.nome || null, idHubspot: c.id_hubspot || null };
+}
+async function pl6CarregarPinosDoApp(rep) {
+  if (!rep || typeof supa === 'undefined' || !supa) return;
+  const dono = String(rep.ownerId);
+  if (PL6_PINO && PL6_PINO.dono === dono && Date.now() - PL6_PINO.em < 300000) return;
+  if (PL6_PINO_VOO) return PL6_PINO_VOO;
+  PL6_PINO_VOO = (async function () {
+    const porDeal = new Map(), porLead = new Map();
+    const guardar = function (c) {
+      const p = pl6PinoDe(c);
+      if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return;
+      if (c.id_hubspot) porDeal.set(String(c.id_hubspot), p);
+      if (c.lead_prospeccao_id) porLead.set(String(c.lead_prospeccao_id), p);
+    };
+    const COLS = 'id, id_hubspot, lead_prospeccao_id, latitude, longitude, bairro, cidade, cep, endereco, empresa, nome';
+
+    for (let de = 0; de < 6000; de += 1000) {
+      const r = await supa.from('clients').select(COLS).eq('vendedor_id_hubspot', dono).range(de, de + 999);
+      if (r.error) throw r.error;
+      (r.data || []).forEach(guardar);
+      if ((r.data || []).length < 1000) break;
+    }
+
+    const deals = [], leads = [];
+    (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(dono) : []).forEach(function (d) { if (d && d.id && !porDeal.has(String(d.id))) deals.push(String(d.id)); });
+    (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : []).forEach(function (l) { if (String(l.ownerId) === dono && l.id && !porDeal.has(String(l.id))) deals.push(String(l.id)); });
+    (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : []).forEach(function (l) { if (String(l.responsavel_owner_id) === dono && l.id && !porLead.has(String(l.id))) leads.push(String(l.id)); });
+    for (let i = 0; i < deals.length; i += 200) {
+      const r = await supa.from('clients').select(COLS).in('id_hubspot', deals.slice(i, i + 200));
+      if (!r.error) (r.data || []).forEach(guardar);
+    }
+    for (let i = 0; i < leads.length; i += 200) {
+      const r = await supa.from('clients').select(COLS).in('lead_prospeccao_id', leads.slice(i, i + 200));
+      if (!r.error) (r.data || []).forEach(guardar);
+    }
+
+    let queda = [];
+    try {
+      const ctx = await supa.rpc('mapa_contexto');
+      if (!ctx.error && ctx.data && Array.isArray(ctx.data.queda)) {
+        const meus = ctx.data.queda.filter(function (q) { return Array.isArray(q) && String(q[3]) === dono; });
+        const ids = meus.map(function (q) { return String(q[0]); });
+        const porId = {};
+        for (let i = 0; i < ids.length; i += 200) {
+          const r = await supa.from('clients').select(COLS).in('id', ids.slice(i, i + 200));
+          if (!r.error) (r.data || []).forEach(function (c) { porId[c.id] = c; guardar(c); });
+        }
+        queda = meus.map(function (q) {
+          const c = porId[String(q[0])];
+          return c && c.id_hubspot ? { c: c, motivo: q[1] || 'em queda', faturamento: q[2] == null ? null : Number(q[2]) } : null;
+        }).filter(Boolean);
+      }
+    } catch (e) { queda = []; }
+    PL6_PINO = { dono: dono, em: Date.now(), porDeal: porDeal, porLead: porLead, queda: queda };
+  })();
+  try { await PL6_PINO_VOO; }
+  catch (e) { console.warn('Planejamento: não consegui ler os pinos do app —', e && e.message); }
+  finally { PL6_PINO_VOO = null; }
+}
+
+function pl6ComPino(l, chave) {
+  if (!l || !PL6_PINO) return l;
+  const p = chave && chave.deal != null ? PL6_PINO.porDeal.get(String(chave.deal))
+    : (chave && chave.lead != null ? PL6_PINO.porLead.get(String(chave.lead)) : null);
+  if (!p) return l;
+  return Object.assign({}, l, {
+    lat: p.lat, lng: p.lng,
+    bairro: p.bairro || l.bairro || null, cidade: p.cidade || l.cidade || null,
+    cep: p.cep || l.cep || null, logradouro: p.logradouro || l.logradouro || null,
+    _pino: true
+  });
+}
+
+function pl6EmQueda(rep, regioes) {
+  if (!PL6_PINO || PL6_PINO.dono !== String(rep.ownerId)) return [];
+  const porChave = new Map((regioes || []).map(function (r) { return [r.chave, r]; }));
+  return PL6_PINO.queda.map(function (q) {
+    const p = pl6PinoDe(q.c);
+    const bruto = { id: q.c.id_hubspot, name: p.nome, bairro: p.bairro, cidade: p.cidade, cep: p.cep, logradouro: p.logradouro, lat: p.lat, lng: p.lng };
+    const reg = pl6RegiaoDoLead(bruto, regioes, porChave);
+    return {
+      id: 'c-' + q.c.id_hubspot, tipo: 'c', base: true, emQueda: q.motivo,
+      dealId: String(q.c.id_hubspot), nome: p.nome || 'Cliente', stageId: '',
+      etapa: 'Cliente em queda · ' + q.motivo, dias: null, sla: false,
+      lat: p.lat, lng: p.lng, regiao: reg ? reg.chave : null, regiaoNome: reg ? reg.nome : null, km: reg ? reg.km : null,
+      semEndereco: p.lat == null || p.lng == null, proximaAtividade: null, _bruto: bruto
+    };
+  });
+}
+
 function pl6FontesCruas(rep) {
   const fontes = [];
   (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
-    .forEach(l => fontes.push({ l: l, fonte: 'carteira' }));
+    .forEach(l => fontes.push({ l: pl6ComPino(l, { deal: l.id }), fonte: 'carteira' }));
   (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : [])
     .filter(l => String(l.ownerId) === String(rep.ownerId))
-    .forEach(l => fontes.push({ l: l, fonte: 'reciclagem' }));
+    .forEach(l => fontes.push({ l: pl6ComPino(l, { deal: l.id }), fonte: 'reciclagem' }));
   (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
     .filter(l => String(l.responsavel_owner_id) === String(rep.ownerId))
-    .forEach(l => fontes.push({ l: l, fonte: 'novo' }));
+    .forEach(l => fontes.push({ l: pl6ComPino(l, { lead: l.id }), fonte: 'novo' }));
   return fontes;
 }
 
@@ -23742,9 +23827,11 @@ function pl6Base(rep, regioes) {
   const todos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
     .filter(function (d) { return PL6_ETAPAS_BASE.indexOf(String(d.stageId || '')) >= 0; });
   const porChave = new Map((regioes || []).map(function (r) { return [r.chave, r]; }));
-  return todos.map(function (d) {
+  return todos.map(function (d0) {
+    const d = pl6ComPino(d0, { deal: d0.id });
     const reg = pl6RegiaoDoLead(d, regioes, porChave);
     return {
+      _bruto: d,
       id: 'c-' + d.id,
       tipo: 'c',
       base: true,
@@ -23770,10 +23857,13 @@ function pl6Carteira(rep, regioes) {
   const abertos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
     .filter(d => PL6_ETAPAS_QUE_SAIRAM.indexOf(String(d.stageId || '')) < 0);
   const porChave = new Map((regioes || []).map(r => [r.chave, r]));
-  return abertos.map(d => {
+  return abertos.map(d0 => {
+
+    const d = pl6ComPino(d0, { deal: d0.id });
 
     const reg = pl6RegiaoDoLead(d, regioes, porChave);
     return {
+      _bruto: d,
       id: 'c-' + d.id,
       tipo: 'c',
       dealId: String(d.id),
@@ -23799,7 +23889,8 @@ function pl6Reciclagem(rep, regioes) {
   const porChave = new Map((regioes || []).map(r => [r.chave, r]));
   return bruto
     .filter(l => String(l.ownerId) === String(rep.ownerId))
-    .map(function (l) {
+    .map(function (l0) {
+      const l = pl6ComPino(l0, { deal: l0.id });
       const lat = l.lat != null ? Number(l.lat) : null;
       const lng = l.lng != null ? Number(l.lng) : null;
       const temPonto = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
@@ -23822,15 +23913,28 @@ function pl6Reciclagem(rep, regioes) {
         km: reg ? reg.km : null,
         semEndereco: !temPonto,
         proximaAtividade: null,
-        reciclagem: true
+        reciclagem: true,
+        _bruto: l
       };
     });
 }
 
 function pl6TodasAsContas(rep, regioes) {
-  return pl6Carteira(rep, regioes)
+  const base = typeof pl6Base === 'function' ? pl6Base(rep, regioes) : [];
+
+  const queda = typeof pl6EmQueda === 'function' ? pl6EmQueda(rep, regioes) : [];
+  const naBase = new Map(base.map(function (b) { return [b.id, b]; }));
+  const quedaNova = queda.filter(function (q) {
+    const b = naBase.get(q.id);
+    if (b) { b.emQueda = q.emQueda; return false; }
+    return true;
+  });
+  const carteira = pl6Carteira(rep, regioes);
+  const naCarteira = new Set(carteira.map(function (c) { return c.id; }));
+  return carteira
     .concat(typeof pl6Reciclagem === 'function' ? pl6Reciclagem(rep, regioes) : [])
-    .concat(typeof pl6Base === 'function' ? pl6Base(rep, regioes) : [])
+    .concat(base)
+    .concat(quedaNova.filter(function (q) { return !naCarteira.has(q.id); }))
     .concat(pl6Novos(rep, regioes));
 }
 
@@ -23880,7 +23984,8 @@ function pl6Novos(rep, regioes) {
     .filter(prospeccaoNaCarteira)
     .filter(l => !jaTem(l));
   const porChave = new Map((regioes || []).map(r => [r.chave, r]));
-  return contas.map(l => {
+  return contas.map(l0 => {
+    const l = pl6ComPino(l0, { lead: l0.id });
 
     const reg = pl6RegiaoDoLead(l, regioes, porChave);
     const meses = l.data_abertura
@@ -24563,7 +24668,7 @@ async function pl6Carregar(rep, segundaPedida) {
     return { ok: false, motivo: error.message || 'o banco recusou a leitura' };
   }
   pl6Plano = (data && data[0]) ? data[0] : null;
-  await pl6CarregarPinos();
+  await Promise.all([pl6CarregarPinos(), pl6CarregarPinosDoApp(rep).catch(function () {})]);
   return { ok: true, tinhaLinha: !!pl6Plano };
 }
 
@@ -25015,6 +25120,7 @@ function pl6DadosFinal(rep) {
       { id: 'dentro', rot: 'dentro da régua', n: n(function (x) { return (x.dias || 0) <= reguaPgto; }) }];
     if (prop === 'relac') return [
       { id: 'todos', rot: 'todos', n: lista.length },
+      { id: 'queda', rot: 'em queda', n: n(function (x) { return !!x.emQueda; }) },
       { id: 'ganho', rot: 'Ganho', n: n(function (x) { return String(x.stageId) === '1396006162'; }) },
       { id: 'onboarding', rot: 'Onboarding', n: n(function (x) { return String(x.stageId) === '1396006163'; }) }];
     if (prop === 'follow') return [
@@ -25023,9 +25129,14 @@ function pl6DadosFinal(rep) {
       { id: '8-14', rot: '8–14d', n: n(function (x) { return x.atrasoDias >= 8 && x.atrasoDias <= 14; }) },
       { id: '1-7', rot: '1–7d', n: n(function (x) { return x.atrasoDias >= 1 && x.atrasoDias <= 7; }) },
       { id: 'hoje', rot: 'para hoje', n: n(function (x) { return x.atrasoDias === 0; }) }];
+
     if (prop === 'nova') return [
       { id: 'todos', rot: 'todos', n: lista.length },
-      { id: 'estrela', rot: '★ 4,5+', n: n(function (x) { return Number(x.nota) >= 4.5; }) }];
+      { id: 'estrela', rot: '★ 4,5+', n: n(function (x) { return Number(x.nota) >= 4.5; }) },
+      { id: 'g:aval', rot: 'Google avaliações', n: n(function (x) { return x.grupo === 'aval'; }) },
+      { id: 'g:casa', rot: 'Casa dos Dados', n: n(function (x) { return x.grupo === 'casa'; }) },
+      { id: 'g:rua', rot: 'criados na rua', n: n(function (x) { return x.grupo === 'rua' || x.grupo === 'mapa' || x.grupo === 'instagram'; }) }]
+      .filter(function (f) { return f.id === 'todos' || f.n > 0; });
 
     if (prop === 'funil') return [
       { id: 'todos', rot: 'todos', n: lista.length },
@@ -25043,7 +25154,7 @@ function pl6DadosFinal(rep) {
   function pl6NaFaixa(l) {
     if (faixaAtiva === 'todos') return true;
     if (propAtivo === 'cobrar') return faixaAtiva === 'acima' ? (l.dias || 0) > reguaPgto : (l.dias || 0) <= reguaPgto;
-    if (propAtivo === 'relac') return String(l.stageId) === (faixaAtiva === 'ganho' ? '1396006162' : '1396006163');
+    if (propAtivo === 'relac') return faixaAtiva === 'queda' ? !!l.emQueda : String(l.stageId) === (faixaAtiva === 'ganho' ? '1396006162' : '1396006163');
     if (propAtivo === 'follow') {
       if (faixaAtiva === '15+') return l.atrasoDias >= 15;
       if (faixaAtiva === '8-14') return l.atrasoDias >= 8 && l.atrasoDias <= 14;
@@ -25051,6 +25162,10 @@ function pl6DadosFinal(rep) {
       if (faixaAtiva === 'hoje') return l.atrasoDias === 0;
     }
     if (propAtivo === 'nova' && faixaAtiva === 'estrela') return Number(l.nota) >= 4.5;
+    if (propAtivo === 'nova' && faixaAtiva.indexOf('g:') === 0) {
+      const g = faixaAtiva.slice(2);
+      return g === 'rua' ? (l.grupo === 'rua' || l.grupo === 'mapa' || l.grupo === 'instagram') : l.grupo === g;
+    }
     if (propAtivo === 'funil') {
       if (faixaAtiva.indexOf('st:') === 0) return String(l.stageId || (l.etapa === 'Reciclagem' ? '1398311191' : '')) === faixaAtiva.slice(3);
       if (faixaAtiva === 'acima') return pl6AcimaDaRegua(l);
@@ -25093,6 +25208,8 @@ function pl6DadosFinal(rep) {
   }).sort(function (a, b) {
 
     if (propAtivo === 'follow') return (b.atrasoDias || 0) - (a.atrasoDias || 0);
+
+    if (propAtivo === 'relac' && !!a.emQueda !== !!b.emQueda) return a.emQueda ? -1 : 1;
     if (propAtivo === 'cobrar' || propAtivo === 'relac') return (b.dias || 0) - (a.dias || 0);
 
     if (propAtivo === 'funil') {
@@ -25103,7 +25220,8 @@ function pl6DadosFinal(rep) {
       };
       return excedeu(b) - excedeu(a);
     }
-    return pl6Prioridade(a) - pl6Prioridade(b);
+
+    return pl6Prioridade(b) - pl6Prioridade(a);
   });
 
   const POR_PAGINA = 6;
@@ -40990,10 +41108,10 @@ function h10ProntoHTML(r, diag, dia, amanha, semDesfecho) {
   const hoje = h10HojeISO();
   if (h10Noite()) {
     return '<span class="h10-pronto-rot">Fechar o dia</span>'
-      + h10Item('Check-ins', dia ? (dia.total ? dia.feitas + ' de ' + dia.total + ' paradas' : 'nenhuma parada hoje') : 'lendo…', dia ? (dia.total ? dia.feitas >= dia.total : null) : null, h10LinkAgenda(hoje, 'Ver'))
+      + h10Item('Check-ins', dia ? (dia.total ? dia.feitas + ' de ' + dia.total + ' paradas' : 'nenhuma parada hoje') : (H10.falhou ? 'não carregou' : 'lendo…'), dia ? (dia.total ? dia.feitas >= dia.total : null) : null, h10LinkAgenda(hoje, 'Ver'))
       + h10Item('Como foi', semDesfecho ? semDesfecho + ' sem desfecho' : 'tudo registrado', semDesfecho ? false : true,
         '<button type="button" class="h10-acao" data-hoje-stat="pendente">Registrar</button>')
-      + h10Item('Plano de amanhã', amanha ? (amanha.total ? amanha.total + ' paradas' : 'vazio') : 'lendo…', amanha ? amanha.total > 0 : null,
+      + h10Item('Plano de amanhã', amanha ? (amanha.total ? amanha.total + ' paradas' : 'vazio') : (H10.falhou ? 'não carregou' : 'lendo…'), amanha ? amanha.total > 0 : null,
         h10LinkAgenda(h10ProximoUtil(hoje), 'Montar'));
   }
   const selo = typeof pl6PromessaSelo === 'function' ? pl6PromessaSelo() : '';

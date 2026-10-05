@@ -84,7 +84,9 @@ function rodarBase() {
     String: String, Number: Number, Array: Array, Object: Object, Map: Map,
     STAGE_LABELS: {},
     meusNegociosAbertos: function () { return NEGOCIOS; },
-    pl6RegiaoDoLead: function () { return null; }
+    pl6RegiaoDoLead: function () { return null; },
+    /* o pino do app (06/10/26): sem pinos lidos, o lead fica como veio */
+    pl6ComPino: function (l) { return l; }
   };
   vm.createContext(ctx);
   vm.runInContext(tpl.match(/const PL6_ETAPAS_BASE = \[[^\]]*\];/)[0], ctx);

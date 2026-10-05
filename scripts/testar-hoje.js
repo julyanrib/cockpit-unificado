@@ -389,10 +389,8 @@ checar('e as decisoes usam os mesmos gestos do Meu funil, com as mesmas travas',
     + 'esqueceria o motivo, que é exatamente o que já aconteceu 174 vezes');
 
 checar('e o decidir nunca rouba a estrela da melhor acao',
-  /* desde 06/10/26 o decidir mora no ⋯ (as "outras"), nunca como o botão principal */
-  template.indexOf('data-h8-decidir="\' + id + \'">decidir</button>') > -1
-    && !/ins\.melhor === 'decidir'/.test(template)
-    && /const principal = lista\.filter\(function \(b\) \{ return b\.melhor; \}\)\[0\] \|\| lista\[0\];/.test(template),
+  template.indexOf('data-h8-decidir="\' + id + \'">decidir ⌄') > -1
+    && !/ins\.melhor === 'decidir'/.test(template),
   'a melhor ação sai de h8Insight, que mede o negócio; o decidir é porta, não recomendação');
 
 checar('e o painel da fila fecha antes de a gaveta abrir',

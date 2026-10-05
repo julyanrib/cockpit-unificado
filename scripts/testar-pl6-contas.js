@@ -53,7 +53,8 @@ function pegarConst(nome) {
    template — só por esta suíte, que exercitava código morto e, ao fazer isso, o mantinha
    com cara de vivo. Ela saiu com o redesenho da tela; a contagem de contas por território
    digitado quem faz é pl6Regioes, via pl6SemearTerrLivres, que continua na lista. */
-const CADEIA = ['pl6ChaveBairro', 'pl6RotuloBairro', 'pl6ChaveTerrLivre', 'pl6SemearTerrLivres',
+/* o pino do app (06/10/26): as fontes passam por pl6ComPino; sem pinos lidos ele devolve o lead como veio */
+const CADEIA = ['pl6PinoDe', 'pl6ComPino', 'pl6EmQueda', 'pl6ChaveBairro', 'pl6RotuloBairro', 'pl6ChaveTerrLivre', 'pl6SemearTerrLivres',
   'pl6FontesCruas',
   'pl6LeadNoTerrLivre', 'pl6ChaveDeLugar', 'pl6RotuloDoGrupo',
   'pl6Km', 'pl6RegiaoDoLead', 'pl6Regioes', 'pl6Carteira', 'pl6Reciclagem', 'pl6GrupoDaFonte', 'pl6ChaveNome', 'pl6ChaveFone', 'pl6JaNaCarteira',
@@ -63,6 +64,7 @@ const CADEIA = ['pl6ChaveBairro', 'pl6RotuloBairro', 'pl6ChaveTerrLivre', 'pl6Se
 // e pl6RegiaoDoLead lê pl6TerrLivres. Sem estes dois aqui a suíte reprovaria a cadeia por
 // falta de dependência — e o certo é ela EXECUTAR a cadeia nova, não ignorá-la.
 const fonte = [
+  'var PL6_PINO = null;',
   pegarConst('PL6_TERR_PREFIXO'),
   /* AS ETAPAS QUE SAIRAM DO FUNIL (04/09/26). Medido na tela do Bruno: "UAU UNIDADE PENHA ·
      Perdido" aparecia na munição da semana com o conselho "sem próximo passo datado" — a tela
@@ -537,7 +539,9 @@ console.log('');
      embaixo da lista qual ordem está rodando. */
   checar('a munição sai ordenada, e pl6Prioridade continua sendo o padrão',
     /const municaoOrd = [\s\S]{0,900}?\.sort\(/.test(dadosCod)
-      && /return pl6Prioridade\(a\) - pl6Prioridade\(b\);/.test(dadosCod),
+      /* b - a desde 06/10/26: "número alto = mais urgente" (pl6Prioridade), e a - b punha a
+         conta sem nota na frente da de 4,8★. Esta guarda exigia a - b, protegendo o defeito. */
+      && /return pl6Prioridade\(b\) - pl6Prioridade\(a\);/.test(dadosCod),
     'lista sem ordem é a ordem do HubSpot, que não quer dizer nada para quem planeja');
   checar('e a tela escreve qual ordem está rodando',
     /pagOrdem: esc\(/.test(dadosCod) && /\$\{d\.pagOrdem\}/.test(codigo),
