@@ -1321,6 +1321,18 @@
   #agendaContent [data-pl6-so-icone]{width:24px;}
   #agendaContent [data-pl6-fi-fechar]{width:28px;}
 
+  #agendaContent .pl6-cartao .pl6-hora-movel{display:none;}
+  #agendaContent .pl6-cartao .pl6-x,
+  #agendaContent .pl6-cartao .pl6-alca{opacity:0;transition:opacity .12s;}
+  #agendaContent .pl6-cartao:hover .pl6-x,
+  #agendaContent .pl6-cartao:hover .pl6-alca,
+  #agendaContent .pl6-cartao:focus-within .pl6-x{opacity:1;}
+  @media (max-width:640px), (hover:none){
+    #agendaContent .pl6-cartao .pl6-hora-movel{display:block;}
+    #agendaContent .pl6-cartao .pl6-x{opacity:1;}
+    #agendaContent .pl6-cartao .pl6-alca{display:none;}
+  }
+
   #agendaContent [data-pl6-grade-semana]{grid-template-columns:repeat(5,minmax(0,1fr));}
   @media (max-width:1050px){
     #agendaContent [data-pl6-grade-semana]{grid-template-columns:repeat(3,minmax(0,1fr));}
@@ -24480,11 +24492,84 @@ function pl6ItensDoDia(coluna, porId) {
 
       fora: !!(v && typeof v === 'object' && v.fora),
 
+      origem: (v && typeof v === 'object' && v.origem) ? String(v.origem) : null,
+
       semPino: !!(typeof PL6_SEM_PINO !== 'undefined' && PL6_SEM_PINO && PL6_SEM_PINO.has(String(id))) });
   }
 
   itens.sort(pl6PorHora);
   return itens;
+}
+
+let PL6_ROTA = { segunda: null, dias: null, lendo: false };
+async function pl6CarregarRotaDaSemana(segunda, aoChegar) {
+  if (PL6_ROTA.lendo || PL6_ROTA.segunda === segunda || typeof supa === 'undefined' || !supa) return;
+  PL6_ROTA.lendo = true;
+  try {
+    const ses = await supa.auth.getSession();
+    const uid = ses && ses.data && ses.data.session && ses.data.session.user && ses.data.session.user.id;
+    if (!uid) return;
+    const sexta = addDays(segunda, 4);
+    const r = await supa.from('field_routes')
+      .select('route_date, stops:field_route_stops(client_id, position, status, horario_fixo, client:clients(id_hubspot, lead_prospeccao_id, latitude, longitude))')
+      .eq('seller_id', uid).gte('route_date', segunda).lte('route_date', sexta);
+    if (r.error) return;
+    const dias = {};
+    (r.data || []).forEach(function (rota) {
+      const m = new Map();
+      (rota.stops || []).forEach(function (st) {
+        if (st.status !== 'planned' && st.status !== 'done') return;
+        const c = st.client || {};
+        const info = { pos: Number(st.position) || 0, fixo: st.horario_fixo || null, feita: st.status === 'done',
+          lat: c.latitude != null ? Number(c.latitude) : null, lng: c.longitude != null ? Number(c.longitude) : null };
+        if (c.id_hubspot) { m.set('c-' + c.id_hubspot, info); m.set('r-' + c.id_hubspot, info); }
+        if (c.lead_prospeccao_id) m.set('n-' + c.lead_prospeccao_id, info);
+      });
+      dias[rota.route_date] = m;
+    });
+    PL6_ROTA.segunda = segunda;
+    PL6_ROTA.dias = dias;
+    if (typeof aoChegar === 'function') aoChegar();
+  } catch (e) {
+    console.warn('[planejamento] rota da semana:', e && e.message);
+  } finally {
+    PL6_ROTA.lendo = false;
+  }
+}
+function pl6MinDe(h) { const m = /^(\d{1,2}):(\d{2})/.exec(String(h || '')); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
+function pl6Duracao(min) { return min >= 60 ? Math.floor(min / 60) + 'h' + String(min % 60).padStart(2, '0') : min + ' min'; }
+function pl6HHMM(min) { return String(Math.floor(min / 60) % 24).padStart(2, '0') + ':' + String(Math.round(min % 60)).padStart(2, '0'); }
+
+function pl6OrdemDoDia(itens, rotaDoDia) {
+  const rota = rotaDoDia || new Map();
+  const com = [], sem = [];
+  itens.forEach(function (it) {
+    const st = it.id ? rota.get(String(it.id)) : null;
+    const compromisso = it.origem === 'app-agenda' || it.origem === 'passo' || it.p === 'follow';
+    const fixo = (st && st.fixo) || (compromisso && it.hora ? it.hora : null);
+    const x = { it: it, st: st, fixo: fixo, compromisso: compromisso };
+    if (st) com.push(x); else sem.push(x);
+  });
+  com.sort(function (a, b) { return a.st.pos - b.st.pos; });
+  const metros = function (a, b) {
+    if (!a || !b || a.lat == null || b.lat == null) return null;
+    const R = 6371000, rad = function (v) { return v * Math.PI / 180; };
+    const dLat = rad(b.lat - a.lat), dLon = rad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.sqrt(h)) * 1.3;
+  };
+  let t = com.length && com[0].fixo ? pl6MinDe(com[0].fixo) : 9 * 60;
+  com.forEach(function (x, i) {
+    if (i > 0) { const m = metros(com[i - 1].st, x.st); t += m == null ? 10 : Math.max(1, Math.round(m / 1000 / 25 * 60)); }
+    const f = x.fixo ? pl6MinDe(x.fixo) : null;
+    x.espera = 0; x.atraso = 0;
+    if (f != null) { if (t < f) { x.espera = f - t; t = f; } else x.atraso = t - f; }
+    x.n = i + 1;
+    x.chega = pl6HHMM(t);
+    t += 20;
+  });
+  sem.forEach(function (x) { x.n = null; x.chega = null; });
+  return com.concat(sem);
 }
 
 function pl6GradeDoPlano() {
@@ -24997,7 +25082,18 @@ function pl6RitmoDoDia(grade, dias, ownerId) {
 
 function pl6DadosFinal(rep) {
   const s = pl6UI;
-  const dias = pl6Dias(pl6SegundaEmFoco());
+  const segundaFoco = pl6SegundaEmFoco();
+  const dias = pl6Dias(segundaFoco);
+
+  const souODono = !!(rep && typeof sessaoAtual !== 'undefined' && sessaoAtual && String(sessaoAtual.ownerId) === String(rep.ownerId));
+  if (souODono && PL6_ROTA.segunda !== segundaFoco) {
+    pl6CarregarRotaDaSemana(segundaFoco, function () { if (typeof renderAgenda === 'function') renderAgenda(); });
+  }
+  const rotaDaSemana = souODono && PL6_ROTA.segunda === segundaFoco ? PL6_ROTA.dias : null;
+  const metaDoDia = (function () {
+    const r = rep && typeof rampDoOwner === 'function' ? rampDoOwner(rep.ownerId) : null;
+    return (r && r.alvo) || (typeof V5_META_VISITAS !== 'undefined' ? V5_META_VISITAS : 6);
+  }());
   const regioes = pl6Regioes(rep);
   const todos = pl6TodasAsContas(rep, regioes);
   const porId = new Map(todos.map(l => [l.id, l]));
@@ -25275,6 +25371,11 @@ function pl6DadosFinal(rep) {
 
       const itens = pl6ItensDoDia(col, porId).filter(x => x.tipo !== 'orfa');
 
+      const ordem = pl6OrdemDoDia(itens, rotaDaSemana ? rotaDaSemana[d.iso] : null);
+      const itensNaOrdem = ordem.map(function (x) { return x.it; });
+      const ordemDe = new Map(ordem.map(function (x) { return [x.it, x]; }));
+      const conflito = ordem.find(function (x) { return x.fixo && (x.espera > 20 || x.atraso > 10); });
+
       const n = itens.filter(x => x.tipo === 'visita' || x.tipo === 'rua').length;
       const regTxt = pl6TextoDaRegiao(rotas[di], regioes);
       const passouDoDia = (typeof pl6DiaPassou === 'function') ? pl6DiaPassou(d.iso) : false;
@@ -25289,8 +25390,13 @@ function pl6DadosFinal(rep) {
         borda: s.dragHover === di ? '#E51A31' : (d.iso === hojeISOPl6 ? '#F0A9B2' : 'var(--line)'),
         di: String(di),
 
-        cnt: n === 0 ? 'livre' : (n + ' visita' + (n > 1 ? 's' : '')),
-        cntCor: n === 0 ? 'var(--ter)' : '#1E9E7B',
+        cnt: n === 0 ? 'vazio' : (n + ' de ' + metaDoDia),
+        cntCor: n === 0 ? 'var(--ter)' : (n >= metaDoDia ? '#1E9E7B' : 'var(--muted2)'),
+        faltamRot: n > 0 && n < metaDoDia && !passouDoDia ? 'faltam ' + (metaDoDia - n) + ' pra meta de ' + metaDoDia : '',
+
+        mapaHref: (typeof v5NoPwa === 'function' && v5NoPwa()) ? '/?agenda=' + d.iso : '',
+
+        conflito: conflito ? esc(conflito.fixo + ' fixo em ' + conflito.n + 'ª: ' + (conflito.atraso > 10 ? 'chega ' + pl6Duracao(conflito.atraso) + ' atrasado' : 'esperaria ' + pl6Duracao(conflito.espera))) : '',
         regiao: esc(regTxt),
         regBorda: regTxt ? 'var(--plum-linha)' : 'var(--line)',
         regOpts: regioes.slice().sort((a, b) => b.contas - a.contas).slice(0, 40).map(function (r) {
@@ -25334,7 +25440,7 @@ function pl6DadosFinal(rep) {
             alt: alt.map(function (x) { return { nome: esc(x.nome), n: String(x.contas.length), on: esc(di + '.' + x.chave), chave: esc(pl6ChaveBairro(x.nome)) }; })
           };
         }()),
-        agenda: itens.map(function (it) {
+        agenda: itensNaOrdem.map(function (it) {
           const movendo = !!(s.sel && s.sel.deDi === di && s.sel.deSi === it.si);
 
           const bl = it.tipo === 'rua' ? pl6BlocoDoSlot(PL6_RUA)
@@ -25361,14 +25467,33 @@ function pl6DadosFinal(rep) {
           const infoReg = reg ? pl6ResultadoInfo(propId2, reg.tipo) : null;
           const motivosAqui = perg && pl6UI.motivoDe === chave;
           const evid = passou ? pl6EvidenciaDoSlot(it, d.iso, rep && rep.ownerId) : null;
+
+          const ox = ordemDe.get(it) || {};
+          const feitaNaRota = !!(ox.st && ox.st.feita);
+          const evidOk = !!(evid && evid.cor === '#16775D');
+          const linha2 = reg ? '' : (feitaNaRota || evidOk) ? (evidOk ? String(evid.txt).replace('check-in ', 'visitado ').replace(' ✓', '') : 'visitado')
+            : ox.fixo ? ox.fixo
+            : ox.chega ? '≈ ' + ox.chega : sub;
           return {
+            num: ox.n ? String(ox.n) : '',
+            numCor: it.tipo === 'bloqueado' ? '#B4AC9C' : (bl ? bl.cor
+              : (it.lead && PF_ET_COR[String(it.lead.etapa || '')] ? PF_ET_COR[String(it.lead.etapa)] : '#9CA3AF')),
+            semEtapa: !bl && it.tipo !== 'bloqueado' && !(it.lead && PF_ET_COR[String(it.lead.etapa || '')]),
+            linha2: esc(linha2),
+
+            seloFunil: !prop || prop.id === 'funil',
+            linha2Cor: (feitaNaRota || evidOk) ? 'var(--green-ink)' : ox.fixo ? 'var(--ink)' : 'var(--muted2)',
+            linha2Peso: ox.fixo ? '800' : '700',
+            cadeado: !!ox.fixo && !(feitaNaRota || evidOk),
+            comoFoiChip: perg && s.comoFoiDe !== chave && !motivosAqui,
+            comoFoiOn: 'comofoi:' + chave,
             hora: esc(it.hora || 'sem hora'),
             nome: esc(nome), sub: esc(sub),
             selo: prop ? esc(prop.etiqueta) : '',
             seloCor: prop ? prop.selo : '', seloBg: prop ? prop.seloBg : '',
 
             passou: passou,
-            comoFoi: perg && !motivosAqui,
+            comoFoi: perg && !motivosAqui && s.comoFoiDe === chave,
             comoFoiRot: d.iso < hojeISOPl6 ? 'FICOU SEM REGISTRO — COMO FOI?' : 'COMO FOI?',
             opcoes: perg ? pl6ResultadosDe(propId2).map(function (o) {
               return { rot: esc(o.rot), on: 'res:' + chave + ':' + o.id,
@@ -25438,10 +25563,6 @@ function pl6DadosFinal(rep) {
       };
     }),
 
-    propProcedencia: esc('contagens: HubSpot' + (DATA.hubspotUpdatedAtFmt
-      ? ' de ' + DATA.hubspotUpdatedAtFmt : ' (sem hora de carga)')
-      + ' · contas-alvo: base do Supabase'),
-
     faixas: faixasDoProp.map(function (f) {
       const on = f.id === faixaAtiva;
       return { on: 'faixa:' + f.id, rot: esc(f.rot + ' · ' + f.n),
@@ -25507,11 +25628,18 @@ function pl6DadosFinal(rep) {
         linha3Cor: (met && met.l3 && met.l3.indexOf('sem ') === 0) ? 'var(--ter)' : '#7A8494',
         tag: esc(tg.tag), tagCor: tg.cor, tagBg: tg.bg,
         bg: sel ? 'var(--red-soft)' : 'var(--panel)', borda: sel ? '#E51A31' : 'var(--line)',
-        acao: sel ? 'escolha o dia ▸' : 'agendar ▸',
-        acaoCor: sel ? '#FFFDF8' : 'var(--plum-ink)',
-        acaoBg: sel ? '#E51A31' : 'var(--panel)',
-        acaoBorda: sel ? '#E51A31' : 'var(--plum-linha)',
-        on: 'pegar:' + l.id,
+
+        acao: 'Pôr em ▾',
+        acaoCor: 'var(--plum-ink)',
+        acaoBg: 'var(--panel)',
+        acaoBorda: 'var(--plum-linha)',
+        on: 'poremmenu:' + l.id,
+        poremAberto: s.poremDe === l.id,
+        poremDias: s.poremDe === l.id ? dias.map(function (dd, di) {
+          const nDia = (grade[di] || []).filter(function (v) { return pl6SlotId(v); }).length;
+          const passou = (typeof pl6DiaPassou === 'function') ? pl6DiaPassou(dd.iso) : false;
+          return { rot: esc(dd.rot + ' ' + dd.data), n: String(nDia), on: 'porem:' + l.id + '|' + di, passou: passou };
+        }).filter(function (x) { return !x.passou; }) : [],
         abrirFicha: 'ficha:' + l.id,
         arraste: 'm:' + l.id
       };
@@ -25816,28 +25944,30 @@ function pl6TelaFinalHTML(d) {
       <!-- ARRASTA SÓ ENQUANTO NÃO PASSOU: depois da hora, o compromisso se move por
            "remarcar", que atualiza a tarefa no CRM. Arrastar um compromisso que já
            aconteceu mudaria a data de uma coisa que já foi. -->
-      <div ${sl.passou ? '' : 'draggable="true"'} data-pl6-arraste="${sl.arraste}" style="background:var(--panel);border:1.5px solid ${sl.cardBorda};border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);cursor:${sl.passou ? 'default' : 'grab'};min-width:0;">
-      <div style="display:flex;min-width:0;">
-        <span style="flex:none;width:3px;background:${sl.etCor};"></span>
-        <button type="button" data-pl6-acao="${sl.mover}" title="mover de dia/horário" aria-label="mover ${sl.nome} de dia ou horário" style="flex:none;align-self:flex-start;border:0;background:transparent;padding:8px 0 4px 9px;cursor:pointer;"><b style="display:block;font:900 10.5px 'Poppins',sans-serif;color:#FFFDF8;background:var(--dark);border-radius:999px;padding:3px 8px;font-variant-numeric:tabular-nums;">${sl.hora}</b></button>
-        <button type="button" data-pl6-acao="${sl.ficha || sl.mover}" title="${sl.ficha ? 'abrir a ficha do lead' : 'clique pra mover de dia/horário'}" style="flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px 8px 6px;cursor:pointer;">
-          <span style="display:flex;align-items:center;gap:6px;min-width:0;min-height:19px;"><b style="font:800 12px 'Poppins',sans-serif;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.nome}</b></span>
-          <span style="display:flex;align-items:center;gap:5px;margin-top:3px;min-width:0;">
-            ${sl.selo ? `<b style="flex:none;font:900 8px 'Poppins',sans-serif;letter-spacing:.07em;color:${sl.seloCor};background:${sl.seloBg};border-radius:4px;padding:2px 5px;">${sl.selo}</b>` : ''}
-            <span style="font:700 9.5px 'Poppins',sans-serif;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.sub}</span>
-          </span>
+      <div class="pl6-cartao" ${sl.passou ? '' : 'draggable="true"'} data-pl6-arraste="${sl.arraste}" style="background:var(--panel);border:1.5px solid ${sl.cardBorda};border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);cursor:${sl.passou ? 'default' : 'grab'};min-width:0;">
+      <div style="display:flex;align-items:flex-start;min-width:0;">
+        <!-- REVISÃO GERAL (05/10/26): o número da ordem é o mesmo do app, na cor da etapa;
+             a hora da faixa só aparece no celular (é o botão de mover dele) -->
+        ${sl.passou ? '' : `<span class="pl6-alca" aria-hidden="true" style="flex:none;align-self:center;padding-left:4px;color:var(--ter);font:800 11px 'Poppins',sans-serif;">⠿</span>`}
+        ${sl.num ? `<b style="flex:none;margin:8px 0 0 7px;width:22px;height:22px;border-radius:999px;display:grid;place-items:center;font:900 10.5px 'Poppins',sans-serif;font-variant-numeric:tabular-nums;color:${sl.semEtapa ? 'var(--muted2)' : '#FFFFFF'};background:${sl.semEtapa ? 'transparent' : sl.numCor};${sl.semEtapa ? 'border:1.5px dashed var(--muted2);box-sizing:border-box;' : ''}">${sl.num}</b>` : `<span style="flex:none;width:3px;align-self:stretch;background:${sl.etCor};"></span>`}
+        <button type="button" class="pl6-hora-movel" data-pl6-acao="${sl.mover}" title="mover de dia/horário" aria-label="mover ${sl.nome} de dia ou horário" style="flex:none;align-self:flex-start;border:0;background:transparent;padding:8px 0 4px 9px;cursor:pointer;"><b style="display:block;font:900 10.5px 'Poppins',sans-serif;color:#FFFDF8;background:var(--dark);border-radius:999px;padding:3px 8px;font-variant-numeric:tabular-nums;">${sl.hora}</b></button>
+        <button type="button" data-pl6-acao="${sl.ficha || sl.mover}" title="${sl.ficha ? 'abrir a ficha do lead' : 'clique pra mover de dia/horário'}" style="flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px 8px 7px;cursor:pointer;">
+          <b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font:800 12px/1.3 'Poppins',sans-serif;color:var(--ink);overflow-wrap:anywhere;">${sl.nome}</b>
+          ${sl.selo && !sl.seloFunil ? `<b style="flex:none;display:inline-block;margin-top:3px;font:900 8px 'Poppins',sans-serif;letter-spacing:.07em;color:${sl.seloCor};background:${sl.seloBg};border-radius:4px;padding:2px 5px;">${sl.selo}</b>` : ''}
+          ${sl.linha2 ? `<span style="display:flex;align-items:center;gap:4px;margin-top:3px;min-width:0;font:700 11px 'Poppins',sans-serif;font-weight:${sl.linha2Peso};color:${sl.linha2Cor};font-variant-numeric:tabular-nums;">${sl.cadeado ? `<svg width="11" height="11" viewBox="0 0 24 24" aria-label="horário fixo" style="flex:none;"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 0 1 6 0v3H9z"/></svg>` : ''}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.linha2}</span></span>` : ''}
         </button>
         <!-- DEPOIS QUE A HORA PASSOU O ✕ SAI (prancha final). Um compromisso que já
              aconteceu não se apaga: ele sai do dia por "remarcar" ou por "não rolou",
              que deixam registro. Apagar seria a única forma de a semana ficar limpa sem
              ninguém saber o que houve — e é exatamente o que o gestor lê como "não
              medido". -->
-        ${sl.passou ? '' : `<button type="button" data-pl6-remover="${sl.rm}" data-pl6-so-icone="1" title="tirar da agenda — volta pra munição" style="flex:none;border:0;background:transparent;color:var(--ter);font:800 12px 'Poppins',sans-serif;cursor:pointer;padding:0;">✕</button>`}
+        ${sl.passou ? '' : `<button type="button" class="pl6-x" data-pl6-remover="${sl.rm}" data-pl6-so-icone="1" title="tirar da agenda — volta pra munição" aria-label="tirar ${sl.nome} do dia" style="flex:none;border:0;background:transparent;color:var(--ter);font:800 12px 'Poppins',sans-serif;cursor:pointer;padding:8px 8px 0 2px;">✕</button>`}
       </div>
+      ${sl.comoFoiChip ? `<button type="button" data-pl6-acao="${sl.comoFoiOn}" style="display:block;width:100%;text-align:left;min-height:40px;border:0;border-top:1px solid var(--amber-line);background:var(--amber-soft);color:var(--amber-ink);font:800 11px 'Poppins',sans-serif;padding:6px 10px;cursor:pointer;">sem check-in · como foi?</button>` : ''}
       <!-- ══ 1.5 · A EVIDÊNCIA DO APP DE CAMPO ═══════════════════════════════════
            Uma das quatro leituras, nunca duas. "sem check-in" sai em cinza e sem fundo:
            é ausência de informação, não acusação. -->
-      ${sl.evid ? `<span style="display:block;font:700 9px 'Poppins',sans-serif;color:${sl.evidCor};background:${sl.evidBg};border-radius:0 0 8px 8px;padding:3px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.evid}</span>` : ''}
+      ${sl.evid && !sl.linha2 && !sl.comoFoiChip && !sl.comoFoi && !sl.registrado ? `<span style="display:block;font:700 9px 'Poppins',sans-serif;color:${sl.evidCor};background:${sl.evidBg};border-radius:0 0 8px 8px;padding:3px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.evid}</span>` : ''}
       <!-- ══ 1.4 · A PERGUNTA, OS MOTIVOS E O REGISTRO ═══════════════════════════ -->
       ${sl.comoFoi ? `
       <div style="border-top:1px solid #F0A9B2;background:var(--red-soft);padding:6px 8px 7px;">
@@ -25873,17 +26003,21 @@ function pl6TelaFinalHTML(d) {
           ${dia.hoje ? `<span style="font:900 8.5px 'Poppins',sans-serif;letter-spacing:.08em;background:#E51A31;color:#FFFDF8;border-radius:999px;padding:3px 7px;">HOJE</span>` : ''}
           <b style="margin-left:auto;font:900 11px 'Poppins',sans-serif;color:${dia.cntCor};font-variant-numeric:tabular-nums;">${dia.cnt}</b>
         </div>
-        ${dia.hoje ? v5VerHojeNoMapa() : ''}
-        <div style="position:relative;margin-top:8px;" data-pl6-reg-caixa="${dia.di}">
-          <input type="text" value="${dia.regiao}" data-pl6-reg-in="${dia.di}" placeholder="⌖ região do dia — digite livre" style="width:100%;box-sizing:border-box;border:1px solid ${dia.regBorda};border-radius:999px;background:var(--panel);padding:7px 12px;font:800 10px 'Poppins',sans-serif;color:var(--plum-ink);outline:none;">
+        <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+        <div style="position:relative;flex:1;min-width:0;" data-pl6-reg-caixa="${dia.di}">
+          <input type="text" value="${dia.regiao}" data-pl6-reg-in="${dia.di}" placeholder="bairro do dia" style="width:100%;box-sizing:border-box;border:1px solid ${dia.regBorda};border-radius:999px;background:var(--panel);padding:7px 12px;font:800 10.5px 'Poppins',sans-serif;color:var(--plum-ink);outline:none;min-height:32px;">
           <div data-pl6-reg-lista="${dia.di}" style="position:absolute;top:34px;left:0;right:0;z-index:5;background:var(--panel);border:1px solid #8E3B5C;border-radius:10px;padding:6px;display:none;flex-direction:column;gap:2px;box-shadow:0 10px 26px rgba(43,52,64,.18);max-height:238px;overflow:auto;">
             <span style="font:900 8px 'Poppins',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--plum-ink);padding:2px 6px;">bairros mapeados — ou fique com o que digitou</span>
             ${regOptsHTML}
           </div>
         </div>
+        ${dia.mapaHref ? `<a href="${dia.mapaHref}" ${window.innerWidth >= 900 ? 'target="_blank" rel="noopener"' : ''} title="abrir este dia na Agenda do app: ordem, mapa e horário" style="flex:none;display:inline-flex;align-items:center;gap:4px;min-height:32px;padding:0 10px;border:1px solid #2563EB;border-radius:999px;color:#2563EB;background:var(--panel);font:800 10.5px 'Poppins',sans-serif;text-decoration:none;">Mapa</a>` : ''}
+        </div>
+        ${dia.conflito ? `<span style="display:block;margin-top:7px;font:700 10.5px/1.4 'Poppins',sans-serif;color:var(--amber-ink);background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:8px;padding:6px 8px;">${dia.conflito}${dia.mapaHref ? ` · <a href="${dia.mapaHref}" ${window.innerWidth >= 900 ? 'target="_blank" rel="noopener"' : ''} style="color:var(--amber-ink);font-weight:800;">acertar no mapa</a>` : ''}</span>` : ''}
       </div>
       <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
         ${agendaHTML}
+        ${dia.faltamRot ? `<span style="text-align:center;font:700 10px 'Poppins',sans-serif;color:var(--ter);padding:2px 0;">${dia.faltamRot}</span>` : ''}
         ${dia.convite ? `<button type="button" data-pl6-acao="${dia.abrirDia}" style="display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;border:1.5px dashed #F0A9B2;border-radius:10px;background:var(--red-soft);cursor:pointer;font:800 10px 'Poppins',sans-serif;color:#E51A31;padding:6px 10px;">+ colocar aqui</button>` : ''}
         ${dia.colocando ? pfRelogioHTML(dia, 'data-pl6-acao', 'agendar') : ''}
         ${dia.vazio && dia.sug ? `<div style="display:flex;flex-direction:column;gap:6px;border:1.5px dashed var(--plum-linha);border-radius:10px;padding:9px;">
@@ -25941,7 +26075,7 @@ function pl6TelaFinalHTML(d) {
     <div draggable="true" data-pl6-arraste="${m.arraste}" data-pl6-acao="${m.abrirFicha}" title="arraste pro dia · clique abre a ficha do negócio" style="background:${m.bg};border:1.5px solid ${m.borda};border-radius:11px;padding:10px 12px;cursor:grab;min-width:0;">
       <span style="display:flex;align-items:center;gap:7px;min-width:0;">
         <span style="flex:none;color:var(--ter);font:800 11px 'Poppins',sans-serif;letter-spacing:1px;">⠿</span>
-        <b style="font:800 12px 'Poppins',sans-serif;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${m.nome}</b>
+        <b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font:800 12px/1.3 'Poppins',sans-serif;color:var(--ink);min-width:0;overflow-wrap:anywhere;">${m.nome}</b>
         <span style="margin-left:auto;flex:none;font:900 7.5px 'Poppins',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${m.tagCor};background:${m.tagBg};border-radius:5px;padding:3px 7px;white-space:nowrap;">${m.tag}</span>
       </span>
       <span style="display:block;font:700 9.5px 'Poppins',sans-serif;color:var(--muted2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.sub}</span>
@@ -25956,9 +26090,9 @@ function pl6TelaFinalHTML(d) {
           <b style="font:900 13px 'Poppins',sans-serif;color:${m.metricaCor};font-variant-numeric:tabular-nums;">${m.metrica}</b>
           <span style="font:700 8.5px 'Poppins',sans-serif;color:var(--muted2);white-space:nowrap;">${m.metricaRot}</span>
         </span>` : ''}
-        <button type="button" data-pl6-acao="${m.on}" style="border:1px solid ${m.acaoBorda};border-radius:999px;background:${m.acaoBg};padding:4px 11px;font:800 9.5px 'Poppins',sans-serif;color:${m.acaoCor};cursor:pointer;white-space:nowrap;">${m.acao}</button>
-        <span style="font:700 9px 'Poppins',sans-serif;color:var(--ter);">ficha no clique</span>
+        <button type="button" class="pl6-porem" data-pl6-acao="${m.on}" style="margin-left:auto;border:1px solid ${m.acaoBorda};border-radius:999px;background:${m.acaoBg};min-height:30px;padding:0 12px;font:800 10px 'Poppins',sans-serif;color:${m.acaoCor};cursor:pointer;white-space:nowrap;">${m.acao}</button>
       </span>
+      ${m.poremAberto ? `<span style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;">${m.poremDias.map(pd => `<button type="button" data-pl6-acao="${pd.on}" style="display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font:800 10px 'Poppins',sans-serif;color:var(--ink);cursor:pointer;">${pd.rot}<span style="color:var(--muted2);font-weight:700;">${pd.n}</span></button>`).join('')}</span>` : ''}
     </div>`).join('');
 
   const fichaCamposHTML = (d.fichaCampos || []).map(fc => `
@@ -25994,14 +26128,6 @@ function pl6TelaFinalHTML(d) {
       <b data-pl6-guia="1" style="font:800 12.5px 'Poppins',sans-serif;color:${d.avisoCor};">${d.aviso}</b>
       ${d.temSel ? `<button type="button" data-pl6-acao="${d.soltar}" style="flex:none;border:1px solid var(--line);border-radius:999px;background:var(--panel);padding:4px 12px;font:800 10px 'Poppins',sans-serif;color:var(--muted2);cursor:pointer;">cancelar</button>` : ''}
     </div>` : ''}
-
-    <div style="padding:14px 28px 13px;background:var(--creme);border-bottom:1px solid var(--line);">
-      <span style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px;">
-        <span style="font:900 10px 'Poppins',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);">1 · o que você vai fazer?</span>
-        <span style="font:700 9px/1.4 'Poppins',sans-serif;color:var(--ter);min-width:0;">${d.propProcedencia}</span>
-      </span>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:8px;">${propositosHTML}</div>
-    </div>
 
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:stretch;">
       <div style="padding:18px 22px 24px;min-width:0;">
@@ -26040,20 +26166,26 @@ function pl6TelaFinalHTML(d) {
           <b style="font:800 10.5px 'Poppins',sans-serif;color:var(--ink);">${d.hojeTxt}</b>
           <span style="font:700 10px 'Poppins',sans-serif;color:var(--muted2);">${d.hojeCheck}</span>
           ${d.temPend ? `<b style="font:800 10px 'Poppins',sans-serif;color:var(--red-ink);">${d.pendTxt}</b>` : ''}
-          <span style="margin-left:auto;font:700 9.5px 'Poppins',sans-serif;color:var(--ter);">o gestor lê a mesma grade: plano × registro × check-in</span>
         </div>
         <!-- ══ + ENCAIXAR NO DIA (celular) ═══════════════════════════════════════
              No telefone a munição fica DEPOIS da grade, fora da tela. Este botão leva
              até ela com o dia escolhido já como destino — sem ele, o gesto de pôr uma
              conta no dia exige rolar a tela inteira para baixo e voltar. -->
         <button type="button" data-pl6-acao="encaixar" data-pl6-encaixar="1" style="width:100%;border:1.5px solid #E51A31;border-radius:999px;background:#E51A31;color:#FFFDF8;min-height:48px;font:800 12px 'Poppins',sans-serif;cursor:pointer;margin-top:12px;">+ encaixar no dia</button>
-        <span style="display:block;font:700 10px/1.6 'Poppins',sans-serif;color:var(--muted2);margin-top:10px;">▸ agendou aqui = o lead entra <b style="color:#E51A31;">automaticamente na sua Daily</b> do dia, com hora — sem redigitar nada · ✕ devolve pra munição enquanto a hora não passou · depois da hora, o cartão pergunta <b style="color:var(--red-ink);">como foi</b> e sai do dia por "remarcar" ou "não rolou" · o bloco de prospecção de rua ocupa hora do mesmo jeito</span>
 
       </div>
 
       <div data-pl6-municao="1" style="border-left:1px solid var(--line);background:var(--creme);padding:18px 18px 20px;min-width:0;overflow:auto;max-height:min(1200px, calc(100vh - 120px));">
-        <span style="display:block;font:900 10px 'Poppins',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:var(--muted2);margin-bottom:4px;">Munição da semana</span>
-        <span style="display:block;font:700 10px 'Poppins',sans-serif;color:var(--muted2);margin-bottom:10px;">clique na conta → clique no horário livre</span>
+        <span style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+          <span style="font:900 10px 'Poppins',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:var(--muted2);">Munição</span>
+          <span style="margin-left:auto;font:700 10px 'Poppins',sans-serif;color:var(--ter);">arraste pro dia</span>
+        </span>
+        <!-- O QUE VOCÊ VAI FAZER virou filtro da munição (revisão geral, 05/10/26): eram 6
+             cartões grandes acima da semana; aqui são o "Pra:" de quem a lista mostra -->
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:9px;">
+          <span style="font:800 10px 'Poppins',sans-serif;color:var(--muted2);">Pra:</span>
+          ${(d.propositos || []).map(p => `<button type="button" data-pl6-acao="${p.on}" aria-pressed="${p.sel}" title="${p.sub}" style="display:inline-flex;align-items:center;gap:5px;min-height:30px;padding:0 10px;border:1.5px solid ${p.sel ? p.cor : 'var(--line)'};border-radius:999px;background:${p.sel ? 'var(--panel)' : 'transparent'};font:800 10px 'Poppins',sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap;"><span style="width:7px;height:7px;border-radius:999px;background:${p.cor};"></span>${p.nome}<b style="color:${p.cor};font-variant-numeric:tabular-nums;">${p.num}</b></button>`).join('')}
+        </div>
         ${d.novoAberto ? `
           <div style="border:1.5px solid #E51A31;border-radius:10px;background:var(--panel);padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
@@ -26125,15 +26257,6 @@ function pl6TelaFinalHTML(d) {
         </div>
         ${pagHTML}`}
       </div>
-    </div>
-
-    <div style="padding:12px 28px 16px;background:var(--creme);border-top:1px solid var(--line);font:700 9.5px/1.6 'Poppins',sans-serif;color:var(--muted2);">
-      A semana que você monta aqui: <b>Supabase planos_semanais</b> — a MESMA linha que a
-      Daily do gestor e o mapa do app leem, com dia e hora · contas, etapas e tarefas:
-      <b>HubSpot</b>, e agendar aqui cria a tarefa lá · contas-alvo novas:
-      <b>leads_prospeccao</b> · a visita feita: <b>Expogo</b>, o app de campo — é o
-      check-in dele que prova a rua e a visita de relacionamento, porque nenhuma das duas
-      tem negócio para pendurar tarefa no CRM.
     </div>
 
     ${d.temFicha ? pl6FichaPainelHTML(d, fichaCamposHTML, fichaEtapasHTML,
@@ -26391,6 +26514,21 @@ function pl6Ligar(box, rep) {
 
   const primeiraVaga = di => pl6PrimeiraVaga(pl6GradeDoPlano(), di);
 
+  const pl6PorNoFimDoDia = async function (idPor, di) {
+    const lead = pl6LeadDaRef(rep, 'm:' + idPor);
+    const dias0 = pl6Dias(pl6SegundaEmFoco());
+    if (!lead || !dias0[di]) { pl6UI.toast = 'essa conta saiu da sua base — recarreguei a lista'; return redesenhar(); }
+    if (typeof pl6DiaPassou === 'function' && pl6DiaPassou(dias0[di].iso)) {
+      pl6UI.toast = dias0[di].rot + ' ' + dias0[di].data + ' já passou — compromisso é para frente';
+      return redesenhar();
+    }
+    const destino = primeiraVaga(di);
+    if (destino < 0) { pl6UI.toast = dias0[di].rot + ' está com ' + PL6_SLOTS + ' contas — tire uma para pôr outra'; return redesenhar(); }
+    pl6UI.sel = null; pl6UI.diaAtivo = null; pl6Ficha = null;
+    await redesenhar();
+    return agendarNoSlot(lead.id, di, destino, pl6HoraDaFaixa(destino) || '09:00');
+  };
+
   let ultimoArraste = 0;
   box.addEventListener('dragstart', function (ev) {
     const alvo = ev.target.closest && ev.target.closest('[data-pl6-arraste]');
@@ -26426,6 +26564,11 @@ function pl6Ligar(box, rep) {
     ultimoArraste = Date.now();
     pl6UI.dragHover = null;
     if (!pl6UI.sel) { redesenhar(); return; }
+
+    if (pl6UI.sel.lead && pl6UI.sel.deDi == null && !pl6UI.sel.bloco) {
+      void pl6PorNoFimDoDia(pl6UI.sel.lead.id, Number(dia.getAttribute('data-pl6-dia-drop')));
+      return;
+    }
     pl6UI.diaAtivo = Number(dia.getAttribute('data-pl6-dia-drop'));
     pl6UI.toast = null;
     redesenhar();
@@ -26819,6 +26962,14 @@ function pl6Ligar(box, rep) {
         return redesenhar();
       }
 
+      if (verbo === 'poremmenu') { s.poremDe = s.poremDe === arg ? null : arg; return redesenhar(); }
+      if (verbo === 'comofoi') { s.comoFoiDe = s.comoFoiDe === arg ? null : arg; return redesenhar(); }
+      if (verbo === 'porem') {
+        const par = String(arg).split('|');
+        const idPor = par[0], di = Number(par[1]);
+        s.poremDe = null;
+        return pl6PorNoFimDoDia(idPor, di);
+      }
       if (verbo === 'pegar') {
         const lead = pl6LeadDaRef(rep, 'm:' + arg);
         if (!lead) { s.toast = 'essa conta saiu da sua base — recarreguei a lista'; return redesenhar(); }

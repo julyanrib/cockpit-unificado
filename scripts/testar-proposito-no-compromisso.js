@@ -193,8 +193,11 @@ checar('o espelho do próximo passo grava follow-up',
 console.log('');
 console.log('4 · O CARD MOSTRA');
 
-checar('o selo é desenhado, e ele depende do propósito',
-  /\$\{sl\.selo \? `<b style="flex:none;/.test(tpl)
+/* REVISÃO GERAL (05/10/26, aprovada): o chip FUNIL sai do cartão — é o propósito da maioria
+   e não diz nada. Os outros continuam desenhados, e é isso que esta guarda segura. */
+checar('o selo é desenhado (menos o de Funil), e ele depende do propósito',
+  /\$\{sl\.selo && !sl\.seloFunil \? `<b style="flex:none;/.test(tpl)
+    && /seloFunil: !prop \|\| prop\.id === 'funil'/.test(tpl)
     && /\$\{sl\.seloCor\}/.test(tpl) && /\$\{sl\.seloBg\}/.test(tpl)
     && /\$\{sl\.selo\}<\/b>/.test(tpl),
   'a sabotagem que troca `sl.selo ?` por `false ?` apaga a etiqueta de todos os cards e '

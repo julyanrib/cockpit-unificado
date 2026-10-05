@@ -382,10 +382,13 @@ console.log('');
   /* ── 2 · SEM DENOMINADOR: A RÉGUA DE SLOTS SAIU DA TELA ──────────────────────────
      "Contador do dia: livre (cinza) ou N visita(s) (verde). Sem denominador — não existe
      teto de slots." O contador anterior dizia 11/15. */
-  checar('o contador do dia não tem denominador',
-    /cnt: n === 0 \? 'livre' : \(n \+ ' visita' \+ \(n > 1 \? 's' : ''\)\)/.test(dadosCod)
-      && !/\/' \+ PL6_SLOTS/.test(dadosCod),
-    'a prancha manda "sem denominador"; o número que importa é quantas visitas o dia tem');
+  /* REVISÃO GERAL (Claude Design, 05/10/26, aprovada): o contador passa a ser "N de M" contra
+     a META DA FASE (rampDoOwner), verde quando bate. Continua proibido o teto de vagas
+     (PL6_SLOTS) como denominador: vaga não é produto. */
+  checar('o contador do dia é N de M contra a meta, nunca contra as vagas',
+    /cnt: n === 0 \? 'vazio' : \(n \+ ' de ' \+ metaDoDia\)/.test(dadosCod)
+      && !/\/' \+ PL6_SLOTS/.test(dadosCod) && !/de ' \+ PL6_SLOTS/.test(dadosCod),
+    'a revisão manda "N de M" contra a meta da fase; o teto de vagas não é denominador');
 
   checar('e a barra de capacidade não voltou',
     telaCod.indexOf('pl6-cap-seg') < 0 && telaCod.indexOf('capSegs') < 0,
