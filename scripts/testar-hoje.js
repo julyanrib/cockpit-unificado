@@ -115,7 +115,11 @@ checar('nem o contador prontos/total no cabeçalho dele',
 checar('o script existe', template.indexOf('function h9ScriptHTML(r, diag)') > -1);
 checar('e é CHAMADO na coluna, não só definido',
   template.indexOf('${h9ScriptHTML(r, diagDia)}') > -1);
-checar('o copiar tem caminho', template.indexOf("el.querySelector('#h9CopiarScript')") > -1);
+/* DELEGADO desde 06/10/26: a daily repinta quando a rota chega, e o ouvinte preso no
+   botão morria com ele. O clique é ouvido na raiz da aba, ligado uma vez. */
+checar('o copiar tem caminho',
+  template.indexOf("ev.target.closest('#h9CopiarScript')") > -1
+    && template.indexOf('el.dataset.h9CopiarLigado') > -1);
 /* TEXTO SIMPLES: daily se fala no WhatsApp e no Meet, e markdown colado lá vira lixo. */
 checar('o copiar monta texto simples com quebras de linha',
   template.indexOf('const nl = String.fromCharCode(10);') > -1
@@ -172,16 +176,21 @@ checar('e explica a ordem da fila',
    padding, e a lista em 862px. */
 checar('a coluna da fila é flex, para a lista poder preencher',
   template.indexOf('.h9-esq{padding:20px 22px;min-width:0;display:flex;flex-direction:column;}') > -1);
-checar('e a lista cresce até o fim da coluna, sem teto',
-  template.indexOf('.h9-esq .h8-fila{flex:1 1 0;max-height:none;min-height:0;}') > -1,
-  'com o teto de volta, a coluna estica com a irmã e sobra branco embaixo da fila');
-checar('o card entre a coluna e a lista também estica',
-  template.indexOf('.h9-esq > .h8-card{flex:1 1 0;display:flex;flex-direction:column;min-height:0;}') > -1,
-  'sem isto o flex:1 da lista não tem contra quem crescer');
-/* NO EMPILHADO O TETO VOLTA: sem coluna irmã não há vão, e 37 itens sem teto viram
-   uma rolagem de página sem fim no celular. */
-checar('empilhado (<=1240px) devolve o teto da fila',
-  template.indexOf('.h9-esq .h8-fila{flex:none;max-height:min(62vh,720px);}') > -1);
+/* 06/10/26 (prancha do executivo): a fila deixou de rolar por dentro — era uma caixa de
+   560 px com 48 itens dentro da página que também rola, e a repintura a devolvia ao topo.
+   Agora mostra 7 e abre de 7 em 7. As duas preocupações das guardas antigas continuam
+   cobertas: sem teto não sobra branco embaixo, e o corte de 7 é o que impede a rolagem de
+   página sem fim no celular (que antes era o trabalho do teto). */
+checar('a lista não tem teto nem rolagem própria',
+  template.indexOf('.h9-esq .h8-fila{max-height:none;min-height:0;overflow:visible;}') > -1
+    && !/\.h8-fila\{[^}]*overflow-y:auto/.test(template),
+  'rolagem dentro da rolagem é o que fazia a fila voltar ao topo e prender o dedo');
+checar('e mostra 7 por vez, abrindo mais no fim',
+  /recorte\.slice\(0, h8Ver\)/.test(template) && /let h8Ver = 7;/.test(template)
+    && /if \(d\.h8Ver\) \{ h8Ver \+= 7; return redesenhar\(\); \}/.test(template),
+  'sem o corte, 48 itens viram uma página sem fim no celular');
+checar('trocar o filtro volta aos 7 primeiros',
+  /if \(d\.h8Filtro\) \{ h8Filtro = d\.h8Filtro; h8Painel = null; h8Ver = 7;/.test(template));
 
 /* ── 9. O RECADO DO GESTOR TEM UM TÍTULO SÓ ──────────────────────────────────────
    O rodapé imprime "Recado do seu gestor" no .h9-pe-rot e o painel imprimia o MESMO

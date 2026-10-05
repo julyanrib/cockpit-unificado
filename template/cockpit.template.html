@@ -3086,8 +3086,8 @@
      min-height:0 nos dois: sem ele o filho de flex nao encolhe abaixo do conteudo e o
      teto volta por outro caminho. */
   .h9-esq{padding:20px 22px;min-width:0;display:flex;flex-direction:column;}
-  .h9-esq > .h8-card{flex:1 1 0;display:flex;flex-direction:column;min-height:0;}
-  .h9-esq .h8-fila{flex:1 1 0;max-height:none;min-height:0;}
+  .h9-esq > .h8-card{display:flex;flex-direction:column;}
+  .h9-esq .h8-fila{max-height:none;min-height:0;overflow:visible;}
   .h9-dir{background:var(--panel2);border-left:1px solid var(--line);padding:18px 18px 20px;
     display:flex;flex-direction:column;gap:12px;min-width:0;}
   .h9-sec-rot{font:900 9.5px var(--font-display);letter-spacing:.13em;text-transform:uppercase;color:var(--ter);}
@@ -3141,7 +3141,6 @@
     /* EMPILHADO NAO TEM COLUNA IRMA para igualar altura, entao nao ha vao a corrigir —
        e sem o teto a fila de 37 itens viraria uma rolagem de pagina sem fim no celular. */
     .h9-esq > .h8-card{flex:none;}
-    .h9-esq .h8-fila{flex:none;max-height:min(62vh,720px);}
     .h9-grade{grid-template-columns:minmax(0,1fr);}
     .h9-dir,.h9-pe-dir{border-left:0;border-top:1px solid var(--line);}
   }
@@ -3149,9 +3148,11 @@
     .h9-esq,.h9-pe-esq{padding:16px;}
     .h9-chip,.h9-script-btn,.h9-check-cta{min-height:44px;}
   }
-  .h8-fila{display:flex;flex-direction:column;gap:8px;
-    max-height:min(62vh,720px);min-height:220px;overflow-y:auto;padding-right:4px;
-    scrollbar-width:thin;overscroll-behavior-y:contain;}
+  /* sem teto e sem rolagem própria (06/10/26): a fila mostra 7 e cresce de 7 em 7 */
+  .h8-fila{display:flex;flex-direction:column;gap:8px;}
+  .h8-ver-mais{margin-top:10px;width:100%;min-height:44px;border:1px dashed var(--line-btn);border-radius:var(--r-md);background:transparent;color:var(--ink);font:800 13px var(--font-body);cursor:pointer;}
+  .h8-ver-mais:hover{background:var(--sunk);}
+
   /* A MESMA BARRA DISCRETA da grade do kanban e da munição: papel no trilho, filete no
      polegar. Três listas com três barras diferentes é o que faz parecer remendo. */
   .h8-fila::-webkit-scrollbar,[data-pl6-municao]::-webkit-scrollbar{width:9px;}
@@ -3166,8 +3167,9 @@
   /* A LINHA: fundo #FDF7F7 e borda vinho quando a régua estourou — o hex é o da prancha. */
   .h8-linha{display:flex;gap:10px;padding:11px 12px;border:1px solid var(--line-soft);
     border-radius:var(--r-md);background:var(--panel);}
-  .h8-linha.is-sla{background:var(--red-soft);border-color:var(--red-dk);
-    animation:h8PulsaVinho 1.6s ease-in-out infinite;}
+  /* sem fundo vermelho pulsando em cada linha (06/10/26): o vermelho é do bloco "O que eu
+     faço agora"; a régua estourada fica no filete e no número da linha */
+  .h8-linha.is-sla{box-shadow:inset 3px 0 0 var(--red);}
   .h8-linha.is-quente{border-color:var(--pl6-atencao);}
   @media (prefers-reduced-motion:reduce){
     .h8-linha.is-sla,.h8-bt.is-melhor,.h8-ck-n{animation:none!important;}
@@ -15939,6 +15941,8 @@ const H8_DESFECHOS_RAPIDOS = [
    redesenhada inteira a cada gesto, e guardar isto no DOM faria o filtro se perder. */
 let h8Filtro = 'todas';
 let h8Painel = null;    /* { id, fase: 'desfecho'|'datar', como, desfecho } */
+/* A FILA MOSTRA 7 E ABRE DE 7 EM 7 (06/10/26): sem rolar por dentro da página */
+let h8Ver = 7;
 let h8Feitas = {};      /* id -> resumo do que foi gravado, para a linha ✓ e o desfazer */
 
 /* ══ AS DATAS QUE O PASSO 2 OFERECE ═══════════════════════════════════════════════════
@@ -16089,7 +16093,13 @@ function h8LinhaHTML(item, i, ins) {
     +       esc(ins.venc) + '</span>'
     +     selo + seloExcesso
     +   '</div>'
-    +   '<div class="h8-motivo">' + esc(ins.motivo) + '</div>'
+    /* o motivo numa frase, com a parte que importa em negrito (a primeira); o resto e o
+       último toque ficam a um toque, no ⋯ */
+    +   (function () {
+          const partes = String(ins.motivo || '').split(' — ');
+          return '<div class="h8-motivo"><b>' + esc(partes[0]) + '</b>'
+            + (partes.length > 1 ? ' — ' + esc(partes.slice(1).join(' — ')) : '') + '</div>';
+        }())
     +   '<div class="h8-ultimo">' + esc(ins.ultimo) + (tel ? '' : ' · sem telefone no CRM') + '</div>'
     +   '<div class="h8-botoes">' + botoes + '</div>'
     +   painel
@@ -16303,14 +16313,15 @@ function h8LigarFila(el, r, redesenhar) {
     const alvo = ev.target.closest('[data-h8-filtro],[data-h8-desfecho],[data-h8-op],'
       + '[data-h8-datar],[data-h8-quando],[data-h8-criar],[data-h8-completo],'
       + '[data-h8-desfazer],[data-h8-fechar],'
-      + '[data-h8-decidir],[data-h8-avancar],[data-h8-perder],[data-h8-ficha]');
+      + '[data-h8-decidir],[data-h8-avancar],[data-h8-perder],[data-h8-ficha],[data-h8-ver]');
     if (!alvo || !card.contains(alvo)) return;
     ev.preventDefault();
     ev.stopPropagation();
     const d = alvo.dataset;
 
     /* ── interface pura ─────────────────────────────────────────────────────────── */
-    if (d.h8Filtro) { h8Filtro = d.h8Filtro; h8Painel = null; return redesenhar(); }
+    if (d.h8Filtro) { h8Filtro = d.h8Filtro; h8Painel = null; h8Ver = 7; return redesenhar(); }
+    if (d.h8Ver) { h8Ver += 7; return redesenhar(); }
     if (d.h8Fechar) { h8Painel = null; return redesenhar(); }
     if (d.h8Desfecho) {
       h8Painel = { id: d.h8Desfecho, fase: 'desfecho', como: d.h8Como || 'ligação' };
@@ -16641,15 +16652,59 @@ function h9ScriptTexto(r, diag) {
        ontem, e o que a tela sabe é que não achou registro. */
     : 'nada comprovado no HubSpot ainda — se você rodou, registre antes da daily';
 
-  const linhaHoje = partesHoje.length
+  let linhaHoje = partesHoje.length
     ? partesHoje.join(', ').replace(/,([^,]*)$/, ' e$1') + ' — nessa ordem'
     : 'fila zerada: o dia já está comprovado no HubSpot';
 
-  const linhaTravei = conta.cadencia
-    ? conta.cadencia + ' conta' + (conta.cadencia === 1 ? '' : 's') + ' acima da régua — decidir avança ou solta com o gestor'
-    : 'nenhuma conta acima da régua da etapa';
+  /* ══ A DAILY FALA A LÍNGUA DO APP (06/10/26, prancha do executivo) ════════════════════
+     "Ontem fiz" é o check-in com prova; "hoje faço" é a rota do dia — a mesma do Seu dia
+     e da Agenda. A versão anterior contava compromissos do HubSpot e dizia "fila zerada:
+     o dia já está comprovado" com 13 itens na fila logo ao lado. Enquanto a leitura do
+     app não chega, a linha diz isso; se ela falhar, volta o texto do HubSpot. */
+  const od = typeof H10 !== 'undefined' ? H10.ontem : null;
+  const dd = typeof H10 !== 'undefined' ? H10.dia : null;
+  let ontemApp = null;
+  if (od) {
+    const qd = od.dia ? (['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][new Date(od.dia + 'T12:00:00Z').getUTCDay()]) : 'ontem';
+    ontemApp = od.n
+      ? (qd === 'sexta' && new Date().getDay() === 1 ? 'Sexta: ' : '') + od.n + (od.n === 1 ? ' visita' : ' visitas') + ', ' + od.provadas + ' com prova (GPS ou foto)'
+        + (od.demos ? ' · ' + od.demos + (od.demos === 1 ? ' demo com decisor' : ' demos com decisor') : '')
+      : 'nenhum check-in no app ' + (qd === 'sexta' && new Date().getDay() === 1 ? 'na sexta' : 'ontem') + ' — se você rodou, conte na daily o que fez';
+  }
+  if (dd) {
+    /* "e N da fila" é a fila que a tela mostra, não a contagem por tipo */
+    let pend = 0;
+    try { pend = (typeof h8Fila === 'function' ? h8Fila(r, diag) : []).filter(function (x) { return !(typeof h8Feitas !== 'undefined' && h8Feitas[String(x.lead.id)]); }).length; } catch (e) { pend = 0; }
+    linhaHoje = dd.total
+      ? dd.total + (dd.total === 1 ? ' parada' : ' paradas') + (dd.bairro ? ' em ' + dd.bairro : '')
+        + (dd.primeira ? ' · 1ª ≈ ' + dd.primeira : '') + (dd.fixo ? ' · compromisso às ' + dd.fixo : '')
+        + (pend ? ' · e ' + pend + ' da fila' : '')
+      : 'ainda sem rota no app — monto o dia na Agenda' + (pend ? ' e ataco ' + pend + ' da fila' : '');
+  }
 
-  return { ontem: linhaOntem, hoje: linhaHoje, travei: linhaTravei };
+  /* A MESMA FILA QUE A TELA MOSTRA AO LADO (06/10/26). A daily contava por outra função e
+     dizia "fila zerada" e "nenhuma conta acima da régua" com 13 itens e 4 de régua
+     estourada na fila logo à esquerda. */
+  let filaPend = null, filaSla = null, piorSla = null;
+  try {
+    const fl = (typeof h8Fila === 'function' ? h8Fila(r, diag) : []).filter(function (x) { return !(typeof h8Feitas !== 'undefined' && h8Feitas[String(x.lead.id)]); });
+    const ins = fl.map(function (x) { return { x: x, i: h8Insight(x) }; });
+    filaPend = fl.length;
+    const sla = ins.filter(function (y) { return y.i.cat === 'sla'; });
+    filaSla = sla.length;
+    piorSla = sla[0] ? (sla[0].x.lead.name || null) : null;
+  } catch (e) { filaPend = null; }
+  if (filaPend != null && !partesHoje.length && !(typeof H10 !== 'undefined' && H10.dia)) {
+    linhaHoje = filaPend ? filaPend + (filaPend === 1 ? ' negócio na fila' : ' negócios na fila') + ' — nessa ordem' : 'fila zerada: nada pendente hoje';
+  }
+  const linhaTravei = filaSla != null
+    ? (filaSla ? filaSla + (filaSla === 1 ? ' conta passou' : ' contas passaram') + ' da régua' + (piorSla ? ', a primeira é ' + piorSla : '') + ' — decidir avança ou solta com o gestor'
+      : 'nenhuma conta acima da régua da etapa')
+    : (conta.cadencia
+      ? conta.cadencia + ' conta' + (conta.cadencia === 1 ? '' : 's') + ' acima da régua — decidir avança ou solta com o gestor'
+      : 'nenhuma conta acima da régua da etapa');
+
+  return { ontem: ontemApp || linhaOntem, hoje: linhaHoje, travei: linhaTravei };
 }
 
 function h9ScriptHTML(r, diag) {
@@ -16717,10 +16772,16 @@ function h8FilaCardHTML(r, diag) {
             + '>' + esc(f[1]) + '</button>';
         }).join('')
     + '</div>'
+    /* 7 POR VEZ, SEM ROLAGEM POR DENTRO (06/10/26): a fila era uma caixa de 560 px rolando
+       48 itens dentro da página que também rola. Agora mostra 7 e abre mais 7 no fim. */
     + (recorte.length
       ? '<div class="h8-fila">'
-        + recorte.map(function (x, i) { return h8LinhaHTML(x.it, i, x.ins); }).join('')
+        + recorte.slice(0, h8Ver).map(function (x, i) { return h8LinhaHTML(x.it, i, x.ins); }).join('')
         + '</div>'
+        + (recorte.length > h8Ver
+          ? '<button type="button" class="h8-ver-mais" data-h8-ver="1">mostrar mais '
+            + Math.min(7, recorte.length - h8Ver) + ' · ' + (recorte.length - h8Ver) + ' ainda na fila</button>'
+          : '')
       : '<div class="empty-state" style="padding:16px 0;">' + esc(vazioRot) + '</div>')
     /* ══ FEITAS HOJE, com desfazer ══════════════════════════════════════════════════
        O desfazer devolve a linha à fila NA TELA. Ele NÃO apaga a nota nem a tarefa do
@@ -17213,7 +17274,7 @@ async function renderMeuPainel() {
       </div>
       <div class="h9-dir">
       <section class="h10-dia" id="h10SeuDia">${h10SeuDiaHTML(H10.dia)}</section>
-      ${h9ScriptHTML(r, diagDia)}
+      <div id="h10Daily">${h9ScriptHTML(r, diagDia)}</div>
       <details class="h10-mais"><summary>Mais leituras · portões do dia e régua da excelência</summary>
       ${buildGatesDoDiaHTML(r, diagDia)}
       ${reguaDaExcelenciaHTML(r)}
@@ -17297,9 +17358,14 @@ async function renderMeuPainel() {
   /* ══ COPIAR O SCRIPT (04/09/26) ═══════════════════════════════════════════════════
      Texto simples de propósito: daily se fala no WhatsApp e no Meet, e markdown colado
      lá vira lixo com asterisco no meio da frase. */
-  const btnScript = el.querySelector('#h9CopiarScript');
-  if (btnScript) btnScript.addEventListener('click', async () => {
-    const t = h9ScriptTexto(r, diagDia);
+  /* DELEGADO E LIGADO UMA VEZ (06/10/26): a daily agora repinta sozinha quando a rota e o
+     ontem chegam do app (h10PreencherDia), e o ouvinte preso no botão morria com ele. O
+     `r` e o diag da última pintura ficam no próprio nó, para copiar o texto de agora. */
+  el.__h9Copiar = { r: r, diag: diagDia };
+  if (!el.dataset.h9CopiarLigado) el.dataset.h9CopiarLigado = '1', el.addEventListener('click', async (ev) => {
+    if (!ev.target.closest || !ev.target.closest('#h9CopiarScript')) return;
+    const atual = el.__h9Copiar || {};
+    const t = h9ScriptTexto(atual.r, atual.diag);
     const nl = String.fromCharCode(10);
     const texto = 'Ontem fiz: ' + t.ontem + nl + 'Hoje faço: ' + t.hoje + nl + 'Onde travei: ' + t.travei;
     try {
@@ -33988,16 +34054,126 @@ function pl6RotuloDoGrupo(chave, itens) {
    lead cru. Resultado medido: o botao prometia "(1 conta)" e o territorio capturava 42.
    E o numero e a unica protecao do item 2: criar territorio tira leads da regiao de CEP
    deles, e o argumento e "ele ve o tamanho antes". */
+
+/* ══ O PINO DO APP MANDA NO LUGAR (06/10/26, auditoria do Planejamento) ════════════════
+   Julyan: "tem que bater certinho no mapa". Medido na produção, carteira do André: 65
+   negócios abertos, 48 com pino no app (o mesmo id do negócio) — e a munição dizia "25 de
+   25 sem endereço no CRM", porque o lugar saía do HubSpot, onde o endereço está vazio. As
+   contas importadas também: o pino do app pode ter sido corrigido na rua, e a munição
+   lia a coordenada original da importação.
+   Aqui o Planejamento lê os MESMOS pinos que o mapa desenha (tabela clients): pelo id do
+   negócio (id_hubspot) e pelo lead importado (lead_prospeccao_id). O pino vence a fonte;
+   sem pino, fica o que a fonte tinha e a marca "sem endereço" continua honesta.
+   E OS CLIENTES EM QUEDA saem da mesma função do mapa (mapa_contexto · queda, dono pelo
+   território): 11 do André no mapa, 0 no Planejamento. Leitura só; nada é gravado daqui. */
+let PL6_PINO = null;    /* { dono, em, porDeal: Map, porLead: Map, queda: [] } */
+let PL6_PINO_VOO = null;
+function pl6PinoDe(c) {
+  const lat = c.latitude != null ? Number(c.latitude) : null;
+  const lng = c.longitude != null ? Number(c.longitude) : null;
+  return { clientId: c.id, lat: lat, lng: lng, bairro: c.bairro || null, cidade: c.cidade || null, cep: c.cep || null,
+    logradouro: c.endereco || null, nome: (c.empresa && String(c.empresa).trim()) || c.nome || null, idHubspot: c.id_hubspot || null };
+}
+async function pl6CarregarPinosDoApp(rep) {
+  if (!rep || typeof supa === 'undefined' || !supa) return;
+  const dono = String(rep.ownerId);
+  if (PL6_PINO && PL6_PINO.dono === dono && Date.now() - PL6_PINO.em < 300000) return;
+  if (PL6_PINO_VOO) return PL6_PINO_VOO;
+  PL6_PINO_VOO = (async function () {
+    const porDeal = new Map(), porLead = new Map();
+    const guardar = function (c) {
+      const p = pl6PinoDe(c);
+      if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return;
+      if (c.id_hubspot) porDeal.set(String(c.id_hubspot), p);
+      if (c.lead_prospeccao_id) porLead.set(String(c.lead_prospeccao_id), p);
+    };
+    const COLS = 'id, id_hubspot, lead_prospeccao_id, latitude, longitude, bairro, cidade, cep, endereco, empresa, nome';
+    /* os pinos dele, em páginas: o PostgREST corta em 1000 sem avisar */
+    for (let de = 0; de < 6000; de += 1000) {
+      const r = await supa.from('clients').select(COLS).eq('vendedor_id_hubspot', dono).range(de, de + 999);
+      if (r.error) throw r.error;
+      (r.data || []).forEach(guardar);
+      if ((r.data || []).length < 1000) break;
+    }
+    /* e os que são dele no funil ou na importação mas o pino está em outro nome */
+    const deals = [], leads = [];
+    (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(dono) : []).forEach(function (d) { if (d && d.id && !porDeal.has(String(d.id))) deals.push(String(d.id)); });
+    (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : []).forEach(function (l) { if (String(l.ownerId) === dono && l.id && !porDeal.has(String(l.id))) deals.push(String(l.id)); });
+    (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : []).forEach(function (l) { if (String(l.responsavel_owner_id) === dono && l.id && !porLead.has(String(l.id))) leads.push(String(l.id)); });
+    for (let i = 0; i < deals.length; i += 200) {
+      const r = await supa.from('clients').select(COLS).in('id_hubspot', deals.slice(i, i + 200));
+      if (!r.error) (r.data || []).forEach(guardar);
+    }
+    for (let i = 0; i < leads.length; i += 200) {
+      const r = await supa.from('clients').select(COLS).in('lead_prospeccao_id', leads.slice(i, i + 200));
+      if (!r.error) (r.data || []).forEach(guardar);
+    }
+    /* os clientes em queda do território dele: a MESMA lista do mapa */
+    let queda = [];
+    try {
+      const ctx = await supa.rpc('mapa_contexto');
+      if (!ctx.error && ctx.data && Array.isArray(ctx.data.queda)) {
+        const meus = ctx.data.queda.filter(function (q) { return Array.isArray(q) && String(q[3]) === dono; });
+        const ids = meus.map(function (q) { return String(q[0]); });
+        const porId = {};
+        for (let i = 0; i < ids.length; i += 200) {
+          const r = await supa.from('clients').select(COLS).in('id', ids.slice(i, i + 200));
+          if (!r.error) (r.data || []).forEach(function (c) { porId[c.id] = c; guardar(c); });
+        }
+        queda = meus.map(function (q) {
+          const c = porId[String(q[0])];
+          return c && c.id_hubspot ? { c: c, motivo: q[1] || 'em queda', faturamento: q[2] == null ? null : Number(q[2]) } : null;
+        }).filter(Boolean);
+      }
+    } catch (e) { queda = []; }
+    PL6_PINO = { dono: dono, em: Date.now(), porDeal: porDeal, porLead: porLead, queda: queda };
+  })();
+  try { await PL6_PINO_VOO; }
+  catch (e) { console.warn('Planejamento: não consegui ler os pinos do app —', e && e.message); }
+  finally { PL6_PINO_VOO = null; }
+}
+/* O lead com o lugar do pino do app. Cópia rasa: o objeto da carga não é mexido. */
+function pl6ComPino(l, chave) {
+  if (!l || !PL6_PINO) return l;
+  const p = chave && chave.deal != null ? PL6_PINO.porDeal.get(String(chave.deal))
+    : (chave && chave.lead != null ? PL6_PINO.porLead.get(String(chave.lead)) : null);
+  if (!p) return l;
+  return Object.assign({}, l, {
+    lat: p.lat, lng: p.lng,
+    bairro: p.bairro || l.bairro || null, cidade: p.cidade || l.cidade || null,
+    cep: p.cep || l.cep || null, logradouro: p.logradouro || l.logradouro || null,
+    _pino: true
+  });
+}
+/* Os clientes em queda, como contas de relacionamento (o mesmo slot "c-<negócio>" da base:
+   o plano vira parada da rota pelo pino, sem caminho novo no banco). */
+function pl6EmQueda(rep, regioes) {
+  if (!PL6_PINO || PL6_PINO.dono !== String(rep.ownerId)) return [];
+  const porChave = new Map((regioes || []).map(function (r) { return [r.chave, r]; }));
+  return PL6_PINO.queda.map(function (q) {
+    const p = pl6PinoDe(q.c);
+    const bruto = { id: q.c.id_hubspot, name: p.nome, bairro: p.bairro, cidade: p.cidade, cep: p.cep, logradouro: p.logradouro, lat: p.lat, lng: p.lng };
+    const reg = pl6RegiaoDoLead(bruto, regioes, porChave);
+    return {
+      id: 'c-' + q.c.id_hubspot, tipo: 'c', base: true, emQueda: q.motivo,
+      dealId: String(q.c.id_hubspot), nome: p.nome || 'Cliente', stageId: '',
+      etapa: 'Cliente em queda · ' + q.motivo, dias: null, sla: false,
+      lat: p.lat, lng: p.lng, regiao: reg ? reg.chave : null, regiaoNome: reg ? reg.nome : null, km: reg ? reg.km : null,
+      semEndereco: p.lat == null || p.lng == null, proximaAtividade: null, _bruto: bruto
+    };
+  });
+}
+
 function pl6FontesCruas(rep) {
   const fontes = [];
   (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
-    .forEach(l => fontes.push({ l: l, fonte: 'carteira' }));
+    .forEach(l => fontes.push({ l: pl6ComPino(l, { deal: l.id }), fonte: 'carteira' }));
   (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : [])
     .filter(l => String(l.ownerId) === String(rep.ownerId))
-    .forEach(l => fontes.push({ l: l, fonte: 'reciclagem' }));
+    .forEach(l => fontes.push({ l: pl6ComPino(l, { deal: l.id }), fonte: 'reciclagem' }));
   (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
     .filter(l => String(l.responsavel_owner_id) === String(rep.ownerId))
-    .forEach(l => fontes.push({ l: l, fonte: 'novo' }));
+    .forEach(l => fontes.push({ l: pl6ComPino(l, { lead: l.id }), fonte: 'novo' }));
   return fontes;
 }
 
@@ -34228,9 +34404,11 @@ function pl6Base(rep, regioes) {
   const todos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
     .filter(function (d) { return PL6_ETAPAS_BASE.indexOf(String(d.stageId || '')) >= 0; });
   const porChave = new Map((regioes || []).map(function (r) { return [r.chave, r]; }));
-  return todos.map(function (d) {
+  return todos.map(function (d0) {
+    const d = pl6ComPino(d0, { deal: d0.id });
     const reg = pl6RegiaoDoLead(d, regioes, porChave);
     return {
+      _bruto: d,
       id: 'c-' + d.id,
       tipo: 'c',
       base: true,
@@ -34257,10 +34435,13 @@ function pl6Carteira(rep, regioes) {
   const abertos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
     .filter(d => PL6_ETAPAS_QUE_SAIRAM.indexOf(String(d.stageId || '')) < 0);
   const porChave = new Map((regioes || []).map(r => [r.chave, r]));
-  return abertos.map(d => {
+  return abertos.map(d0 => {
+    /* O LUGAR É O DO PINO DO APP quando ele existe (06/10/26) — o mesmo que o mapa desenha */
+    const d = pl6ComPino(d0, { deal: d0.id });
     /* A REGIAO DELE, pela chave de lugar dele — nao o centroide mais proximo. */
     const reg = pl6RegiaoDoLead(d, regioes, porChave);
     return {
+      _bruto: d,
       id: 'c-' + d.id,
       tipo: 'c',
       dealId: String(d.id),
@@ -34299,7 +34480,8 @@ function pl6Reciclagem(rep, regioes) {
   const porChave = new Map((regioes || []).map(r => [r.chave, r]));
   return bruto
     .filter(l => String(l.ownerId) === String(rep.ownerId))
-    .map(function (l) {
+    .map(function (l0) {
+      const l = pl6ComPino(l0, { deal: l0.id });
       const lat = l.lat != null ? Number(l.lat) : null;
       const lng = l.lng != null ? Number(l.lng) : null;
       const temPonto = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
@@ -34330,7 +34512,8 @@ function pl6Reciclagem(rep, regioes) {
         km: reg ? reg.km : null,
         semEndereco: !temPonto,
         proximaAtividade: null,
-        reciclagem: true
+        reciclagem: true,
+        _bruto: l
       };
     });
 }
@@ -34351,9 +34534,21 @@ function pl6Reciclagem(rep, regioes) {
    do Julyan ("sempre reforcando o que ele tem na carteira e PRINCIPALMENTE com os slas
    estourados"), e quem desempata id igual e o primeiro da lista. */
 function pl6TodasAsContas(rep, regioes) {
-  return pl6Carteira(rep, regioes)
+  const base = typeof pl6Base === 'function' ? pl6Base(rep, regioes) : [];
+  /* EM QUEDA (06/10/26): o cliente que já está na base ganha a marca; o que não está entra */
+  const queda = typeof pl6EmQueda === 'function' ? pl6EmQueda(rep, regioes) : [];
+  const naBase = new Map(base.map(function (b) { return [b.id, b]; }));
+  const quedaNova = queda.filter(function (q) {
+    const b = naBase.get(q.id);
+    if (b) { b.emQueda = q.emQueda; return false; }
+    return true;
+  });
+  const carteira = pl6Carteira(rep, regioes);
+  const naCarteira = new Set(carteira.map(function (c) { return c.id; }));
+  return carteira
     .concat(typeof pl6Reciclagem === 'function' ? pl6Reciclagem(rep, regioes) : [])
-    .concat(typeof pl6Base === 'function' ? pl6Base(rep, regioes) : [])
+    .concat(base)
+    .concat(quedaNova.filter(function (q) { return !naCarteira.has(q.id); }))
     .concat(pl6Novos(rep, regioes));
 }
 
@@ -34424,7 +34619,8 @@ function pl6Novos(rep, regioes) {
     .filter(prospeccaoNaCarteira)
     .filter(l => !jaTem(l));
   const porChave = new Map((regioes || []).map(r => [r.chave, r]));
-  return contas.map(l => {
+  return contas.map(l0 => {
+    const l = pl6ComPino(l0, { lead: l0.id });
     /* A MESMA REGRA DAS OUTRAS DUAS FONTES (04/09/26): a regiao do lead e a DELE, pela
        chave de lugar, e nao o centroide mais proximo. Tres fontes com tres criterios de
        regiao davam tres respostas para "onde fica esta conta". */
@@ -35500,7 +35696,7 @@ async function pl6Carregar(rep, segundaPedida) {
     return { ok: false, motivo: error.message || 'o banco recusou a leitura' };
   }
   pl6Plano = (data && data[0]) ? data[0] : null;
-  await pl6CarregarPinos();
+  await Promise.all([pl6CarregarPinos(), pl6CarregarPinosDoApp(rep).catch(function () {})]);
   return { ok: true, tinhaLinha: !!pl6Plano };
 }
 
@@ -36185,6 +36381,7 @@ function pl6DadosFinal(rep) {
       { id: 'dentro', rot: 'dentro da régua', n: n(function (x) { return (x.dias || 0) <= reguaPgto; }) }];
     if (prop === 'relac') return [
       { id: 'todos', rot: 'todos', n: lista.length },
+      { id: 'queda', rot: 'em queda', n: n(function (x) { return !!x.emQueda; }) },
       { id: 'ganho', rot: 'Ganho', n: n(function (x) { return String(x.stageId) === '1396006162'; }) },
       { id: 'onboarding', rot: 'Onboarding', n: n(function (x) { return String(x.stageId) === '1396006163'; }) }];
     if (prop === 'follow') return [
@@ -36193,9 +36390,15 @@ function pl6DadosFinal(rep) {
       { id: '8-14', rot: '8–14d', n: n(function (x) { return x.atrasoDias >= 8 && x.atrasoDias <= 14; }) },
       { id: '1-7', rot: '1–7d', n: n(function (x) { return x.atrasoDias >= 1 && x.atrasoDias <= 7; }) },
       { id: 'hoje', rot: 'para hoje', n: n(function (x) { return x.atrasoDias === 0; }) }];
+    /* A FONTE VIRA FAIXA (06/10/26, "cadê os leads da Casa dos Dados / Google avaliações"):
+       as contas das três origens estavam na mesma lista sem jeito de separar */
     if (prop === 'nova') return [
       { id: 'todos', rot: 'todos', n: lista.length },
-      { id: 'estrela', rot: '★ 4,5+', n: n(function (x) { return Number(x.nota) >= 4.5; }) }];
+      { id: 'estrela', rot: '★ 4,5+', n: n(function (x) { return Number(x.nota) >= 4.5; }) },
+      { id: 'g:aval', rot: 'Google avaliações', n: n(function (x) { return x.grupo === 'aval'; }) },
+      { id: 'g:casa', rot: 'Casa dos Dados', n: n(function (x) { return x.grupo === 'casa'; }) },
+      { id: 'g:rua', rot: 'criados na rua', n: n(function (x) { return x.grupo === 'rua' || x.grupo === 'mapa' || x.grupo === 'instagram'; }) }]
+      .filter(function (f) { return f.id === 'todos' || f.n > 0; });
     /* O FUNIL SE RECORTA POR RÉGUA E POR PROMESSA — as duas perguntas que o gestor faz
        na Daily. A régua de cada um é a da ETAPA dele, e não uma só para a lista toda:
        um negócio parado há 4 dias está fora da régua no Diagnóstico e dentro dela na
@@ -36218,7 +36421,7 @@ function pl6DadosFinal(rep) {
   function pl6NaFaixa(l) {
     if (faixaAtiva === 'todos') return true;
     if (propAtivo === 'cobrar') return faixaAtiva === 'acima' ? (l.dias || 0) > reguaPgto : (l.dias || 0) <= reguaPgto;
-    if (propAtivo === 'relac') return String(l.stageId) === (faixaAtiva === 'ganho' ? '1396006162' : '1396006163');
+    if (propAtivo === 'relac') return faixaAtiva === 'queda' ? !!l.emQueda : String(l.stageId) === (faixaAtiva === 'ganho' ? '1396006162' : '1396006163');
     if (propAtivo === 'follow') {
       if (faixaAtiva === '15+') return l.atrasoDias >= 15;
       if (faixaAtiva === '8-14') return l.atrasoDias >= 8 && l.atrasoDias <= 14;
@@ -36226,6 +36429,10 @@ function pl6DadosFinal(rep) {
       if (faixaAtiva === 'hoje') return l.atrasoDias === 0;
     }
     if (propAtivo === 'nova' && faixaAtiva === 'estrela') return Number(l.nota) >= 4.5;
+    if (propAtivo === 'nova' && faixaAtiva.indexOf('g:') === 0) {
+      const g = faixaAtiva.slice(2);
+      return g === 'rua' ? (l.grupo === 'rua' || l.grupo === 'mapa' || l.grupo === 'instagram') : l.grupo === g;
+    }
     if (propAtivo === 'funil') {
       if (faixaAtiva.indexOf('st:') === 0) return String(l.stageId || (l.etapa === 'Reciclagem' ? '1398311191' : '')) === faixaAtiva.slice(3);
       if (faixaAtiva === 'acima') return pl6AcimaDaRegua(l);
@@ -36272,6 +36479,8 @@ function pl6DadosFinal(rep) {
   }).sort(function (a, b) {
     /* follow: mais vencido primeiro. cobrar e relac: mais parado primeiro. */
     if (propAtivo === 'follow') return (b.atrasoDias || 0) - (a.atrasoDias || 0);
+    /* relacionamento: cliente em queda primeiro (é dinheiro saindo), depois o mais parado */
+    if (propAtivo === 'relac' && !!a.emQueda !== !!b.emQueda) return a.emQueda ? -1 : 1;
     if (propAtivo === 'cobrar' || propAtivo === 'relac') return (b.dias || 0) - (a.dias || 0);
     /* FUNIL: o quanto PASSOU da régua, e não os dias crus. Um negócio de 6 dias no
        Diagnóstico (régua 4) está 2 dias estourado; um de 6 dias na Negociação (régua 7)
@@ -36284,7 +36493,10 @@ function pl6DadosFinal(rep) {
       };
       return excedeu(b) - excedeu(a);
     }
-    return pl6Prioridade(a) - pl6Prioridade(b);
+    /* MAIOR PRIORIDADE PRIMEIRO (06/10/26). Estava a - b: a conta sem nota (Casa dos Dados,
+       1000) vinha antes da de 4,8★ do Google (1.130+), e as 24 avaliadas do André ficavam
+       atrás de 125 outras, em páginas de 6 — "cadê os leads do Google". */
+    return pl6Prioridade(b) - pl6Prioridade(a);
   });
 
   /* ══ SEIS POR PÁGINA — é isto que faz 142 itens caberem ════════════════════════
@@ -58706,10 +58918,10 @@ function h10ProntoHTML(r, diag, dia, amanha, semDesfecho) {
   const hoje = h10HojeISO();
   if (h10Noite()) {
     return '<span class="h10-pronto-rot">Fechar o dia</span>'
-      + h10Item('Check-ins', dia ? (dia.total ? dia.feitas + ' de ' + dia.total + ' paradas' : 'nenhuma parada hoje') : 'lendo…', dia ? (dia.total ? dia.feitas >= dia.total : null) : null, h10LinkAgenda(hoje, 'Ver'))
+      + h10Item('Check-ins', dia ? (dia.total ? dia.feitas + ' de ' + dia.total + ' paradas' : 'nenhuma parada hoje') : (H10.falhou ? 'não carregou' : 'lendo…'), dia ? (dia.total ? dia.feitas >= dia.total : null) : null, h10LinkAgenda(hoje, 'Ver'))
       + h10Item('Como foi', semDesfecho ? semDesfecho + ' sem desfecho' : 'tudo registrado', semDesfecho ? false : true,
         '<button type="button" class="h10-acao" data-hoje-stat="pendente">Registrar</button>')
-      + h10Item('Plano de amanhã', amanha ? (amanha.total ? amanha.total + ' paradas' : 'vazio') : 'lendo…', amanha ? amanha.total > 0 : null,
+      + h10Item('Plano de amanhã', amanha ? (amanha.total ? amanha.total + ' paradas' : 'vazio') : (H10.falhou ? 'não carregou' : 'lendo…'), amanha ? amanha.total > 0 : null,
         h10LinkAgenda(h10ProximoUtil(hoje), 'Montar'));
   }
   const selo = typeof pl6PromessaSelo === 'function' ? pl6PromessaSelo() : '';
@@ -58764,6 +58976,32 @@ async function h10LerDia(uid, iso) {
   return { total: lista.length, feitas: lista.filter(function (x) { return x.feita; }).length, itens: lista,
     bairro: bairro ? bairro[0] : null, primeira: ordem[0] && ordem[0].chega ? ordem[0].chega : null, fixo: fixos[0] || null };
 }
+/* O DIA ÚTIL ANTERIOR, PELO APP (06/10/26, prancha do executivo, regra 1 "um número, uma
+   fonte"): visita é o check-in com prova (visitas_com_prova, a mesma do mapa e do Meu
+   desempenho), e demo com decisor é a regra do app (ficha "falou com o decisor" + reunião,
+   ou reunião criada no app, contadas por cliente). A daily dizia "nada comprovado no
+   HubSpot" no dia seguinte a cinco visitas provadas no app. */
+function h10UtilAnterior(iso) {
+  let d = addDays(iso, -1);
+  for (let i = 0; i < 4; i++) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w !== 0 && w !== 6) break; d = addDays(d, -1); }
+  return d;
+}
+async function h10LerOntem(uid, iso) {
+  const ini = new Date(iso + 'T00:00:00-03:00').toISOString();
+  const fim = new Date(addDays(iso, 1) + 'T00:00:00-03:00').toISOString();
+  const res = await Promise.all([
+    supa.rpc('visitas_com_prova', { p_de: iso, p_ate: iso, p_pessoa: uid }),
+    supa.from('fichas_de_rua').select('client_id, como_foi, proximo').eq('criado_por', uid).gte('ocorrido_em', ini).lt('ocorrido_em', fim),
+    supa.from('client_meetings').select('client_id, type, status').eq('created_by', uid).gte('created_at', ini).lt('created_at', fim)
+  ]);
+  if (res[0].error) throw res[0].error;
+  const vis = res[0].data || [];
+  const demos = new Set();
+  if (!res[1].error) (res[1].data || []).forEach(function (f) { if (f.como_foi === 'falou_com_decisor' && f.proximo === 'reuniao') demos.add(String(f.client_id)); });
+  if (!res[2].error) (res[2].data || []).forEach(function (m) { if (m.type === 'reuniao' && m.status !== 'cancelada') demos.add(String(m.client_id)); });
+  return { dia: iso, n: vis.length, provadas: vis.filter(function (v) { return v.provada; }).length,
+    demos: (res[1].error || res[2].error) ? null : demos.size };
+}
 async function h10PreencherDia(r, nSla, diag, semDesfecho) {
   const pintar = function () {
     const man = document.getElementById('h10Manchete');
@@ -58772,6 +59010,9 @@ async function h10PreencherDia(r, nSla, diag, semDesfecho) {
     if (pr) pr.innerHTML = h10ProntoHTML(r, diag, H10.dia, H10.amanha, semDesfecho);
     const sd = document.getElementById('h10SeuDia');
     if (sd) sd.innerHTML = h10SeuDiaHTML(H10.dia);
+    /* a daily lê a mesma rota e o mesmo ontem: repinta junto, senão diria "lendo" para sempre */
+    const dl = document.getElementById('h10Daily');
+    if (dl) dl.innerHTML = h9ScriptHTML(r, diag);
   };
   /* sem banco ou sem ser o dono do dia: a tela diz que não leu, em vez de 'lendo…' para sempre */
   if (typeof supa === 'undefined' || !supa || !sessaoAtual || sessaoAtual.role !== 'rep') { H10.falhou = true; return pintar(); }
@@ -58785,8 +59026,9 @@ async function h10PreencherDia(r, nSla, diag, semDesfecho) {
     const uid = ses && ses.data && ses.data.session && ses.data.session.user && ses.data.session.user.id;
     if (!uid) throw new Error('sem sessão');
     const hoje = h10HojeISO();
-    const res = await Promise.all([h10LerDia(uid, hoje), h10Noite() ? h10LerDia(uid, h10ProximoUtil(hoje)) : Promise.resolve(null)]);
-    H10.dia = res[0]; H10.amanha = res[1]; H10.em = Date.now(); H10.falhou = false;
+    const res = await Promise.all([h10LerDia(uid, hoje), h10Noite() ? h10LerDia(uid, h10ProximoUtil(hoje)) : Promise.resolve(null),
+      h10LerOntem(uid, h10UtilAnterior(hoje)).catch(function () { return null; })]);
+    H10.dia = res[0]; H10.amanha = res[1]; H10.ontem = res[2]; H10.em = Date.now(); H10.falhou = false;
   } catch (e) {
     console.warn('[hoje] a rota de hoje não carregou:', e && e.message);
     H10.falhou = true;
