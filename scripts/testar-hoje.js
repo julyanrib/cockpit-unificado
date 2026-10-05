@@ -45,16 +45,19 @@ checar('os fechamentos da semana também',
    anel do mês continuam nas regras que já funcionavam. E o seletor tem DUAS classes
    de propósito — .xv3-hero fica milhares de linhas abaixo no arquivo e, com a mesma
    especificidade, vencia: o hero ficava claro e só o título mudava de cor. */
-checar('o hero recebe a classe da repaginação', template.indexOf('class="xv3-hero h9-hero"') > -1);
+/* REVISÃO GERAL (05/10/26): o herói do Hoje passou a ser .h10-heroi (manchete por regra, 3
+   números, 1 CTA). As regras de cor abaixo seguem valendo para o herói antigo, que outras
+   telas ainda usam. */
+checar('o hero recebe a classe da repaginação', template.indexOf('<div class="h10-heroi">') > -1);
 checar('e a regra vence a antiga por especificidade, não por ordem',
-  /* v5: o herói é faixa escura nos dois temas (--dark); --ink vira quase branco no escuro */
-  template.indexOf('.xv3-hero.h9-hero{background:var(--dark);') > -1,
+  /* revisão geral (05/10/26): o herói do Hoje é .h10-heroi, escuro nos dois temas */
+  template.indexOf('.h10-heroi{background:var(--hero-grad);') > -1,
   'com um seletor de uma classe só, .xv3-hero vence e o hero volta a ficar claro');
 /* AS CORES DE ESTADO SOBREVIVEM AO ESCURO: vermelho sobre tinta some, e "visita
    pendente" precisa ser legível justamente no dia em que ela importa. */
 checar('vermelho, âmbar e verde clareiam sobre a tinta',
-  template.indexOf('.h9-hero .xv3-herostat.is-red b{color:#FF8A85;}') > -1
-  && template.indexOf('.h9-hero .xv3-herostat.is-amber b{color:#F2C879;}') > -1);
+  template.indexOf('.h10-num b.is-verde{color:#4ADE80;}') > -1
+  && template.indexOf('.h10-num.is-ambar b{color:#FBBF24;}') > -1);
 
 /* ── 3. A COLUNA DIREITA CONTA A MESMA FILA ──────────────────────────────────────
    Se ela contasse de outra fonte, a tela mostraria dois números para o mesmo dia. */
@@ -154,7 +157,10 @@ checar('sem registro o script não afirma que o dia foi vazio',
 /* ── 7. A NOTA DE FONTE ──────────────────────────────────────────────────────────
    Toda tela desta casa diz de onde veio o número — e aqui ela carrega a regra da fila,
    que é o que o executivo precisa entender uma vez para confiar na ordem todo dia. */
-checar('a nota de fonte fecha o quadro', template.indexOf('<div class="h9-fonte">') > -1);
+/* REVISÃO GERAL (05/10/26): o parágrafo de fontes virou a dica "de onde vêm os números" no
+   herói (a prancha manda). O que a guarda protege continua: a tela diz de onde vem o número
+   e explica a ordem da fila. */
+checar('a fonte dos números está no herói', template.indexOf('class="h10-fonte"') > -1);
 checar('e explica a ordem da fila',
   template.indexOf('cadência quebrada → follow-up → visita → touchpoint') > -1);
 
@@ -457,23 +463,28 @@ const h9DiaFonte = (function () {
   return i < 0 ? '' : template.slice(Math.max(0, i - 1200), i + 1600);
 }());
 
-checar('a faixa do dia sai da MESMA leitura da agenda, não de uma segunda',
-  h9DiaFonte.indexOf('agendaNormalizar(DATA.agenda)') > -1
-    && template.indexOf('const doDia = (hojeConta.lista || []);') > -1,
+/* REVISÃO GERAL (05/10/26): o fio de compromissos do HubSpot saiu; o dia do Hoje é a ROTA
+   DO APP ("Seu dia"), a mesma que o Planejamento e a Agenda do app leem, com a mesma conta
+   de ordem e de "≈ horário". As três guardas protegem o mesmo de antes, na forma nova. */
+checar('o Seu dia sai da rota do app, pela mesma conta do Planejamento, não de uma segunda',
+  /async function h10LerDia\(uid, iso\)/.test(template)
+    && /from\('field_routes'\)[\s\S]{0,200}field_route_stops/.test(template.slice(template.indexOf('async function h10LerDia')))
+    && /pl6OrdemDoDia\(itens, mapa\)/.test(template),
   'um segundo levantamento do mesmo dia é uma quarta tela para discordar das outras três');
 
-checar('a faixa fica ACIMA da fila, não ao lado nem embaixo',
+checar('o "Pronto pra rua?" fica ACIMA da fila, não ao lado nem embaixo',
   (function () {
-    const f = template.indexOf('<div class="h9-dia">');
-    const g = template.indexOf('<div class="h9-grade">');
+    const f = template.indexOf('<div class="h10-pronto" id="h10Pronto">');
+    const g = template.indexOf('<div class="h9-grade">', f);
     return f > -1 && g > -1 && f < g;
   }()),
   'ver "por onde começar" antes de "o que eu já combinei" faz a tela recomendar contra '
     + 'o próprio compromisso dele');
 
-checar('sem compromisso nenhum a faixa não aparece',
-  /if \(!doDia\.length\) return '';/.test(template),
-  'faixa vazia é ruído, e o hero já diz "sem compromisso agendado" nesse caso');
+checar('sem rota o Seu dia diz o que fazer, nunca um zero',
+  template.indexOf('Nada no plano de hoje. Monte a rota na Agenda do app.') > -1
+    && template.indexOf('lendo a rota de hoje…') > -1,
+  'faixa vazia é ruído, e zero sem leitura é o zero que tranquiliza');
 
 checar('só UM compromisso é o "agora"',
   template.indexOf('const proximoDaFaixa = listaDeHoje.find(') > -1
@@ -481,10 +492,14 @@ checar('só UM compromisso é o "agora"',
     && /agora: false,/.test(template),
   'três destaques é nenhum destaque — "e agora, onde eu vou?" tem resposta única');
 
+/* REVISÃO GERAL (05/10/26): o fio de compromissos saiu; o que passou da hora sem desfecho
+   aparece no "Fechar o dia" (Como foi · N sem desfecho · Registrar) e na manchete da noite,
+   e conta pela mesma hojeConta.pendentes de antes. */
 checar('o que passou da hora sem fechamento aparece marcado',
   /vencido: !feito && min < agoraMin/.test(template)
-    && template.indexOf('is-vencido') > -1
-    && template.indexOf('sem fechamento') > -1,
+    && template.indexOf("semDesfecho ? semDesfecho + ' sem desfecho'") > -1
+    && template.indexOf('data-hoje-stat="pendente">Registrar') > -1
+    && template.indexOf('h10ProntoHTML(r, diagDia, H10.dia, H10.amanha, hojeConta.pendentes)') > -1,
   'esse é o estado que sumia da leitura de "próximo compromisso" e por isso ficava '
     + 'invisível — o oposto de agenda vazia');
 
