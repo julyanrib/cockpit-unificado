@@ -3086,8 +3086,8 @@
      min-height:0 nos dois: sem ele o filho de flex nao encolhe abaixo do conteudo e o
      teto volta por outro caminho. */
   .h9-esq{padding:20px 22px;min-width:0;display:flex;flex-direction:column;}
-  .h9-esq > .h8-card{flex:1 1 0;display:flex;flex-direction:column;min-height:0;}
-  .h9-esq .h8-fila{flex:1 1 0;max-height:none;min-height:0;}
+  .h9-esq > .h8-card{display:flex;flex-direction:column;}
+  .h9-esq .h8-fila{max-height:none;min-height:0;overflow:visible;}
   .h9-dir{background:var(--panel2);border-left:1px solid var(--line);padding:18px 18px 20px;
     display:flex;flex-direction:column;gap:12px;min-width:0;}
   .h9-sec-rot{font:900 9.5px var(--font-display);letter-spacing:.13em;text-transform:uppercase;color:var(--ter);}
@@ -3141,7 +3141,6 @@
     /* EMPILHADO NAO TEM COLUNA IRMA para igualar altura, entao nao ha vao a corrigir —
        e sem o teto a fila de 37 itens viraria uma rolagem de pagina sem fim no celular. */
     .h9-esq > .h8-card{flex:none;}
-    .h9-esq .h8-fila{flex:none;max-height:min(62vh,720px);}
     .h9-grade{grid-template-columns:minmax(0,1fr);}
     .h9-dir,.h9-pe-dir{border-left:0;border-top:1px solid var(--line);}
   }
@@ -3149,9 +3148,12 @@
     .h9-esq,.h9-pe-esq{padding:16px;}
     .h9-chip,.h9-script-btn,.h9-check-cta{min-height:44px;}
   }
-  .h8-fila{display:flex;flex-direction:column;gap:8px;
-    max-height:min(62vh,720px);min-height:220px;overflow-y:auto;padding-right:4px;
-    scrollbar-width:thin;overscroll-behavior-y:contain;}
+  /* sem teto e sem rolagem própria (06/10/26): a fila mostra 7 e cresce de 7 em 7 */
+  .h8-fila{display:flex;flex-direction:column;gap:8px;}
+  .h8-ver-mais{margin-top:10px;width:100%;min-height:44px;border:1px dashed var(--line-btn);border-radius:var(--r-md);background:transparent;color:var(--ink);font:800 13px var(--font-body);cursor:pointer;}
+  .h8-ver-mais:hover{background:var(--sunk);}
+  .h8-bt.is-mais{min-width:44px;padding:0 10px;font-weight:900;letter-spacing:.08em;}
+  .h8-mais{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;padding-top:6px;border-top:1px dashed var(--line);margin-top:4px;}
   /* A MESMA BARRA DISCRETA da grade do kanban e da munição: papel no trilho, filete no
      polegar. Três listas com três barras diferentes é o que faz parecer remendo. */
   .h8-fila::-webkit-scrollbar,[data-pl6-municao]::-webkit-scrollbar{width:9px;}
@@ -3166,8 +3168,9 @@
   /* A LINHA: fundo #FDF7F7 e borda vinho quando a régua estourou — o hex é o da prancha. */
   .h8-linha{display:flex;gap:10px;padding:11px 12px;border:1px solid var(--line-soft);
     border-radius:var(--r-md);background:var(--panel);}
-  .h8-linha.is-sla{background:var(--red-soft);border-color:var(--red-dk);
-    animation:h8PulsaVinho 1.6s ease-in-out infinite;}
+  /* sem fundo vermelho pulsando em cada linha (06/10/26): o vermelho é do bloco "O que eu
+     faço agora"; a régua estourada fica no filete e no número da linha */
+  .h8-linha.is-sla{box-shadow:inset 3px 0 0 var(--red);}
   .h8-linha.is-quente{border-color:var(--pl6-atencao);}
   @media (prefers-reduced-motion:reduce){
     .h8-linha.is-sla,.h8-bt.is-melhor,.h8-ck-n{animation:none!important;}
@@ -15939,6 +15942,10 @@ const H8_DESFECHOS_RAPIDOS = [
    redesenhada inteira a cada gesto, e guardar isto no DOM faria o filtro se perder. */
 let h8Filtro = 'todas';
 let h8Painel = null;    /* { id, fase: 'desfecho'|'datar', como, desfecho } */
+/* A FILA MOSTRA 7 E TEM UM BOTÃO POR LINHA (06/10/26, prancha do executivo): o resto das
+   ações mora no ⋯ da linha (h8Mais = o id aberto) e o resto da fila abre de 7 em 7 (h8Ver). */
+let h8Mais = null;
+let h8Ver = 7;
 let h8Feitas = {};      /* id -> resumo do que foi gravado, para a linha ✓ e o desfazer */
 
 /* ══ AS DATAS QUE O PASSO 2 OFERECE ═══════════════════════════════════════════════════
@@ -15985,11 +15992,13 @@ function h8LinhaHTML(item, i, ins) {
      Aqui o botão sem telefone não é desabilitado: ele DIZ que falta o número e abre a
      ficha para preencher — botão apagado é clique morto com aparência de regra. */
   const tel = String(lead.celular || lead.telefone || '').replace(/[^0-9]/g, '');
+  /* UM BOTÃO À VISTA (06/10/26, prancha do executivo): a melhor ação, cheia; as outras
+     moram no ⋯ da linha. Eram quatro botões por linha com uma ★ — quatro decisões por
+     negócio, numa fila de dezenas. A regra da ★ não mudou: quem escolhe é h8Insight. */
   const bt = function (chave, rot, attr) {
     const eMelhor = ins.melhor === chave;
-    return '<button type="button" class="h8-bt' + (eMelhor ? ' is-melhor' : '') + '"'
-      + ' ' + attr + '>' + (eMelhor ? '★ ' : '') + esc(rot)
-      + (eMelhor ? ' <i>— melhor ação</i>' : '') + '</button>';
+    return { melhor: eMelhor, html: '<button type="button" class="h8-bt' + (eMelhor ? ' is-melhor' : '') + '"'
+      + ' ' + attr + '>' + esc(rot) + '</button>' };
   };
 
   /* ══ O SELO DE JA AGENDADO (14/09/26) ════════════════════════════════════════════
@@ -16015,17 +16024,25 @@ function h8LinhaHTML(item, i, ins) {
       + ' · feche os que já não valem</span>'
     : '';
 
-  const botoes = ins.melhor === 'criar'
-    ? bt('criar', 'criar negócio + gravar visita ▸', 'data-h8-criar="' + id + '"')
-      + bt('visitar', 'agendar retorno ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
-    : bt('ligar', 'ligar', 'data-h8-desfecho="' + id + '" data-h8-como="ligação"')
-      + bt('whats', 'WhatsApp', 'data-h8-desfecho="' + id + '" data-h8-como="WhatsApp"')
-      + bt('visitar', 'agendar visita ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
-      /* ══ E A DECISAO, QUE FALTAVA (14/09/26) ══════════════════════════════════
-         Os tres acima sao TOQUE. Para o negocio de 21 dias sem telefone, tocar de novo
-         nao e a acao — decidir e. Nunca vem com a ★: a melhor acao continua saindo de
-         h8Insight, que mede o negocio; este botao e a porta, nao a recomendacao. */
-      + '<button type="button" class="h8-bt is-fraco" data-h8-decidir="' + id + '">decidir ⌄</button>';
+  const lista = ins.melhor === 'criar'
+    ? [bt('criar', 'criar negócio + gravar visita', 'data-h8-criar="' + id + '"'),
+      bt('visitar', 'agendar retorno', 'data-h8-datar="' + id + '" data-h8-como="visita"')]
+    : [bt('ligar', 'ligar', 'data-h8-desfecho="' + id + '" data-h8-como="ligação"'),
+      bt('whats', 'WhatsApp', 'data-h8-desfecho="' + id + '" data-h8-como="WhatsApp"'),
+      bt('visitar', 'agendar visita', 'data-h8-datar="' + id + '" data-h8-como="visita"')];
+  /* se o insight não escolheu nenhuma (não deveria), a primeira vira a principal */
+  const principal = lista.filter(function (b) { return b.melhor; })[0] || lista[0];
+  const outras = lista.filter(function (b) { return b !== principal; }).map(function (b) { return b.html; }).join('')
+    /* ══ E A DECISAO, QUE FALTAVA (14/09/26) ══════════════════════════════════
+       Os tres acima sao TOQUE. Para o negocio de 21 dias sem telefone, tocar de novo
+       nao e a acao — decidir e. Nunca vem como principal: a melhor acao continua saindo
+       de h8Insight, que mede o negocio; este botao e a porta, nao a recomendacao. */
+    + '<button type="button" class="h8-bt is-fraco" data-h8-decidir="' + id + '">decidir</button>';
+  const maisAberto = h8Mais === String(lead.id);
+  const botoes = principal.html.replace('class="h8-bt', 'class="h8-bt is-melhor')
+    + '<button type="button" class="h8-bt is-mais" data-h8-mais="' + id + '" aria-expanded="' + maisAberto + '"'
+    + ' aria-label="Outras ações para ' + esc(lead.name || 'este negócio') + '">⋯</button>'
+    + (maisAberto ? '<div class="h8-mais">' + outras + '</div>' : '');
 
   /* ── o painel inline, nas duas fases ─────────────────────────────────────────── */
   let painel = '';
@@ -16089,8 +16106,14 @@ function h8LinhaHTML(item, i, ins) {
     +       esc(ins.venc) + '</span>'
     +     selo + seloExcesso
     +   '</div>'
-    +   '<div class="h8-motivo">' + esc(ins.motivo) + '</div>'
-    +   '<div class="h8-ultimo">' + esc(ins.ultimo) + (tel ? '' : ' · sem telefone no CRM') + '</div>'
+    /* o motivo numa frase, com a parte que importa em negrito (a primeira); o resto e o
+       último toque ficam a um toque, no ⋯ */
+    +   (function () {
+          const partes = String(ins.motivo || '').split(' — ');
+          return '<div class="h8-motivo"><b>' + esc(partes[0]) + '</b>'
+            + (partes.length > 1 ? ' — ' + esc(partes.slice(1).join(' — ')) : '') + '</div>';
+        }())
+    +   (maisAberto ? '<div class="h8-ultimo">' + esc(ins.ultimo) + (tel ? '' : ' · sem telefone no CRM') + '</div>' : '')
     +   '<div class="h8-botoes">' + botoes + '</div>'
     +   painel
     + '</div>'
@@ -16303,14 +16326,16 @@ function h8LigarFila(el, r, redesenhar) {
     const alvo = ev.target.closest('[data-h8-filtro],[data-h8-desfecho],[data-h8-op],'
       + '[data-h8-datar],[data-h8-quando],[data-h8-criar],[data-h8-completo],'
       + '[data-h8-desfazer],[data-h8-fechar],'
-      + '[data-h8-decidir],[data-h8-avancar],[data-h8-perder],[data-h8-ficha]');
+      + '[data-h8-decidir],[data-h8-avancar],[data-h8-perder],[data-h8-ficha],[data-h8-mais],[data-h8-ver]');
     if (!alvo || !card.contains(alvo)) return;
     ev.preventDefault();
     ev.stopPropagation();
     const d = alvo.dataset;
 
     /* ── interface pura ─────────────────────────────────────────────────────────── */
-    if (d.h8Filtro) { h8Filtro = d.h8Filtro; h8Painel = null; return redesenhar(); }
+    if (d.h8Filtro) { h8Filtro = d.h8Filtro; h8Painel = null; h8Ver = 7; h8Mais = null; return redesenhar(); }
+    if (d.h8Mais) { h8Mais = h8Mais === d.h8Mais ? null : d.h8Mais; return redesenhar(); }
+    if (d.h8Ver) { h8Ver += 7; return redesenhar(); }
     if (d.h8Fechar) { h8Painel = null; return redesenhar(); }
     if (d.h8Desfecho) {
       h8Painel = { id: d.h8Desfecho, fase: 'desfecho', como: d.h8Como || 'ligação' };
@@ -16641,15 +16666,59 @@ function h9ScriptTexto(r, diag) {
        ontem, e o que a tela sabe é que não achou registro. */
     : 'nada comprovado no HubSpot ainda — se você rodou, registre antes da daily';
 
-  const linhaHoje = partesHoje.length
+  let linhaHoje = partesHoje.length
     ? partesHoje.join(', ').replace(/,([^,]*)$/, ' e$1') + ' — nessa ordem'
     : 'fila zerada: o dia já está comprovado no HubSpot';
 
-  const linhaTravei = conta.cadencia
-    ? conta.cadencia + ' conta' + (conta.cadencia === 1 ? '' : 's') + ' acima da régua — decidir avança ou solta com o gestor'
-    : 'nenhuma conta acima da régua da etapa';
+  /* ══ A DAILY FALA A LÍNGUA DO APP (06/10/26, prancha do executivo) ════════════════════
+     "Ontem fiz" é o check-in com prova; "hoje faço" é a rota do dia — a mesma do Seu dia
+     e da Agenda. A versão anterior contava compromissos do HubSpot e dizia "fila zerada:
+     o dia já está comprovado" com 13 itens na fila logo ao lado. Enquanto a leitura do
+     app não chega, a linha diz isso; se ela falhar, volta o texto do HubSpot. */
+  const od = typeof H10 !== 'undefined' ? H10.ontem : null;
+  const dd = typeof H10 !== 'undefined' ? H10.dia : null;
+  let ontemApp = null;
+  if (od) {
+    const qd = od.dia ? (['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][new Date(od.dia + 'T12:00:00Z').getUTCDay()]) : 'ontem';
+    ontemApp = od.n
+      ? (qd === 'sexta' && new Date().getDay() === 1 ? 'Sexta: ' : '') + od.n + (od.n === 1 ? ' visita' : ' visitas') + ', ' + od.provadas + ' com prova (GPS ou foto)'
+        + (od.demos ? ' · ' + od.demos + (od.demos === 1 ? ' demo com decisor' : ' demos com decisor') : '')
+      : 'nenhum check-in no app ' + (qd === 'sexta' && new Date().getDay() === 1 ? 'na sexta' : 'ontem') + ' — se você rodou, conte na daily o que fez';
+  }
+  if (dd) {
+    /* "e N da fila" é a fila que a tela mostra, não a contagem por tipo */
+    let pend = 0;
+    try { pend = (typeof h8Fila === 'function' ? h8Fila(r, diag) : []).filter(function (x) { return !(typeof h8Feitas !== 'undefined' && h8Feitas[String(x.lead.id)]); }).length; } catch (e) { pend = 0; }
+    linhaHoje = dd.total
+      ? dd.total + (dd.total === 1 ? ' parada' : ' paradas') + (dd.bairro ? ' em ' + dd.bairro : '')
+        + (dd.primeira ? ' · 1ª ≈ ' + dd.primeira : '') + (dd.fixo ? ' · compromisso às ' + dd.fixo : '')
+        + (pend ? ' · e ' + pend + ' da fila' : '')
+      : 'ainda sem rota no app — monto o dia na Agenda' + (pend ? ' e ataco ' + pend + ' da fila' : '');
+  }
 
-  return { ontem: linhaOntem, hoje: linhaHoje, travei: linhaTravei };
+  /* A MESMA FILA QUE A TELA MOSTRA AO LADO (06/10/26). A daily contava por outra função e
+     dizia "fila zerada" e "nenhuma conta acima da régua" com 13 itens e 4 de régua
+     estourada na fila logo à esquerda. */
+  let filaPend = null, filaSla = null, piorSla = null;
+  try {
+    const fl = (typeof h8Fila === 'function' ? h8Fila(r, diag) : []).filter(function (x) { return !(typeof h8Feitas !== 'undefined' && h8Feitas[String(x.lead.id)]); });
+    const ins = fl.map(function (x) { return { x: x, i: h8Insight(x) }; });
+    filaPend = fl.length;
+    const sla = ins.filter(function (y) { return y.i.cat === 'sla'; });
+    filaSla = sla.length;
+    piorSla = sla[0] ? (sla[0].x.lead.name || null) : null;
+  } catch (e) { filaPend = null; }
+  if (filaPend != null && !partesHoje.length && !(typeof H10 !== 'undefined' && H10.dia)) {
+    linhaHoje = filaPend ? filaPend + (filaPend === 1 ? ' negócio na fila' : ' negócios na fila') + ' — nessa ordem' : 'fila zerada: nada pendente hoje';
+  }
+  const linhaTravei = filaSla != null
+    ? (filaSla ? filaSla + (filaSla === 1 ? ' conta passou' : ' contas passaram') + ' da régua' + (piorSla ? ', a primeira é ' + piorSla : '') + ' — decidir avança ou solta com o gestor'
+      : 'nenhuma conta acima da régua da etapa')
+    : (conta.cadencia
+      ? conta.cadencia + ' conta' + (conta.cadencia === 1 ? '' : 's') + ' acima da régua — decidir avança ou solta com o gestor'
+      : 'nenhuma conta acima da régua da etapa');
+
+  return { ontem: ontemApp || linhaOntem, hoje: linhaHoje, travei: linhaTravei };
 }
 
 function h9ScriptHTML(r, diag) {
@@ -16717,10 +16786,16 @@ function h8FilaCardHTML(r, diag) {
             + '>' + esc(f[1]) + '</button>';
         }).join('')
     + '</div>'
+    /* 7 POR VEZ, SEM ROLAGEM POR DENTRO (06/10/26): a fila era uma caixa de 560 px rolando
+       48 itens dentro da página que também rola. Agora mostra 7 e abre mais 7 no fim. */
     + (recorte.length
       ? '<div class="h8-fila">'
-        + recorte.map(function (x, i) { return h8LinhaHTML(x.it, i, x.ins); }).join('')
+        + recorte.slice(0, h8Ver).map(function (x, i) { return h8LinhaHTML(x.it, i, x.ins); }).join('')
         + '</div>'
+        + (recorte.length > h8Ver
+          ? '<button type="button" class="h8-ver-mais" data-h8-ver="1">mostrar mais '
+            + Math.min(7, recorte.length - h8Ver) + ' · ' + (recorte.length - h8Ver) + ' ainda na fila</button>'
+          : '')
       : '<div class="empty-state" style="padding:16px 0;">' + esc(vazioRot) + '</div>')
     /* ══ FEITAS HOJE, com desfazer ══════════════════════════════════════════════════
        O desfazer devolve a linha à fila NA TELA. Ele NÃO apaga a nota nem a tarefa do
@@ -17213,7 +17288,7 @@ async function renderMeuPainel() {
       </div>
       <div class="h9-dir">
       <section class="h10-dia" id="h10SeuDia">${h10SeuDiaHTML(H10.dia)}</section>
-      ${h9ScriptHTML(r, diagDia)}
+      <div id="h10Daily">${h9ScriptHTML(r, diagDia)}</div>
       <details class="h10-mais"><summary>Mais leituras · portões do dia e régua da excelência</summary>
       ${buildGatesDoDiaHTML(r, diagDia)}
       ${reguaDaExcelenciaHTML(r)}
@@ -17297,9 +17372,14 @@ async function renderMeuPainel() {
   /* ══ COPIAR O SCRIPT (04/09/26) ═══════════════════════════════════════════════════
      Texto simples de propósito: daily se fala no WhatsApp e no Meet, e markdown colado
      lá vira lixo com asterisco no meio da frase. */
-  const btnScript = el.querySelector('#h9CopiarScript');
-  if (btnScript) btnScript.addEventListener('click', async () => {
-    const t = h9ScriptTexto(r, diagDia);
+  /* DELEGADO E LIGADO UMA VEZ (06/10/26): a daily agora repinta sozinha quando a rota e o
+     ontem chegam do app (h10PreencherDia), e o ouvinte preso no botão morria com ele. O
+     `r` e o diag da última pintura ficam no próprio nó, para copiar o texto de agora. */
+  el.__h9Copiar = { r: r, diag: diagDia };
+  if (!el.dataset.h9CopiarLigado) el.dataset.h9CopiarLigado = '1', el.addEventListener('click', async (ev) => {
+    if (!ev.target.closest || !ev.target.closest('#h9CopiarScript')) return;
+    const atual = el.__h9Copiar || {};
+    const t = h9ScriptTexto(atual.r, atual.diag);
     const nl = String.fromCharCode(10);
     const texto = 'Ontem fiz: ' + t.ontem + nl + 'Hoje faço: ' + t.hoje + nl + 'Onde travei: ' + t.travei;
     try {
@@ -58764,6 +58844,32 @@ async function h10LerDia(uid, iso) {
   return { total: lista.length, feitas: lista.filter(function (x) { return x.feita; }).length, itens: lista,
     bairro: bairro ? bairro[0] : null, primeira: ordem[0] && ordem[0].chega ? ordem[0].chega : null, fixo: fixos[0] || null };
 }
+/* O DIA ÚTIL ANTERIOR, PELO APP (06/10/26, prancha do executivo, regra 1 "um número, uma
+   fonte"): visita é o check-in com prova (visitas_com_prova, a mesma do mapa e do Meu
+   desempenho), e demo com decisor é a regra do app (ficha "falou com o decisor" + reunião,
+   ou reunião criada no app, contadas por cliente). A daily dizia "nada comprovado no
+   HubSpot" no dia seguinte a cinco visitas provadas no app. */
+function h10UtilAnterior(iso) {
+  let d = addDays(iso, -1);
+  for (let i = 0; i < 4; i++) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w !== 0 && w !== 6) break; d = addDays(d, -1); }
+  return d;
+}
+async function h10LerOntem(uid, iso) {
+  const ini = new Date(iso + 'T00:00:00-03:00').toISOString();
+  const fim = new Date(addDays(iso, 1) + 'T00:00:00-03:00').toISOString();
+  const res = await Promise.all([
+    supa.rpc('visitas_com_prova', { p_de: iso, p_ate: iso, p_pessoa: uid }),
+    supa.from('fichas_de_rua').select('client_id, como_foi, proximo').eq('criado_por', uid).gte('ocorrido_em', ini).lt('ocorrido_em', fim),
+    supa.from('client_meetings').select('client_id, type, status').eq('created_by', uid).gte('created_at', ini).lt('created_at', fim)
+  ]);
+  if (res[0].error) throw res[0].error;
+  const vis = res[0].data || [];
+  const demos = new Set();
+  if (!res[1].error) (res[1].data || []).forEach(function (f) { if (f.como_foi === 'falou_com_decisor' && f.proximo === 'reuniao') demos.add(String(f.client_id)); });
+  if (!res[2].error) (res[2].data || []).forEach(function (m) { if (m.type === 'reuniao' && m.status !== 'cancelada') demos.add(String(m.client_id)); });
+  return { dia: iso, n: vis.length, provadas: vis.filter(function (v) { return v.provada; }).length,
+    demos: (res[1].error || res[2].error) ? null : demos.size };
+}
 async function h10PreencherDia(r, nSla, diag, semDesfecho) {
   const pintar = function () {
     const man = document.getElementById('h10Manchete');
@@ -58772,6 +58878,9 @@ async function h10PreencherDia(r, nSla, diag, semDesfecho) {
     if (pr) pr.innerHTML = h10ProntoHTML(r, diag, H10.dia, H10.amanha, semDesfecho);
     const sd = document.getElementById('h10SeuDia');
     if (sd) sd.innerHTML = h10SeuDiaHTML(H10.dia);
+    /* a daily lê a mesma rota e o mesmo ontem: repinta junto, senão diria "lendo" para sempre */
+    const dl = document.getElementById('h10Daily');
+    if (dl) dl.innerHTML = h9ScriptHTML(r, diag);
   };
   /* sem banco ou sem ser o dono do dia: a tela diz que não leu, em vez de 'lendo…' para sempre */
   if (typeof supa === 'undefined' || !supa || !sessaoAtual || sessaoAtual.role !== 'rep') { H10.falhou = true; return pintar(); }
@@ -58785,8 +58894,9 @@ async function h10PreencherDia(r, nSla, diag, semDesfecho) {
     const uid = ses && ses.data && ses.data.session && ses.data.session.user && ses.data.session.user.id;
     if (!uid) throw new Error('sem sessão');
     const hoje = h10HojeISO();
-    const res = await Promise.all([h10LerDia(uid, hoje), h10Noite() ? h10LerDia(uid, h10ProximoUtil(hoje)) : Promise.resolve(null)]);
-    H10.dia = res[0]; H10.amanha = res[1]; H10.em = Date.now(); H10.falhou = false;
+    const res = await Promise.all([h10LerDia(uid, hoje), h10Noite() ? h10LerDia(uid, h10ProximoUtil(hoje)) : Promise.resolve(null),
+      h10LerOntem(uid, h10UtilAnterior(hoje)).catch(function () { return null; })]);
+    H10.dia = res[0]; H10.amanha = res[1]; H10.ontem = res[2]; H10.em = Date.now(); H10.falhou = false;
   } catch (e) {
     console.warn('[hoje] a rota de hoje não carregou:', e && e.message);
     H10.falhou = true;
