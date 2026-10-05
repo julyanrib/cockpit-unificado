@@ -12464,6 +12464,17 @@ function repintarTelaAtivaDoNegocio() {
   try { ativa = document.querySelector('.view.active'); } catch (e) { ativa = null; }
   const nome = ativa ? TELAS_QUE_MOSTRAM_NEGOCIO[ativa.id] : null;
   if (!nome) return;   /* a aba aberta nao mostra negocio: nada a repintar */
+  /* O PLANEJAMENTO PISCAVA (Julyan, 05/10/26: "tá piscando toda hora"). Com o Planejamento
+     aberto, cada rajada de sinal de negócio/tarefa do time — 146 numa hora, em 15 minutos
+     diferentes, medido na segunda de manhã — chamava renderDaily, que esvazia o #pt6Raiz e
+     redesenha tudo, mapas incluídos. O Planejamento não mostra card de negócio (os números
+     vêm de planejamento_do_time, que tem o próprio ao vivo em pt6AoVivo); quem mostra é a
+     rodada antiga, fechada embaixo. Então só ela repinta, e só se estiver aberta. */
+  if (ativa.id === 'viewDaily' && document.getElementById('pt6Raiz')) {
+    const antiga = document.getElementById('pt6Antiga');
+    if (antiga && antiga.open && typeof dg4Repintar === 'function') dg4Repintar();
+    return;
+  }
   /* AS FUNCOES SAO BUSCADAS POR NOME, e nao guardadas no mapa: o mapa e declarado no
      topo do script e tres desses renders sao declarados centenas de linhas abaixo —
      guardar a referencia ali gravaria `undefined`. Declaracao de funcao sobe para o
@@ -59426,7 +59437,15 @@ function pt6Pintar() {
     return;
   }
   const rs = pt6Retratos(d);
-  raiz.innerHTML = '<div class="pt6">' + pt6TopoHTML(d, rs) + pt6CartoesHTML(d, rs) + pt6PalavraHTML(d, rs) + pt6RuaHTML(d, rs) + '</div>';
+  const html = '<div class="pt6">' + pt6TopoHTML(d, rs) + pt6CartoesHTML(d, rs) + pt6PalavraHTML(d, rs) + pt6RuaHTML(d, rs) + '</div>';
+  /* nada mudou, nada repinta (05/10/26): o ao vivo relê o plano a cada parada ou visita do
+     time, e trocar o HTML idêntico recriava os mapas — a tela piscava sem mudar um número */
+  /* a marca fica no próprio nó e a raiz tem de estar mostrando o plano: depois de
+     "Lendo…" ou do erro (que escrevem outra coisa nela), repinta mesmo com HTML igual */
+  const naTela = raiz.firstElementChild;
+  if (naTela && naTela.className === 'pt6' && raiz.__pt6Html === html) return;
+  raiz.__pt6Html = html;
+  raiz.innerHTML = html;
   pt6DesenharMapas();
 }
 
