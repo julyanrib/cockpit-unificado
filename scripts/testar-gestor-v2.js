@@ -36,10 +36,10 @@ const pessoasRpc = [
   { ownerId: '3', dias: [dia(4, 4), dia(4, 2, 4), dia(4, 0, 4), dia(4, 0, 4), dia(4, 0, 4)], plano: { promessaDadaEm: 'x' }, ultimo: null }
 ];
 const tabelas = {
-  visitas_com_prova: [{ owner_id: '1', provada: true }, { owner_id: '1', provada: true }, { owner_id: '2', provada: true }, { owner_id: '2', provada: false }],
+  visitas_com_prova: [{ owner_id: '1', provada: true, client_id: 'c1', visited_at: '2026-10-05T13:00:00Z' }, { owner_id: '1', provada: true, client_id: 'c2', visited_at: '2026-10-05T15:00:00Z' }, { owner_id: '2', provada: true }, { owner_id: '2', provada: false }],
   fichas_de_rua: [{ owner_id: '1' }],
   pontos_eventos: [{ owner_id: '2', tipo: 'contrato' }, { owner_id: '2', tipo: 'demo_realizada' }, { owner_id: '3', tipo: 'contrato' }, { owner_id: '3', tipo: 'estorno' }],
-  client_stage_changes: [], um_a_um: [], playbook_progresso: [], clients: []
+  client_stage_changes: [], um_a_um: [], playbook_progresso: [], clients: [{ id: 'c1', nome: 'Bar do Zé', id_hubspot: 'a' }, { id: 'c2', nome: 'Cantina Sol', id_hubspot: null }]
 };
 const q = (dados) => { const o = { then: (a, b) => Promise.resolve({ data: dados, error: null }).then(a, b) }; ['select', 'eq', 'gte', 'in', 'order', 'limit'].forEach(k => { o[k] = () => o; }); return o; };
 global.supa = {
@@ -85,6 +85,11 @@ const relogio = (iso) => { const R = Date; global.Date = class extends R { const
   checar('portas = só visitas provadas', ana.funil_mes.portas === 2 && bia.funil_mes.portas === 1);
   checar('a meta do mês é a soma das pessoas', b.time.metaMes === 15);
   checar('provável = fechados + 50% quentes + 20% mornos', bia.provavel === 2 && ana.provavel === 1 + 0, 'bia ' + bia.provavel + ' ana ' + ana.provavel);
+  checar('cada passo do funil é a lista que o gestor abre ao clicar', [0, 1, 2, 3, 4].every(i => b.time.funil[i] === b.funilItens[i].length), b.time.funil.join() + ' vs ' + b.funilItens.map(x => x.length).join());
+  GV2.estado.passo = 0; GV2.estado.passoDono = '1';
+  const lista = GV2.render.negocios();
+  checar('o passo clicado lista os leads pelo nome, com a etapa de hoje', /Bar do Zé/.test(lista) && /Cantina Sol/.test(lista) && /Negociação/.test(lista));
+  GV2.estado.passo = null;
   checar('a Prova não acusa nada com a base íntegra', GV2.testes.prova().length === 0, GV2.testes.ultimo.join(' · '));
   /* a guarda tem dente: um total adulterado tem de aparecer */
   const errOrig = console.error; console.error = () => {};
