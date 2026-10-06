@@ -11463,6 +11463,11 @@ html.gv2-on, html.gv2-on body{overflow:hidden !important;}
 .gv2-tab-cab .gv2-ellip{white-space:normal;line-height:1.25;}
 /* piso de altura das áreas que enchem a aba: em tela baixa elas não esmagam, a aba rola */
 .gv2-rua-hoje, .gv2-pes, .gv2-pb, .gv2-prop{min-height:380px;}
+
+/* o funil vira botão: cada passo abre a lista de leads que ele contou */
+button.gv2-funil-lin{border:0;background:transparent;color:inherit;font:inherit;text-align:left;width:100%;padding:4px 6px;margin:0 -6px;border-radius:8px;cursor:pointer;min-height:40px;}
+button.gv2-funil-lin:hover{background:var(--gv2-sub);}
+button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
 </style><!-- /gv2-css -->
 </head>
 <body>
@@ -11547,7 +11552,7 @@ html.gv2-on, html.gv2-on body{overflow:hidden !important;}
   
 
   <div id="appRoot" style="display:none;">
-                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                  <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -73910,7 +73915,7 @@ GV2.render.funil = function () {
   const b = GV2.base, F = b.time.funil;
   const ROT = ['Portas (visitas)', 'Decisor', 'Demo', 'Proposta', 'Fechado'];
   const g = b.gargalo;
-  return '<section class="card"><div class="card-cab"><span class="card-titulo">Funil do mês</span><span class="card-sub">time · e o melhor de cada passo</span></div>'
+  return '<section class="card"><div class="card-cab"><span class="card-titulo">Funil do mês</span><span class="card-sub">clique num passo para ver os leads</span></div>'
     + '<div class="gv2-funil">' + F.map(function (n, i) {
       let p = '';
       if (i > 0) {
@@ -73921,7 +73926,7 @@ GV2.render.funil = function () {
         p = (!F[i - 1] ? 'sem base' : r > 100 ? 'mais que o passo anterior' : r + '% passam') + (melhor && r <= 100 ? ' · melhor ' + GV2.prim(melhor.nome) + ' ' + melhor.pct + '%' : '');
       }
       const w = F[0] ? Math.max(6, Math.round(n / F[0] * 100)) : 6;
-      return '<div class="gv2-funil-lin' + (g && i === g.i ? ' is-gargalo' : '') + '"><span>' + ROT[i] + '</span><div class="gv2-funil-trilho"><i style="width:' + w + '%">' + n + '</i></div><span class="gv2-funil-p">' + GV2.e(p) + '</span></div>';
+      return '<button type="button" class="gv2-funil-lin is-clica' + (g && i === g.i ? ' is-gargalo' : '') + (GV2.estado.passo === i ? ' is-sel' : '') + '" data-gv2="passo:' + i + '" title="ver os ' + n + ' leads deste passo"><span>' + ROT[i] + '</span><div class="gv2-funil-trilho"><i style="width:' + w + '%">' + n + '</i></div><span class="gv2-funil-p">' + GV2.e(p) + '</span></button>';
     }).join('')
     + (g ? '<div class="gv2-funil-pe">Gargalo: ' + GV2.e(ROT[g.i - 1].split(' ')[0].toLowerCase() + ' → ' + ROT[g.i].toLowerCase()) + '. Só ' + g.pct + '% passam.</div>' : '')
     + '</div></section>';
@@ -73946,7 +73951,37 @@ GV2.filtroNegocios = function (k) {
   if (k === 'sempasso-quentes') return ns.filter(function (n) { return n.quente && !n.proximo_passo; });
   return ns;
 };
+GV2.PASSOS = ['Portas do mês (visitas com prova)', 'Falou com o decisor', 'Demos realizadas', 'Propostas (entrou em Negociação)', 'Fechados'];
+GV2.render.passoLista = function () {
+  const b = GV2.base, i = GV2.estado.passo;
+  const todos = (b.funilItens && b.funilItens[i]) || [];
+  const quem = GV2.estado.passoDono;
+  const lista = todos.filter(function (x) { return !quem || x.dono === quem; }).slice().sort(function (x, y) { return String(y.quando).localeCompare(String(x.quando)); });
+  const porDono = {};
+  todos.forEach(function (x) { porDono[x.dono] = (porDono[x.dono] || 0) + 1; });
+  const chips = '<button type="button" class="gv2-filtro' + (!quem ? ' is-ativo' : '') + '" data-gv2="passodono:">Todos <span>' + todos.length + '</span></button>'
+    + b.ordem.filter(function (p) { return porDono[p.id]; }).map(function (p) {
+      return '<button type="button" class="gv2-filtro' + (quem === p.id ? ' is-ativo' : '') + '" data-gv2="passodono:' + p.id + '">' + GV2.e(GV2.prim(p.nome)) + ' <span>' + porDono[p.id] + '</span></button>';
+    }).join('');
+  const naEtapa = {};
+  b.negocios.forEach(function (n) { naEtapa[n.id] = n; });
+  const linhas = lista.map(function (x) {
+    const n = x.deal && naEtapa[x.deal];
+    return { acao: n ? 'ficha:' + n.id : '', celulas: [
+      '<b class="gv2-ellip">' + GV2.e(x.nome) + '</b>',
+      '<span class="gv2-ellip t-mute">' + GV2.e(GV2.nomeDe(x.dono)) + '</span>',
+      '<span class="num t-mute">' + GV2.e(x.quando ? GV2.DIAS[GV2.dow(GV2.diaDe(x.quando))] + ' ' + GV2.ddmm(GV2.diaDe(x.quando)) + ' ' + GV2.horaDe(x.quando) : '—') + '</span>',
+      '<span class="gv2-ellip t-mute">' + GV2.e(x.detalhe || '') + '</span>',
+      '<span class="gv2-ellip">' + (n ? '<i class="gv2-ponto" style="background:' + GV2.temp(n.etapa_idx) + ';margin-right:6px"></i>' + GV2.e(GV2.ETAPAS[n.etapa_idx]) : '<span class="t-faint">fora do funil aberto</span>') + '</span>'
+    ] };
+  });
+  return '<section class="card" style="flex:1;min-height:240px;display:flex;flex-direction:column;"><div class="card-cab" style="align-items:center;flex-wrap:wrap;"><span class="card-titulo">' + GV2.e(GV2.PASSOS[i]) + ' · ' + lista.length + '</span>'
+    + '<div class="gv2-filtros">' + chips + '</div><span class="card-acao">' + GV2.html.btn({ texto: 'Voltar aos negócios', acao: 'passo:fechar' }) + '</span></div>'
+    + GV2.html.tabela({ colunas: 'minmax(0,1.5fr) minmax(0,1fr) 140px minmax(0,1.1fr) minmax(0,1fr)', cabecalho: ['Lead', 'Executivo', 'Quando', 'O que contou', 'Etapa hoje'], linhas: linhas, vazio: 'Nada neste passo no mês.' })
+    + '</section>';
+};
 GV2.render.negocios = function () {
+  if (GV2.estado.passo != null) return GV2.render.passoLista();
   const f = GV2.estado.filtro;
   const lista = GV2.filtroNegocios(f).slice().sort(function (x, y) { return (y.mrr - x.mrr) || (y.dias - x.dias); });
   const ops = [['quentes', 'Quentes'], ['travados', 'Travados'], ['sempasso', 'Sem próximo passo'], ['todos', 'Todos']];
@@ -74222,8 +74257,8 @@ GV2.ler = async function (donos, agora) {
     semana: supa.rpc('planejamento_do_time', { p_segunda: seg, p_donos: donos, p_dia: agora.iso }),
     anterior: supa.rpc('planejamento_do_time', { p_segunda: segAnt, p_donos: donos, p_dia: GV2.somaDias(segAnt, 4) }),
     visitasMes: supa.rpc('visitas_com_prova', { p_de: mes, p_ate: agora.iso, p_pessoa: null }),
-    decisor: supa.from('fichas_de_rua').select('owner_id').eq('como_foi', 'falou_com_decisor').gte('ocorrido_em', tsMes),
-    pontos: supa.from('pontos_eventos').select('owner_id,tipo,ref_em').in('tipo', ['demo_realizada', 'contrato', 'estorno']).gte('ref_em', tsMes),
+    decisor: supa.from('fichas_de_rua').select('owner_id,client_id,deal_id,ocorrido_em').eq('como_foi', 'falou_com_decisor').gte('ocorrido_em', tsMes),
+    pontos: supa.from('pontos_eventos').select('owner_id,tipo,ref_em,negocio_id,negocio_nome').in('tipo', ['demo_realizada', 'contrato', 'estorno']).gte('ref_em', tsMes),
     negociacao: supa.from('client_stage_changes').select('client_id,created_at').eq('to_stage', 'Negociação').gte('created_at', tsMes),
     umAUm: supa.from('um_a_um').select('owner_id,data').in('owner_id', donos).order('data', { ascending: false }).limit(200),
     playbook: listaEmails.length ? supa.from('playbook_progresso').select('user_email,guia_slug,concluido_em').in('user_email', listaEmails) : Promise.resolve({ data: [] })
@@ -74235,10 +74270,20 @@ GV2.ler = async function (donos, agora) {
   }));
   const out = {};
   chaves.forEach(function (k, i) { out[k] = res[i]; });
-  /* quem entrou em Negociação: o banco diz o cliente; o negócio e o dono vêm do clients */
-  const ids = Array.from(new Set(((out.negociacao.data) || []).map(function (x) { return x.client_id; }).filter(Boolean)));
-  out.negClientes = ids.length ? await Promise.resolve(supa.from('clients').select('id,id_hubspot,vendedor_id_hubspot').in('id', ids.slice(0, 300)))
-    .then(function (r) { return r.error ? { erro: r.error.message } : { data: r.data }; }, function (e) { return { erro: e.message }; }) : { data: [] };
+  /* o NOME de cada lead por trás do funil (para o gestor bater um a um): visitas provadas,
+     fichas de decisor e entradas em Negociação dizem o cliente; o clients diz nome, negócio e dono */
+  const ids = Array.from(new Set([].concat(
+    ((out.negociacao.data) || []).map(function (x) { return x.client_id; }),
+    ((out.visitasMes.data) || []).filter(function (v) { return v.provada; }).map(function (v) { return v.client_id; }),
+    ((out.decisor.data) || []).map(function (x) { return x.client_id; })
+  ).filter(Boolean)));
+  const lotes = [];
+  for (let i = 0; i < ids.length && i < 900; i += 150) lotes.push(ids.slice(i, i + 150));
+  const lidos = await Promise.all(lotes.map(function (l) {
+    return Promise.resolve(supa.from('clients').select('id,nome,empresa,bairro,id_hubspot,vendedor_id_hubspot').in('id', l))
+      .then(function (r) { return r.error ? { erro: r.error.message } : { data: r.data || [] }; }, function (e) { return { erro: e.message }; });
+  }));
+  out.negClientes = { data: [].concat.apply([], lidos.map(function (x) { return x.data || []; })), erro: (lidos.find(function (x) { return x.erro; }) || {}).erro || null };
   out.emails = emails;
   return out;
 };
@@ -74275,11 +74320,36 @@ GV2.montar = async function () {
   if (L.visitasMes.erro) faltas.push('Portas do mês: ' + L.visitasMes.erro);
   if (L.decisor.erro) faltas.push('Decisor do mês: ' + L.decisor.erro);
   if (L.pontos.erro) faltas.push('Demos e contratos do mês: ' + L.pontos.erro);
-  const portas = conta(L.visitasMes.data, 'owner_id', function (v) { return v.provada; });
-  const decisor = conta(L.decisor.data, 'owner_id');
-  const demos = conta(L.pontos.data, 'owner_id', function (x) { return x.tipo === 'demo_realizada'; });
-  const contratos = conta(L.pontos.data, 'owner_id', function (x) { return x.tipo === 'contrato'; });
-  const estornos = conta(L.pontos.data, 'owner_id', function (x) { return x.tipo === 'estorno'; });
+  const clientePorIdN = {};
+  ((L.negClientes && L.negClientes.data) || []).forEach(function (cl) { clientePorIdN[cl.id] = cl; });
+  const nomeCliente = function (id) { const cl = clientePorIdN[id]; return cl ? (cl.nome || cl.empresa || 'sem nome') : 'cliente fora da lista'; };
+  const dealDoCliente = function (id) { const cl = clientePorIdN[id]; return cl && cl.id_hubspot ? String(cl.id_hubspot) : null; };
+  const doTime = function (o) { return donos.indexOf(String(o)) >= 0; };
+  /* AS LISTAS POR PASSO DO FUNIL: o número do passo é o tamanho da lista, então o que o
+     gestor vê ao clicar é exatamente o que foi contado */
+  const itens = [[], [], [], [], []];
+  ((L.visitasMes.data) || []).forEach(function (v) {
+    if (!v.provada || !doTime(v.owner_id)) return;
+    itens[0].push({ dono: String(v.owner_id), nome: nomeCliente(v.client_id), quando: v.visited_at, deal: dealDoCliente(v.client_id), detalhe: v.motivo === 'foto' ? 'prova por foto' : 'prova por GPS' });
+  });
+  ((L.decisor.data) || []).forEach(function (x) {
+    if (!doTime(x.owner_id)) return;
+    itens[1].push({ dono: String(x.owner_id), nome: nomeCliente(x.client_id), quando: x.ocorrido_em, deal: x.deal_id ? String(x.deal_id) : dealDoCliente(x.client_id), detalhe: 'ficha: falou com o decisor' });
+  });
+  const estornados = {};
+  ((L.pontos.data) || []).forEach(function (x) { if (x.tipo === 'estorno') { const k = x.owner_id + '|' + (x.negocio_id || ''); estornados[k] = (estornados[k] || 0) + 1; } });
+  ((L.pontos.data) || []).forEach(function (x) {
+    if (!doTime(x.owner_id)) return;
+    const it = { dono: String(x.owner_id), nome: x.negocio_nome || 'negócio ' + (x.negocio_id || '?'), quando: x.ref_em, deal: x.negocio_id ? String(x.negocio_id) : null };
+    if (x.tipo === 'demo_realizada') itens[2].push(Object.assign(it, { detalhe: 'demo realizada (ranking)' }));
+    if (x.tipo === 'contrato') {
+      const k = x.owner_id + '|' + (x.negocio_id || '');
+      if (estornados[k]) { estornados[k]--; return; }
+      itens[4].push(Object.assign(it, { detalhe: 'contrato (ranking)' }));
+    }
+  });
+  const contaItens = function (lista) { const m = {}; lista.forEach(function (x) { m[x.dono] = (m[x.dono] || 0) + 1; }); return m; };
+  const portas = contaItens(itens[0]), decisor = contaItens(itens[1]), demos = contaItens(itens[2]), fechadosPor = contaItens(itens[4]);
 
   /* os negócios abertos do funil, de Prospecção a Ag. Pagamento */
   const slaCfg = (DATA.stageMeta && DATA.stageMeta.slaDays) || {};
@@ -74334,6 +74404,13 @@ GV2.montar = async function () {
     if (!em || n.etapa_idx < 4) return;
     const di = GV2.diaDe(em);
     if (di >= mesIni && (!propostaPorDeal[n.id] || di > propostaPorDeal[n.id].dia)) propostaPorDeal[n.id] = { dono: n.dono, dia: di };
+  });
+  Object.keys(propostaPorDeal).forEach(function (k) {
+    const p = propostaPorDeal[k];
+    if (p.dia < mesIni || !doTime(p.dono)) return;
+    const n = negocios.find(function (x) { return x.id === k; });
+    const cl = Object.keys(clientePorIdN).map(function (i) { return clientePorIdN[i]; }).find(function (x) { return String(x.id_hubspot) === k; });
+    itens[3].push({ dono: p.dono, nome: n ? n.nome : (cl ? (cl.nome || cl.empresa) : 'negócio ' + k), quando: p.dia + 'T12:00:00Z', deal: k, detalhe: 'entrou em Negociação' });
   });
   const propostasDe = function (dono) {
     let mes = 0, sem = 0;
@@ -74401,7 +74478,7 @@ GV2.montar = async function () {
     const ultPb = datas[datas.length - 1];
     const diasParado = ultPb ? Math.floor((Date.now() - new Date(ultPb).getTime()) / 86400000) : null;
     const prop = propostasDe(id);
-    const fech = Math.max(0, (contratos[id] || 0) - (estornos[id] || 0));
+    const fech = fechadosPor[id] || 0;
     return {
       id: id, nome: r.name, iniciais: GV2.iniciais(r.name), praca: (r.praca || 'sem praça').trim(),
       fase: ramp && ramp.label ? ramp.label : 'fase não definida',
@@ -74520,7 +74597,7 @@ GV2.montar = async function () {
     prazo2: prazo(2), prazo3: prazo(3),
     pessoas: pessoas, ordem: ordem, porId: porId,
     ordemRua: pessoas.slice().sort(function (x, y) { const o = { visita: 0, desloc: 1, sem: 2 }; return (o[x.hoje.status] - o[y.hoje.status]) || x.nome.localeCompare(y.nome); }),
-    negocios: negocios, time: time, gargalo: gargalo, melhorPorPasso: melhorPorPasso, dinheiro: dinheiro,
+    negocios: negocios, time: time, funilItens: itens, gargalo: gargalo, melhorPorPasso: melhorPorPasso, dinheiro: dinheiro,
     semValorDecisorEmDiante: negocios.filter(function (n) { return n.etapa_idx >= 2 && !n.mrr; }).length,
     emJogo: { n: emJogo.length, mrr: emJogo.reduce(function (x, n) { return x + n.mrr; }, 0) },
     pracas: pracas, pracaPrincipal: pracas[0] || '',
@@ -74548,6 +74625,8 @@ GV2.testes = {
     conf('travados', t.travados, b.negocios.filter(function (n) { return n.travado; }).length);
     conf('quentes sem passo', t.quentesSemPasso, b.negocios.filter(function (n) { return n.quente && !n.proximo_passo; }).length);
     conf('fechados', t.fechados, t.funil[4]);
+    /* o que o gestor vê ao clicar no passo é o que foi contado */
+    ['portas', 'decisor', 'demo', 'proposta', 'fechado'].forEach(function (k, i) { conf('lista do passo ' + k, t.funil[i], ((b.funilItens || [])[i] || []).length); });
     const k = GV2.render.kpisTime();
     conf('KPI visitas', k[0].valor, String(t.visitas));
     conf('KPI quentes', k[2].valor, String(t.quentes));
@@ -74770,10 +74849,24 @@ GV2.mapa = {
       pin.style.transform = 'none';
       g.itens.push(new maps.marker.AdvancedMarkerElement({ map: g.mapa, position: pos, content: pin, zIndex: d === p.id ? 5 : 3 }));
     });
+    /* ENQUADRA a praça, ou só a pessoa destacada: clicar no executivo leva o mapa até ele */
     const praca = GV2.estado.praca || GV2.base.pracaPrincipal;
-    if (g.enquadrado !== praca) {
-      g.enquadrado = praca;
-      const enq = function () { if (el.clientWidth) g.mapa.fitBounds(bounds, 40); };
+    const chaveEnq = praca + '|' + (d || '');
+    if (g.enquadrado !== chaveEnq) {
+      g.enquadrado = chaveEnq;
+      const alvo = d ? pessoas.find(function (p) { return p.id === d; }) : null;
+      let caixa = bounds;
+      if (alvo) {
+        caixa = new maps.LatLngBounds();
+        if (alvo.hoje.posicao) caixa.extend(alvo.hoje.posicao);
+        alvo.hoje.paradas.forEach(function (x) { caixa.extend({ lat: x.lat, lng: x.lng }); });
+      }
+      const so1 = alvo && (alvo.hoje.paradas.length + (alvo.hoje.posicao ? 1 : 0)) <= 1;
+      const enq = function () {
+        if (!el.clientWidth) return;
+        if (so1) { g.mapa.setCenter(caixa.getCenter()); g.mapa.setZoom(15); }
+        else g.mapa.fitBounds(caixa, 56);
+      };
       enq(); setTimeout(enq, 300);
     }
   }
@@ -74943,12 +75036,23 @@ GV2.clique = function (ev) {
   const cmd = parte[0];
   if (cmd === 'aba') return GV2.ir(parte[1]);
   if (cmd === 'ir') return GV2.ir(parte[1], parte[2]);
-  if (cmd === 'filtro') { GV2.estado.filtro = parte[1]; return GV2.pintar(); }
+  if (cmd === 'filtro') { GV2.estado.filtro = parte[1]; GV2.estado.passo = null; return GV2.pintar(); }
+  if (cmd === 'passo') {
+    if (parte[1] === 'fechar') GV2.estado.passo = null;
+    else { const i = Number(parte[1]); GV2.estado.passo = GV2.estado.passo === i ? null : i; GV2.estado.passoDono = null; }
+    return GV2.pintar();
+  }
+  if (cmd === 'passodono') { GV2.estado.passoDono = parte[1] || null; return GV2.pintar(); }
   if (cmd === 'rua') { GV2.estado.rua = parte[1]; return GV2.pintar(); }
   if (cmd === 'prop') { GV2.estado.prop = parte[1]; return GV2.pintar(); }
   if (cmd === 'propsel') { GV2.estado.propSel = Number(parte[1]) || 0; return GV2.pintar(); }
   if (cmd === 'praca') { GV2.estado.praca = parte.slice(1).join(':'); GV2.estado.destaque = null; return GV2.pintar(); }
-  if (cmd === 'destaque') { GV2.estado.destaque = GV2.estado.destaque === parte[1] ? null : parte[1]; return GV2.pintar(); }
+  if (cmd === 'destaque') {
+    const p = GV2.base.porId[parte[1]];
+    if (GV2.estado.destaque === parte[1]) GV2.estado.destaque = null;
+    else { GV2.estado.destaque = parte[1]; if (p) GV2.estado.praca = p.praca; }
+    return GV2.pintar();
+  }
   if (cmd === 'pessoa') { GV2.estado.pessoa = parte[1]; return GV2.ir('pessoas'); }
   if (cmd === 'mapa') {
     const p = GV2.base.porId[parte[1]];
