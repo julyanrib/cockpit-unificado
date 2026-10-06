@@ -22,8 +22,8 @@ const fim = tpl.indexOf('</script><!-- /gv2-js -->');
 checar('o bloco gv2 está no template entre os marcadores', ini > 0 && fim > ini);
 const codigo = tpl.slice(ini + '<script id="gv2-js">'.length, fim).replace('GV2.instalar();', '');
 checar('o bloco não tem crase (guarda 26)', codigo.indexOf('`') < 0);
-checar('a flag desliga por padrão: só ?gv2=1 ou localStorage.gv2 === "1" ligam',
-  /return localStorage\.getItem\('gv2'\) === '1';/.test(codigo));
+checar('a versão nova é o padrão do gestor: só ?gv2=0 ou localStorage.gv2 === "0" desligam',
+  /return localStorage\.getItem\('gv2'\) !== '0';/.test(codigo));
 checar('aplicarVisaoPorPapel chama GV2.ligar', tpl.indexOf("if (typeof GV2 !== 'undefined' && GV2.ligar) GV2.ligar();") > 0);
 
 /* ── o mundo falso ── */
