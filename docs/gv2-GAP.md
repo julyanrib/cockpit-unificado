@@ -25,7 +25,7 @@ Pacote: `vasco.zip` (Claude Design, 05/10). O Julyan delegou: "tudo o que for re
 | funil · portas | sim | `visitas_com_prova(1º do mês, hoje)`, `provada = true` | — |
 | funil · decisor | sim | `fichas_de_rua.como_foi = 'falou_com_decisor'` no mês | — |
 | funil · demo | sim | `pontos_eventos.tipo = 'demo_realizada'` no mês | A mesma fonte do ranking. |
-| funil · proposta | **não existe registro** | Entrou em Negociação no mês: `client_stage_changes` (app e cockpit) ∪ negócio em Negociação há menos dias úteis que o mês | Aproximação documentada na Prova. Mudança feita direto no HubSpot e já fora de Negociação escapa. |
+| funil · proposta | **não existe registro** | Entrou em Negociação no mês: `client_stage_changes` (app e cockpit) ∪ `entrouNegociacaoEm` do negócio (`hs_v2_date_entered` de Negociação, que o robô passa desde 06/10 em `lib/lead-do-funil.js`) | Quem entrou em Negociação e já fechou ou perdeu escapa. `dias` NÃO serve: conta desde o último toque, não desde a entrada na etapa. |
 | funil · fechado | sim | `pontos_eventos` `contrato` − `estorno` no mês | O mesmo número do ranking ("3 de 38"). |
 | Negócios | sim | `DATA.funilLeads`, as 6 etapas abertas | MRR por `mrrDoNegocio`. Próximo passo por `proximoPassoDoLead`. |
 | Régua | sim | `DATA.stageMeta.slaDays` = 5·5·4·3·7·2 dias úteis | Igual ao spec. A tabela `stage_sla` do app tem outros valores (3·2·3·5·3) e **não** é usada: "não mudar a régua". |
