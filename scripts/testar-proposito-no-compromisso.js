@@ -197,7 +197,9 @@ console.log('4 · O CARD MOSTRA');
    e não diz nada. Os outros continuam desenhados, e é isso que esta guarda segura. */
 checar('o selo é desenhado (menos o de Funil), e ele depende do propósito',
   /\$\{sl\.selo && !sl\.seloFunil \? `<b style="flex:none;/.test(tpl)
-    && /seloFunil: !prop \|\| prop\.id === 'funil'/.test(tpl)
+    /* um plano só (06/10/26): com o chip do pino (`it.a`) o selo aparece sempre, com o
+       rótulo do chip; sem ele, a regra do Funil continua a mesma */
+    && /seloFunil: it\.a \? false : \(!prop \|\| prop\.id === 'funil'\)/.test(tpl)
     && /\$\{sl\.seloCor\}/.test(tpl) && /\$\{sl\.seloBg\}/.test(tpl)
     && /\$\{sl\.selo\}<\/b>/.test(tpl),
   'a sabotagem que troca `sl.selo ?` por `false ?` apaga a etiqueta de todos os cards e '

@@ -193,7 +193,7 @@ tabelas.gv2_falta_etapa = [
   /* Rua › Rotas: a rota da pessoa dia a dia (itens_do_plano) e a feita pela visita com prova */
   tabelas.rotas_da_semana = [
     { owner_id: '1', dia: '2026-10-06', vaga: 1, hora: '10:00', client_id: 'c1', nome: 'Bar do Zé', proposito: 'visita', lat: -20.31, lng: -40.3 },
-    { owner_id: '1', dia: '2026-10-06', vaga: 2, hora: '09:00', client_id: 'c2', nome: 'Cantina Sol', proposito: 'visita', lat: -20.32, lng: -40.31 },
+    { owner_id: '1', dia: '2026-10-06', vaga: 2, hora: '09:00', client_id: 'c2', nome: 'Cantina Sol', proposito: 'visita', acao: 'demo', lat: -20.32, lng: -40.31 },
     { owner_id: '1', dia: '2026-10-07', vaga: 1, hora: '09:00', client_id: 'c3', nome: 'Padaria', proposito: 'visita', lat: null, lng: null },
     { owner_id: '2', dia: '2026-10-06', vaga: 1, hora: '09:00', client_id: 'c9', nome: 'Da Bia', proposito: 'visita', lat: -20.3, lng: -40.3 }
   ];
@@ -205,6 +205,7 @@ tabelas.gv2_falta_etapa = [
   const rr = GV2.render.rua();
   const ordem = rr.indexOf('Cantina Sol') >= 0 && rr.indexOf('Cantina Sol') < rr.indexOf('Bar do Zé');
   checar('Rua › Rotas: hoje, na ordem da hora, a feita marcada, sem o plano dos outros', ordem && /is-feita/.test(rr) && !/Da Bia/.test(rr) && !/Padaria/.test(rr) && /data-gv2-rotamapa="1\|2026-10-05\|2026-10-06"/.test(rr));
+  checar('Rua › Rotas: o chip do pino (0175) aparece com o mesmo rótulo do app', /<b>Cantina Sol<\/b><small>Demo/.test(rr) && /<b>Bar do Zé<\/b><small>visita/.test(rr));
   GV2.estado.rotaDia = 'semana';
   const rs = GV2.render.rua();
   checar('Rua › Rotas › Semana: os dias juntos, e a parada sem endereço contada', /Padaria/.test(rs) && /sem endereço/.test(rs) && /fica fora do mapa/.test(rs));

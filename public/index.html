@@ -7457,7 +7457,7 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
   
 
   <div id="appRoot" style="display:none;">
-                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                            <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -25022,6 +25022,19 @@ function pl6SlotProposito(v) {
   if (!v || typeof v !== 'object') return null;
   return v.p ? String(v.p) : null;
 }
+
+const PL6_ACOES = {
+  prosp: 'Visita de prospecção', follow: 'Follow-up', reuniao: 'Reunião', demo: 'Demo',
+  ligar: 'Ligar', cobrar: 'Cobrar pagamento', rel: 'Visita de relacionamento'
+};
+function pl6SlotAcao(v) {
+  if (!v || typeof v !== 'object' || !v.a) return null;
+  return PL6_ACOES[String(v.a)] ? String(v.a) : null;
+}
+
+function pl6OrigemRot(origem) {
+  return (origem === 'app' || origem === 'app-agenda') ? 'do mapa' : 'do Cockpit';
+}
 function pl6SlotRua(v) {
   if (!v) return false;
   return ((typeof v === 'object') ? v.id : v) === PL6_RUA;
@@ -25131,6 +25144,8 @@ function pl6ItensDoDia(coluna, porId) {
       fora: !!(v && typeof v === 'object' && v.fora),
 
       origem: (v && typeof v === 'object' && v.origem) ? String(v.origem) : null,
+
+      a: (typeof pl6SlotAcao === 'function') ? pl6SlotAcao(v) : null,
 
       semPino: !!(typeof PL6_SEM_PINO !== 'undefined' && PL6_SEM_PINO && PL6_SEM_PINO.has(String(id))) });
   }
@@ -26251,7 +26266,10 @@ function pl6DadosFinal(rep) {
             semEtapa: !bl && it.tipo !== 'bloqueado' && !(it.lead && PF_ET_COR[String(it.lead.etapa || '')]),
             linha2: esc(linha2),
 
-            seloFunil: !prop || prop.id === 'funil',
+            seloFunil: it.a ? false : (!prop || prop.id === 'funil'),
+
+            origemRot: it.tipo === 'visita' ? pl6OrigemRot(it.origem) : '',
+            origemMapa: it.tipo === 'visita' && (it.origem === 'app' || it.origem === 'app-agenda'),
             linha2Cor: (feitaNaRota || evidOk) ? 'var(--green-ink)' : ox.fixo ? 'var(--ink)' : 'var(--muted2)',
             linha2Peso: ox.fixo ? '800' : '700',
             cadeado: !!ox.fixo && !(feitaNaRota || evidOk),
@@ -26259,8 +26277,9 @@ function pl6DadosFinal(rep) {
             comoFoiOn: 'comofoi:' + chave,
             hora: esc(it.hora || 'sem hora'),
             nome: esc(nome), sub: esc(sub),
-            selo: prop ? esc(prop.etiqueta) : '',
-            seloCor: prop ? prop.selo : '', seloBg: prop ? prop.seloBg : '',
+
+            selo: it.a ? esc(PL6_ACOES[it.a].toUpperCase()) : (prop ? esc(prop.etiqueta) : ''),
+            seloCor: prop ? prop.selo : 'var(--ink)', seloBg: prop ? prop.seloBg : 'var(--sunk)',
 
             passou: passou,
             comoFoi: perg && !motivosAqui && s.comoFoiDe === chave,
@@ -26724,6 +26743,7 @@ function pl6TelaFinalHTML(d) {
         <button type="button" data-pl6-acao="${sl.ficha || sl.mover}" title="${sl.ficha ? 'abrir a ficha do lead' : 'clique pra mover de dia/horário'}" style="flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px 8px 7px;cursor:pointer;">
           <b style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font:800 12px/1.3 'Poppins',sans-serif;color:var(--ink);overflow-wrap:anywhere;">${sl.nome}</b>
           ${sl.selo && !sl.seloFunil ? `<b style="flex:none;display:inline-block;margin-top:3px;font:900 8px 'Poppins',sans-serif;letter-spacing:.07em;color:${sl.seloCor};background:${sl.seloBg};border-radius:4px;padding:2px 5px;">${sl.selo}</b>` : ''}
+          ${sl.origemRot ? `<span style="display:inline-block;margin:3px 0 0 4px;font:800 9px 'Poppins',sans-serif;color:${sl.origemMapa ? 'var(--blue)' : 'var(--muted2)'};">${sl.origemRot}</span>` : ''}
           ${sl.linha2 ? `<span style="display:flex;align-items:center;gap:4px;margin-top:3px;min-width:0;font:700 11px 'Poppins',sans-serif;font-weight:${sl.linha2Peso};color:${sl.linha2Cor};font-variant-numeric:tabular-nums;">${sl.cadeado ? `<svg width="11" height="11" viewBox="0 0 24 24" aria-label="horário fixo" style="flex:none;"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 0 1 6 0v3H9z"/></svg>` : ''}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.linha2}</span></span>` : ''}
         </button>
         <!-- DEPOIS QUE A HORA PASSOU O ✕ SAI (prancha final). Um compromisso que já
@@ -56544,6 +56564,8 @@ GV2.render.funilPessoa = function (p) {
 };
 
 GV2.DIA_COR = ['#2563EB', '#16A34A', '#F5A524', '#8B5CF6', '#E23B3B'];
+
+GV2.ACOES = { prosp: 'Visita de prospecção', follow: 'Follow-up', reuniao: 'Reunião', demo: 'Demo', ligar: 'Ligar', cobrar: 'Cobrar pagamento', rel: 'Visita de relacionamento' };
 GV2.rota = { cache: {} };
 GV2.rotaSegunda = function () { return GV2.somaDias(GV2.base.semanaAtual || GV2.segundaDe(GV2.base.agora.iso), 7 * (GV2.estado.rotaSem || 0)); };
 GV2.rotaLer = async function (seg, forcar) {
@@ -56568,7 +56590,7 @@ GV2.rotaParadas = function (p, seg, dia) {
   const feitas = {};
   c.visitas.forEach(function (v) { if (v.provada && String(v.owner_id) === p.id) feitas[v.client_id + '|' + v.dia] = true; });
   return c.itens.filter(function (x) { return String(x.owner_id) === p.id && (!dia || x.dia === dia); })
-    .map(function (x) { return { dia: x.dia, hora: x.hora, nome: x.nome, proposito: x.proposito, lat: x.lat != null ? Number(x.lat) : null, lng: x.lng != null ? Number(x.lng) : null, feita: !!feitas[x.client_id + '|' + x.dia], vaga: x.vaga }; })
+    .map(function (x) { return { dia: x.dia, hora: x.hora, nome: x.nome, proposito: x.proposito, acao: x.acao || null, lat: x.lat != null ? Number(x.lat) : null, lng: x.lng != null ? Number(x.lng) : null, feita: !!feitas[x.client_id + '|' + x.dia], vaga: x.vaga }; })
     .sort(function (a, b) { return a.dia.localeCompare(b.dia) || String(a.hora || '99').localeCompare(String(b.hora || '99')) || (a.vaga || 0) - (b.vaga || 0); });
 };
 GV2.render.rotaPessoa = function (p) {
@@ -56597,7 +56619,7 @@ GV2.render.rotaPessoa = function (p) {
     k++;
     const cor = GV2.DIA_COR[dias.indexOf(x.dia)] || 'var(--gv2-ink)';
     return (sel === 'semana' && k === 1 ? '<li class="gv2-rt-sep">' + GV2.e(GV2.DIAS[GV2.dow(x.dia)] + ' ' + GV2.ddmm(x.dia)) + '</li>' : '')
-      + '<li class="' + (x.feita ? 'is-feita' : '') + '"><i style="border-color:' + cor + ';' + (x.feita ? 'background:' + cor + ';color:#fff' : '') + '">' + k + '</i><span class="gv2-ellip"><b>' + GV2.e(x.nome || 'parada') + '</b><small>' + GV2.e([x.proposito, x.lat == null ? 'sem endereço' : ''].filter(Boolean).join(' · ')) + '</small></span><small>' + GV2.e((x.hora || '—') + (x.feita ? ' · feita' : '')) + '</small></li>';
+      + '<li class="' + (x.feita ? 'is-feita' : '') + '"><i style="border-color:' + cor + ';' + (x.feita ? 'background:' + cor + ';color:#fff' : '') + '">' + k + '</i><span class="gv2-ellip"><b>' + GV2.e(x.nome || 'parada') + '</b><small>' + GV2.e([(x.acao && GV2.ACOES[x.acao]) || x.proposito, x.lat == null ? 'sem endereço' : ''].filter(Boolean).join(' · ')) + '</small></span><small>' + GV2.e((x.hora || '—') + (x.feita ? ' · feita' : '')) + '</small></li>';
   }).join('');
   return '<div class="gv2-rt">' + nav + '<div class="gv2-rt-dias">' + chips + '</div>'
     + '<div class="gv2-rt-corpo"><div class="gv2-mapa gv2-rt-mapa" data-gv2-rotamapa="' + GV2.e(p.id + '|' + seg + '|' + sel) + '"></div>'
