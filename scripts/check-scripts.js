@@ -92,7 +92,9 @@ console.log('Todos os scripts inline e JSONs de dados passaram.');
    @media não aceita var(), então a escala não pode ser um token. A única forma de ela
    se manter é uma checagem que quebra o build. É esta.
    ============================================================================ */
-const ESCALA_BREAKPOINTS = [420, 640, 760, 900, 1050, 1240];
+/* 1366 (06/10/26): o Cockpit do gestor v2 vira trilho de 72px abaixo de 1366 — a prancha
+   tem a tela-alvo em 1280 com o trilho. 1240 deixaria 1280 com a navegação de 220px. */
+const ESCALA_BREAKPOINTS = [420, 640, 760, 900, 1050, 1240, 1366];
 
 /* ============================================================================
    GUARD DE VARIÁVEL CSS ÓRFÃ — a terceira vez que este defeito acontece.
