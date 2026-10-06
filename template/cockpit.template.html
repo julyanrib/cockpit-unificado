@@ -11220,7 +11220,10 @@ html.gv2-on, html.gv2-on body{overflow:hidden !important;}
 .gv2-cab h1{font:var(--gv2-h1);margin:0;}
 .gv2-cab p{font:var(--gv2-mini);font-size:12.5px;color:var(--gv2-mute);margin:2px 0 0;}
 .gv2-corpo{flex:1;min-height:0;display:flex;flex-direction:column;gap:var(--gv2-gap);overflow:auto;}
-.gv2-corpo.is-fixo{overflow:hidden;}
+.gv2-corpo.is-fixo{overflow:auto;}
+/* em tela baixa (o notebook com a barra do navegador) a aba rola inteira; em 900px de altura ela cabe e só a tabela rola */
+.gv2-corpo.is-fixo > *{flex-shrink:0;}
+.gv2-corpo.is-fixo > .gv2-porpessoa, .gv2-corpo.is-fixo > section.card:last-child{flex-shrink:1;}
 .gv2-rodape-aba{font:var(--gv2-mini);color:var(--gv2-dim);flex:none;}
 
 /* componentes */
@@ -11458,6 +11461,8 @@ html.gv2-on, html.gv2-on body{overflow:hidden !important;}
 .gv2-mapa-rot b{font:700 11.5px var(--gv2-font);}
 .gv2-mapa-rot span{font:500 11.5px var(--gv2-font);opacity:.85;}
 .gv2-tab-cab .gv2-ellip{white-space:normal;line-height:1.25;}
+/* piso de altura das áreas que enchem a aba: em tela baixa elas não esmagam, a aba rola */
+.gv2-rua-hoje, .gv2-pes, .gv2-pb, .gv2-prop{min-height:380px;}
 </style><!-- /gv2-css -->
 </head>
 <body>
@@ -11542,7 +11547,7 @@ html.gv2-on, html.gv2-on body{overflow:hidden !important;}
   
 
   <div id="appRoot" style="display:none;">
-      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -73640,6 +73645,7 @@ GV2.STATUS = {
   desloc: { cor: 'var(--gv2-rota)', rot: 'deslocando' },
   sem: { cor: 'var(--gv2-av-barra)', rot: 'sem check-in' }
 };
+GV2.statusRot = function (p) { return GV2.base && GV2.base.foraDaJornada && p.hoje.status !== 'sem' ? 'dia encerrado' : GV2.STATUS[p.hoje.status].rot; };
 GV2.temp = function (etapaIdx) { return etapaIdx >= 4 ? 'var(--gv2-quente)' : etapaIdx >= 2 ? 'var(--gv2-morno)' : 'var(--gv2-frio)'; };
 
 /* ── componentes (Parte 5) ── */
@@ -73780,7 +73786,7 @@ GV2.excecoesLista = function () {
     b: GV2.html.btn({ texto: semPlano.length > 1 ? 'Cobrar os ' + semPlano.length : 'Cobrar', icone: 'wa', tipo: 'prim', acao: 'cobrar:semplano' })
   });
   parados.forEach(function (p) {
-    ex.push({ t: GV2.prim(p.nome) + ': plano de ' + p.hoje.paradas_plano + ', nenhuma visita até ' + b.horaTxt, s: p.hoje.ultima_atividade + ' · ' + p.fase,
+    ex.push({ t: GV2.prim(p.nome) + ': plano de ' + p.hoje.paradas_plano + ', nenhuma visita ' + (b.foraDaJornada ? 'hoje' : 'até ' + b.horaTxt), s: p.hoje.ultima_atividade + ' · ' + p.fase,
       b: GV2.html.btn({ texto: 'Chamar', icone: 'fone', acao: 'ligar:' + p.id, titulo: 'abre o WhatsApp com o texto pronto' }) });
   });
   if (qsp.length) ex.push({
@@ -73867,7 +73873,7 @@ GV2.render.daily = function () {
     + '<li><i class="gv2-ponto" style="background:var(--gv2-faint)"></i>' + GV2.pl(p.funil_mes.demo, 'demo', 'demos') + ' e ' + GV2.pl(p.funil_mes.fechado, 'fechado', 'fechados') + ' no mês</li></ul></section>'
     + '<section class="card gv2-daily-col"><h3>Hoje</h3>'
     + (p.hoje.paradas_plano ? '<div class="gv2-daily-num ' + (ok ? 't-ok' : 't-av') + '">' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + '</div>'
-      + '<div class="t-mute">' + GV2.e(GV2.STATUS[p.hoje.status].rot + ' · ' + p.hoje.ultima_atividade) + '</div>'
+      + '<div class="t-mute">' + GV2.e(GV2.statusRot(p) + ' · ' + p.hoje.ultima_atividade) + '</div>'
       + '<ul><li><i class="gv2-ponto" style="background:var(--gv2-vivo)"></i>' + GV2.pl(p.hoje.paradas.filter(function (x) { return x.feita; }).length, 'parada feita', 'paradas feitas') + ' com GPS</li>'
       + '<li><i class="gv2-ponto" style="background:var(--gv2-faint)"></i>' + p.hoje.paradas.filter(function (x) { return !x.feita; }).length + ' por fazer</li></ul>'
       : '<div class="gv2-daily-num t-erro">sem plano</div><div class="t-mute">nenhuma parada na Agenda</div>'
@@ -73910,7 +73916,9 @@ GV2.render.funil = function () {
       if (i > 0) {
         const r = F[i - 1] ? Math.round(n / F[i - 1] * 100) : 0;
         const melhor = b.melhorPorPasso[i];
-        p = (F[i - 1] ? r + '% passam' : 'sem base') + (melhor ? ' · melhor ' + GV2.prim(melhor.nome) + ' ' + melhor.pct + '%' : '');
+        /* o mês não é uma coorte fechada (cada passo vem de uma fonte): passo maior que o
+           anterior não vira "117% passam" — diz o que é, e não entra no gargalo */
+        p = (!F[i - 1] ? 'sem base' : r > 100 ? 'mais que o passo anterior' : r + '% passam') + (melhor && r <= 100 ? ' · melhor ' + GV2.prim(melhor.nome) + ' ' + melhor.pct + '%' : '');
       }
       const w = F[0] ? Math.max(6, Math.round(n / F[0] * 100)) : 6;
       return '<div class="gv2-funil-lin' + (g && i === g.i ? ' is-gargalo' : '') + '"><span>' + ROT[i] + '</span><div class="gv2-funil-trilho"><i style="width:' + w + '%">' + n + '</i></div><span class="gv2-funil-p">' + GV2.e(p) + '</span></div>';
@@ -73989,7 +73997,7 @@ GV2.render.ruaHoje = function () {
       const sem = p.hoje.status === 'sem';
       const fora = p.praca !== praca ? p.praca + ' · ' : '';
       return '<div class="gv2-rua-it' + (GV2.estado.destaque === p.id ? ' is-sel' : '') + '" data-gv2="destaque:' + p.id + '">' + GV2.html.av(p)
-        + '<div class="gv2-pessoa-txt"><b>' + GV2.e(p.nome) + '</b><span class="' + (sem ? 't-av' : '') + '">' + GV2.e(fora + (p.hoje.paradas_plano ? GV2.STATUS[p.hoje.status].rot : 'sem plano hoje') + ' · ' + p.hoje.ultima_atividade) + '</span></div>'
+        + '<div class="gv2-pessoa-txt"><b>' + GV2.e(p.nome) + '</b><span class="' + (sem ? 't-av' : '') + '">' + GV2.e(fora + (p.hoje.paradas_plano ? GV2.statusRot(p) : 'sem plano hoje') + ' · ' + p.hoje.ultima_atividade) + '</span></div>'
         + '<b class="num">' + (p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : (p.hoje.visitas_com_prova ? p.hoje.visitas_com_prova + ' fora do plano' : '—')) + '</b></div>';
     }).join('') + '</div></section></div>';
 };
@@ -74042,7 +74050,7 @@ GV2.pautaDe = function (p) {
   const itens = [];
   itens.push(p.hoje.paradas_plano === 0
     ? 'Hoje sem plano. ' + (b.ontemRot ? 'Ontem' : 'No último dia') + ' provou ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano + '. O que impediu?'
-    : 'Hoje: ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' até ' + b.horaTxt + (p.furou > 0 ? '. Ontem furou ' + p.furou + '.' : '.'));
+    : 'Hoje: ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + (b.foraDaJornada ? ', dia encerrado' : ' até ' + b.horaTxt) + (p.furou > 0 ? '. Ontem furou ' + p.furou + '.' : '.'));
   itens.push(p.travados.length ? GV2.pl(p.travados.length, 'travado', 'travados') + ': ' + p.travados.slice(0, 2).map(function (n) { return n.nome + ' (' + n.dias + 'd em ' + GV2.ETAPAS[n.etapa_idx] + ')'; }).join(', ') + '.' : 'Nenhum negócio travado.');
   if (pd != null && pdT != null) itens.push(pd < pdT ? 'Chega na porta mas não no decisor: ' + pd + '% contra ' + pdT + '% do time.' : 'Porta → decisor em ' + pd + '%, no nível do time (' + pdT + '%).');
   else itens.push(p.quentesSemPasso ? GV2.pl(p.quentesSemPasso, 'quente sem próximo passo', 'quentes sem próximo passo') + '.' : 'Nenhuma visita com prova no mês ainda.');
@@ -74051,7 +74059,7 @@ GV2.pautaDe = function (p) {
 GV2.compSugeridos = function (p) {
   const b = GV2.base;
   return [
-    p.hoje.paradas_plano === 0 ? 'Plano de amanhã montado na Agenda até hoje 18h.' : 'Fechar as ' + Math.max(0, p.hoje.paradas_plano - p.hoje.visitas_com_prova) + ' visitas que faltam hoje.',
+    (p.hoje.paradas_plano === 0 || b.foraDaJornada) ? 'Plano de amanhã com ' + p.meta_visitas_dia + ' paradas na Agenda até ' + (b.foraDaJornada ? '9h.' : 'hoje 18h.') : 'Fechar as ' + Math.max(0, p.hoje.paradas_plano - p.hoje.visitas_com_prova) + ' visitas que faltam hoje.',
     p.travados.length ? 'Próximo passo com data nos ' + GV2.pl(p.travados.length, 'travado', 'travados') + ' até ' + b.prazo2 + '.' : 'Marcar 2 visitas de decisor até ' + b.prazo2 + '.',
     p.quentes.length ? 'Data de decisão em ' + p.quentes[0].nome + ' até ' + b.prazo3 + '.' : 'Levar 2 demos para a semana.'
   ];
@@ -74126,7 +74134,7 @@ GV2.render.propAcomp = function () {
 GV2.render.playbook = function () {
   const b = GV2.base, PB = b.playbook;
   if (!PB || !PB.ok) return GV2.cabHTML('Playbook', 'quem está em qual nível', '') + GV2.html.estado(PB && PB.erro ? 'erro' : 'lendo', PB && PB.erro ? 'Não consegui ler a trilha: ' + PB.erro : 'Lendo a trilha do time…');
-  const rows = b.pessoas.slice().sort(function (x, y) { return (x.playbook.nivel - y.playbook.nivel) || (y.playbook.dias_parado - x.playbook.dias_parado); });
+  const rows = b.pessoas.slice().sort(function (x, y) { return (x.playbook.nivel - y.playbook.nivel) || ((y.playbook.dias_parado == null ? 999 : y.playbook.dias_parado) - (x.playbook.dias_parado == null ? 999 : x.playbook.dias_parado)); });
   const n = PB.capitulos.length;
   return GV2.cabHTML('Playbook', 'quem está em qual nível', GV2.html.btn({ texto: 'Abrir o playbook', acao: 'menu:playbook' }))
     + '<div class="gv2-corpo is-fixo"><div class="gv2-pb"><section class="card" style="display:flex;flex-direction:column;min-height:0;"><div class="card-cab"><span class="card-titulo">O time na trilha</span><span class="card-sub">' + n + ' capítulos · parado = 7 dias sem concluir nada</span></div><div class="gv2-tab-corpo">'
@@ -74134,7 +74142,7 @@ GV2.render.playbook = function () {
       const nv = p.playbook.nivel, par = p.playbook.parado;
       return '<div class="gv2-pb-lin"><b>' + GV2.e(p.nome) + '</b><div class="gv2-trilha" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))">'
         + PB.capitulos.map(function (c, i) { return '<i class="' + (p.playbook.feitos[i] ? 'ok' : i + 1 === nv ? 'atual' : '') + '" title="' + GV2.e(c.titulo) + '"></i>'; }).join('')
-        + '</div><span class="' + (par ? 't-av' : 't-mute') + '" style="font:var(--gv2-mini)">' + (par ? 'parado há ' + p.playbook.dias_parado + ' dias' : nv > n ? 'trilha completa' : 'nível ' + nv) + '</span>'
+        + '</div><span class="' + (par ? 't-av' : 't-mute') + '" style="font:var(--gv2-mini)">' + (par ? (p.playbook.nunca ? 'não começou a trilha' : 'parado há ' + p.playbook.dias_parado + ' dias') : nv > n ? 'trilha completa' : 'nível ' + nv) + '</span>'
         + (par ? GV2.html.btn({ texto: '1:1', acao: 'pessoa:' + p.id }) : '<span></span>') + '</div>';
     }).join('') + '</div></section>'
     + '<div class="gv2-caps">' + PB.capitulos.map(function (c, i) {
@@ -74240,7 +74248,11 @@ GV2.montar = async function () {
   const faltas = [];
   const reps = (DATA.reps || []).filter(function (r) { return r && r.ownerId && !/DESATIVADO/i.test(r.name || ''); });
   const donos = reps.map(function (r) { return String(r.ownerId); });
+  /* o conteúdo do playbook chega sob demanda (/api/dados?recurso=playbook): em paralelo */
+  const pbCarga = typeof carregarPlaybookProtegido === 'function'
+    ? carregarPlaybookProtegido().catch(function (e) { return { erro: (e && e.message) || 'erro' }; }) : Promise.resolve(null);
   const L = await GV2.ler(donos, agora);
+  await pbCarga;
   const semana = (L.semana.data && L.semana.data.pessoas) || [];
   const anterior = (L.anterior.data && L.anterior.data.pessoas) || [];
   const mapa = (L.semana.data && L.semana.data.mapa) || { checkins: [], plano: [] };
@@ -74314,17 +74326,22 @@ GV2.montar = async function () {
     const ant = propostaPorDeal[deal];
     if (!ant || di > ant.dia) propostaPorDeal[deal] = { dono: dono, dia: di };
   });
+  /* a data de entrada em Negociação que o HubSpot guarda (o robô a passa desde 06/10):
+     cobre quem moveu direto no CRM e já está em Ag. Pagamento */
+  const mesIni = agora.iso.slice(0, 8) + '01';
   negocios.forEach(function (n) {
-    if (n.etapa_idx !== 4 || propostaPorDeal[n.id]) return;
-    if (n.dias < uteisNoMes) propostaPorDeal[n.id] = { dono: n.dono, dia: null, uteis: n.dias };
+    const em = n.lead && n.lead.entrouNegociacaoEm;
+    if (!em || n.etapa_idx < 4) return;
+    const di = GV2.diaDe(em);
+    if (di >= mesIni && (!propostaPorDeal[n.id] || di > propostaPorDeal[n.id].dia)) propostaPorDeal[n.id] = { dono: n.dono, dia: di };
   });
   const propostasDe = function (dono) {
     let mes = 0, sem = 0;
     Object.keys(propostaPorDeal).forEach(function (k) {
       const p = propostaPorDeal[k];
-      if (p.dono !== dono) return;
+      if (p.dono !== dono || p.dia < mesIni) return;
       mes++;
-      if (p.dia ? p.dia >= seg : p.uteis < uteisNaSemana) sem++;
+      if (p.dia >= seg) sem++;
     });
     return { semana: sem, mes: mes };
   };
@@ -74351,7 +74368,8 @@ GV2.montar = async function () {
     const s = semana.find(function (x) { return String(x.ownerId) === id; }) || { dias: [] };
     const a = anterior.find(function (x) { return String(x.ownerId) === id; }) || { dias: [] };
     const dHoje = idxHoje >= 0 ? (s.dias[idxHoje] || {}) : {};
-    const dOntem = ontemNaAnterior ? (a.dias.find(function (d) { return d.dia === ontemIso; }) || {}) : (s.dias.find(function (d) { return d.dia === ontemIso; }) || {});
+    /* a RPC devolve os 5 dias em ordem (segunda a sexta): o índice é a data */
+    const dOntem = (ontemNaAnterior ? a.dias[GV2.dow(ontemIso) - 1] : s.dias[diasSemana.indexOf(ontemIso)]) || {};
     const meta = Number(dHoje.meta) || Number((s.dias.find(function (d) { return d.meta; }) || {}).meta) || 6;
     const ramp = typeof rampDoOwner === 'function' ? rampDoOwner(id) : null;
     const checks = (mapa.checkins || []).filter(function (c) { return String(c.ownerId) === id; });
@@ -74396,7 +74414,7 @@ GV2.montar = async function () {
       palavra_dada: !!(s.plano && s.plano.promessaDadaEm),
       funil_mes: { portas: portas[id] || 0, decisor: decisor[id] || 0, demo: demos[id] || 0, proposta: prop.mes, fechado: fech },
       propostas: { semana: prop.semana, mes: prop.mes, aceitas_mes: fech },
-      playbook: { nivel: nivel, feitos: feitos, dias_parado: diasParado == null ? 0 : diasParado, parado: nivel <= caps.length && (diasParado == null || diasParado >= 7) },
+      playbook: { nivel: nivel, feitos: feitos, dias_parado: diasParado, nunca: diasParado == null, parado: nivel <= caps.length && (diasParado == null || diasParado >= 7) },
       email: email
     };
   });
@@ -74419,7 +74437,7 @@ GV2.montar = async function () {
       + (p.hoje.paradas_plano > 0 && p.hoje.visitas_com_prova < p.esperado ? 2 : 0)
       + (p.furou > 0 ? 1 : 0);
     p.motivo = (p.hoje.paradas_plano === 0 && !fds) ? 'sem plano hoje' + (p.furou ? ' · furou ' + p.furou + ' ontem' : '')
-      : (p.hoje.paradas_plano > 0 && p.hoje.visitas_com_prova === 0 && agora.min > j.ini) ? 'nenhuma visita até ' + GV2.hm()
+      : (p.hoje.paradas_plano > 0 && p.hoje.visitas_com_prova === 0 && agora.min > j.ini) ? (agora.min >= j.fim ? 'nenhuma visita hoje' : 'nenhuma visita até ' + GV2.hm())
       : p.travados.length >= 3 ? GV2.pl(p.travados.length, 'travado', 'travados')
       : p.furou ? 'furou ' + p.furou + ' ontem' : 'no ritmo';
   });
@@ -74448,7 +74466,7 @@ GV2.montar = async function () {
   }
   const melhorPorPasso = [null];
   for (let i = 1; i < 5; i++) {
-    const cand = pessoas.filter(function (p) { return p.funil_mes[K[i - 1]] >= 3; })
+    const cand = pessoas.filter(function (p) { return p.funil_mes[K[i - 1]] >= 3 && p.funil_mes[K[i]] <= p.funil_mes[K[i - 1]]; })
       .map(function (p) { return { nome: p.nome, r: p.funil_mes[K[i]] / p.funil_mes[K[i - 1]] }; })
       .sort(function (x, y) { return y.r - x.r; })[0];
     melhorPorPasso.push(cand ? { nome: cand.nome, pct: Math.round(cand.r * 100) } : null);
@@ -74490,7 +74508,7 @@ GV2.montar = async function () {
   const fim = GV2.somaDias(agora.iso.slice(0, 8) + '01', 40).slice(0, 8) + '01';
   const diasUteis = GV2.uteisEntre(agora.iso.slice(0, 8) + '01', GV2.somaDias(fim, -1));
   const prazo = function (n) { let d = agora.iso, k = n; while (k > 0) { d = GV2.somaDias(d, 1); if (GV2.dow(d) > 0 && GV2.dow(d) < 6) k--; } return GV2.DIAS[GV2.dow(d)] + ' ' + GV2.ddmm(d); };
-  const hsEm = DATA.updatedAtHubspot || DATA.geradoEm || DATA.gerado_em || null;
+  const hsEm = DATA.hubspotUpdatedAtISO || null;
 
   return {
     agora: agora, horaTxt: GV2.hm(), foraDaJornada: fds || agora.min >= j.fim, antesDaJornada: !fds && agora.min < j.ini,
@@ -74681,7 +74699,7 @@ GV2.mapa = {
     b.style.opacity = apagado ? '.35' : '1';
     b.title = p.nome;
     b.innerHTML = '<i style="background:' + st.cor + '">' + GV2.e(p.iniciais) + '</i>'
-      + (mostraRot ? '<span class="gv2-mapa-rot"><b>' + GV2.e(GV2.prim(p.nome)) + '</b><span>' + GV2.e(p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' · ' + st.rot : (p.hoje.posicaoOntem ? 'sem plano · ' + p.hoje.ultima_atividade : 'sem plano hoje')) + '</span></span>' : '');
+      + (mostraRot ? '<span class="gv2-mapa-rot"><b>' + GV2.e(GV2.prim(p.nome)) + '</b><span>' + GV2.e(p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' · ' + GV2.statusRot(p) : (p.hoje.posicaoOntem ? 'sem plano · ' + p.hoje.ultima_atividade : 'sem plano hoje')) + '</span></span>' : '');
     return b;
   },
   /* sem Google (fora do PWA, sem chave): projeção simples dos pontos na caixa */
@@ -74771,9 +74789,10 @@ GV2.wa = function (texto) {
 };
 GV2.marcarCobrado = function (chave) { GV2.estado.cobrados[chave] = GV2.hm(); };
 GV2.textoSemPlano = function (p) {
-  return 'Oi ' + GV2.prim(p.nome) + '! Ainda não vi seu plano de hoje na Agenda. Monta até 12h? '
+  return 'Oi ' + GV2.prim(p.nome) + '! ' + (GV2.base.foraDaJornada ? 'Monta o plano de amanhã na Agenda até 9h? ' : 'Ainda não vi seu plano de hoje na Agenda. Monta até 12h? ')
     + (p.ontem.paradas_plano ? 'Ontem foram ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano + ' com prova.' : '');
 };
+GV2.recadoPlano = function () { return GV2.base && GV2.base.foraDaJornada ? 'Monte o plano de amanhã na Agenda até 9h.' : 'Monte o plano de hoje na Agenda até 12h.'; };
 GV2.textoNegocios = function (p, ns) {
   return 'Oi ' + GV2.prim(p ? p.nome : '') + '! Preciso de próximo passo com data hoje em: '
     + ns.slice(0, 6).map(function (n) { return n.nome + ' (' + n.dias + 'd em ' + GV2.ETAPAS[n.etapa_idx] + (n.mrr ? ', ' + GV2.rs(n.mrr) : '') + ')'; }).join('; ')
@@ -74811,7 +74830,7 @@ GV2.cobrarPessoa = async function (id) {
   if (!p) return;
   const txt = GV2.textoSemPlano(p);
   GV2.wa(txt);
-  const ok = await GV2.recado(p, 'Monte o plano de hoje na Agenda até 12h.');
+  const ok = await GV2.recado(p, GV2.recadoPlano());
   if (ok) GV2.marcarCobrado('pessoa:' + id);
   GV2.pintar();
 };
@@ -74861,7 +74880,7 @@ GV2.enviarLote = async function () {
   for (const g of L.grupos) {
     if (L.tipo === 'semplano') {
       i++; GV2.estado.lote = 'Enviando ' + i + ' de ' + total + '…'; GV2.pintar();
-      if (await GV2.recado(g.p, 'Monte o plano de hoje na Agenda até 12h.')) { ok++; GV2.marcarCobrado('pessoa:' + g.p.id); } else falhas++;
+      if (await GV2.recado(g.p, GV2.recadoPlano())) { ok++; GV2.marcarCobrado('pessoa:' + g.p.id); } else falhas++;
       continue;
     }
     for (const n of g.ns) {
