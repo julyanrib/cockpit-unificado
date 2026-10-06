@@ -7347,6 +7347,14 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
 .gv2-fp-neg b{display:flex;align-items:center;gap:6px;font:700 12.5px var(--gv2-font);}
 .gv2-fp-neg span{font:500 11.5px var(--gv2-font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gv2-fp-vazio{font:var(--gv2-mini);color:var(--gv2-faint);padding:4px;}
+
+.gv2-comb-cartao:focus-within{border-style:solid;border-color:var(--gv2-ink);}
+.gv2-comb-cartao textarea{cursor:text;}
+.gv2-comb-pe{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.gv2-comb-tirar{border:0;background:transparent;color:var(--gv2-dim);font:600 11.5px var(--gv2-font);cursor:pointer;min-height:32px;padding:0 6px;border-radius:6px;}
+.gv2-comb-tirar:hover{background:var(--gv2-sub);color:var(--gv2-ink);}
+.gv2-comb-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.gv2-comb-nota{font:var(--gv2-mini);color:var(--gv2-dim);}
 </style><!-- /gv2-css -->
 </head>
 <body>
@@ -7431,7 +7439,7 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
   
 
   <div id="appRoot" style="display:none;">
-                                  <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -55192,16 +55200,24 @@ GV2.render.umAUmV2 = function (p) {
   const deals = p.negocios.slice().sort(function (x, y) { return (y.travado - x.travado) || (y.mrr - x.mrr); }).slice(0, 5);
   return '<div class="gv2-duas"><div>' + ultimo + '</div><div><p class="gv2-rot">Pauta de hoje · ' + GV2.PESSOAS.PAUTA_MIN + ' minutos</p><ol class="gv2-pauta is-v2">' + pauta + '</ol></div></div>'
     + '<div><p class="gv2-rot">Combinar agora · ' + GV2.e(n) + ' vê no app e você confere no próximo 1:1</p><div class="gv2-combinar">' + comb.map(function (c, i) {
-      return '<label class="gv2-comb-cartao"><textarea data-gv2-comb="' + p.id + ':' + i + '" rows="2" aria-label="Combinado ' + (i + 1) + '">' + GV2.e(c.texto) + '</textarea><span>' + GV2.e(c.como) + '</span></label>';
-    }).join('') + '</div></div>'
-    + '<div><p class="gv2-rot">Os negócios da conversa</p>' + GV2.linhasNegocios(deals) + '</div>';
+      return '<div class="gv2-comb-cartao"><textarea data-gv2-comb="' + p.id + ':' + i + '" rows="2" placeholder="Escreva o combinado…" aria-label="Combinado ' + (i + 1) + '">' + GV2.e(c.texto) + '</textarea><div class="gv2-comb-pe"><span>' + GV2.e(c.como) + '</span><button type="button" class="gv2-comb-tirar" data-gv2="comb:tirar:' + p.id + ':' + i + '">Tirar</button></div></div>';
+    }).join('') + '</div>'
+
+    + '<div class="gv2-comb-acoes">' + GV2.html.btn({ texto: '+ Combinado', acao: 'comb:add:' + p.id, off: comb.length >= 5 })
+    + GV2.html.btn({ texto: 'Pauta no WhatsApp', icone: 'wa', acao: 'pauta:wa:' + p.id })
+    + (GV2.estado.registrando && GV2.estado.registrando.id === p.id ? GV2.html.btn({ texto: 'Desfazer · ' + GV2.estado.registrando.s + 's', tam: 'lg', acao: 'um:desfazer' })
+      : GV2.html.btn({ texto: 'Registrar 1:1 · ' + GV2.pl(comb.filter(function (c) { return String(c.texto || '').trim(); }).length, 'combinado', 'combinados'), tipo: 'prim', tam: 'lg', acao: 'um:registrar:' + p.id }))
+    + '<span class="gv2-comb-nota">' + GV2.e('grava o 1:1 e manda cada combinado para o sino do app de ' + n) + '</span></div></div>'
+    + '<div><p class="gv2-rot">Os negócios da conversa · Cobrar vira próximo passo hoje no app</p>' + GV2.linhasNegocios(deals, true) + '</div>';
 };
-GV2.linhasNegocios = function (deals) {
+GV2.linhasNegocios = function (deals, comCobrar) {
   return deals.length ? deals.map(function (d) {
-    return '<div class="gv2-tab-lin is-clica" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) 90px;padding:0 4px;" data-gv2="ficha:' + d.id + '">'
+    const c = comCobrar ? GV2.estado.cobrados['neg:' + d.id] : null;
+    return '<div class="gv2-tab-lin is-clica" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) 90px' + (comCobrar ? ' 110px' : '') + ';padding:0 4px;" data-gv2="ficha:' + d.id + '">'
       + '<div class="gv2-pessoa"><i class="gv2-ponto" style="background:' + GV2.temp(d.etapa_idx) + '"></i><b class="gv2-ellip" style="font:700 13px var(--gv2-font)">' + GV2.e(d.nome) + '</b></div>'
       + '<span class="t-mute gv2-ellip">' + GV2.e(GV2.ETAPAS[d.etapa_idx]) + '</span><span class="num ' + (d.travado ? 't-av' : 't-mute') + '">' + d.dias + ' dias · régua ' + d.regua + '</span>'
-      + '<b class="num" style="justify-self:end;' + (d.mrr ? '' : 'color:var(--gv2-faint);font-weight:500') + '">' + (d.mrr ? GV2.rs(d.mrr) : 'sem valor') + '</b></div>';
+      + '<b class="num" style="justify-self:end;' + (d.mrr ? '' : 'color:var(--gv2-faint);font-weight:500') + '">' + (d.mrr ? GV2.rs(d.mrr) : 'sem valor') + '</b>'
+      + (comCobrar ? '<span style="justify-self:end">' + GV2.html.btn({ texto: c ? 'cobrado ' + c : 'Cobrar', acao: 'cobrar:neg:' + d.id, feito: !!c, titulo: 'vira próximo passo com data de hoje no app e abre o WhatsApp' }) + '</span>' : '') + '</div>';
   }).join('') : GV2.html.estado('vazio', 'Nenhum negócio aberto no funil.');
 };
 GV2.render.campo = function (p, ida, dia) {
@@ -55352,6 +55368,15 @@ GV2.enviarDevolutiva = function (id) {
 };
 GV2.pessoasClique = function (cmd, parte) {
   if (cmd === 'pmodo') { GV2.estado.pmodo = parte[1]; GV2.pintar(); return true; }
+  if (cmd === 'comb') {
+    const lista = GV2.estado.comb1a1[parte[2]];
+    if (!lista) return true;
+    if (parte[1] === 'tirar') lista.splice(Number(parte[3]), 1);
+    if (parte[1] === 'add' && lista.length < 5) { const pz = GV2.uteisAdiante(GV2.base.agora.iso, 3); lista.push({ texto: '', regra: 'livre', prazo: pz, como: 'até ' + GV2.diaCurto(pz) + ' · você confere no 1:1' }); }
+    GV2.pintar();
+    if (parte[1] === 'add') { const ts = document.querySelectorAll('[data-gv2-comb^="' + parte[2] + ':"]'); const t = ts[ts.length - 1]; if (t) t.focus(); }
+    return true;
+  }
   if (cmd === 'pfunil' && parte[1] === 'cobrar') {
     const pp = GV2.base.porId[parte[2]];
     if (pp && pp.travados.length) { GV2.estado.filtro = 'travados'; GV2.estado.prf = 'todas'; GV2.estado.loteDados = { tipo: 'neg', grupos: [{ p: pp, ns: pp.travados.slice(0, 40), texto: GV2.textoNegocios(pp, pp.travados) }] }; GV2.estado.veu = GV2.render.lote; GV2.pintar(); }

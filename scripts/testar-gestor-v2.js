@@ -184,6 +184,8 @@ tabelas.gv2_falta_etapa = [
   try { pf = GV2.render.pessoas(); } catch (e) { falhas.push('Pessoas › Funil: ' + e.message); }
   checar('Pessoas › Funil: o funil do mês da pessoa e os negócios dela por etapa, clicáveis', /Funil do mês/.test(pf) && /data-gv2="ficha:a"/.test(pf) && /data-gv2="ficha:d"/.test(pf) && !/data-gv2="ficha:b"/.test(pf) && /Cobrar travados/.test(pf));
   GV2.estado.pmodo = '1a1';
+  const um = GV2.render.pessoas();
+  checar('1:1: Registrar, + Combinado, Tirar e Cobrar nos negócios ficam embaixo dos combinados', /data-gv2="comb:add:1"/.test(um) && /data-gv2="comb:tirar:1:0"/.test(um) && /Registrar 1:1 · 3 combinados/.test(um) && /data-gv2="cobrar:neg:a"/.test(um));
   let mg = '';
   try { GV2.estado.destaque = '1'; mg = GV2.render.mapaGrande(); } catch (e) { falhas.push('mapa grande: ' + e.message); }
   checar('mapa grande: o time inteiro na lista e o mapa "grande"', (mg.match(/data-gv2="mg:pessoa:/g) || []).length === 3 && /data-gv2-mapa="grande"/.test(mg) && /Ana Lima/.test(mg));
