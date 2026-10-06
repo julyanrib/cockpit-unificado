@@ -355,8 +355,30 @@ async function buscarCidade(cidadeCfg, casaToken) {
   return { leads: leadsFinais, porMeta: contagemPorMeta() };
 }
 
+/* EM PEDAÇOS (06/10/26). Desde que a importação mora no APP Outbound (Edge Function
+   cockpit-robo), Rio (450 contas) e São Paulo (272) voltavam 546 e 503: a Edge estoura
+   memória/tempo num lote só, e as cidades pequenas passavam. Lotes de 80, cada um com uma
+   nova tentativa se a recusa for de limite (5xx); um lote que falha não derruba os outros. */
+const TAMANHO_DO_LOTE = 80;
 async function importarLote(leadsCidade, importSecret) {
   if (leadsCidade.length === 0) return { inseridos: 0, duplicados: 0 };
+  let inseridos = 0, duplicados = 0;
+  const erros = [];
+  for (let i = 0; i < leadsCidade.length; i += TAMANHO_DO_LOTE) {
+    const pedaco = leadsCidade.slice(i, i + TAMANHO_DO_LOTE);
+    let r = await importarPedaco(pedaco, importSecret);
+    if (r.erro && /^5\d\d$/.test(String(r.status))) {
+      await new Promise(ok => setTimeout(ok, 4000));
+      r = await importarPedaco(pedaco, importSecret);
+    }
+    if (r.erro) erros.push(`lote ${i / TAMANHO_DO_LOTE + 1}: ${r.erro}`);
+    inseridos += r.inseridos || 0;
+    duplicados += r.duplicados || 0;
+  }
+  return erros.length ? { inseridos, duplicados, erro: erros.join(' · ') } : { inseridos, duplicados };
+}
+
+async function importarPedaco(leadsCidade, importSecret) {
   const resp = await fetch(`${COCKPIT_URL}/api/importar-leads`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-import-secret': importSecret },
@@ -368,7 +390,7 @@ async function importarLote(leadsCidade, importSecret) {
     // Repassa o diagnóstico do endpoint (presença/tamanho/trim do segredo — nunca o
     // valor). Sem isto, "recusado" não distingue variável ausente de valor diferente.
     if (data.diagnosticoSegredo) console.log('[backfill-casa-dos-dados] Diagnóstico do segredo:', JSON.stringify(data.diagnosticoSegredo));
-    return { inseridos: 0, duplicados: 0, erro: data.erro || String(resp.status) };
+    return { inseridos: 0, duplicados: 0, erro: data.erro || String(resp.status), status: resp.status };
   }
   return data;
 }
