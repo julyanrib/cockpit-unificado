@@ -7349,6 +7349,30 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
 .gv2-comb-tirar:hover{background:var(--gv2-sub);color:var(--gv2-ink);}
 .gv2-comb-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;}
 .gv2-comb-nota{font:var(--gv2-mini);color:var(--gv2-dim);}
+
+.gv2-rr{flex:1;min-height:0;display:grid;grid-template-columns:280px minmax(0,1fr);gap:var(--gv2-gap);}
+@media (max-width:1366px){.gv2-rr{grid-template-columns:240px minmax(0,1fr);}}
+.gv2-rr-lado,.gv2-rr-main{display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.gv2-rr-main .gv2-rt{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:0 14px 14px;}
+.gv2-rt-nav{display:flex;align-items:center;gap:10px;}
+.gv2-rt-nav b{font:700 13px var(--gv2-font);}
+.gv2-rt-nav .btn{min-width:40px;font-size:16px;}
+.gv2-rt-dias{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;}
+.gv2-rt-dia{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:52px;padding:6px 10px;border:1px solid var(--gv2-line);border-radius:var(--gv2-r-ctl);background:var(--gv2-card);color:var(--gv2-ink);cursor:pointer;text-align:left;}
+.gv2-rt-dia i{width:22px;height:4px;border-radius:2px;margin-bottom:3px;}
+.gv2-rt-dia b{font:700 12.5px var(--gv2-font);}
+.gv2-rt-dia span{font:var(--gv2-mini);color:var(--gv2-dim);}
+.gv2-rt-dia.is-ativo{border-color:var(--gv2-ink);background:var(--gv2-sub);box-shadow:inset 0 0 0 1px var(--gv2-ink);}
+.gv2-rt-corpo{flex:1;min-height:300px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;}
+.gv2-rt-mapa{margin:0;min-height:300px;}
+.gv2-rt-lista{min-height:0;overflow-y:auto;scrollbar-width:thin;}
+.gv2-rt-lista ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;}
+.gv2-rt-lista li{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:center;min-height:40px;padding:2px 0;border-bottom:1px solid var(--gv2-line-soft);}
+.gv2-rt-lista li > i{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--gv2-ink);display:flex;align-items:center;justify-content:center;font:700 11px var(--gv2-font);font-style:normal;}
+.gv2-rt-lista li b{display:block;font:700 12.5px var(--gv2-font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gv2-rt-lista li small{font:var(--gv2-mini);color:var(--gv2-dim);white-space:nowrap;}
+.gv2-rt-lista li.gv2-rt-sep{display:block;min-height:0;border:0;padding:8px 0 2px;font:700 11.5px var(--gv2-font);letter-spacing:.06em;text-transform:uppercase;color:var(--gv2-dim);}
+.gv2-rt-nota{font:var(--gv2-mini);margin:6px 0 0;}
 </style><!-- /gv2-css -->
 </head>
 <body>
@@ -7433,7 +7457,7 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
   
 
   <div id="appRoot" style="display:none;">
-                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -53846,10 +53870,12 @@ GV2.render.negocios = function () {
 
 GV2.render.rua = function () {
   const b = GV2.base, modo = GV2.estado.rua;
-  const seg = GV2.segHTML('rua', [['hoje', 'Hoje'], ['semana', 'Semana']], modo);
+
+  const m = modo === 'agora' || modo === 'semana' ? modo : 'rotas';
+  const seg = GV2.segHTML('rua', [['rotas', 'Rotas'], ['agora', 'Agora no mapa'], ['semana', 'Grade da semana']], m);
   const antigo = GV2.html.btn({ texto: 'Tomada de contas e Radar', acao: 'menu:rotas', titulo: 'abre a aba Rotas & Prospecção do cockpit antigo' });
-  return GV2.cabHTML('Rua', 'o plano de cada um e onde o time está', '<div style="display:flex;gap:8px;align-items:center;">' + antigo + seg + '</div>')
-    + '<div class="gv2-corpo is-fixo">' + (modo === 'semana' ? GV2.render.ruaSemana() : GV2.render.ruaHoje()) + GV2.faltaHTML() + '</div>';
+  return GV2.cabHTML('Rua', m === 'rotas' ? 'a rota de cada um, dia a dia: clique na pessoa e no dia' : 'o plano de cada um e onde o time está', '<div style="display:flex;gap:8px;align-items:center;">' + antigo + seg + '</div>')
+    + '<div class="gv2-corpo is-fixo">' + (m === 'semana' ? GV2.render.ruaSemana() : m === 'agora' ? GV2.render.ruaHoje() : GV2.render.ruaRotas()) + GV2.faltaHTML() + '</div>';
 };
 GV2.render.ruaHoje = function () {
   const b = GV2.base;
@@ -54541,6 +54567,7 @@ GV2.pintar = function () {
   const guardados = {};
   raiz.querySelectorAll('[data-gv2-mapa]').forEach(function (el) { if (el._gv2) guardados[el.getAttribute('data-gv2-mapa')] = el._gv2; });
   raiz.querySelectorAll('[data-gv2-pxmapa]').forEach(function (el) { if (el._gv2px) guardados['px:' + el.getAttribute('data-gv2-pxmapa')] = el._gv2px; });
+  raiz.querySelectorAll('[data-gv2-rotamapa]').forEach(function (el) { if (el._gv2rt) guardados.rota = el._gv2rt; });
   raiz.innerHTML = '<div class="gv2">' + GV2.navHTML() + '<main class="gv2-main">' + r()
     + (GV2.estado.daily != null ? GV2.render.daily() : '')
     + (GV2.estado.veu ? GV2.estado.veu() : '')
@@ -54551,6 +54578,7 @@ GV2.pintar = function () {
   if (GV2.pendente) GV2.pintarAviso();
   raiz.querySelectorAll('[data-gv2-mapa]').forEach(function (el) { GV2.mapa.montar(el, guardados[el.getAttribute('data-gv2-mapa')]); });
   raiz.querySelectorAll('[data-gv2-pxmapa]').forEach(function (el) { GV2.pxMapa.montar(el, guardados['px:' + el.getAttribute('data-gv2-pxmapa')]); });
+  raiz.querySelectorAll('[data-gv2-rotamapa]').forEach(function (el) { GV2.rotaMapa.montar(el, guardados.rota); });
   const host = raiz.querySelector('[data-gv2-vender]');
   GV2.vender(host);
 };
@@ -54860,6 +54888,7 @@ GV2.clique = function (ev) {
   if (GV2.pessoasClique && GV2.pessoasClique(cmd, parte, el)) return;
   if (GV2.pxComando && GV2.pxComando(cmd, parte)) return;
   if (GV2.mgComando && GV2.mgComando(cmd, parte)) return;
+  if (GV2.rotaComando && GV2.rotaComando(cmd, parte)) return;
   if (cmd === 'aba') return GV2.ir(parte[1]);
   if (cmd === 'ir') return GV2.ir(parte[1], parte[2]);
   if (cmd === 'filtro') { GV2.estado.filtro = parte[1]; GV2.estado.passo = null; return GV2.pintar(); }
@@ -54882,8 +54911,8 @@ GV2.clique = function (ev) {
   if (cmd === 'pessoa') { GV2.estado.pessoa = parte[1]; return GV2.ir('pessoas'); }
   if (cmd === 'mapa') {
     const p = GV2.base.porId[parte[1]];
-    if (p) { GV2.estado.praca = p.praca; GV2.estado.destaque = p.id; }
-    return GV2.ir('rua', 'hoje');
+    if (p) { GV2.estado.praca = p.praca; GV2.estado.destaque = p.id; GV2.estado.ruaSel = p.id; }
+    return GV2.ir('rua', 'rotas');
   }
   if (cmd === 'ficha') {
     const n = GV2.base.negocios.find(function (x) { return x.id === parte[1]; });
@@ -56512,6 +56541,163 @@ GV2.render.funilPessoa = function (p) {
     + '<div class="gv2-fp-barras">' + funil + '</div>'
     + '<div class="gv2-fp-cab"><span class="card-titulo">Negócios abertos por etapa</span><span class="card-sub">' + GV2.e(GV2.pl(p.negocios.length, 'negócio', 'negócios') + ' · âmbar = travado · clique numa etapa para ver os negócios') + '</span></div>'
     + '<div class="gv2-fp-barras">' + etapas + '</div>' + lista + '</div>';
+};
+
+GV2.DIA_COR = ['#2563EB', '#16A34A', '#F5A524', '#8B5CF6', '#E23B3B'];
+GV2.rota = { cache: {} };
+GV2.rotaSegunda = function () { return GV2.somaDias(GV2.base.semanaAtual || GV2.segundaDe(GV2.base.agora.iso), 7 * (GV2.estado.rotaSem || 0)); };
+GV2.rotaLer = async function (seg, forcar) {
+  const c = GV2.rota.cache[seg];
+  if (c && !forcar && c.estado !== 'erro') return;
+  GV2.rota.cache[seg] = { estado: 'lendo' };
+  const donos = GV2.base.pessoas.map(function (p) { return p.id; });
+  const fimSem = GV2.somaDias(seg, 4);
+  const [itens, vis] = await Promise.all([
+    Promise.resolve(supa.rpc('rotas_da_semana', { p_segunda: seg, p_donos: donos })).then(function (r) { return r.error ? { erro: r.error.message } : { data: r.data || [] }; }, function (e) { return { erro: e.message }; }),
+    seg <= GV2.base.agora.iso
+      ? Promise.resolve(supa.rpc('visitas_com_prova', { p_de: seg, p_ate: fimSem < GV2.base.agora.iso ? fimSem : GV2.base.agora.iso, p_pessoa: null })).then(function (r) { return r.error ? { data: [] } : { data: r.data || [] }; }, function () { return { data: [] }; })
+      : Promise.resolve({ data: [] })
+  ]);
+  GV2.rota.cache[seg] = itens.erro ? { estado: 'erro', erro: itens.erro } : { estado: 'ok', itens: itens.data, visitas: vis.data };
+  if (GV2.estado.aba === 'rua') GV2.pintar();
+};
+
+GV2.rotaParadas = function (p, seg, dia) {
+  const c = GV2.rota.cache[seg];
+  if (!c || c.estado !== 'ok') return null;
+  const feitas = {};
+  c.visitas.forEach(function (v) { if (v.provada && String(v.owner_id) === p.id) feitas[v.client_id + '|' + v.dia] = true; });
+  return c.itens.filter(function (x) { return String(x.owner_id) === p.id && (!dia || x.dia === dia); })
+    .map(function (x) { return { dia: x.dia, hora: x.hora, nome: x.nome, proposito: x.proposito, lat: x.lat != null ? Number(x.lat) : null, lng: x.lng != null ? Number(x.lng) : null, feita: !!feitas[x.client_id + '|' + x.dia], vaga: x.vaga }; })
+    .sort(function (a, b) { return a.dia.localeCompare(b.dia) || String(a.hora || '99').localeCompare(String(b.hora || '99')) || (a.vaga || 0) - (b.vaga || 0); });
+};
+GV2.render.rotaPessoa = function (p) {
+  const b = GV2.base, seg = GV2.rotaSegunda();
+  const c = GV2.rota.cache[seg];
+  if (!c) setTimeout(function () { GV2.rotaLer(seg); }, 0);
+  const dias = [0, 1, 2, 3, 4].map(function (i) { return GV2.somaDias(seg, i); });
+  if (GV2.estado.rotaDia !== 'semana' && dias.indexOf(GV2.estado.rotaDia) < 0) GV2.estado.rotaDia = dias.indexOf(b.agora.iso) >= 0 ? b.agora.iso : dias[0];
+  const sel = GV2.estado.rotaDia;
+  const nav = '<div class="gv2-rt-nav">' + GV2.html.btn({ texto: '‹', acao: 'rota:sem:-1', titulo: 'semana anterior' })
+    + '<b>' + GV2.e((GV2.estado.rotaSem ? '' : 'esta semana · ') + GV2.ddmm(dias[0]) + ' a ' + GV2.ddmm(dias[4])) + '</b>'
+    + GV2.html.btn({ texto: '›', acao: 'rota:sem:1', titulo: 'próxima semana' }) + '</div>';
+  if (!c || c.estado === 'lendo') return '<div class="gv2-rt">' + nav + '<div class="gv2-esq" style="height:340px"></div></div>';
+  if (c.estado === 'erro') return '<div class="gv2-rt">' + nav + GV2.html.estado('erro', 'Não consegui ler o plano da semana: ' + c.erro) + GV2.html.btn({ texto: 'Tentar de novo', acao: 'rota:ler' }) + '</div>';
+  const todas = GV2.rotaParadas(p, seg, null);
+  const chips = dias.map(function (d, i) {
+    const n = todas.filter(function (x) { return x.dia === d; });
+    const f = n.filter(function (x) { return x.feita; }).length;
+    return '<button type="button" class="gv2-rt-dia' + (sel === d ? ' is-ativo' : '') + '" data-gv2="rota:dia:' + d + '"><i style="background:' + GV2.DIA_COR[i] + '"></i><b>' + GV2.DIAS[GV2.dow(d)] + ' ' + d.slice(8, 10) + (d === b.agora.iso ? ' · hoje' : '') + '</b><span>' + (n.length ? (d <= b.agora.iso ? f + ' de ' + n.length : GV2.pl(n.length, 'parada', 'paradas')) : 'sem plano') + '</span></button>';
+  }).join('') + '<button type="button" class="gv2-rt-dia' + (sel === 'semana' ? ' is-ativo' : '') + '" data-gv2="rota:dia:semana"><i style="background:var(--gv2-ink)"></i><b>Semana</b><span>' + GV2.pl(todas.length, 'parada', 'paradas') + '</span></button>';
+  const lista = sel === 'semana' ? todas : todas.filter(function (x) { return x.dia === sel; });
+  const semPino = lista.filter(function (x) { return x.lat == null; }).length;
+  let k = 0, diaAnt = null;
+  const itens = lista.map(function (x) {
+    if (x.dia !== diaAnt) { k = 0; diaAnt = x.dia; }
+    k++;
+    const cor = GV2.DIA_COR[dias.indexOf(x.dia)] || 'var(--gv2-ink)';
+    return (sel === 'semana' && k === 1 ? '<li class="gv2-rt-sep">' + GV2.e(GV2.DIAS[GV2.dow(x.dia)] + ' ' + GV2.ddmm(x.dia)) + '</li>' : '')
+      + '<li class="' + (x.feita ? 'is-feita' : '') + '"><i style="border-color:' + cor + ';' + (x.feita ? 'background:' + cor + ';color:#fff' : '') + '">' + k + '</i><span class="gv2-ellip"><b>' + GV2.e(x.nome || 'parada') + '</b><small>' + GV2.e([x.proposito, x.lat == null ? 'sem endereço' : ''].filter(Boolean).join(' · ')) + '</small></span><small>' + GV2.e((x.hora || '—') + (x.feita ? ' · feita' : '')) + '</small></li>';
+  }).join('');
+  return '<div class="gv2-rt">' + nav + '<div class="gv2-rt-dias">' + chips + '</div>'
+    + '<div class="gv2-rt-corpo"><div class="gv2-mapa gv2-rt-mapa" data-gv2-rotamapa="' + GV2.e(p.id + '|' + seg + '|' + sel) + '"></div>'
+    + '<div class="gv2-rt-lista">' + (lista.length ? '<ol>' + itens + '</ol>' : GV2.html.estado('vazio', sel === 'semana' ? 'Nenhuma parada planejada nesta semana.' : 'Nenhuma parada planejada neste dia.'))
+    + (semPino ? '<p class="t-av gv2-rt-nota">' + GV2.pl(semPino, 'parada sem endereço fica', 'paradas sem endereço ficam') + ' fora do mapa.</p>' : '') + '</div></div></div>';
+};
+
+GV2.rotaMapa = {
+  montar: function (el, guardado) {
+    const ch = el.getAttribute('data-gv2-rotamapa').split('|');
+    const p = GV2.base.porId[ch[0]], seg = ch[1], sel = ch[2];
+    if (!p) return;
+    const dias = [0, 1, 2, 3, 4].map(function (i) { return GV2.somaDias(seg, i); });
+    const pts = (GV2.rotaParadas(p, seg, sel === 'semana' ? null : sel) || []).filter(function (x) { return x.lat != null && x.lng != null; });
+    if (!pts.length) { el.innerHTML = '<div class="gv2-estado" style="position:absolute;inset:0;">' + GV2.e(p.hoje.posicao ? 'Sem parada com endereço neste dia.' : 'Sem parada com endereço neste dia.') + '</div>'; return; }
+    const usarGoogle = typeof pt6CarregarGoogle === 'function' && !(typeof PT6_GM !== 'undefined' && PT6_GM.falhou);
+    if (!usarGoogle) return GV2.rotaMapa.simples(el, pts, dias);
+    if (guardado && guardado.google) { el.innerHTML = ''; el.appendChild(guardado.div); el._gv2rt = guardado; GV2.rotaMapa.google(el, pts, dias); return; }
+    GV2.rotaMapa.simples(el, pts, dias);
+    pt6CarregarGoogle().then(function () { if (document.body.contains(el)) GV2.rotaMapa.google(el, pts, dias); }, function () {});
+  },
+  simples: function (el, pts, dias) {
+    let la0 = Infinity, la1 = -Infinity, lo0 = Infinity, lo1 = -Infinity;
+    pts.forEach(function (x) { la0 = Math.min(la0, x.lat); la1 = Math.max(la1, x.lat); lo0 = Math.min(lo0, x.lng); lo1 = Math.max(lo1, x.lng); });
+    const X = function (x) { return 8 + (x.lng - lo0) / Math.max(1e-4, lo1 - lo0) * 84; }, Y = function (x) { return 8 + (la1 - x.lat) / Math.max(1e-4, la1 - la0) * 84; };
+    let html = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;">';
+    dias.forEach(function (d, i) { const ds = pts.filter(function (x) { return x.dia === d; }); if (ds.length > 1) html += '<polyline points="' + ds.map(function (x) { return X(x).toFixed(2) + ',' + Y(x).toFixed(2); }).join(' ') + '" fill="none" stroke="' + GV2.DIA_COR[i] + '" stroke-width="2" vector-effect="non-scaling-stroke"/>'; });
+    el.innerHTML = html + '</svg>';
+    let k = 0, d0 = null;
+    pts.forEach(function (x) { if (x.dia !== d0) { k = 0; d0 = x.dia; } k++; const s = GV2.rotaMapa.num(x, k, dias); s.style.position = 'absolute'; s.style.left = X(x) + '%'; s.style.top = Y(x) + '%'; s.style.transform = 'translate(-50%,-50%)'; el.appendChild(s); });
+  },
+  num: function (x, k, dias) {
+    const cor = GV2.DIA_COR[dias.indexOf(x.dia)] || '#111418';
+    const s = document.createElement('span');
+    s.className = 'gv2-mg-num' + (x.feita ? ' is-feita' : '');
+    s.textContent = String(k);
+    s.title = k + ' · ' + (x.nome || '') + (x.hora ? ' · ' + x.hora : '') + (x.feita ? ' · feita' : '');
+    s.style.borderColor = cor;
+    if (x.feita) s.style.background = cor;
+    return s;
+  },
+  google: function (el, pts, dias) {
+    const maps = window.google && window.google.maps;
+    if (!maps || !maps.marker) return;
+    const escuro = document.documentElement.getAttribute('data-tema') === 'escuro';
+    let g = el._gv2rt;
+    if (!g || g.escuro !== escuro) {
+      el.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'gv2-mapa-gm';
+      el.appendChild(div);
+      const mapa = new maps.Map(div, { mapId: (typeof PT6_GM !== 'undefined' && PT6_GM.mapId) || 'DEMO_MAP_ID', colorScheme: escuro ? 'DARK' : 'LIGHT',
+        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13 });
+      g = el._gv2rt = { google: true, mapa: mapa, div: div, escuro: escuro, itens: [] };
+    }
+    g.itens.forEach(function (m) { if (m.setMap) m.setMap(null); else m.map = null; });
+    g.itens = [];
+    const bounds = new maps.LatLngBounds();
+    dias.forEach(function (d, i) {
+      const ds = pts.filter(function (x) { return x.dia === d; });
+      if (ds.length > 1) g.itens.push(new maps.Polyline({ map: g.mapa, path: ds.map(function (x) { return { lat: x.lat, lng: x.lng }; }), strokeColor: GV2.DIA_COR[i], strokeOpacity: .85, strokeWeight: 3 }));
+    });
+    let k = 0, d0 = null;
+    pts.forEach(function (x) {
+      if (x.dia !== d0) { k = 0; d0 = x.dia; }
+      k++;
+      g.itens.push(new maps.marker.AdvancedMarkerElement({ map: g.mapa, position: { lat: x.lat, lng: x.lng }, content: GV2.rotaMapa.num(x, k, dias), zIndex: 2 }));
+      bounds.extend({ lat: x.lat, lng: x.lng });
+    });
+    const enq = function () { if (!el.clientWidth) return; if (pts.length === 1) { g.mapa.setCenter(bounds.getCenter()); g.mapa.setZoom(15); } else g.mapa.fitBounds(bounds, 48); };
+    enq(); maps.event.addListenerOnce(g.mapa, 'idle', enq);
+  }
+};
+GV2.rotaComando = function (cmd, parte) {
+  if (cmd === 'ruasel') { GV2.estado.ruaSel = parte[1]; GV2.pintar(); return true; }
+  if (cmd !== 'rota') return false;
+  if (parte[1] === 'dia') { GV2.estado.rotaDia = parte[2]; GV2.pintar(); return true; }
+  if (parte[1] === 'sem') { GV2.estado.rotaSem = (GV2.estado.rotaSem || 0) + Number(parte[2]); GV2.estado.rotaDia = null; GV2.pintar(); return true; }
+  if (parte[1] === 'ler') { GV2.rotaLer(GV2.rotaSegunda(), true); return true; }
+  return false;
+};
+
+GV2.render.ruaRotas = function () {
+  const b = GV2.base;
+  const sel = b.porId[GV2.estado.ruaSel] || b.ordemRua.find(function (p) { return p.hoje.paradas_plano > 0; }) || b.pessoas[0];
+  if (!sel) return GV2.html.estado('vazio', 'Nenhum executivo no time.');
+  GV2.estado.ruaSel = sel.id;
+  const lista = b.pracas.map(function (pr) {
+    const ps = b.pessoas.filter(function (p) { return p.praca === pr; });
+    return '<div class="gv2-mg-praca"><div class="gv2-mg-praca-cab">' + GV2.e(pr) + ' <span>' + ps.length + '</span></div>'
+      + ps.map(function (p) {
+        const st = GV2.STATUS[p.hoje.status];
+        return '<button type="button" class="gv2-mg-pessoa' + (sel.id === p.id ? ' is-ativo' : '') + '" data-gv2="ruasel:' + p.id + '">'
+          + '<span class="gv2-av is-30">' + GV2.e(p.iniciais) + '<i style="background:' + st.cor + '"></i></span>'
+          + '<span class="gv2-mg-pessoa-txt"><b>' + GV2.e(p.nome) + '</b><span>' + GV2.e((p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' hoje · ' : 'sem plano hoje · ') + GV2.statusRot(p)) + '</span></span></button>';
+      }).join('') + '</div>';
+  }).join('');
+  return '<div class="gv2-rr"><section class="card gv2-rr-lado"><div class="card-cab"><span class="card-titulo">O time</span><span class="card-sub">' + GV2.e('hoje · ' + b.horaTxt) + '</span></div><div class="gv2-mg-lista">' + lista + '</div></section>'
+    + '<section class="card gv2-rr-main"><div class="card-cab"><span class="card-titulo">' + GV2.e('A rota de ' + GV2.prim(sel.nome)) + '</span><span class="card-sub">' + GV2.e(sel.praca + ' · ' + (sel.hoje.ultima_atividade || '')) + '</span></div>'
+    + GV2.render.rotaPessoa(sel) + '</section></div>';
 };
 
 GV2.instalar();

@@ -190,6 +190,25 @@ tabelas.gv2_falta_etapa = [
   GV2.estado.pmodo = '1a1';
   const um = GV2.render.pessoas();
   checar('1:1: Registrar, + Combinado, Tirar e Cobrar nos negócios ficam embaixo dos combinados', /data-gv2="comb:add:1"/.test(um) && /data-gv2="comb:tirar:1:0"/.test(um) && /Registrar 1:1 · 3 combinados/.test(um) && /data-gv2="cobrar:neg:a"/.test(um));
+  /* Rua › Rotas: a rota da pessoa dia a dia (itens_do_plano) e a feita pela visita com prova */
+  tabelas.rotas_da_semana = [
+    { owner_id: '1', dia: '2026-10-06', vaga: 1, hora: '10:00', client_id: 'c1', nome: 'Bar do Zé', proposito: 'visita', lat: -20.31, lng: -40.3 },
+    { owner_id: '1', dia: '2026-10-06', vaga: 2, hora: '09:00', client_id: 'c2', nome: 'Cantina Sol', proposito: 'visita', lat: -20.32, lng: -40.31 },
+    { owner_id: '1', dia: '2026-10-07', vaga: 1, hora: '09:00', client_id: 'c3', nome: 'Padaria', proposito: 'visita', lat: null, lng: null },
+    { owner_id: '2', dia: '2026-10-06', vaga: 1, hora: '09:00', client_id: 'c9', nome: 'Da Bia', proposito: 'visita', lat: -20.3, lng: -40.3 }
+  ];
+  tabelas.visitas_com_prova.push({ owner_id: '1', provada: true, client_id: 'c2', dia: '2026-10-06' });
+  GV2.estado.aba = 'rua'; GV2.estado.rua = 'rotas'; GV2.estado.ruaSel = '1'; GV2.estado.rotaDia = null;
+  const pintarOrig = GV2.pintar; GV2.pintar = function () {};
+  await GV2.rotaLer(GV2.rotaSegunda(), true);
+  GV2.pintar = pintarOrig;
+  const rr = GV2.render.rua();
+  const ordem = rr.indexOf('Cantina Sol') >= 0 && rr.indexOf('Cantina Sol') < rr.indexOf('Bar do Zé');
+  checar('Rua › Rotas: hoje, na ordem da hora, a feita marcada, sem o plano dos outros', ordem && /is-feita/.test(rr) && !/Da Bia/.test(rr) && !/Padaria/.test(rr) && /data-gv2-rotamapa="1\|2026-10-05\|2026-10-06"/.test(rr));
+  GV2.estado.rotaDia = 'semana';
+  const rs = GV2.render.rua();
+  checar('Rua › Rotas › Semana: os dias juntos, e a parada sem endereço contada', /Padaria/.test(rs) && /sem endereço/.test(rs) && /fica fora do mapa/.test(rs));
+  GV2.estado.rotaDia = null; GV2.estado.aba = 'pessoas';
   let mg = '';
   try { GV2.estado.destaque = '1'; mg = GV2.render.mapaGrande(); } catch (e) { falhas.push('mapa grande: ' + e.message); }
   checar('mapa grande: o time inteiro na lista e o mapa "grande"', (mg.match(/data-gv2="mg:pessoa:/g) || []).length === 3 && /data-gv2-mapa="grande"/.test(mg) && /Ana Lima/.test(mg));
