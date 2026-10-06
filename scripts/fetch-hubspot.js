@@ -851,6 +851,63 @@ async function hsTarefasAbertasDosNegocios(dealIds) {
   return mapaFinal;
 }
 
+/* ══ QUEM DECIDE, POR NEGÓCIO (06/10/26, Raio X › As armas que faltam) ══════════════
+   O app grava o decisor como CONTATO do negócio com cargo (jobtitle) "Dono" ou "Gerente"
+   (hubspot-sync, op `decisor`). Sem ler isso, o gestor veria "sem decisor" em todo negócio
+   cujo decisor foi registrado pelo app. Um lote de associações e um de contatos, só para
+   os negócios de Decisor em diante. ENRIQUECIMENTO: se o HubSpot recusar (escopo do token,
+   429 repetido), avisa no log e segue sem o campo — nunca derruba o robô. */
+async function hsDecisoresDosNegocios(dealIds) {
+  if (!dealIds.length) return {};
+  const contatosPorDeal = {};
+  const todos = [];
+  for (let i = 0; i < dealIds.length; i += 100) {
+    const lote = dealIds.slice(i, i + 100);
+    let assoc = null;
+    for (let tentativa = 1; tentativa <= 5; tentativa++) {
+      await sleep(350);
+      const res = await fetch('https://api.hubapi.com/crm/v4/associations/deals/contacts/batch/read', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputs: lote.map(id => ({ id: String(id) })) })
+      });
+      if (res.status === 429) { await sleep(1000 * tentativa); continue; }
+      if (!res.ok) { console.log(`Aviso: associações deals->contacts falharam (${res.status}) — o Raio X segue sem o decisor do HubSpot.`); return {}; }
+      assoc = await res.json();
+      break;
+    }
+    if (!assoc) continue;
+    (assoc.results || []).forEach(r => {
+      const dealId = r.from && r.from.id;
+      const ids = (r.to || []).map(t => t.toObjectId).filter(Boolean).map(String);
+      if (dealId && ids.length) { contatosPorDeal[String(dealId)] = ids; todos.push(...ids); }
+    });
+  }
+  const unicos = Array.from(new Set(todos));
+  const props = {};
+  for (let i = 0; i < unicos.length; i += 100) {
+    const lote = unicos.slice(i, i + 100);
+    await sleep(350);
+    const res = await fetch('https://api.hubapi.com/crm/v3/objects/contacts/batch/read', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ properties: ['firstname', 'lastname', 'jobtitle'], inputs: lote.map(id => ({ id })) })
+    });
+    if (!res.ok) { console.log(`Aviso: leitura de contatos falhou (${res.status}) — o Raio X segue sem o decisor do HubSpot.`); return {}; }
+    const data = await res.json();
+    (data.results || []).forEach(c => { props[String(c.id)] = c.properties || {}; });
+  }
+  const mapa = {};
+  Object.entries(contatosPorDeal).forEach(([dealId, ids]) => {
+    const c = ids.map(id => props[id]).find(p => p && /^(dono|gerente)$/i.test(String(p.jobtitle || '').trim()));
+    if (c) {
+      const nome = [c.firstname, c.lastname].filter(Boolean).join(' ').trim();
+      if (nome) mapa[dealId] = { nome, papel: /^dono$/i.test(String(c.jobtitle).trim()) ? 'Dono' : 'Gerente' };
+    }
+  });
+  return mapa;
+}
+
 // Lê nome e dono de vários negócios de uma vez.
 async function hsNegociosEmLote(ids, attempt = 1) {
   if (!ids.length) return {};
@@ -2153,6 +2210,11 @@ async function main() {
     funilLeads[stageId] = deals
       .map(d => montarLeadDoFunil(d, stageId, { ownerNameById, tarefas: tarefasPorDeal[d.id] || [], configTemperatura: CONFIG_TEMPERATURA }))
       .sort((a, b) => b.dias - a.dias);
+    /* quem decide (contato Dono/Gerente do negócio): só de Decisor em diante — ver hsDecisoresDosNegocios */
+    if (stageId !== STAGES.prospeccao && stageId !== STAGES.visita) {
+      const decisores = await hsDecisoresDosNegocios(deals.map(d => d.id));
+      funilLeads[stageId].forEach(l => { const x = decisores[String(l.id)]; if (x) { l.decisorNome = x.nome; l.decisorPapel = x.papel; } });
+    }
   }
 
   /* ══ O FUNIL DE QUEM ESTÁ FORA DO TIME (02/10/26) ═══════════════════════════════
