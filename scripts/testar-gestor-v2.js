@@ -39,7 +39,10 @@ const tabelas = {
   visitas_com_prova: [{ owner_id: '1', provada: true, client_id: 'c1', visited_at: '2026-10-05T13:00:00Z' }, { owner_id: '1', provada: true, client_id: 'c2', visited_at: '2026-10-05T15:00:00Z' }, { owner_id: '2', provada: true }, { owner_id: '2', provada: false }],
   fichas_de_rua: [{ owner_id: '1' }],
   pontos_eventos: [{ owner_id: '2', tipo: 'contrato' }, { owner_id: '2', tipo: 'demo_realizada' }, { owner_id: '3', tipo: 'contrato' }, { owner_id: '3', tipo: 'estorno' }],
-  client_stage_changes: [], um_a_um: [], playbook_progresso: [], clients: [{ id: 'c1', nome: 'José', empresa: 'Bar do Zé', id_hubspot: 'a' }, { id: 'c2', nome: 'Sidnei', empresa: 'Cantina Sol', id_hubspot: null }]
+  client_stage_changes: [], playbook_progresso: [], gestor_idas_campo: [],
+  um_a_um: [{ owner_id: '1', data: '2026-09-23', canal: 'video', created_at: '2026-09-23T12:00:00Z', compromissos: ['a', 'b', 'c'],
+    combinados: [{ texto: 'Plano todo dia', regra: 'plano_diario' }, { texto: 'Travados com data', regra: 'travados_com_data' }, { texto: 'Duas demos', regra: 'livre' }] },
+    { owner_id: '2', data: '2026-10-01', canal: 'campo', created_at: '2026-10-01T20:00:00Z', compromissos: ['voltar no Bar'], devolutiva: { foco: 'Disciplina de plano' } }], clients: [{ id: 'c1', nome: 'José', empresa: 'Bar do Zé', id_hubspot: 'a' }, { id: 'c2', nome: 'Sidnei', empresa: 'Cantina Sol', id_hubspot: null }]
 };
 const q = (dados) => { const o = { then: (a, b) => Promise.resolve({ data: dados, error: null }).then(a, b) }; ['select', 'eq', 'gte', 'in', 'order', 'limit'].forEach(k => { o[k] = () => o; }); return o; };
 global.supa = {
@@ -90,6 +93,19 @@ const relogio = (iso) => { const R = Date; global.Date = class extends R { const
   const lista = GV2.render.negocios();
   checar('o passo lista o RESTAURANTE (negócio no funil ou empresa), nunca o contato, com a etapa de hoje', lista.indexOf('>Na</b>') >= 0 && /Cantina Sol/.test(lista) && !/Sidnei|José/.test(lista) && /Negociação/.test(lista));
   GV2.estado.passo = null;
+  /* ── Pessoas (pacote pessoa.zip) ── */
+  GV2.pessoasMontar(b);
+  checar('1:1 e campo contam dias corridos desde o último registro de cada canal', ana.u1 === 13 && ana.uv === null && bia.u1 === null && bia.uv === 5, 'ana ' + ana.u1 + '/' + ana.uv + ' bia ' + bia.u1 + '/' + bia.uv);
+  checar('necessidade = exceção + 1:1 atrasado + campo atrasado', ana.necessidade === 8 && bia.necessidade === 4 && caio.necessidade === 4, [ana.necessidade, bia.necessidade, caio.necessidade].join());
+  checar('sem plano hoje, o foco do dia é disciplina de plano', ana.foco === 'plano');
+  const cs = ana.combinados;
+  checar('o combinado é conferido sozinho: plano (não), travados (não), livre (a conferir)', cs[0].ok === false && /hoje sem plano/.test(cs[0].ev) && cs[1].ok === false && /0 de 1 com data/.test(cs[1].ev) && cs[2].ok === null, cs.map(c => c.ok + ':' + c.ev).join(' | '));
+  checar('a pauta diz o placar dos combinados', /Cumpriu 0 de 2/.test(GV2.pautaPessoa(ana)[1].t));
+  const rt = GV2.roteiro(ana);
+  checar('roteiro: travado primeiro, com o motivo certo; quente pede a decisão', rt[0].n.id === 'd' && rt[0].motivo.indexOf('régua 4) · ir junto no decisor') >= 0 && /pedir a decisão juntos/.test(rt[1].motivo) && rt[0].hora === '09:00', rt.map(r => r.hora + ' ' + r.n.id + ' ' + r.motivo).join(' | '));
+  checar('combinar agora: sem plano pede o plano; travado pede data; quente pede decisão no negócio', (function () { const c = GV2.combinarAgora(ana); return c[0].regra === 'plano_diario' && c[1].regra === 'travados_com_data' && c[2].regra === 'decisao_em_negocio' && c[2].alvo.negocio_id === 'a'; })());
+  checar('a rotação proposta é uma praça por semana, a mais urgente primeiro', (function () { const r = GV2.propostaRotacao(false); return r.length === 5 && r[0].inicio === '2026-10-05' && r[1].inicio === '2026-10-12'; })());
+  checar('a aba Pessoas desenha nos dois modos', ['1a1', 'campo'].every(m => { try { GV2.estado.pmodo = m; return /Sua rotação de campo/.test(GV2.render.pessoas()); } catch (e) { falhas.push('pessoas ' + m + ': ' + e.message); return false; } }));
   checar('a Prova não acusa nada com a base íntegra', GV2.testes.prova().length === 0, GV2.testes.ultimo.join(' · '));
   /* a guarda tem dente: um total adulterado tem de aparecer */
   const errOrig = console.error; console.error = () => {};
