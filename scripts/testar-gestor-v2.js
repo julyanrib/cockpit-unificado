@@ -178,6 +178,16 @@ tabelas.gv2_falta_etapa = [
   checar('a Praça desenha: Onde atacar por bairro (grafias juntas), Contra quem, armas e o painel do concorrente',
     /Praia do Canto/.test(px) && /<span class="num cel-forte">2<\/span>/.test(px) && /As armas que faltam/.test(px) && /Concorrente · Vitória/.test(px) && /Cobrar os 2/.test(px));
   checar('Visitas, Clientes e Em queda sem ponto na praça viram "sem dado", nunca zero', (px.match(/sem dado<\/span>/g) || []).length === 3, String((px.match(/sem dado<\/span>/g) || []).length));
+  /* Pessoas › Funil e o mapa grande (06/10/26) */
+  GV2.estado.cz = null; GV2.estado.aba = 'pessoas'; GV2.estado.pmodo = 'funil'; GV2.estado.pessoa = '1';
+  let pf = '';
+  try { pf = GV2.render.pessoas(); } catch (e) { falhas.push('Pessoas › Funil: ' + e.message); }
+  checar('Pessoas › Funil: o funil do mês da pessoa e os negócios dela por etapa, clicáveis', /Funil do mês/.test(pf) && /data-gv2="ficha:a"/.test(pf) && /data-gv2="ficha:d"/.test(pf) && !/data-gv2="ficha:b"/.test(pf) && /Cobrar travados/.test(pf));
+  GV2.estado.pmodo = '1a1';
+  let mg = '';
+  try { GV2.estado.destaque = '1'; mg = GV2.render.mapaGrande(); } catch (e) { falhas.push('mapa grande: ' + e.message); }
+  checar('mapa grande: o time inteiro na lista e o mapa "grande"', (mg.match(/data-gv2="mg:pessoa:/g) || []).length === 3 && /data-gv2-mapa="grande"/.test(mg) && /Ana Lima/.test(mg));
+  GV2.estado.destaque = null;
   checar('só um bloco vermelho na Praça (as armas que faltam)', (px.match(/is-falta"/g) || []).length <= 1 && /gv2-px-l3 is-falta/.test(px));
 
   if (falhas.length) {
