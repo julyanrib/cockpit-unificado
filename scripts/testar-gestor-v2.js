@@ -206,6 +206,20 @@ tabelas.gv2_falta_etapa = [
   const ordem = rr.indexOf('Cantina Sol') >= 0 && rr.indexOf('Cantina Sol') < rr.indexOf('Bar do Zé');
   checar('Rua › Rotas: hoje, na ordem da hora, a feita marcada, sem o plano dos outros', ordem && /is-feita/.test(rr) && !/Da Bia/.test(rr) && !/Padaria/.test(rr) && /data-gv2-rotamapa="1\|2026-10-05\|2026-10-06"/.test(rr));
   checar('Rua › Rotas: o chip do pino (0175) aparece com o mesmo rótulo do app', /<b>Cantina Sol<\/b><small>Demo/.test(rr) && /<b>Bar do Zé<\/b><small>visita/.test(rr));
+  /* 06/10/26: combinado "decisão em negócio" lia GV2.base na PRIMEIRA carga (null) e
+     derrubava o painel inteiro do gestor. A montagem tem de usar a base que monta. */
+  {
+    const salva = GV2.base; const p0 = salva.pessoas[0];
+    salva.cru = salva.cru || { umAUm: [], idas: [], visitas4: null };
+    const umEra = salva.cru.umAUm;
+    salva.cru.umAUm = umEra.concat([{ owner_id: p0.id, data: salva.agora.iso, created_at: '2099-01-01T00:00:00Z', canal: 'video',
+      combinados: [{ texto: 'decidir o negócio', regra: 'decisao_em_negocio', alvo: { negocio_id: 'a' } }] }]);
+    let quebrou = null;
+    GV2.base = null;
+    try { GV2.pessoasMontar(salva); } catch (e) { quebrou = e.message; }
+    GV2.base = salva; salva.cru.umAUm = umEra; GV2.pessoasMontar(salva);
+    checar('primeira carga com combinado de decisão em negócio não derruba o painel', !quebrou);
+  }
   GV2.estado.rotaDia = 'semana';
   const rs = GV2.render.rua();
   checar('Rua › Rotas › Semana: os dias juntos, e a parada sem endereço contada', /Padaria/.test(rs) && /sem endereço/.test(rs) && /fica fora do mapa/.test(rs));
