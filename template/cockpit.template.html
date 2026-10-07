@@ -12198,7 +12198,7 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -66583,72 +66583,9 @@ function rt7Dados() {
       borda: escolhido ? '#6E1210' : 'var(--red-line)' };
   }).slice(0, 4);
 
-  /* ── 2 · A RUA DE CADA EXECUTIVO ─────────────────────────────────────────────────── */
-  const ruas = ativos.map(function (u) {
-    const oid = String(u.ownerId);
-    const sem = rt7Semana(oid);
-    const al = rt7Alvos(oid);
-    const est = rt7Estoque(oid);
-    const p = rt7PracaDoRep(u);
-    /* NÍVEL: 2 = crítico (sem semana montada ou seco), 1 = atenção, 0 = ok. Sai de
-       medida, não de lista fixa de nomes como no mockup. */
-    const nivel = (!sem.existe || sem.slots === 0 || (est.semanas != null && est.semanas < 1)) ? 2
-      : (!sem.fechada || sem.slots < 15) ? 1 : 0;
-    const N = [['#1E9E7B', 'var(--panel)', 'var(--line-soft)'], ['#B07C1F', 'var(--panel)', 'var(--line-soft)'], ['#6E1210', 'var(--red-soft)', 'var(--red-line)']][nivel];
-    const quadrados = [0, 1, 2, 3, 4].map(function (k) {
-      const aceso = k < sem.dias;
-      return '<span style="width:11px;height:11px;border-radius:3px;display:inline-block;background:'
-        + (aceso ? (nivel === 2 ? '#6E1210' : nivel === 1 ? '#B07C1F' : '#1E9E7B') : 'var(--trilho)') + ';"></span>';
-    }).join('');
-    const leitura = !sem.existe
-      ? 'não montou a semana no Planejamento — sem grade não há rota, e a semana dele começa no improviso'
-      : (sem.slots === 0
-        ? 'grade criada e vazia: 0 de 35 vagas preenchidas'
-        : (est.semanas != null && est.semanas < 1
-          ? sem.slots + ' de 35 vagas e só ' + est.contas + ' contas na munição — ele fica sem conta antes de sexta'
-          : (!sem.fechada
-            ? sem.slots + ' de 35 vagas preenchidas, semana ainda não fechada — fechar é o gesto que vira rota'
-            : sem.slots + ' de 35 vagas, semana fechada ✓ · ' + al.naRota + ' conta(s)-alvo na rota'
-              + (al.parados ? ' e ' + al.parados + ' na munição' : ''))));
-    /* A AÇÃO EXECUTA E DIZ O EFEITO. Três destinos reais, nenhum inventado:
-         cobrar / pauta  -> pauta_do_lider, a MESMA tabela que a Daily, a Semana e a
-                            Pessoas leem (tl5Alternar é o escritor único);
-         travar contas   -> leads_prospeccao.data_rota na próxima segunda, que é o que a
-                            tela de Planejamento DELE lê;
-         ver a semana    -> navegação.
-       NÃO existe canal de "aviso na tela Hoje dele": conferido — nenhuma tela do
-       executivo lê pauta_do_lider. Então o rótulo promete o que acontece de verdade. */
-    const acao = !sem.existe
-      ? { on: 'cobrar:' + oid, rot: 'cobrar a semana ▸', efeito: 'na sua pauta' }
-      : (est.semanas != null && est.semanas < 1
-        ? { on: 'travar:' + oid, rot: 'travar ' + Math.min(3, est.contas) + ' contas na segunda ▸', efeito: 'no Planejamento dele' }
-        : (!sem.fechada
-          ? { on: 'cobrar:' + oid, rot: 'cobrar o fechamento ▸', efeito: 'na sua pauta' }
-          : { on: 'case:' + oid, rot: 'levar como case pra Semanal ▸', efeito: 'na pauta da Semanal' }));
-    const feito = rt7Feito(acao.on);
-    return {
-      ini: esc(String(u.nome || '?').split(/\s+/).map(function (x) { return x.charAt(0); }).slice(0, 2).join('').toUpperCase()),
-      nome: esc(u.nome || 'sem nome'), praca: esc(p ? p.nome : 'praça não declarada'),
-      avBg: N[0], bg: N[1], borda: N[2],
-      grade: quadrados,
-      gradeCor: nivel === 2 ? 'var(--red-dk)' : nivel === 1 ? 'var(--amber-ink)' : '#1E9E7B',
-      slots: sem.existe ? (sem.slots + '/35') : 'sem grade',
-      rota: sem.existe ? (sem.fechada ? 'semana fechada ✓' : 'não fechada') : '—',
-      rotaCor: sem.fechada ? '#1E9E7B' : 'var(--red-dk)',
-      /* A RUA DO MAPA NA PRÓPRIA LINHA (fase 4, 01/10/26): feitas/plano por dia, o
-         cumprido até hoje, o que ficou para trás e a rota do dia — ver rt7LinhaDaRua */
-      ...rt7LinhaDaRua(oid, u.nome),
-      alvo: String(al.naRota) + ' na rota',
-      alvoCor: al.naRota ? 'var(--ink)' : 'var(--red-dk)',
-      leitura: esc(leitura),
-      leiaCor: nivel === 2 ? 'var(--red-dk)' : nivel === 1 ? 'var(--amber-ink)' : '#1E9E7B',
-      acao: acao.on,
-      btRot: esc(feito ? '✓ ' + acao.efeito : acao.rot),
-      btBg: feito ? 'var(--green-soft)' : (nivel === 2 ? '#E51A31' : 'var(--panel)'),
-      btCor: feito ? '#1E9E7B' : (nivel === 2 ? '#FFFDF8' : 'var(--ink)'),
-      btBorda: feito ? 'var(--green-line)' : (nivel === 2 ? '#E51A31' : 'var(--line)')
-    };
-  }).sort(function (a, b) { return String(a.btBg === '#E51A31' ? 0 : 1) + a.nome < String(b.btBg === '#E51A31' ? 0 : 1) + b.nome ? -1 : 1; });
+  /* ── 2 · A RUA DE CADA EXECUTIVO saiu em 07/10/26 (auditoria Rua e Pessoas): repetia a aba
+     Rua do gestor com outra fonte (a rota do app × o Planejamento) e números diferentes, e a
+     "semana fechada" estava em "não fechada" para os 7. A semana de cada um mora na Rua. */
 
   /* ── 3 · RADAR: os maiores scores em jogo ─────────────────────────────────────────
      Só entra quem TEM nota — sem nota não há score, e um card de radar sem score não diz
@@ -66776,7 +66713,6 @@ function rt7Dados() {
     orfaoTexto: esc(orfaoTexto),
     orfao: orfaoOpcoes,
 
-    ruas: ruas,
     tops: tops,
     temTops: tops.length > 0,
     semTopsTxt: esc('nenhuma conta da fila tem nota: a Casa dos Dados entrega CNPJ sem nota nem telefone,'
@@ -67140,8 +67076,6 @@ async function rt7Executar(acao) {
     await rt7Enviar();
   } else if (verbo === 'aprovarbloq') {
     s.toast = 'marque ao menos uma conta da fila — o quadradinho de cada linha';
-  } else if (verbo === 'cobrar' || verbo === 'case' || verbo === 'travar') {
-    await rt7AcaoDaRua(verbo, a);
   } else if (verbo === 'orfao') {
     const uo = rt7Ativos().filter(function (x) { return String(x.ownerId) === String(a); })[0];
     const orf = rt7Orfao();
@@ -67582,29 +67516,8 @@ function rt7TelaHTML(d) {
         </div>
       </div>
 
-      <div style="padding:16px 22px 6px;">
-        <span style="font:900 11px 'Poppins',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">2 · A rua de cada executivo <span style="color:var(--muted2);">— a semana no mapa (feitas × plano por dia, medindo desde 26/09), a grade 5×7 do Planejamento, o fechamento e as contas-alvo · toque num dia para ver a rota</span></span>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px;">
-          ${(d.ruas||[]).map(r => `
-            <div style="display:flex;align-items:center;gap:14px;background:${r.bg};border:1.5px solid ${r.borda};border-radius:12px;padding:10px 15px;min-width:0;flex-wrap:wrap;">
-              <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:${r.avBg};color:#FDFEFF;font:900 11px 'Poppins',sans-serif;flex:none;">${r.ini}</span>
-              <span style="width:190px;flex:none;min-width:0;"><b style="display:block;font:800 13px 'Poppins',sans-serif;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.nome}</b><span style="font:700 9px 'Poppins',sans-serif;color:var(--muted2);white-space:nowrap;">${r.praca}</span></span>
-              <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Poppins',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">semana 5×7</span><span style="display:flex;align-items:center;gap:5px;"><span style="display:flex;gap:2px;">${r.grade}</span><b style="font:800 11px 'Poppins',sans-serif;color:${r.gradeCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.slots}</b></span></span>
-              <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Poppins',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">semana fechada</span><b style="font:800 11px 'Poppins',sans-serif;color:${r.rotaCor};white-space:nowrap;">${r.rota}</b></span>
-              ${r.dias}
-              <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Poppins',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">cumprido até hoje</span><b style="font:800 11px 'Poppins',sans-serif;color:${r.cumpCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.cump}</b></span>
-              <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Poppins',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">ficou para trás</span><b style="font:800 11px 'Poppins',sans-serif;color:${r.atrasCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.atras}</b></span>
-              <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Poppins',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">contas-alvo</span><b style="font:800 11px 'Poppins',sans-serif;color:${r.alvoCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.alvo}</b></span>
-              <span style="flex:1;min-width:140px;font:700 10.5px/1.45 'Poppins',sans-serif;color:${r.leiaCor};">▸ ${r.leitura}</span>
-              <button type="button" data-rt7-acao="${r.acao}" data-rt7-hv="5" style="margin-left:auto;flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1.5px solid ${r.btBorda};border-radius:999px;background:${r.btBg};font:800 10px 'Poppins',sans-serif;color:${r.btCor};cursor:pointer;white-space:nowrap;">${r.btRot}</button>
-              <button type="button" class="rt7-rua-abre" data-rt7-acao="${r.abre}" aria-expanded="${r.aberto}"${r.abreOff ? ' disabled' : ''}>${r.abreRot}</button>${r.mapa}
-            </div>${r.painel}
-          `).join('')}
-        </div>
-      </div>
-
       <div style="padding:16px 22px 18px;">
-        <span style="font:900 11px 'Poppins',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#1E9E7B;">3 · Radar de leads — os maiores scores em jogo <span style="color:var(--muted2);">— score = nota × volume de avaliações · onde cada um está e qual o próximo gesto</span></span>
+        <span style="font:900 11px 'Poppins',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#1E9E7B;">2 · Radar de leads — os maiores scores em jogo <span style="color:var(--muted2);">— score = nota × volume de avaliações · onde cada um está e qual o próximo gesto</span></span>
         <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;">
           ${(d.tops||[]).map(tp => `
             <div style="background:var(--creme);border:1px solid var(--line);border-left:4px solid ${tp.cor};border-radius:11px;padding:10px 13px;min-width:0;">
@@ -74824,12 +74737,13 @@ GV2.render.ruaSemana = function () {
     let tot = 0;
     const cels = p.semana.map(function (d) {
       if (d.passado || d.hoje) tot += d.hoje && !b.foraDaJornada ? Math.max(d.planejadas, d.provadas) : d.provadas; else tot += d.planejadas;
-      if (d.hoje) return d.planejadas ? '<span class="gv2-sem-cel is-and num">' + d.provadas + ' de ' + d.planejadas + '</span>' : '<span class="gv2-sem-cel is-sem">sem plano</span>';
+      const tl = d.semLugar ? ' title="' + GV2.pl(d.semLugar, 'item sem lugar no mapa: o negócio não tem endereço no HubSpot', 'itens sem lugar no mapa: os negócios não têm endereço no HubSpot') + '"' : '';
+      if (d.hoje) return d.planejadas ? '<span class="gv2-sem-cel is-and num"' + tl + '>' + d.provadas + ' de ' + d.planejadas + '</span>' : '<span class="gv2-sem-cel is-sem">sem plano</span>';
       if (d.passado) {
         if (!d.planejadas) return d.provadas ? '<span class="gv2-sem-cel is-and num">' + d.provadas + ' sem plano</span>' : '<span class="gv2-sem-cel is-sem">sem plano</span>';
         return '<span class="gv2-sem-cel num ' + (d.provadas >= d.planejadas ? 'is-ok' : 'is-fur') + '">' + d.provadas + ' de ' + d.planejadas + '</span>';
       }
-      return d.planejadas ? '<span class="gv2-sem-cel is-plan num">' + d.planejadas + ' planej.</span>' : '<span class="gv2-sem-cel is-sem">sem plano</span>';
+      return d.planejadas ? '<span class="gv2-sem-cel is-plan num"' + tl + '>' + d.planejadas + ' planej.' + (d.semLugar ? ' · ' + d.semLugar + ' s/ lugar' : '') + '</span>' : '<span class="gv2-sem-cel is-sem">sem plano</span>';
     });
     return { acao: 'pessoa:' + p.id, celulas: ['<b class="gv2-ellip">' + GV2.e(p.nome) + '</b>'].concat(cels).concat([
       '<b class="num" title="provadas nos dias que passaram + o plano dos que faltam, contra a meta da semana">' + tot + ' de ' + p.meta_visitas_dia * dias.length + '</b>'
@@ -75365,7 +75279,7 @@ GV2.montar = async function () {
       .sort(function (x, y) { return String(x.hora || '99').localeCompare(String(y.hora || '99')); });
     const semanaP = diasSemana.map(function (iso, i) {
       const d = s.dias[i] || {};
-      return { iso: iso, planejadas: Number(d.planejadas) || 0, provadas: Number(d.provadas) || 0, feitasDoPlano: Number(d.feitasDoPlano) || 0, hoje: iso === agora.iso, passado: iso < agora.iso };
+      return { iso: iso, planejadas: Number(d.planejadas) || 0, provadas: Number(d.provadas) || 0, feitasDoPlano: Number(d.feitasDoPlano) || 0, semLugar: Number(d.semLugar) || 0, hoje: iso === agora.iso, passado: iso < agora.iso };
     });
     const email = String(L.emails[id] || '').toLowerCase();
     const feitosPb = {};
@@ -75382,7 +75296,7 @@ GV2.montar = async function () {
       fase: ramp && ramp.label ? ramp.label : 'fase não definida',
       meta_visitas_dia: meta,
       meta_clientes_mes: typeof metaClientesDoRep === 'function' ? metaClientesDoRep(r) : (r.metaMensal || 0),
-      hoje: { paradas_plano: fds ? 0 : (Number(dHoje.planejadas) || 0), visitas_com_prova: Number(dHoje.provadas) || 0, feitas: Number(dHoje.feitas) || 0,
+      hoje: { paradas_plano: fds ? 0 : (Number(dHoje.planejadas) || 0), visitas_com_prova: Number(dHoje.provadas) || 0, feitas: Number(dHoje.feitas) || 0, sem_lugar: fds ? 0 : (Number(dHoje.semLugar) || 0),
         status: status, ultima_atividade: ultima, posicao: posicao, posicaoOntem: posOntem, paradas: paradas },
       ontem: { paradas_plano: Number(dOntem.planejadas) || 0, visitas_com_prova: Number(dOntem.provadas) || 0 },
       semana: semanaP, semanaTotal: semanaP.reduce(function (x, d) { return x + d.planejadas; }, 0),
@@ -78037,7 +77951,7 @@ GV2.p3Agora = function (p) {
       + GV2.html.btn({ texto: 'Cobrar no WhatsApp', tipo: 'acao', tam: 'lg', icone: 'wa', acao: 'v4:cobrarvisita:' + p.id }) + '</div>' : '';
   const kpis = '<div class="gv2-p3-kpis">'
     + '<div class="gv2-p3-kpi"><small>Onde está</small><b class="' + (p.hoje.status === 'sem' ? 't-av' : 't-ok') + '">' + GV2.e(st.rot || 'sem check-in hoje') + '</b><span class="gv2-ellip">' + GV2.e(p.hoje.ultima_atividade || '') + '</span></div>'
-    + '<div class="gv2-p3-kpi"><small>Plano de hoje</small><b class="' + (!p.hoje.paradas_plano ? 't-av' : '') + '">' + GV2.e(p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem plano') + '</b><span>' + GV2.e(p.hoje.paradas_plano ? 'com prova · ritmo agora ' + p.esperado : 'nada na Agenda de hoje') + '</span></div>'
+    + '<div class="gv2-p3-kpi"><small>Plano de hoje</small><b class="' + (!p.hoje.paradas_plano ? 't-av' : '') + '">' + GV2.e(p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem plano') + '</b><span>' + GV2.e(p.hoje.paradas_plano ? ['com prova', p.hoje.sem_lugar ? GV2.pl(p.hoje.sem_lugar, 'sem lugar no mapa', 'sem lugar no mapa') : null, GV2.base.foraDaJornada ? null : 'esperadas até agora ' + p.esperado].filter(Boolean).join(' · ') : 'nada na Agenda de hoje') + '</span></div>'
     + '<div class="gv2-p3-kpi"><small>Ontem</small><b class="' + (p.furou ? 't-av' : p.ontem.paradas_plano ? 't-ok' : '') + '">' + GV2.e(p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : '—') + '</b><span>' + GV2.e(p.ontem.paradas_plano ? (p.furou ? 'furou ' + p.furou : 'tudo com prova') : 'sem plano ontem') + '</span></div></div>';
   if (!c || c.estado === 'lendo') return exc + kpis + '<div class="gv2-esq" style="height:260px"></div>';
   if (c.estado === 'erro') return exc + kpis + GV2.html.estado('erro', 'Não consegui ler a rota da semana: ' + c.erro) + GV2.html.btn({ texto: 'Tentar de novo', acao: 'rota:ler' });

@@ -154,11 +154,11 @@ checar('score sem nota é "—", não um número inventado',
 /* REANCORADA EM 01/10/26 (fase 4, N10): o cumprido deixou de apontar para outro bloco e
    passou a ser a medida do mapa na própria linha. A regra que importa continua: enquanto
    não leu, a tela diz "lendo…"; se falhou, "não li" — nunca um zero. */
-checar('o cumprido da rua é a medida do mapa, nunca um zero de quem não leu',
-  aba.indexOf("cump: lendo ? 'lendo…' : erro ? 'não li'") > 0
-    && aba.indexOf('...rt7LinhaDaRua(oid, u.nome)') > 0
-    && aba.indexOf('paradas feitas × planejadas') > 0,
-  'zero aqui acusaria o time de não ter ido à rua quando o que falta é a medida');
+/* 07/10/26: a seção 2 saiu da Prospecção; a semana de cada um mora na aba Rua do gestor.
+   Guarda: a seção não volta duplicada, com a outra fonte. */
+checar('a Prospecção não repete a rua de cada executivo (mora na Rua, uma fonte só)',
+  aba.indexOf('2 · A rua de cada executivo') < 0 && aba.indexOf('d.ruas') < 0 && aba.indexOf('2 · Radar de leads') > 0,
+  'duas telas com a semana de cada um, e números diferentes, é o gestor sem saber em qual acreditar');
 
 checar('os chips do radar saem da ficha, e não de review que ninguém coleta',
   /function rt7SinaisDoLead\(l\)/.test(aba)
