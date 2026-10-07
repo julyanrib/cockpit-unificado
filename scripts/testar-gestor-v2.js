@@ -88,6 +88,8 @@ tabelas.gv2_falta_etapa = [
 (async () => {
   relogio('2026-10-06T14:20:00Z'); // 11:20 em Brasília
   const GV2 = new Function(codigo + '\nreturn GV2;')();
+  /* sem tela neste teste: o redesenho que as leituras pedem por trás (nota mais recente, rota) não faz nada */
+  GV2.pintar = function () {};
   const b = await GV2.montar();
   GV2.base = b;
   const ana = b.porId['1'], bia = b.porId['2'], caio = b.porId['3'];
@@ -120,7 +122,15 @@ tabelas.gv2_falta_etapa = [
   checar('roteiro: travado primeiro, com o motivo certo; quente pede a decisão', rt[0].n.id === 'd' && rt[0].motivo.indexOf('régua 4) · ir junto no decisor') >= 0 && /pedir a decisão juntos/.test(rt[1].motivo) && rt[0].hora === '09:00', rt.map(r => r.hora + ' ' + r.n.id + ' ' + r.motivo).join(' | '));
   checar('combinar agora: sem plano pede o plano; travado pede data; quente pede decisão no negócio', (function () { const c = GV2.combinarAgora(ana); return c[0].regra === 'plano_diario' && c[1].regra === 'travados_com_data' && c[2].regra === 'decisao_em_negocio' && c[2].alvo.negocio_id === 'a'; })());
   checar('a rotação proposta é uma praça por semana, a mais urgente primeiro', (function () { const r = GV2.propostaRotacao(false); return r.length === 5 && r[0].inicio === '2026-10-05' && r[1].inicio === '2026-10-12'; })());
-  checar('a aba Pessoas desenha nos dois modos', ['1a1', 'campo'].every(m => { try { GV2.estado.pmodo = m; return /Sua rotação de campo/.test(GV2.render.pessoas()); } catch (e) { falhas.push('pessoas ' + m + ': ' + e.message); return false; } }));
+  /* Pessoas v3 (06/10/26): uma página com 5 seções fixas, a lista e a barra do pé; a rotação vira folha */
+  let p3 = '';
+  try { p3 = GV2.render.pessoas(); } catch (e) { falhas.push('pessoas v3: ' + e.message); }
+  checar('Pessoas v3: as 5 seções em ordem, a lista "Quem precisa de você", a barra do pé e o botão da rotação',
+    ['agora', 'ritmo', 'funil', 'um', 'campo'].every(function (s, i, a) { return i === 0 || p3.indexOf('data-p3-sec="' + s + '"') > p3.indexOf('data-p3-sec="' + a[i - 1] + '"'); })
+      && /Quem precisa de você/.test(p3) && /class="gv2-p3-pe"/.test(p3) && /data-gv2="p3:rotacao"/.test(p3) && !/Sua rotação de campo/.test(p3));
+  GV2.estado.p3rotacao = true;
+  checar('Pessoas v3: a rotação abre numa folha lateral, com o mesmo componente', /class="gv2-p3-folha"/.test(GV2.render.pessoas()) && /Sua rotação de campo/.test(GV2.render.pessoas()));
+  GV2.estado.p3rotacao = false;
   checar('a Prova não acusa nada com a base íntegra', GV2.testes.prova().length === 0, GV2.testes.ultimo.join(' · '));
   /* a guarda tem dente: um total adulterado tem de aparecer */
   const errOrig = console.error; console.error = () => {};
@@ -182,14 +192,39 @@ tabelas.gv2_falta_etapa = [
   GV2.estado.cz = null; GV2.estado.aba = 'pessoas'; GV2.estado.pmodo = 'funil'; GV2.estado.pessoa = '1';
   let pf = '';
   try { pf = GV2.render.pessoas(); } catch (e) { falhas.push('Pessoas › Funil: ' + e.message); }
-  checar('Pessoas › Funil em barras: o funil do mês e as etapas clicáveis, sem negócio aberto até escolher', /Funil do mês/.test(pf) && /data-gv2="fpetapa:4"/.test(pf) && !/data-gv2="ficha:/.test(pf) && /Cobrar travados/.test(pf));
+  const ana1 = GV2.base.porId['1'];
+  const fp1 = GV2.render.funilPessoa(ana1);
+  checar('Pessoas › Funil em barras: o funil do mês e as etapas clicáveis, sem negócio aberto até escolher', /Funil do mês/.test(pf) && /data-gv2="fpetapa:4"/.test(pf) && !/data-gv2="ficha:/.test(fp1));
+  checar('Pessoas v3 › Funil: "Para puxar" com Cobrar em cada linha e Cobrar os N (travado d, quente a sem passo)', /Para puxar · travados e quentes sem passo · 2/.test(pf) && /data-gv2="cobrar:neg:d"/.test(pf) && /data-gv2="cobrar:neg:a"/.test(pf) && /data-gv2="p3:cobrartodos:1"/.test(pf));
   GV2.estado.fpEtapa = 4;
-  const pf2 = GV2.render.pessoas();
+  const pf2 = GV2.render.funilPessoa(ana1);
   checar('Pessoas › Funil: clicar numa etapa lista só os negócios dela, da pessoa', /data-gv2="ficha:a"/.test(pf2) && !/data-gv2="ficha:d"/.test(pf2) && !/data-gv2="ficha:b"/.test(pf2));
   GV2.estado.fpEtapa = null;
-  GV2.estado.pmodo = '1a1';
   const um = GV2.render.pessoas();
-  checar('1:1: Registrar, + Combinado, Tirar e Cobrar nos negócios ficam embaixo dos combinados', /data-gv2="comb:add:1"/.test(um) && /data-gv2="comb:tirar:1:0"/.test(um) && /Registrar 1:1 · 3 combinados/.test(um) && /data-gv2="cobrar:neg:a"/.test(um));
+  checar('1:1: + Combinado, Tirar, prazo que troca e Automático | Você confere em cada cartão', /data-gv2="comb:add:1"/.test(um) && /data-gv2="comb:tirar:1:0"/.test(um) && /data-gv2="p3:prazo:1:0"/.test(um) && /data-gv2="p3:conf:1:0:manual"/.test(um));
+  /* a barra do pé segue a seção em foco (§8) */
+  const pe = function (s) { return GV2.p3Pe(ana1, s); };
+  checar('barra do pé: 1:1 → Registrar 1:1 · 3 combinados; Funil com pendência → Cobrar os 2; Campo sem ida → Marcar ida; sempre Chamar e Pauta',
+    /Registrar 1:1 · 3 combinados/.test(pe('um')) && /Cobrar os 2/.test(pe('funil')) && /Marcar ida/.test(pe('campo')) && ['agora', 'ritmo', 'funil', 'um', 'campo'].every(function (s) { return /data-gv2="p3:chamar:1"/.test(pe(s)) && /data-gv2="pauta:wa:1"/.test(pe(s)); }));
+  checar('barra do pé: Agora sem plano pede o plano; com plano, Ver no mapa grande', /Pedir o plano/.test(pe('agora')) && /data-gv2="mg:abrir:2"/.test(GV2.p3Pe(GV2.base.porId['2'], 'agora')) === (GV2.base.porId['2'].hoje.paradas_plano > 0));
+  /* nada some: o texto do combinado fica ao trocar de pessoa e voltar */
+  GV2.estado.comb1a1['1'][0].texto = 'Texto que não pode sumir';
+  GV2.estado.pessoa = '2'; GV2.render.pessoas(); GV2.estado.pessoa = '1';
+  checar('nada some: digitar num combinado, trocar de pessoa e voltar mantém o texto', /Texto que não pode sumir/.test(GV2.render.pessoas()));
+  /* Registrar grava prazo, conferência e origem por combinado e manda cada um para o sino */
+  {
+    const supaOrig = global.supa, cdOrig = GV2.comDesfazer, recOrig = GV2.recado;
+    let gravado = null; const recados = [];
+    global.supa = { from: function () { return { insert: function (l) { gravado = l; return { select: function () { return { single: async function () { return { data: Object.assign({ id: 'x' }, l), error: null }; } }; } }; } }; } };
+    GV2.comDesfazer = function (id, gravar) { return gravar(); };
+    GV2.recado = async function (p, t) { recados.push(t); };
+    await GV2.registrarUmAUm('1');
+    global.supa = supaOrig; GV2.comDesfazer = cdOrig; GV2.recado = recOrig;
+    checar('Registrar grava em um_a_um com prazo, conferência e origem por combinado e manda cada um ao sino',
+      !!gravado && gravado.combinados.length === 3 && gravado.combinados.every(function (c) { return c.prazo && (c.conferencia === 'auto' || c.conferencia === 'manual') && 'origem' in c; }) && recados.length === 3,
+      gravado ? JSON.stringify(gravado.combinados[0]) : 'nada gravado');
+    GV2.base.cru.umAUm.shift(); GV2.pessoasMontar(GV2.base);
+  }
   /* Rua › Rotas: a rota da pessoa dia a dia (itens_do_plano) e a feita pela visita com prova */
   tabelas.rotas_da_semana = [
     { owner_id: '1', dia: '2026-10-06', vaga: 1, hora: '10:00', client_id: 'c1', nome: 'Bar do Zé', proposito: 'visita', lat: -20.31, lng: -40.3 },
