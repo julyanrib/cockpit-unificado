@@ -49,11 +49,17 @@ const tabelas = {
   fichas_de_rua: [{ owner_id: '1' }],
   pontos_eventos: [{ owner_id: '2', tipo: 'contrato' }, { owner_id: '2', tipo: 'demo_realizada' }, { owner_id: '3', tipo: 'contrato' }, { owner_id: '3', tipo: 'estorno' }],
   client_stage_changes: [], playbook_progresso: [], gestor_idas_campo: [],
+  /* v4 (07/10/26): a disciplina e as leituras do gestor */
+  profiles: [{ id: 'u1', id_hubspot: '1' }, { id: 'u2', id_hubspot: '2' }, { id: 'u3', id_hubspot: '3' }],
+  client_meetings: [{ id: 'm1', client_id: 'c1', created_by: 'u1', scheduled_at: '2026-10-05T15:00:00Z', type: 'reuniao' }, { id: 'm2', client_id: 'c2', created_by: 'u1', scheduled_at: '2026-10-02T15:00:00Z', type: 'follow_up' }],
+  fila_feitas: [{ user_id: 'u2', dia: '2026-10-06', estado: 'gravada' }, { user_id: 'u2', dia: '2026-10-06', estado: 'desfeita' }],
+  dailies: [{ seller_id: 'u3', prometido_visitas: 4 }],
+  gestor_v4_leituras: { prospeccao: { '1': { atribuidas: 10, visitadas: 2, avancaram: 1 } }, fonte: [{ dono: '1', origem: 'alvo', portas: 5, avancaram: 2 }, { dono: '3', origem: 'rua', portas: 10, avancaram: 1 }] },
   um_a_um: [{ owner_id: '1', data: '2026-09-23', canal: 'video', created_at: '2026-09-23T12:00:00Z', compromissos: ['a', 'b', 'c'],
     combinados: [{ texto: 'Plano todo dia', regra: 'plano_diario' }, { texto: 'Travados com data', regra: 'travados_com_data' }, { texto: 'Duas demos', regra: 'livre' }] },
     { owner_id: '2', data: '2026-10-01', canal: 'campo', created_at: '2026-10-01T20:00:00Z', compromissos: ['voltar no Bar'], devolutiva: { foco: 'Disciplina de plano' } }], clients: [{ id: 'c1', nome: 'José', empresa: 'Bar do Zé', id_hubspot: 'a' }, { id: 'c2', nome: 'Sidnei', empresa: 'Cantina Sol', id_hubspot: null }]
 };
-const q = (dados) => { const o = { then: (a, b) => Promise.resolve({ data: dados, error: null }).then(a, b) }; ['select', 'eq', 'gte', 'in', 'order', 'limit'].forEach(k => { o[k] = () => o; }); return o; };
+const q = (dados) => { const o = { then: (a, b) => Promise.resolve({ data: dados, error: null }).then(a, b) }; ['select', 'eq', 'gte', 'lt', 'in', 'order', 'limit'].forEach(k => { o[k] = () => o; }); return o; };
 global.supa = {
   rpc: (nome, a) => q(nome === 'planejamento_do_time' ? { pessoas: a.p_segunda === SEG ? pessoasRpc : [], mapa: { checkins: [], plano: [] } } : tabelas[nome] || []),
   from: (t) => q(tabelas[t] || [])
@@ -64,8 +70,10 @@ global.DATA = {
   usuarios: [], stageMeta: { slaDays: {} },
   funilLeads: {
     '1395880472': [lead('a', '1', 2, 500, false, false), lead('b', '2', 9, 300, true, true)],
-    '1395880473': [lead('c', '3', 1, 200, false, true)],
-    '1395880470': [lead('d', '1', 6, 0, true, false)]
+    '1395880473': [lead('c', '3', 9, 200, true, true)] /* v4: Ag. Pagamento estourando a régua — nem assim é travado */,
+    '1395880470': [lead('d', '1', 6, 0, true, false)],
+    /* v4: o mesmo restaurante do mesmo dono em Visita (repetido de Na, que está em Negociação) */
+    '1396005401': [Object.assign(lead('x', '1', 3, 0, false, false), { name: 'Na' })]
   }
 };
 global.sessaoAtual = { role: 'manager', nome: 'Julyan Ribeiro', ownerId: '99' };
@@ -113,7 +121,21 @@ tabelas.gv2_falta_etapa = [
   checar('fechado = contratos − estornos (o mesmo do ranking)', bia.funil_mes.fechado === 1 && caio.funil_mes.fechado === 0);
   checar('portas = só visitas provadas', ana.funil_mes.portas === 2 && bia.funil_mes.portas === 1);
   checar('a meta do mês é a soma das pessoas', b.time.metaMes === 15);
-  checar('provável = fechados + 50% quentes + 20% mornos', bia.provavel === 2 && ana.provavel === 1 + 0, 'bia ' + bia.provavel + ' ana ' + ana.provavel);
+  checar('provável = fechados + Ag. Pagamento + 60% de Negociação (v4)', bia.provavel === 2 && ana.provavel === 1 && caio.provavel === 1, 'bia ' + bia.provavel + ' ana ' + ana.provavel + ' caio ' + caio.provavel);
+  /* ── v4 (Pessoas e Raio X, 07/10/26): os testes de aceite 1–4 e 8 do prompt ── */
+  checar('v4 · 1: o provável do Time é a soma das Pessoas e o KPI Mês mostra o mesmo número',
+    b.time.provavel === ana.provavel + bia.provavel + caio.provavel && GV2.render.kpisTime()[4].unidade === 'provável ' + b.time.provavel, 'time ' + b.time.provavel);
+  checar('v4 · 3: negócio repetido (mesmo dono, mesmo nome) conta uma vez, na etapa mais avançada, com rep e as outras etapas',
+    b.negocios.filter(n => n.nome === 'Na').length === 1 && b.negocios.find(n => n.nome === 'Na').etapa_idx === 4 && b.negocios.find(n => n.nome === 'Na').rep === 2 && /Visita/.test(b.negocios.find(n => n.nome === 'Na').outros.join()),
+    b.negocios.map(n => n.nome + ':' + n.etapa_idx).join());
+  const agp = b.negocios.find(n => n.id === 'c');
+  checar('v4 · 4: Ag. Pagamento nunca é travado, sem passo nem "a puxar", mesmo estourando a régua', agp && agp.agPag && !agp.travado && !agp.semPasso && !agp.puxar);
+  GV2.estado.filtro = 'quentes';
+  const negQ = GV2.render.negocios();
+  checar('v4 · 4: na lista do Raio X o Ag. Pagamento aparece "com o financeiro" e sem Cobrar', /com o financeiro/.test(negQ) && negQ.indexOf('cobrar:neg:c"') < 0);
+  checar('v4: as reuniões que passaram sem desfecho chegam à pessoa pelo created_by (perfis → dono)', ana.disc.nReunioes === 2 && bia.disc.nReunioes === 0 && ana.disc.reunioes[0].id === 'm1', JSON.stringify(ana.disc));
+  checar('v4: fila do app conta o Feito e ignora o desfeito; promessa do dia vem de dailies', bia.disc.fila7 === 1 && caio.promessa === 4 && ana.promessa === null);
+  checar('v4: prospecção e resultado do mês por pessoa', ana.prosp.atribuidas === 10 && bia.resultado.fechados === 1 && bia.resultado.meta === 5 && bia.resultado.faltam === 4);
   checar('cada passo do funil é a lista que o gestor abre ao clicar', [0, 1, 2, 3, 4].every(i => b.time.funil[i] === b.funilItens[i].length), b.time.funil.join() + ' vs ' + b.funilItens.map(x => x.length).join());
   GV2.estado.passo = 0; GV2.estado.passoDono = '1';
   const lista = GV2.render.negocios();
@@ -134,9 +156,20 @@ tabelas.gv2_falta_etapa = [
   /* Pessoas v3 (06/10/26): uma página com 5 seções fixas, a lista e a barra do pé; a rotação vira folha */
   let p3 = '';
   try { p3 = GV2.render.pessoas(); } catch (e) { falhas.push('pessoas v3: ' + e.message); }
+  const melhor = GV2.melhorV4(b.pessoas, b.time.funil);
+  checar('v4 · 2: "melhor" nunca mostra taxa menor ou igual à do time nem amostra < 3', melhor.slice(1).every(function (m, j) {
+    const i = j + 1, K = ['portas', 'decisor', 'demo', 'proposta', 'fechado'], F = b.time.funil;
+    if (!m.nome) return /ninguém acima do time/.test(m.txt);
+    const p = b.pessoas.find(x => x.nome === m.nome);
+    return p.funil_mes[K[i - 1]] >= 3 && m.pct > Math.round(F[i] / F[i - 1] * 100);
+  }), JSON.stringify(melhor));
+  checar('v4: Pessoas tem a âncora Disciplina entre Ritmo e Funil, o resumo de 5 e nenhum "Chamar"',
+    p3.indexOf('data-p3-sec="disc"') > p3.indexOf('data-p3-sec="ritmo"') && p3.indexOf('data-p3-sec="disc"') < p3.indexOf('data-p3-sec="funil"') && (p3.match(/class="gv2-v4-res"/g) || []).length === 5 && p3.indexOf('p3:chamar') < 0);
   checar('Pessoas v3: as 5 seções em ordem, a lista "Quem precisa de você", a barra do pé e o botão da rotação',
     ['agora', 'ritmo', 'funil', 'um', 'campo'].every(function (s, i, a) { return i === 0 || p3.indexOf('data-p3-sec="' + s + '"') > p3.indexOf('data-p3-sec="' + a[i - 1] + '"'); })
       && /Quem precisa de você/.test(p3) && /class="gv2-p3-pe"/.test(p3) && /data-gv2="p3:rotacao"/.test(p3) && !/Sua rotação de campo/.test(p3));
+  let telas = p3; try { telas += GV2.render.time(); } catch (e) { falhas.push('time: ' + e.message); }
+  checar('v4 · 8: "0 de 0" não aparece em lugar nenhum (Pessoas e Time)', !/(^|[^0-9])0 de 0([^0-9]|$)/.test(telas.replace(/<[^>]+>/g, ' ')), (function () { const t = telas.replace(/<[^>]+>/g, ' '); const i = t.search(/(^|[^0-9])0 de 0([^0-9]|$)/); return i < 0 ? '' : t.slice(Math.max(0, i - 80), i + 40).replace(/s+/g, ' '); })());
   GV2.estado.p3rotacao = true;
   checar('Pessoas v3: a rotação abre numa folha lateral, com o mesmo componente', /class="gv2-p3-folha"/.test(GV2.render.pessoas()) && /Sua rotação de campo/.test(GV2.render.pessoas()));
   GV2.estado.p3rotacao = false;
@@ -171,7 +204,7 @@ tabelas.gv2_falta_etapa = [
   GV2.estado.filtro = 'todos'; GV2.estado.aba = 'raiox'; GV2.estado.rxm = 'funil';
   const rxf = GV2.render.raiox();
   checar('Negócios ganha a coluna Sistema, com "não registrado" e o clique para a Praça', /Sistema/.test(rxf) && /não registrado/.test(rxf) && /data-gv2="pxsis:vv:Saipos"/.test(rxf));
-  checar('Funil tem "Ver onde atacar"', /data-gv2="atacar"/.test(rxf));
+  checar('Funil do mês diz que é contagem por passo, não a mesma turma (v4)', /não a mesma turma/.test(rxf));
   checar('a ficha do negócio carrega o bloco das armas (Meu funil do executivo)', tpl.indexOf("GV2.armasNaFicha(l, document.getElementById('gv2ArmasFicha'))") > 0);
   const C = GV2.pracaContra('vv');
   checar('Contra quem: abertos por sistema = lista do painel', C.lista.every(x => x.ab === x.abertos.length));
@@ -213,9 +246,9 @@ tabelas.gv2_falta_etapa = [
   checar('1:1: + Combinado, Tirar, prazo que troca e Automático | Você confere em cada cartão', /data-gv2="comb:add:1"/.test(um) && /data-gv2="comb:tirar:1:0"/.test(um) && /data-gv2="p3:prazo:1:0"/.test(um) && /data-gv2="p3:conf:1:0:manual"/.test(um));
   /* a barra do pé segue a seção em foco (§8) */
   const pe = function (s) { return GV2.p3Pe(ana1, s); };
-  checar('barra do pé: 1:1 → Registrar 1:1 · 3 combinados; Funil com pendência → Cobrar os 2; Campo sem ida → Marcar ida; sempre Chamar e Pauta',
-    /Registrar 1:1 · 3 combinados/.test(pe('um')) && /Cobrar os 2/.test(pe('funil')) && /Marcar ida/.test(pe('campo')) && ['agora', 'ritmo', 'funil', 'um', 'campo'].every(function (s) { return /data-gv2="p3:chamar:1"/.test(pe(s)) && /data-gv2="pauta:wa:1"/.test(pe(s)); }));
-  checar('barra do pé: Agora sem plano pede o plano; com plano, Ver no mapa grande', /Pedir o plano/.test(pe('agora')) && /data-gv2="mg:abrir:2"/.test(GV2.p3Pe(GV2.base.porId['2'], 'agora')) === (GV2.base.porId['2'].hoje.paradas_plano > 0));
+  checar('barra do pé: 1:1 → Registrar 1:1 · 3 combinados; Disciplina → Cobrar a disciplina; Funil → Cobrar os 2; Campo → Marcar ida; sempre Pauta e nunca Chamar (v4)',
+    /Registrar 1:1 · 3 combinados/.test(pe('um')) && /Cobrar a disciplina/.test(pe('disc')) && /Cobrar os 2/.test(pe('funil')) && /Marcar ida/.test(pe('campo')) && ['agora', 'ritmo', 'disc', 'funil', 'um', 'campo'].every(function (s) { return !/p3:chamar/.test(pe(s)) && /data-gv2="pauta:wa:1"/.test(pe(s)); }));
+  checar('barra do pé: sem plano pede o plano até 15h; plano com 0 provadas → Cobrar a primeira visita (v4)', /Pedir o plano até 15h|Pedir o plano de amanhã/.test(pe('agora')) && /v4:cobrarvisita:2/.test(GV2.p3Pe(GV2.base.porId['2'], 'agora')));
   /* nada some: o texto do combinado fica ao trocar de pessoa e voltar */
   GV2.estado.comb1a1['1'][0].texto = 'Texto que não pode sumir';
   GV2.estado.pessoa = '2'; GV2.render.pessoas(); GV2.estado.pessoa = '1';
