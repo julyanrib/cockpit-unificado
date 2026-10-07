@@ -159,7 +159,7 @@ tabelas.gv2_falta_etapa = [
   const melhor = GV2.melhorV4(b.pessoas, b.time.funil);
   checar('v4 · 2: "melhor" nunca mostra taxa menor ou igual à do time nem amostra < 3', melhor.slice(1).every(function (m, j) {
     const i = j + 1, K = ['portas', 'decisor', 'demo', 'proposta', 'fechado'], F = b.time.funil;
-    if (!m.nome) return /ninguém acima do time/.test(m.txt);
+    if (!m.nome) return /ninguém acima do time|sem comparação honesta/.test(m.txt);
     const p = b.pessoas.find(x => x.nome === m.nome);
     return p.funil_mes[K[i - 1]] >= 3 && m.pct > Math.round(F[i] / F[i - 1] * 100);
   }), JSON.stringify(melhor));

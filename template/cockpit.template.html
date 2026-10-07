@@ -12112,6 +12112,8 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
 .gv2-v4-faixa-ok{padding:10px 12px;border-radius:var(--gv2-r-ctl);background:var(--gv2-ok-soft);color:var(--gv2-ok);font:600 12px var(--gv2-font);}
 .gv2-v4-fonte .gv2-v4-nota{padding:6px 14px 10px;}
 @media (max-width:900px){.gv2-px-l1.gv2-v4-px-l1{height:auto;grid-template-columns:minmax(0,1fr);grid-template-rows:300px auto;}.gv2-v4-px-duas{height:auto;grid-template-columns:minmax(0,1fr);}.gv2-v4-px-duas > section{min-height:260px;}}
+@media (max-width:900px){.gv2-kpis{grid-template-columns:repeat(3,minmax(0,1fr));}.gv2-kpi-val{flex-wrap:wrap;row-gap:0;}}
+@media (max-width:900px){.gv2-p3-abas button span{display:none;}}
 </style><!-- /gv2-css -->
 </head>
 <body>
@@ -12196,7 +12198,7 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -74404,6 +74406,8 @@ GV2.rsCheio = function (v) { return 'R$ ' + Math.round(Number(v) || 0).toLocaleS
 GV2.hm = function (d) { d = d || new Date(); return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }); };
 GV2.pl = function (n, um, varios) { return n + ' ' + (n === 1 ? um : varios); };
 /* "N de M" sem nunca virar "0 de 0" (v4): sem plano, diz "sem plano" (ou "N sem plano") */
+/* "N de M" de meta: sem meta, não vira "0 de 0" */
+GV2.deMeta = function (n, meta) { return meta ? n + ' de ' + meta : n + ' · sem meta'; };
 GV2.deDe = function (feitas, plano) { return plano ? feitas + ' de ' + plano : feitas ? feitas + ' sem plano' : 'sem plano'; };
 GV2.prim = function (nome) { return String(nome || '').split(' ')[0]; };
 GV2.STATUS = {
@@ -74543,7 +74547,7 @@ GV2.excecoesLista = function () {
   const semPlano = b.pessoas.filter(function (p) { return p.hoje.paradas_plano === 0; });
   const parados = b.pessoas.filter(function (p) { return p.hoje.paradas_plano > 0 && p.hoje.visitas_com_prova === 0 && !b.antesDaJornada; });
   const furaram = b.pessoas.filter(function (p) { return p.furou > 0; });
-  const qsp = b.negocios.filter(function (n) { return n.quente && !n.proximo_passo; });
+  const qsp = b.negocios.filter(function (n) { return n.quente && !n.agPag && !n.proximo_passo; });
   const topTr = b.negocios.filter(function (n) { return n.travado && n.mrr; }).sort(function (x, y) { return y.mrr - x.mrr; })[0];
   if (semPlano.length) ex.push({
     t: GV2.lista(semPlano.map(function (p) { return GV2.prim(p.nome); })) + ' sem plano hoje',
@@ -74618,7 +74622,7 @@ GV2.render.daily = function () {
   if (!p) return '';
   const ok = p.hoje.visitas_com_prova >= p.esperado;
   const pd = p.funil_mes.portas ? Math.round(p.funil_mes.decisor / p.funil_mes.portas * 100) : null;
-  const destravar = p.travados.concat(p.quentes.filter(function (n) { return !n.proximo_passo && !n.travado; }));
+  const destravar = p.travados.concat(p.quentes.filter(function (n) { return !n.agPag && !n.proximo_passo && !n.travado; }));
   const rasc = GV2.estado.compromissos[p.id] || '';
   const ultimo = i >= b.ordem.length - 1;
   const ontemTem = p.ontem.paradas_plano || p.ontem.visitas_com_prova;
@@ -74828,11 +74832,11 @@ GV2.render.ruaSemana = function () {
     return { acao: 'pessoa:' + p.id, celulas: ['<b class="gv2-ellip">' + GV2.e(p.nome) + '</b>'].concat(cels).concat([
       '<b class="num">' + p.semanaTotal + ' de ' + p.meta_visitas_dia * dias.length + '</b>',
       /* v4 (07/10/26): a promessa do DIA (dailies), a mesma que o app pergunta; a palavra da semana saiu */
-      '<b class="' + (p.promessa == null ? 't-dim' : 't-ok') + '">' + GV2.e(p.promessa == null ? '—' : 'prometeu ' + p.promessa) + '</b>'
+      '<b class="' + (p.promessa == null ? 't-dim' : 't-ok') + '" title="' + (p.promessa === undefined ? 'dailies não respondeu agora' : '') + '">' + GV2.e(p.promessa === undefined ? '—' : p.promessa === null ? 'não prometeu' : 'prometeu ' + p.promessa) + '</b>'
     ]) };
   });
   const semPlano = b.ordem.reduce(function (a, p) { return a + p.semana.filter(function (d) { return !d.planejadas && !(d.passado && d.provadas); }).length; }, 0);
-  const semPromessa = b.ordem.filter(function (p) { return p.promessa == null; }).length;
+  const semPromessa = b.ordem.filter(function (p) { return p.promessa === null; }).length;
   const leg = '<span class="gv2-legenda"><span><i style="background:var(--gv2-ok-soft)"></i>cumpriu</span><span><i style="background:var(--gv2-erro-soft)"></i>furou</span><span><i style="background:var(--gv2-av-soft)"></i>sem plano</span><span><i style="border:1px dashed var(--gv2-faint)"></i>planejado</span></span>';
   return '<section class="card" style="flex:1;min-height:0;display:flex;flex-direction:column;"><div class="card-cab"><span class="card-titulo">Semana ' + GV2.e(b.semanaRot) + '</span><span class="card-sub">o plano de cada um no Planejamento · os dias que já passaram com o que foi provado</span></div>'
     + GV2.html.tabela({ colunas: 'minmax(180px,1.3fr) repeat(' + dias.length + ',minmax(0,1fr)) 110px 90px', cabecalho: cab, linhas: linhas })
@@ -74871,7 +74875,7 @@ GV2.compSugeridos = function (p) {
   return [
     (p.hoje.paradas_plano === 0 || b.foraDaJornada) ? 'Plano de amanhã com ' + p.meta_visitas_dia + ' paradas na Agenda até ' + (b.foraDaJornada ? '9h.' : 'hoje 18h.') : 'Fechar as ' + Math.max(0, p.hoje.paradas_plano - p.hoje.visitas_com_prova) + ' visitas que faltam hoje.',
     p.travados.length ? 'Próximo passo com data nos ' + GV2.pl(p.travados.length, 'travado', 'travados') + ' até ' + b.prazo2 + '.' : 'Marcar 2 visitas de decisor até ' + b.prazo2 + '.',
-    p.quentes.length ? 'Data de decisão em ' + p.quentes[0].nome + ' até ' + b.prazo3 + '.' : 'Levar 2 demos para a semana.'
+    (p.negociacao || []).length ? 'Data de decisão em ' + p.negociacao[0].nome + ' até ' + b.prazo3 + '.' : 'Levar 2 demos para a semana.'
   ];
 };
 GV2.render.dossie = function (p) {
@@ -75044,6 +75048,12 @@ GV2.dedupNegocios = function (lista) {
     ganha.outros = g.filter(function (x) { return x !== ganha; })
       .map(function (x) { return GV2.ETAPAS[x.etapa_idx] + (x.nome !== ganha.nome ? ' como ' + x.nome : ''); });
     g.forEach(function (x) { if (x !== ganha) fora.add(x); });
+  });
+  GV2.aliasDeal = {};
+  Object.keys(grupos).forEach(function (k) {
+    const g = grupos[k]; if (g.length < 2) return;
+    const ganha = g.find(function (x) { return !fora.has(x); });
+    g.forEach(function (x) { if (x !== ganha) GV2.aliasDeal[x.id] = ganha.id; });
   });
   for (let i = lista.length - 1; i >= 0; i--) if (fora.has(lista[i])) lista.splice(i, 1);
   return lista;
@@ -75282,6 +75292,14 @@ GV2.montar = async function () {
     const di = GV2.diaDe(em);
     if (di >= mesIni && (!propostaPorDeal[n.id] || di > propostaPorDeal[n.id].dia)) propostaPorDeal[n.id] = { dono: n.dono, dia: di };
   });
+  /* v4: o repetido que entrou em Negociação conta uma proposta só, no negócio que ficou */
+  Object.keys(propostaPorDeal).forEach(function (k) {
+    const alvo = (GV2.aliasDeal || {})[k];
+    if (!alvo) return;
+    const a = propostaPorDeal[k], b2 = propostaPorDeal[alvo];
+    if (!b2 || a.dia > b2.dia) propostaPorDeal[alvo] = a;
+    delete propostaPorDeal[k];
+  });
   Object.keys(propostaPorDeal).forEach(function (k) {
     const p = propostaPorDeal[k];
     if (p.dia < mesIni || !doTime(p.dono)) return;
@@ -75459,7 +75477,7 @@ GV2.montar = async function () {
     negocios: negocios, time: time, funilItens: AG.funilItens, gargalo: AG.gargalo, melhorPorPasso: AG.melhorPorPasso, dinheiro: AG.dinheiro,
     semValorDecisorEmDiante: AG.semValorDecisorEmDiante, emJogo: AG.emJogo,
     pracas: pracas, pracaPrincipal: pracas[0] || '',
-    fechados: armas.fechados, fichas: armas.fichas, faltasEtapa: armas.faltas,
+    fechados: armas.fechados, fichas: armas.fichas, faltasEtapa: armas.faltas, fichasErro: (L.fichasArmas && L.fichasArmas.erro) || null,
     propostas: { ok: true, lista: mesa, porPessoa: pessoas.map(function (p) { return { nome: p.nome, semana: p.propostas.semana, mes: p.propostas.mes, aceitas: p.propostas.aceitas_mes }; }).sort(function (x, y) { return y.mes - x.mes || x.nome.localeCompare(y.nome); }),
       total: { semana: somar(function (p) { return p.propostas.semana; }), mes: somar(function (p) { return p.propostas.mes; }), aceitas: somar(function (p) { return p.propostas.aceitas_mes; }) } },
     playbook: { ok: !L.playbook.erro && caps.length > 0, erro: L.playbook.erro || (caps.length ? null : 'o playbook não carregou'), capitulos: caps },
@@ -76266,14 +76284,15 @@ GV2.combinarAgora = function (p) {
   const dois = p.travados.length
     ? { texto: 'Próximo passo com data nos ' + GV2.pl(p.travados.length, 'travado', 'travados'), regra: 'travados_com_data', prazo: qua, como: 'até ' + GV2.diaCurto(qua) + ' · automático' }
     : { texto: 'Levar 2 demos para a semana', regra: 'livre', prazo: qua, como: 'até ' + GV2.diaCurto(qua) + ' · você confere no 1:1' };
-  const q = p.quentes.slice().sort(function (x, y) { return y.mrr - x.mrr; })[0];
+  const q = (p.negociacao || p.quentes.filter(function (n) { return !n.agPag; })).slice().sort(function (x, y) { return y.mrr - x.mrr; })[0];
   const tres = q
     ? { texto: 'Data de decisão em ' + q.nome, regra: 'decisao_em_negocio', alvo: { negocio_id: q.id }, prazo: qui, como: 'até ' + GV2.diaCurto(qui) + ' · automático' }
     : { texto: 'Pedir a decisão em 1 proposta aberta', regra: 'livre', prazo: qui, como: 'até ' + GV2.diaCurto(qui) + ' · você confere no 1:1' };
   return [um, dois, tres];
 };
 GV2.roteiro = function (p) {
-  return p.negocios.slice().sort(function (x, y) { return (y.travado - x.travado) || (x.etapa_idx - y.etapa_idx); }).slice(0, 5).map(function (n, i) {
+  /* Ag. Pagamento é do financeiro: não entra no roteiro de campo (v4) */
+  return p.negocios.filter(function (n) { return !n.agPag; }).sort(function (x, y) { return (y.travado - x.travado) || (x.etapa_idx - y.etapa_idx); }).slice(0, 5).map(function (n, i) {
     const motivo = n.quente ? 'quente em ' + GV2.ETAPAS[n.etapa_idx] + ' · pedir a decisão juntos'
       : n.travado ? n.dias + 'd em ' + GV2.ETAPAS[n.etapa_idx] + ' (régua ' + n.regua + ') · ir junto no decisor'
       : n.etapa_idx <= 1 ? 'porta · ' + GV2.prim(p.nome) + ' conduz, você observa'
@@ -78057,7 +78076,7 @@ GV2.p3Ritmo = function (p) {
     const rot = GV2.DIAS[GV2.dow(d.iso)].toUpperCase() + ' ' + d.iso.slice(8, 10);
     let v, sub, cls = '';
     if (!d.planejadas && d.hoje) { v = 'sem plano'; sub = 'hoje'; cls = 'is-av'; }
-    else if (d.passado) { const fur = Math.max(0, d.planejadas - d.provadas); v = d.provadas + ' de ' + d.planejadas; sub = d.planejadas ? (fur ? 'furou ' + fur : 'cumpriu') : 'sem plano'; cls = d.planejadas && !fur ? 'is-ok' : fur ? 'is-av' : ''; }
+    else if (d.passado) { const fur = Math.max(0, d.planejadas - d.provadas); v = GV2.deDe(d.provadas, d.planejadas); sub = d.planejadas ? (fur ? 'furou ' + fur : 'cumpriu') : (d.provadas ? 'visitas fora do plano' : 'nenhuma visita'); cls = d.planejadas && !fur ? 'is-ok' : fur || !d.planejadas ? 'is-av' : ''; }
     else if (d.hoje) { v = d.provadas + ' de ' + d.planejadas; sub = 'até ' + GV2.hm() + ' · ' + GV2.v4Promessa(p); cls = 'is-hoje'; }
     else if (!d.planejadas) { v = '—'; sub = 'ainda não montou'; cls = 'is-futuro'; }
     else { v = d.planejadas + ' planej.'; sub = 'futuro'; cls = 'is-futuro'; }
@@ -78066,7 +78085,7 @@ GV2.p3Ritmo = function (p) {
   return '<div class="gv2-p3-kpis">'
     + '<div class="gv2-p3-kpi"><small>Visitas/dia · 4 semanas</small><div class="gv2-p3-kpi-lin"><b class="' + (z != null && z < p.meta_visitas_dia * 0.9 ? 't-av' : 't-ok') + '">' + (z == null ? '—' : GV2.virg(z) + '/dia') + '</b>' + barras + '</div><span>' + GV2.e('meta ' + p.meta_visitas_dia + (w.length ? ' · ' + w.map(GV2.virg).join(' → ') : '')) + '</span></div>'
     + '<div class="gv2-p3-kpi"><small>Ontem</small><b class="' + (p.furou ? 't-av' : 't-ok') + '">' + GV2.e(p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : '—') + '</b><span>' + GV2.e(p.ontem.paradas_plano ? (p.furou ? 'furou ' + p.furou + ' · com prova' : 'tudo com prova') : 'sem plano ontem') + '</span></div>'
-    + '<div class="gv2-p3-kpi"><small>Promessa de hoje</small><b class="' + (p.promessa == null ? 't-av' : 't-ok') + '">' + GV2.e(p.promessa === undefined ? '—' : p.promessa == null ? 'não prometeu' : 'prometeu ' + p.promessa) + '</b><span>' + GV2.e(p.promessa === undefined ? 'dailies não respondeu agora' : p.promessa == null ? 'o app pergunta no começo do dia · sem resposta' : p.hoje.visitas_com_prova + ' de ' + p.promessa + ' com prova até agora') + '</span></div>'
+    + '<div class="gv2-p3-kpi"><small>Promessa de hoje</small><b class="' + (p.promessa == null ? 't-av' : 't-ok') + '">' + GV2.e(p.promessa === undefined ? '—' : p.promessa == null ? 'não prometeu' : 'prometeu ' + p.promessa) + '</b><span>' + GV2.e(p.promessa === undefined ? 'dailies não respondeu agora' : p.promessa == null ? 'o app pergunta no começo do dia · sem resposta' : (p.promessa ? p.hoje.visitas_com_prova + ' de ' + p.promessa + ' com prova até agora' : 'prometeu zero visitas hoje')) + '</span></div>'
     + '<div class="gv2-p3-kpi"><small>Playbook</small><b>' + GV2.e(p.playbook.nivel > ((GV2.base.playbook && GV2.base.playbook.capitulos) || []).length ? 'trilha completa' : 'Nível ' + p.playbook.nivel) + '</b><span>' + GV2.e(p.playbook.nunca ? 'nunca abriu a trilha' : GV2.pl(p.playbook.dias_parado, 'dia parado', 'dias parado') + ' no nível') + '</span></div></div>'
     + '<div class="gv2-p3-semana">' + celulas + '</div>';
 };
@@ -78292,7 +78311,7 @@ GV2.p3Clique = function (cmd, parte) {
   if (acao === 'cobrartodos') {
     const p = b.porId[parte[2]]; if (!p) return true;
     const ns = p.puxar || [];
-    if (ns.length) { GV2.estado.filtro = 'travados'; GV2.estado.prf = 'todas'; GV2.estado.loteDados = { tipo: 'neg', grupos: [{ p: p, ns: ns.slice(0, 40), texto: GV2.textoNegocios(p, ns) }] }; GV2.estado.veu = GV2.render.lote; GV2.pintar(); }
+    if (ns.length) { GV2.estado.loteDados = { tipo: 'neg', grupos: [{ p: p, ns: ns.slice(0, 40), texto: GV2.textoNegocios(p, ns) }] }; GV2.estado.veu = GV2.render.lote; GV2.pintar(); }
     return true;
   }
   if (acao === 'rotacao') { GV2.estado.p3rotacao = true; GV2.pintar(); return true; }
@@ -78355,8 +78374,15 @@ GV2.variavel = function (n) {
   const c = typeof DATA !== 'undefined' && DATA && DATA.comissionamento;
   const fx = c && Array.isArray(c.faixas) ? c.faixas : null;
   if (!fx) return null;
-  const f = fx.find(function (x) { return n >= (x.de || 0) && (x.ate == null || n <= x.ate); });
-  return f ? n * (f.porCliente || 0) : 0;
+  const faixa = function (k) { return fx.find(function (x) { return k >= (x.de || 0) && (x.ate == null || k <= x.ate); }) || { porCliente: 0 }; };
+  if (c.modelo === 'marginal') { let t = 0; for (let k = 1; k <= n; k++) t += faixa(k).porCliente || 0; return t; }
+  return n * (faixa(n).porCliente || 0);
+};
+/* vendas do mês por dono: as mesmas do "Meu desempenho" do app (vendasMes do robô) */
+GV2.vendasDoMes = function (id) {
+  const v = typeof DATA !== 'undefined' && DATA && DATA.vendasMes;
+  const r = v && Array.isArray(v.porRep) ? v.porRep.find(function (x) { return String(x.ownerId) === String(id); }) : null;
+  return v && Array.isArray(v.porRep) ? (r ? r.count || 0 : 0) : null;
 };
 
 GV2.disciplinaMontar = function (L, pessoas, agora, clientePorId, faltas) {
@@ -78416,12 +78442,13 @@ GV2.disciplinaMontar = function (L, pessoas, agora, clientePorId, faltas) {
       fila7: erros.fila ? null : (filaPor[p.id] || 0)
     };
     p.promessa = erros.promessa ? undefined : (promPor[p.id] != null ? promPor[p.id] : null);
-    const fech = p.funil_mes.fechado, meta = p.meta_clientes_mes || 0;
-    p.resultado = { fechados: fech, meta: meta, faltam: Math.max(0, meta - fech), variavel: GV2.variavel(fech), proxima: GV2.variavel(fech + 1) };
+    const vm = GV2.vendasDoMes(p.id), fech = vm != null ? vm : p.funil_mes.fechado, meta = p.meta_clientes_mes || 0;
+    const vv = GV2.variavel(fech);
+    p.resultado = { fechados: fech, meta: meta, faltam: Math.max(0, meta - fech), variavel: vv, proxima: vv == null ? null : GV2.variavel(fech + 1) - vv };
     const pr = !erros.v4 && L.v4 && L.v4.data && L.v4.data.prospeccao ? L.v4.data.prospeccao[p.id] : null;
     p.prosp = erros.v4 ? null : (pr || { atribuidas: 0, visitadas: 0, avancaram: 0 });
   });
-  GV2.v4Time = { decisor: decTime, fichasMes: fichasTime };
+  GV2.v4Time = erros.fichas ? null : { decisor: decTime, fichasMes: fichasTime };
   GV2.v4Fonte = erros.v4 ? null : ((L.v4 && L.v4.data && L.v4.data.fonte) || []);
 };
 
@@ -78431,14 +78458,21 @@ GV2.melhorV4 = function (pessoas, funilTime) {
   const K = ['portas', 'decisor', 'demo', 'proposta', 'fechado'];
   const out = [null];
   for (let i = 1; i < 5; i++) {
-    const tt = funilTime[i - 1] ? Math.round(funilTime[i] / funilTime[i - 1] * 100) : null;
+    const rt = funilTime[i - 1] ? funilTime[i] / funilTime[i - 1] : null;
+    const tt = rt == null ? null : Math.round(rt * 100);
     const eleg = pessoas.filter(function (p) { return p.funil_mes[K[i - 1]] >= 3; });
     if (!eleg.length) { out.push({ nome: null, txt: 'ninguém acima do time', por: 'ninguém teve 3 ou mais no passo anterior' }); continue; }
-    const acima = eleg.map(function (p) { return { p: p, r: Math.round(p.funil_mes[K[i]] / p.funil_mes[K[i - 1]] * 100), n: p.funil_mes[K[i - 1]] }; })
-      .filter(function (x) { return tt != null && x.r > tt && x.r <= 100; })
-      .sort(function (a, b) { return (b.r - a.r) || (b.n - a.n); });
-    if (!acima.length) { out.push({ nome: null, txt: 'ninguém acima do time', por: GV2.pl(eleg.length, 'pessoa com amostra', 'pessoas com amostra') + ', nenhuma acima de ' + tt + '%' }); continue; }
-    out.push({ nome: acima[0].p.nome, pct: acima[0].r, txt: 'melhor ' + GV2.prim(acima[0].p.nome) + ' ' + acima[0].r + '%', por: 'de ' + acima[0].n + ' no passo anterior' });
+    const taxas = eleg.map(function (p) { return { p: p, x: p.funil_mes[K[i]] / p.funil_mes[K[i - 1]], n: p.funil_mes[K[i - 1]] }; });
+    const passou = taxas.filter(function (x) { return x.x > 1; }).length;
+    const acima = taxas.filter(function (x) { return rt != null && x.x > rt && x.x <= 1; })
+      .sort(function (a, b) { return (b.x - a.x) || (b.n - a.n); });
+    if (!acima.length) {
+      out.push(passou ? { nome: null, txt: 'sem comparação honesta', por: GV2.pl(passou, 'pessoa contou', 'pessoas contaram') + ' mais neste passo do que no anterior' }
+        : { nome: null, txt: 'ninguém acima do time', por: GV2.pl(eleg.length, 'pessoa com amostra', 'pessoas com amostra') + ', nenhuma acima de ' + tt + '%' });
+      continue;
+    }
+    const pct = Math.round(acima[0].x * 100);
+    out.push({ nome: acima[0].p.nome, pct: pct, txt: 'melhor ' + GV2.prim(acima[0].p.nome) + ' ' + pct + '%', por: 'de ' + acima[0].n + ' no passo anterior' });
   }
   return out;
 };
@@ -78454,6 +78488,7 @@ GV2.fonteDoLead = function (pessoas) {
 
 /* perdas do mês: os motivos das fichas (Perdido) do recorte */
 GV2.perdasDoMes = function (pessoas) {
+  if (GV2.base.fichasErro) return null;
   const ids = {}; pessoas.forEach(function (p) { ids[p.id] = true; });
   const mesIni = GV2.base.agora.iso.slice(0, 8) + '01', c = {};
   let total = 0;
@@ -78548,7 +78583,7 @@ GV2.p3Resumo = function (p) {
   const reun = d.nReunioes;
   return '<div class="gv2-v4-resumo">'
     + cartao('agora', 'Hoje', semPlano ? 'sem plano' : p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' provadas', GV2.v4Promessa(p), p.v4grav >= 800)
-    + cartao('funil', 'Mês', r.fechados + ' de ' + r.meta + ' ' + (r.meta === 1 ? 'cliente' : 'clientes'), 'faltam ' + r.faltam + (r.variavel != null ? ' · variável ' + GV2.rsCheio(r.variavel) : ''), false)
+    + cartao('funil', 'Mês', r.meta ? r.fechados + ' de ' + r.meta + ' ' + (r.meta === 1 ? 'cliente' : 'clientes') : GV2.pl(r.fechados, 'cliente', 'clientes') + ' · sem meta', 'faltam ' + r.faltam + (r.variavel != null ? ' · variável ' + GV2.rsCheio(r.variavel) : ''), false)
     + cartao('ritmo', 'Ritmo', z == null ? '—' : GV2.virg(z) + '/dia', 'meta ' + p.meta_visitas_dia + (w.length ? ' · ' + GV2.virg(w[0]) + ' → ' + GV2.virg(z) + ' em 4 sem.' : ''), z != null && z < p.meta_visitas_dia * 0.9)
     + cartao('disc', 'Disciplina', reun == null ? '— reuniões' : GV2.pl(reun, 'reunião', 'reuniões'),
       reun == null ? 'não li as reuniões do app' : 'sem desfecho' + (d.nSemFicha != null ? ' · ' + GV2.pl(d.nSemFicha, 'porta', 'portas') + ' sem como foi' : ''), reun > 0)
@@ -78583,10 +78618,10 @@ GV2.p3Disciplina = function (p) {
   const portas = '<div class="gv2-v4-disc"><div class="gv2-v4-disc-cab"><small>Portas sem "como foi" · 7 dias</small><b class="' + (d.nSemFicha ? 't-av' : 't-ok') + '">' + (semF == null ? '—' : d.portas7 ? d.nSemFicha + ' de ' + d.portas7 : 'sem portas') + '</b></div>'
     + '<span>' + GV2.e(!temPortas ? 'não li as visitas ou as fichas agora' : !d.portas7 ? 'nenhuma visita com prova nos últimos 7 dias' : GV2.pl(d.portas7, 'visita com prova', 'visitas com prova') + ' × ' + GV2.pl(d.fichas7, 'ficha', 'fichas') + (d.fichasSemCheckin ? ' · ' + GV2.pl(d.fichasSemCheckin, 'ficha sem check-in com prova', 'fichas sem check-in com prova') : '')) + '</span>'
     + (semF && semF.length ? '<span class="gv2-v4-chips">' + semF.slice(0, 3).map(function (x) { return '<i>' + GV2.e(x.cliente) + '</i>'; }).join('') + (semF.length > 3 ? '<i>+' + (semF.length - 3) + '</i>' : '') + '</span>' : '') + '</div>';
-  const vt = GV2.v4Time || { decisor: 0, fichasMes: 0 };
+  const vt = GV2.v4Time;
   const pct = d.fichasMes ? Math.round(d.decisor / d.fichasMes * 100) : 0;
   const decisor = '<div class="gv2-v4-disc"><div class="gv2-v4-disc-cab"><small>Decisor nomeado · mês</small><b class="' + (d.fichasMes && pct < 25 ? 't-av' : 't-ok') + '">' + (d.fichasMes == null ? '—' : d.fichasMes ? d.decisor + ' de ' + d.fichasMes : 'sem fichas') + '</b></div>'
-    + '<span class="gv2-v4-barra"><i style="width:' + pct + '%"></i></span><span>' + GV2.e('fichas com o nome do decisor · ' + (vt.fichasMes ? 'time ' + vt.decisor + ' de ' + vt.fichasMes : 'o time ainda não tem ficha no mês')) + '</span></div>';
+    + '<span class="gv2-v4-barra"><i style="width:' + pct + '%"></i></span><span>' + GV2.e('fichas com o nome do decisor · ' + (!vt ? 'não li as fichas do time agora' : vt.fichasMes ? 'time ' + vt.decisor + ' de ' + vt.fichasMes : 'o time ainda não tem ficha no mês')) + '</span></div>';
   const filaT = b.pessoas.reduce(function (s, x) { return s + ((x.disc && x.disc.fila7) || 0); }, 0);
   const fila = '<div class="gv2-v4-disc"><div class="gv2-v4-disc-cab"><small>Fila do app · 7 dias</small><b class="t-dim">' + (d.fila7 == null ? '—' : d.fila7 + ' Feito') + '</b></div>'
     + '<span>' + GV2.e(d.fila7 == null ? 'não li a fila do app agora' : (d.fila7 ? GV2.pl(d.fila7, 'Feito', 'Feito') + ' na aba Tarefas' : 'nenhum Feito na aba Tarefas') + ' · time ' + filaT + ' em 7 dias') + '</span></div>';
@@ -78604,9 +78639,9 @@ GV2.v4Mes = function (p) {
   const como = GV2.estado.v4como
     ? '<p class="gv2-v4-como">' + GV2.e(r.fechados + ' ' + (r.fechados === 1 ? 'fechado' : 'fechados') + ' + ' + p.agPag.length + ' em Ag. Pagamento + 60% de ' + p.negociacao.length + ' em Negociação (' + Math.round(0.6 * p.negociacao.length) + ') = ' + p.provavel + '. A mesma conta no Time, no Raio X e aqui; o do time é a soma das pessoas.') + '</p>' : '';
   return '<div class="gv2-p3-kpis">'
-    + '<div class="gv2-p3-kpi"><small>Fechados no mês</small><b>' + r.fechados + ' de ' + r.meta + '</b><span>' + GV2.e('meta do mês · faltam ' + r.faltam) + '</span></div>'
+    + '<div class="gv2-p3-kpi"><small>Fechados no mês</small><b>' + GV2.e(GV2.deMeta(r.fechados, r.meta)) + '</b><span>' + GV2.e('meta do mês · faltam ' + r.faltam) + '</span></div>'
     + '<div class="gv2-p3-kpi"><small>Provável</small><b>' + p.provavel + '</b><span>fechados + Ag. Pagamento + 60% dos quentes</span></div>'
-    + '<div class="gv2-p3-kpi"><small>Variável</small><b>' + (r.variavel == null ? '—' : GV2.rsCheio(r.variavel)) + '</b><span>' + GV2.e(r.variavel == null ? 'a tabela de comissionamento não carregou' : 'o mesmo do "Meu desempenho" · próxima venda ' + GV2.rsCheio(r.proxima)) + '</span></div></div>'
+    + '<div class="gv2-p3-kpi"><small>Variável</small><b>' + (r.variavel == null ? '—' : GV2.rsCheio(r.variavel)) + '</b><span>' + GV2.e(r.variavel == null ? 'a tabela de comissionamento não carregou' : 'o mesmo do "Meu desempenho" · a próxima venda vale +' + GV2.rsCheio(r.proxima)) + '</span></div></div>'
     + '<p class="gv2-v4-comolin"><button type="button" class="gv2-v4-link" data-gv2="v4:como">Como contamos</button><span>uma fórmula só, a mesma no Time, no Raio X e aqui</span></p>' + como;
 };
 GV2.v4FunilMes = function (p) {
@@ -78750,7 +78785,7 @@ GV2.v4Desfecho = async function (pid, mid, status, quando) {
     if (r.error) throw r.error;
     GV2.toast(status === 'realizada' ? x.cliente + ': aconteceu ✓' : status === 'nao_aconteceu' ? x.cliente + ': não aconteceu ✓' : x.cliente + ': remarcada para ' + GV2.v4QuandoReun(quando) + ' ✓');
   } catch (e) {
-    p.disc.reunioes.splice(i, 0, x); p.disc.nReunioes = p.disc.reunioes.length;
+    p.disc.reunioes.push(x); p.disc.reunioes.sort(function (a, b) { return a.quando < b.quando ? 1 : -1; }); p.disc.nReunioes = p.disc.reunioes.length;
     GV2.v4Ordenar(GV2.base); GV2.pintar();
     GV2.toast('Não gravou: ' + ((e && e.message) || 'erro'), 'erro');
   }
@@ -78774,7 +78809,7 @@ GV2.estado.rxComo = false;
     const b = fonte || GV2.base, t = b.time, k = k0(fonte);
     k[2] = Object.assign({}, k[2], { rotulo: 'Quentes', sub: t.quentesSemPasso + ' sem próximo passo' + (t.agPag ? ' · ' + t.agPag + ' com o financeiro' : '') });
     k[3] = Object.assign({}, k[3], { sub: 'passaram da régua da etapa' });
-    k[4] = Object.assign({}, k[4], { valor: t.fechados + ' de ' + t.metaMes, unidade: 'provável ' + t.provavel, sub: 'faltam ' + Math.max(0, t.metaMes - t.provavel) + ' para a meta' });
+    k[4] = Object.assign({}, k[4], { valor: GV2.deMeta(t.fechados, t.metaMes), unidade: 'provável ' + t.provavel, sub: 'faltam ' + Math.max(0, t.metaMes - t.provavel) + ' para a meta' });
     return k;
   };
 })();
@@ -78787,7 +78822,7 @@ GV2.render.raiox = function () {
   const kpis = [
     { rotulo: 'Em jogo', valor: String(b.emJogo.n), unidade: GV2.rs(b.emJogo.mrr), sub: 'negócios de Visita em diante', subTom: 'neutro', ir: 'filtro:todos' },
     Object.assign({}, k[2], { ir: 'filtro:quentes' }), Object.assign({}, k[3], { ir: 'filtro:travados' }),
-    { rotulo: 'Porta → fechado', valor: pf + '%', unidade: F[4] + ' de ' + F[0], sub: 'no mês, contagem por passo', subTom: 'neutro', ir: '' },
+    { rotulo: 'Porta → fechado', valor: F[0] ? pf + '%' : '—', unidade: F[0] ? F[4] + ' de ' + F[0] : 'sem portas no mês', sub: 'no mês, contagem por passo', subTom: 'neutro', ir: '' },
     Object.assign({}, k[4], { ir: '' })
   ];
   const pess = b.pessoas;
@@ -78879,6 +78914,7 @@ GV2.render.ciclo = function () {
 
 GV2.render.perdas = function () {
   const r = GV2.perdasDoMes(GV2.rx().pessoas);
+  if (!r) return '<section class="card"><div class="card-cab"><span class="card-titulo">Perdas do mês</span></div>' + GV2.html.estado('erro', 'Não li as fichas de rua agora (fichas_de_rua não respondeu).') + '</section>';
   const sem = r.lista.filter(function (x) { return x.motivo !== 'Outros'; });
   const outros = r.lista.filter(function (x) { return x.motivo === 'Outros'; }).reduce(function (s, x) { return s + x.n; }, 0);
   const top = sem.slice(0, 3), max = Math.max.apply(null, top.map(function (x) { return x.n; }).concat([1]));
