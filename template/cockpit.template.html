@@ -11179,6 +11179,13 @@ foi escrita para jogar o "0 de 27 resolvidos"
 body.gv2-on .app-header, body.gv2-on #appRoot > .view{display:none !important;}
 html.gv2-on, html.gv2-on body{overflow:hidden !important;}
 #gv2Raiz{position:fixed;inset:0;z-index:40;}
+/* visita (Prospecção, Playbook): o menu do gestor fica, a tela antiga ocupa o resto, o topo antigo some */
+body.gv2-visita .app-header{display:none !important;}
+body.gv2-visita #gv2Raiz{right:auto;width:220px;}
+body.gv2-visita #gv2Raiz .gv2{grid-template-columns:100%;}
+body.gv2-visita #gv2Raiz .gv2-main{display:none;}
+body.gv2-visita #appRoot{padding-left:220px;}
+@media (max-width:1366px){body.gv2-visita #gv2Raiz{width:72px;} body.gv2-visita #appRoot{padding-left:72px;}}
 #gv2Raiz[hidden]{display:none !important;}
 .gv2{background:var(--gv2-bg);color:var(--gv2-ink);font:var(--gv2-corpo);display:grid;grid-template-columns:var(--gv2-nav) minmax(0,1fr);height:100%;overflow:hidden;}
 .gv2 *{box-sizing:border-box;}
@@ -12052,7 +12059,7 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -74307,7 +74314,7 @@ GV2.toast = function (texto, tipo) { if (typeof mostrarToast === 'function') mos
 
 /* ── casca ── */
 GV2.ABAS = [
-  ['time', 'Time', 'time'], ['raiox', 'Raio X', 'raiox'], ['rua', 'Rua', 'rua'],
+  ['time', 'Time', 'time'], ['raiox', 'Raio X', 'raiox'], ['rua', 'Rua', 'rua'], ['prospeccao', 'Prospecção', 'raiox'],
   ['pessoas', 'Pessoas', 'pessoas'], ['propostas', 'Propostas', 'propostas'], ['playbook', 'Playbook', 'playbook']
 ];
 GV2.navHTML = function () {
@@ -74327,7 +74334,6 @@ GV2.navHTML = function () {
       + '<button type="button" data-gv2="menu:prova">Prova dos números</button>'
       + '<button type="button" data-gv2="menu:executivo">Ver como executivo</button>'
       + '<button type="button" data-gv2="menu:tema">Tema ' + (document.documentElement.getAttribute('data-tema') === 'escuro' ? 'claro' : 'escuro') + '</button>'
-      + '<button type="button" data-gv2="menu:antigo">Abrir o cockpit antigo</button>'
       + '</div>' : '')
     + '<button type="button" class="gv2-quem" data-gv2="menu:abrir" title="' + GV2.e(nome) + '"><span class="gv2-av is-escuro">' + GV2.e(ini) + '</span>'
     + '<span class="gv2-quem-txt"><b>' + GV2.e(nome) + '</b><span>' + GV2.e(b ? b.rodapeFonte : 'lendo…') + '</span></span></button>'
@@ -74643,7 +74649,7 @@ GV2.render.rua = function () {
   /* Rotas é a tela principal da Rua (06/10/26); Agora é o mapa do time; Grade é a semana em tabela */
   const m = modo === 'agora' || modo === 'semana' ? modo : 'rotas';
   const seg = GV2.segHTML('rua', [['rotas', 'Rotas'], ['agora', 'Agora no mapa'], ['semana', 'Grade da semana']], m);
-  const antigo = GV2.html.btn({ texto: 'Tomada de contas e Radar', acao: 'menu:rotas', titulo: 'abre a aba Rotas & Prospecção do cockpit antigo' });
+  const antigo = GV2.html.btn({ texto: 'Tomada de contas e Radar', acao: 'aba:prospeccao', titulo: 'abre Rotas & Prospecção aqui dentro' });
   return GV2.cabHTML('Rua', m === 'rotas' ? 'a rota de cada um, dia a dia: clique na pessoa e no dia' : 'o plano de cada um e onde o time está', '<div style="display:flex;gap:8px;align-items:center;">' + antigo + seg + '</div>')
     + '<div class="gv2-corpo is-fixo">' + (m === 'semana' ? GV2.render.ruaSemana() : m === 'agora' ? GV2.render.ruaHoje() : GV2.render.ruaRotas()) + GV2.faltaHTML() + '</div>';
 };
@@ -75302,10 +75308,11 @@ GV2.estado = { aba: 'time', rua: 'hoje', prop: 'acomp', filtro: 'quentes', pesso
 GV2.ligado = function () {
   try {
     const q = new URLSearchParams(location.search).get('gv2');
-    if (q === '1' || q === '0') localStorage.setItem('gv2', q);
-    /* PADRÃO DESDE 06/10/26 (Julyan: "quero a nova versão já pra eu acessar sempre"):
-       liga para todo gestor; só ?gv2=0 ou "Abrir o cockpit antigo" desligam */
-    return localStorage.getItem('gv2') !== '0';
+    /* UM COCKPIT SÓ (Julyan, 07/10: "não quero nada indo pro cockpit antigo"): liga para todo
+       gestor, sempre. O '0' que ficou gravado de quem um dia abriu o antigo não vale mais; só o
+       ?gv2=0 no endereço desliga, e só naquela carga (saída de emergência). */
+    try { localStorage.removeItem('gv2'); } catch (e) {}
+    return q !== '0';
   } catch (e) { return false; }
 };
 GV2.raiz = function () { return document.getElementById('gv2Raiz'); };
@@ -75317,6 +75324,10 @@ GV2.ligar = function () {
   const souGestor = typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.role === 'manager';
   const on = souGestor && GV2.ligado();
   raiz.hidden = !on;
+  /* ligar de novo no meio de uma visita (recarga dos dados) não tira o gestor da tela */
+  if (on && GV2.estado.visita) { document.body.classList.add('gv2-visita'); if (GV2.base) GV2.pintar(); return; }
+  if (!on) { GV2.estado.visita = null; document.body.classList.remove('gv2-visita'); }
+  if (on) { const v = document.getElementById('gv2Voltar'); if (v) v.hidden = true; }
   document.body.classList.toggle('gv2-on', on);
   document.documentElement.classList.toggle('gv2-on', on);
   if (!on) return;
@@ -75690,6 +75701,8 @@ GV2.encerrarDaily = async function () {
 
 /* ══ CLIQUES ══ */
 GV2.ir = function (aba, extra) {
+  if (aba === 'prospeccao') return GV2.visitar('rotas');
+  GV2.sairVisita();
   GV2.estado.aba = aba; GV2.estado.menu = false; GV2.estado.daily = null;
   if (aba === 'rua' && extra) GV2.estado.rua = extra;
   if (aba === 'raiox' && extra) GV2.estado.filtro = extra;
@@ -75772,7 +75785,8 @@ GV2.clique = function (ev) {
     if (o === 'prova') return GV2.ir('prova');
     if (o === 'tema') { if (typeof window.v5SetTema === 'function') window.v5SetTema(document.documentElement.getAttribute('data-tema') === 'escuro' ? 'sol' : 'escuro'); return GV2.pintar(); }
     if (o === 'executivo') { GV2.desligarTela(); if (typeof v5TrocarVisao === 'function') v5TrocarVisao(true); return; }
-    if (o === 'antigo' || o === 'rotas' || o === 'playbook') {
+    if (o === 'rotas' || o === 'playbook') return GV2.visitar(o);
+    if (o === 'antigo') {
       GV2.desligarTela(o === 'antigo');
       if (o === 'rotas') { const bt = document.getElementById('tabBtnRotas'); if (bt) bt.click(); }
       if (o === 'playbook') { const bt = document.getElementById('tabBtnPlaybook'); if (bt) bt.click(); }
@@ -75781,7 +75795,31 @@ GV2.clique = function (ev) {
     }
   }
 };
-/* sair para o cockpit antigo: "antigo" apaga a flag; Rotas e Playbook só visitam */
+/* UM COCKPIT SÓ (Julyan, 07/10): Rotas & Prospecção e o Playbook ainda são as telas do cockpit
+   antigo, mas abrem DENTRO do novo — o menu do gestor fica à esquerda e o topo antigo some. Antes,
+   o "Tomada de contas e Radar" desligava o novo e deixava só um "Voltar ao cockpit novo" no canto. */
+GV2.render.prospeccao = function () { return ''; };
+GV2.visitar = function (o) {
+  const raiz = GV2.raiz();
+  if (!raiz) return;
+  GV2.vender(null);
+  GV2.estado.visita = o; GV2.estado.menu = false; GV2.estado.daily = null;
+  GV2.estado.aba = o === 'rotas' ? 'prospeccao' : 'playbook';
+  raiz.hidden = false;
+  document.body.classList.remove('gv2-on'); document.documentElement.classList.remove('gv2-on');
+  document.body.classList.add('gv2-visita');
+  const bt = document.getElementById(o === 'rotas' ? 'tabBtnRotas' : 'tabBtnPlaybook'); if (bt) bt.click();
+  const v = document.getElementById('gv2Voltar'); if (v) v.hidden = true;
+  GV2.pintar();
+  window.scrollTo(0, 0);
+};
+GV2.sairVisita = function () {
+  if (!GV2.estado.visita) return;
+  GV2.estado.visita = null;
+  document.body.classList.remove('gv2-visita');
+  document.body.classList.add('gv2-on'); document.documentElement.classList.add('gv2-on');
+};
+/* sair para o cockpit antigo: "antigo" apaga a flag */
 GV2.desligarTela = function (apagarFlag) {
   if (apagarFlag) { try { localStorage.setItem('gv2', '0'); } catch (e) {} }
   GV2.vender(null);
@@ -77289,13 +77327,9 @@ GV2.pxMandar = function () {
 GV2.pxPlaybook = function () {
   const arg = GV2.argumento(GV2.estado.cz);
   GV2.estado.cz = null;
-  GV2.desligarTela(false);
-  GV2.botaoVoltar();
-  if (typeof abrirPaginaPlaybook === 'function') {
-    const bt = document.getElementById('tabBtnPlaybook');
-    if (bt) bt.click();
-    abrirPaginaPlaybook(GV2.ARG_PAGINA, arg && arg.ancora);
-  }
+  /* abre o Playbook DENTRO do cockpit novo (07/10: antes desligava o novo) */
+  GV2.visitar('playbook');
+  if (typeof abrirPaginaPlaybook === 'function') abrirPaginaPlaybook(GV2.ARG_PAGINA, arg && arg.ancora);
 };
 /* os comandos da Raio X: devolve true quando tratou */
 GV2.pxComando = function (cmd, parte) {
