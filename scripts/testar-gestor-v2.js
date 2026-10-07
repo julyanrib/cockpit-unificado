@@ -22,8 +22,17 @@ const fim = tpl.indexOf('</script><!-- /gv2-js -->');
 checar('o bloco gv2 está no template entre os marcadores', ini > 0 && fim > ini);
 const codigo = tpl.slice(ini + '<script id="gv2-js">'.length, fim).replace('GV2.instalar();', '');
 checar('o bloco não tem crase (guarda 26)', codigo.indexOf('`') < 0);
-checar('a versão nova é o padrão do gestor: só ?gv2=0 ou localStorage.gv2 === "0" desligam',
-  /return localStorage\.getItem\('gv2'\) !== '0';/.test(codigo));
+checar('a versão nova é o padrão do gestor, sempre: só ?gv2=0 na URL desliga (o "0" gravado não vale mais)',
+  /return q !== '0';/.test(codigo) && !/localStorage\.getItem\('gv2'\)/.test(codigo));
+/* UM COCKPIT SÓ (Julyan, 07/10: "não quero nada indo pro cockpit antigo"): Prospecção e Playbook
+   abrem dentro do novo (GV2.visitar); nenhum botão desliga a tela nova para visitar uma aba antiga. */
+checar('Prospecção é aba do cockpit novo e "Tomada de contas e Radar" vai para ela',
+  /\['prospeccao', 'Prospecção'/.test(codigo) && /texto: 'Tomada de contas e Radar', acao: 'aba:prospeccao'/.test(codigo));
+checar('nenhum botão sai para Rotas/Playbook do antigo (menu:rotas some; Playbook e Praça usam GV2.visitar)',
+  !/acao: 'menu:rotas'/.test(codigo) && /if \(o === 'rotas' \|\| o === 'playbook'\) return GV2\.visitar\(o\);/.test(codigo)
+  && /GV2\.pxPlaybook = function[\s\S]{0,200}GV2\.visitar\('playbook'\)/.test(codigo));
+checar('o menu não oferece "Abrir o cockpit antigo" (só a tela de erro guarda a saída)',
+  (codigo.match(/Abrir o cockpit antigo/g) || []).length === 1 && (codigo.match(/GV2\.botaoVoltar\(\);/g) || []).length === 1);
 checar('aplicarVisaoPorPapel chama GV2.ligar', tpl.indexOf("if (typeof GV2 !== 'undefined' && GV2.ligar) GV2.ligar();") > 0);
 
 /* ── o mundo falso ── */
