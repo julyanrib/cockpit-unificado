@@ -12198,7 +12198,7 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -78385,6 +78385,7 @@ GV2.vendasDoMes = function (id) {
   return v && Array.isArray(v.porRep) ? (r ? r.count || 0 : 0) : null;
 };
 
+GV2.V4_JANELA = 30;
 GV2.disciplinaMontar = function (L, pessoas, agora, clientePorId, faltas) {
   const nomeCli = function (id) { const c = clientePorId[id]; return c ? (String(c.empresa || '').trim() || String(c.nome || '').trim() || 'sem nome') : 'cliente'; };
   const donoDoUid = {};
@@ -78399,6 +78400,7 @@ GV2.disciplinaMontar = function (L, pessoas, agora, clientePorId, faltas) {
   if (erros.v4) faltas.push('Prospecção e fonte do lead: ' + erros.v4);
   GV2.v4Erros = erros;
 
+  GV2.v4Corte = new Date(Date.now() - GV2.V4_JANELA * 86400000).toISOString();
   const reunPor = {};
   ((L.reunioes && L.reunioes.data) || []).forEach(function (r) {
     const d = donoDoUid[r.created_by]; if (!d) return;
@@ -78429,10 +78431,14 @@ GV2.disciplinaMontar = function (L, pessoas, agora, clientePorId, faltas) {
     const mes = fichas.filter(function (f) { return String(f.owner_id) === p.id && GV2.diaDe(f.ocorrido_em) >= mesIni; });
     const comDec = mes.filter(function (f) { return String(f.decisor_nome || '').trim(); }).length;
     decTime += comDec; fichasTime += mes.length;
-    const reun = (reunPor[p.id] || []).slice().sort(function (a, b) { return a.quando < b.quando ? 1 : -1; });
+    /* a cobrança conta os últimos 30 dias; antes disso é passivo de antes do app ter onde fechar (07/10) */
+    const todasR = (reunPor[p.id] || []).slice().sort(function (a, b) { return a.quando < b.quando ? 1 : -1; });
+    const reun = todasR.filter(function (x) { return x.quando >= GV2.v4Corte; });
+    const antigas = todasR.filter(function (x) { return x.quando < GV2.v4Corte; });
     p.disc = {
       reunioes: erros.reunioes ? null : reun,
       nReunioes: erros.reunioes ? null : reun.length,
+      antigas: erros.reunioes ? null : antigas,
       portas7: erros.visitas ? null : minhas.length,
       fichas7: erros.fichas ? null : minhasFichas7.length,
       semFicha: erros.visitas || erros.fichas ? null : semFicha.map(function (x) { return { cliente: nomeCli(x.cliente), dia: x.dia }; }),
@@ -78512,6 +78518,13 @@ GV2.perdasDoMes = function (pessoas) {
 
 GV2.P3.secoes = [['agora', 'Agora'], ['ritmo', 'Ritmo'], ['disc', 'Disciplina'], ['funil', 'Funil'], ['um', '1:1'], ['campo', 'Campo']];
 GV2.estado.v4todas = {};
+GV2.estado.v4antigas = {};
+/* as de antes da janela: à vista, fora da cobrança e do número */
+GV2.v4LinkAntigas = function (p) {
+  const a = p.disc && p.disc.antigas; if (!a || !a.length) return '';
+  const ab = GV2.estado.v4antigas[p.id];
+  return '<button type="button" class="gv2-v4-link" data-gv2="v4:antigas:' + p.id + '">' + GV2.e(ab ? 'Esconder as antigas' : GV2.pl(a.length, 'antiga', 'antigas') + ', de antes de ' + GV2.diaCurto(GV2.diaDe(GV2.v4Corte)) + ' · fora da cobrança') + '</button>';
+};
 GV2.estado.v4rem = null;
 GV2.estado.v4como = false;
 
@@ -78598,12 +78611,12 @@ GV2.p3Disciplina = function (p) {
   let reun;
   if (d.reunioes == null) {
     reun = '<div class="gv2-p3-erro"><b>' + GV2.e('Não li as reuniões do app agora') + '</b><span>' + GV2.e('client_meetings não respondeu às ' + b.horaTxt + '. Portas, decisor e fila continuam.') + '</span>' + GV2.html.btn({ texto: 'Tentar de novo', acao: 'recarregar' }) + '</div>';
-  } else if (!d.reunioes.length) {
-    reun = '<div class="gv2-p3-bloco"><div class="gv2-p3-bloco-cab"><b>Reuniões que passaram sem desfecho</b><span class="t-ok">0</span></div><p class="gv2-hist">' + GV2.e('Nenhuma reunião de ' + n + ' ficou sem desfecho.') + '</p></div>';
+  } else if (!d.reunioes.length && !GV2.estado.v4antigas[p.id]) {
+    reun = '<div class="gv2-p3-bloco"><div class="gv2-p3-bloco-cab"><b>Reuniões que passaram sem desfecho · 30 dias</b><span class="t-ok">0</span></div><p class="gv2-hist">' + GV2.e('Nenhuma reunião de ' + n + ' dos últimos 30 dias ficou sem desfecho.') + '</p>' + GV2.v4LinkAntigas(p) + '</div>';
   } else {
     const todas = GV2.estado.v4todas[p.id];
-    const lista = todas ? d.reunioes : d.reunioes.slice(0, 5);
-    reun = '<div class="gv2-p3-bloco gv2-v4-reun"><div class="gv2-p3-bloco-cab"><b>Reuniões que passaram sem desfecho</b><span class="t-av num">' + d.reunioes.length + '</span></div>'
+    const lista = (todas ? d.reunioes : d.reunioes.slice(0, 5)).concat(GV2.estado.v4antigas[p.id] ? d.antigas || [] : []);
+    reun = '<div class="gv2-p3-bloco gv2-v4-reun"><div class="gv2-p3-bloco-cab"><b>Reuniões que passaram sem desfecho · 30 dias</b><span class="t-av num">' + d.reunioes.length + '</span></div>'
       + '<div class="gv2-v4-reun-lista">' + lista.map(function (x) {
         const rem = GV2.estado.v4rem === x.id;
         return '<div class="gv2-v4-reun-it"><span class="gv2-ellip"><b>' + GV2.e(x.cliente) + '</b><small>' + GV2.e(GV2.v4QuandoReun(x.quando) + (x.tipo === 'retorno' ? ' · retorno' : '')) + '</small></span>'
@@ -78612,7 +78625,7 @@ GV2.p3Disciplina = function (p) {
             : '<span class="gv2-v4-reun-bt">' + GV2.html.btn({ texto: 'Aconteceu', acao: 'v4:desf:' + p.id + ':' + x.id + ':realizada' }) + GV2.html.btn({ texto: 'Remarcar', acao: 'v4:rem:' + x.id }) + GV2.html.btn({ texto: 'Não aconteceu', acao: 'v4:desf:' + p.id + ':' + x.id + ':nao_aconteceu' }) + '</span>')
           + '</div>';
       }).join('') + '</div>'
-      + (d.reunioes.length > 5 ? '<button type="button" class="gv2-v4-link" data-gv2="v4:todas:' + p.id + '">' + GV2.e(todas ? 'Ver só as 5 mais recentes' : 'Ver todas (' + d.reunioes.length + ')') + '</button>' : '') + '</div>';
+      + (d.reunioes.length > 5 ? '<button type="button" class="gv2-v4-link" data-gv2="v4:todas:' + p.id + '">' + GV2.e(todas ? 'Ver só as 5 mais recentes' : 'Ver todas (' + d.reunioes.length + ')') + '</button>' : '') + GV2.v4LinkAntigas(p) + '</div>';
   }
   const semF = d.semFicha, temPortas = d.portas7 != null && d.fichas7 != null;
   const portas = '<div class="gv2-v4-disc"><div class="gv2-v4-disc-cab"><small>Portas sem "como foi" · 7 dias</small><b class="' + (d.nSemFicha ? 't-av' : 't-ok') + '">' + (semF == null ? '—' : d.portas7 ? d.nSemFicha + ' de ' + d.portas7 : 'sem portas') + '</b></div>'
@@ -78760,6 +78773,7 @@ GV2.v4Clique = function (parte) {
     GV2.v4Desfecho(parte[2], parte[3], 'remarcar', new Date(v + ':00-03:00').toISOString());
     return true;
   }
+  if (acao === 'antigas') { GV2.estado.v4antigas[parte[2]] = !GV2.estado.v4antigas[parte[2]]; GV2.pintar(); return true; }
   if (acao === 'todas') { GV2.estado.v4todas[parte[2]] = !GV2.estado.v4todas[parte[2]]; GV2.pintar(); return true; }
   if (acao === 'como') { GV2.estado.v4como = !GV2.estado.v4como; GV2.pintar(); return true; }
   if (acao === 'cobrardisc' && p) { GV2.wa(GV2.v4TextoDisc(p)); return true; }
@@ -78775,17 +78789,18 @@ GV2.v4Clique = function (parte) {
 /* a RPC reuniao_desfecho (0176): só o desfecho, pelo gestor ou pelo dono */
 GV2.v4Desfecho = async function (pid, mid, status, quando) {
   const p = GV2.base.porId[pid]; if (!p || !p.disc || !p.disc.reunioes) return;
-  const i = p.disc.reunioes.findIndex(function (x) { return x.id === mid; });
+  const arr = p.disc.reunioes.some(function (x) { return x.id === mid; }) ? p.disc.reunioes : (p.disc.antigas || []);
+  const i = arr.findIndex(function (x) { return x.id === mid; });
   if (i < 0) return;
-  const x = p.disc.reunioes[i];
-  p.disc.reunioes.splice(i, 1); p.disc.nReunioes = p.disc.reunioes.length;
+  const x = arr[i];
+  arr.splice(i, 1); p.disc.nReunioes = p.disc.reunioes.length;
   GV2.estado.v4rem = null; GV2.v4Ordenar(GV2.base); GV2.pintar();
   try {
     const r = await supa.rpc('reuniao_desfecho', { p_id: mid, p_status: status, p_quando: quando || null });
     if (r.error) throw r.error;
     GV2.toast(status === 'realizada' ? x.cliente + ': aconteceu ✓' : status === 'nao_aconteceu' ? x.cliente + ': não aconteceu ✓' : x.cliente + ': remarcada para ' + GV2.v4QuandoReun(quando) + ' ✓');
   } catch (e) {
-    p.disc.reunioes.push(x); p.disc.reunioes.sort(function (a, b) { return a.quando < b.quando ? 1 : -1; }); p.disc.nReunioes = p.disc.reunioes.length;
+    arr.push(x); arr.sort(function (a, b) { return a.quando < b.quando ? 1 : -1; }); p.disc.nReunioes = p.disc.reunioes.length;
     GV2.v4Ordenar(GV2.base); GV2.pintar();
     GV2.toast('Não gravou: ' + ((e && e.message) || 'erro'), 'erro');
   }
