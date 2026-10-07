@@ -7655,7 +7655,7 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                            <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -54744,8 +54744,9 @@ GV2.ligar = function () {
   const souGestor = typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.role === 'manager';
   const on = souGestor && GV2.ligado();
   raiz.hidden = !on;
+  if (on) GV2.instalarTroca();
 
-  if (on && GV2.estado.visita) { document.body.classList.add('gv2-visita'); if (GV2.base) GV2.pintar(); return; }
+  if (on && GV2.estado.visita) { document.body.classList.add('gv2-visita'); GV2.reafirmarVisita(); if (GV2.base) GV2.pintar(); return; }
   if (!on) { GV2.estado.visita = null; document.body.classList.remove('gv2-visita'); }
   if (on) { const v = document.getElementById('gv2Voltar'); if (v) v.hidden = true; }
   document.body.classList.toggle('gv2-on', on);
@@ -55207,19 +55208,47 @@ GV2.clique = function (ev) {
 };
 
 GV2.render.prospeccao = function () { return ''; };
-GV2.visitar = function (o) {
+GV2.visitar = function (o) { GV2.entrar(o === 'rotas' ? 'viewRotas' : 'viewPlaybook', o === 'rotas' ? 'tabBtnRotas' : 'tabBtnPlaybook'); };
+
+GV2.entrar = function (viewId, btnId) {
   const raiz = GV2.raiz();
   if (!raiz) return;
   GV2.vender(null);
-  GV2.estado.visita = o; GV2.estado.menu = false; GV2.estado.daily = null;
-  GV2.estado.aba = o === 'rotas' ? 'prospeccao' : 'playbook';
+  GV2.estado.visita = viewId; GV2.estado.menu = false; GV2.estado.daily = null;
+  if (viewId === 'viewPlaybook') GV2.estado.aba = 'playbook';
+  else if (viewId === 'viewRotas' || viewId === 'viewLeadsPraca') GV2.estado.aba = 'prospeccao';
   raiz.hidden = false;
   document.body.classList.remove('gv2-on'); document.documentElement.classList.remove('gv2-on');
   document.body.classList.add('gv2-visita');
-  const bt = document.getElementById(o === 'rotas' ? 'tabBtnRotas' : 'tabBtnPlaybook'); if (bt) bt.click();
+  if (btnId) { const bt = document.getElementById(btnId); GV2.trocando = true; try { if (bt) bt.click(); } finally { GV2.trocando = false; } }
   const v = document.getElementById('gv2Voltar'); if (v) v.hidden = true;
   GV2.pintar();
   window.scrollTo(0, 0);
+};
+
+GV2.reafirmarVisita = function () {
+  const v = GV2.estado.visita;
+  if (!v || !GV2.trocaOriginal) return;
+  GV2.trocando = true;
+  try { GV2.trocaOriginal(v); } finally { GV2.trocando = false; }
+};
+
+GV2.MAPA_VIEW = { viewResumo: 'time', viewCockpit: 'time', viewDaily: 'time', viewPDIs: 'pessoas', viewRaioX: 'raiox' };
+GV2.instalarTroca = function () {
+  if (GV2.trocaOriginal || typeof window === 'undefined' || typeof window.activateTab !== 'function') return;
+  const orig = window.activateTab;
+  GV2.trocaOriginal = function (id) { return orig.call(window, id); };
+  window.activateTab = function (id) {
+    const r = orig.apply(this, arguments);
+    if (GV2.trocando) return r;
+    const visita = !!GV2.estado.visita, ligado = document.body.classList.contains('gv2-on');
+    if (!visita && !ligado) return r;
+    const ev = window.event;
+    if (!(ev && ev.isTrusted)) { if (visita) GV2.reafirmarVisita(); return r; }
+    if (GV2.MAPA_VIEW[id]) { GV2.ir(GV2.MAPA_VIEW[id]); return r; }
+    GV2.entrar(id);
+    return r;
+  };
 };
 GV2.sairVisita = function () {
   if (!GV2.estado.visita) return;
@@ -55231,6 +55260,7 @@ GV2.sairVisita = function () {
 GV2.desligarTela = function (apagarFlag) {
   if (apagarFlag) { try { localStorage.setItem('gv2', '0'); } catch (e) {} }
   GV2.vender(null);
+  GV2.estado.visita = null; document.body.classList.remove('gv2-visita');
   const raiz = GV2.raiz();
   if (raiz) raiz.hidden = true;
   document.body.classList.remove('gv2-on');
