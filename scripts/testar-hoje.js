@@ -504,13 +504,18 @@ checar('só UM compromisso é o "agora"',
 /* REVISÃO GERAL (05/10/26): o fio de compromissos saiu; o que passou da hora sem desfecho
    aparece no "Fechar o dia" (Como foi · N sem desfecho · Registrar) e na manchete da noite,
    e conta pela mesma hojeConta.pendentes de antes. */
-checar('o que passou da hora sem fechamento aparece marcado',
+/* AUDITORIA 06/10/26 (decisão do Julyan): "Como foi" é a FICHA DA VISITA, não a tarefa do HubSpot.
+   A Kelly, 6 de 6 com 6 fichas, lia "9 sem desfecho"; o Bruno, 7 visitas e 4 fichas, "tudo registrado". */
+checar('"Como foi" conta as visitas de hoje sem ficha (client_visits × fichas_de_rua), não o HubSpot',
   /vencido: !feito && min < agoraMin/.test(template)
-    && template.indexOf("semDesfecho ? semDesfecho + ' sem desfecho'") > -1
-    && template.indexOf('data-hoje-stat="pendente">Registrar') > -1
-    && template.indexOf('h10ProntoHTML(r, diagDia, H10.dia, H10.amanha, hojeConta.pendentes)') > -1,
-  'esse é o estado que sumia da leitura de "próximo compromisso" e por isso ficava '
-    + 'invisível — o oposto de agenda vazia');
+    && template.indexOf('async function h10LerSemFicha(uid, iso)') > -1
+    && template.indexOf("supa.from('client_visits').select('client_id').eq('visited_by', uid)") > -1
+    && template.indexOf("' visita sem ficha' : ' visitas sem ficha'") > -1
+    && template.indexOf("h10LinkAgenda(hoje, 'Registrar')") > -1
+    && template.indexOf("semDesfecho ? semDesfecho + ' sem desfecho'") < 0,
+  'a mesma conta do "Feito hoje" do app: tarefa do HubSpot aberta não é visita sem registro');
+checar('fim do dia no Cockpit às 18h, o mesmo corte do app', template.indexOf('function h10Noite() { return h10HoraBRT() >= 18; }') > -1);
+checar('a tarefa criada pela fila tem ação curta e o nome do cliente', template.indexOf("'Ligar') + ' · ' + (lead.name || 'cliente')") > -1);
 
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');

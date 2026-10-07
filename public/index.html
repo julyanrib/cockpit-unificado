@@ -11464,7 +11464,8 @@ function h8LigarFila(el, r, redesenhar) {
       try {
         rg = await gravarDesfechoEPasso({
           lead: lead, nota: nota,
-          passo: { texto: acao, data: dataISO, canal: canal }
+
+          passo: { texto: (canal === 'whatsapp' ? 'WhatsApp' : canal === 'visita' ? 'Visitar' : 'Ligar') + ' · ' + (lead.name || 'cliente'), data: dataISO, canal: canal }
         });
       } catch (e) {
         rg = { ok: false, erro: 'sem conexão: ' + ((e && e.message) || 'erro') };
@@ -12141,7 +12142,8 @@ async function renderMeuPainel() {
   wireHojeExecucao(el, r, diagDia);
 
   if (DATA.supabase && supa) {
-    supa.from('sugestoes_planos').select('*').eq('owner_id', r.ownerId).order('created_at', { ascending: false }).limit(3)
+
+    supa.from('sugestoes_planos').select('*').eq('owner_id', r.ownerId).gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()).order('created_at', { ascending: false }).limit(3)
       .then(({ data: sugestoes, error }) => {
         const sugEl = document.getElementById('meuPainelSugestoes');
         if (!sugEl) return;
@@ -42074,7 +42076,8 @@ function h10HoraBRT() {
   const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hourCycle: 'h23', timeZone: 'America/Sao_Paulo' }));
   return isFinite(h) ? h : 12;
 }
-function h10Noite() { return h10HoraBRT() >= 17; }
+
+function h10Noite() { return h10HoraBRT() >= 18; }
 function h10HojeISO() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
 function h10ProximoUtil(iso) {
   let d = addDays(iso, 1);
@@ -42102,7 +42105,7 @@ function h10Manchete(dia, nSla, semDesfecho) {
   if (!dia) return h10MancheteBase(nSla);
   if (h10Noite()) {
     const partes = [dia.total ? dia.feitas + ' de ' + dia.total + ' paradas feitas hoje' : 'Nenhuma parada no plano de hoje'];
-    if (semDesfecho > 0) partes.push(semDesfecho + (semDesfecho === 1 ? ' compromisso sem desfecho' : ' compromissos sem desfecho'));
+    if (H10.semFicha && H10.semFicha.semFicha > 0) partes.push(H10.semFicha.semFicha + (H10.semFicha.semFicha === 1 ? ' visita sem ficha' : ' visitas sem ficha'));
     return partes.join(' · ') + '.';
   }
   if (!dia.total) return 'Hoje: nada no plano ainda. ' + (nSla > 0 ? 'Comece pelos ' + nSla + ' que passaram da régua.' : 'Monte a rota no app.');
@@ -42122,8 +42125,10 @@ function h10ProntoHTML(r, diag, dia, amanha, semDesfecho) {
   if (h10Noite()) {
     return '<span class="h10-pronto-rot">Fechar o dia</span>'
       + h10Item('Check-ins', dia ? (dia.total ? dia.feitas + ' de ' + dia.total + ' paradas' : 'nenhuma parada hoje') : (H10.falhou ? 'não carregou' : 'lendo…'), dia ? (dia.total ? dia.feitas >= dia.total : null) : null, h10LinkAgenda(hoje, 'Ver'))
-      + h10Item('Como foi', semDesfecho ? semDesfecho + ' sem desfecho' : 'tudo registrado', semDesfecho ? false : true,
-        '<button type="button" class="h10-acao" data-hoje-stat="pendente">Registrar</button>')
+      + (H10.semFicha
+        ? h10Item('Como foi', H10.semFicha.visitas ? (H10.semFicha.semFicha ? H10.semFicha.semFicha + (H10.semFicha.semFicha === 1 ? ' visita sem ficha' : ' visitas sem ficha') : 'todas as ' + H10.semFicha.visitas + ' com ficha') : 'nenhuma visita hoje',
+          H10.semFicha.visitas ? !H10.semFicha.semFicha : null, h10LinkAgenda(hoje, 'Registrar'))
+        : h10Item('Como foi', H10.falhou ? 'não carregou' : 'lendo…', null, ''))
       + h10Item('Plano de amanhã', amanha ? (amanha.total ? amanha.total + ' paradas' : 'vazio') : (H10.falhou ? 'não carregou' : 'lendo…'), amanha ? amanha.total > 0 : null,
         h10LinkAgenda(h10ProximoUtil(hoje), 'Montar'));
   }
@@ -42185,6 +42190,21 @@ function h10UtilAnterior(iso) {
   for (let i = 0; i < 4; i++) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w !== 0 && w !== 6) break; d = addDays(d, -1); }
   return d;
 }
+
+async function h10LerSemFicha(uid, iso) {
+  const ini = new Date(iso + 'T00:00:00-03:00').toISOString();
+  const fim = new Date(addDays(iso, 1) + 'T00:00:00-03:00').toISOString();
+  const res = await Promise.all([
+    supa.from('client_visits').select('client_id').eq('visited_by', uid).gte('visited_at', ini).lt('visited_at', fim),
+    supa.from('fichas_de_rua').select('client_id').eq('criado_por', uid).gte('ocorrido_em', ini).lt('ocorrido_em', fim)
+  ]);
+  if (res[0].error) throw res[0].error;
+  if (res[1].error) throw res[1].error;
+  const comFicha = new Set((res[1].data || []).map(function (x) { return String(x.client_id); }));
+  const visitados = new Set((res[0].data || []).map(function (x) { return String(x.client_id); }));
+  let n = 0; visitados.forEach(function (c) { if (!comFicha.has(c)) n++; });
+  return { visitas: visitados.size, semFicha: n };
+}
 async function h10LerOntem(uid, iso) {
   const ini = new Date(iso + 'T00:00:00-03:00').toISOString();
   const fim = new Date(addDays(iso, 1) + 'T00:00:00-03:00').toISOString();
@@ -42226,8 +42246,8 @@ async function h10PreencherDia(r, nSla, diag, semDesfecho) {
     if (!uid) throw new Error('sem sessão');
     const hoje = h10HojeISO();
     const res = await Promise.all([h10LerDia(uid, hoje), h10Noite() ? h10LerDia(uid, h10ProximoUtil(hoje)) : Promise.resolve(null),
-      h10LerOntem(uid, h10UtilAnterior(hoje)).catch(function () { return null; })]);
-    H10.dia = res[0]; H10.amanha = res[1]; H10.ontem = res[2]; H10.em = Date.now(); H10.falhou = false;
+      h10LerOntem(uid, h10UtilAnterior(hoje)).catch(function () { return null; }), h10LerSemFicha(uid, hoje).catch(function () { return null; })]);
+    H10.dia = res[0]; H10.amanha = res[1]; H10.ontem = res[2]; H10.semFicha = res[3]; H10.em = Date.now(); H10.falhou = false;
   } catch (e) {
     console.warn('[hoje] a rota de hoje não carregou:', e && e.message);
     H10.falhou = true;
