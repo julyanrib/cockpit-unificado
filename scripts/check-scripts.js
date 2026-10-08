@@ -406,8 +406,8 @@ function checarSeletoresDeFiacao() {
     'd-salvar': 'Minha Daily — fiacao orfa de desenho aposentado',
     'prospeccao-btn-rota': 'Prospeccao — fiacao orfa de desenho aposentado',
     'prospeccao-btn-semfit': 'Prospeccao — fiacao orfa de desenho aposentado',
-    'prospeccao-btn-criar': 'Prospeccao — fiacao orfa de desenho aposentado',
-    'fn2-esteira': 'Meu Funil — atalho reserva ficou no nome antigo depois da Esteira v3 (.fn3-); o caminho principal (.fn2-gaveta) existe'
+    'prospeccao-btn-criar': 'Prospeccao — fiacao orfa de desenho aposentado'
+    /* 'fn2-esteira' saiu em 08/10/26 com o desenho antigo da Desenvolvimento do executivo, onde estava o seletor */
   };
 
   const geradas = new Set();
