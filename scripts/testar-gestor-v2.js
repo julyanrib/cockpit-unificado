@@ -189,7 +189,7 @@ tabelas.gv2_falta_etapa = [
     const c = GV2.rxGavConteudo();
     const tempo = GV2.render.time ? GV2.render.time() : '';
     GV2.rxGavClique(['rxg', 'fechar']);
-    checar('planejamento de cada um abre do Time (cartão e coluna de paradas) e do Raio X, na gaveta', /^Planejamento de /.test(c.tit) && c.corpo.indexOf('gv2-rt') > 0 && tempo.indexOf('rxg:plano:' + ana.id) > 0 && tempo.indexOf('data-gv2="rxg:plano"') > 0 && GV2.render.raiox().indexOf('data-gv2="rxg:plano"') > 0, c.tit);
+    checar('planejamento: o cartão do Hoje e o Raio X abrem a gaveta; o plano de cada um abre o dia na Rua (v5)', /^Planejamento de /.test(c.tit) && c.corpo.indexOf('gv2-rt') > 0 && tempo.indexOf('v5dia:' + ana.id + ':') > 0 && tempo.indexOf('data-gv2="rxg:plano"') > 0 && GV2.render.raiox().indexOf('data-gv2="rxg:plano"') > 0, c.tit);
   })();
   (function () {
     GV2.estado.rotaSem = -1; GV2.estado.rotaDia = '2026-09-30';
@@ -224,12 +224,12 @@ tabelas.gv2_falta_etapa = [
     const um2 = DV.proximo1a1({ iso: '2026-10-07', min: 600, dow: 3 });
     checar('desenvolvimento: 1:1 de segunda que cai em feriado vai para o próximo dia útil, mesma hora', um2.dia === '2026-10-13' && um2.hora === '08:30', JSON.stringify(um2));
   })();
-  checar('sidebar: o selo do Time é o número de exceções da aba Time (a mesma função) e some com 0', (function () {
-    const n = GV2.excecoesLista().length, h = GV2.navHTML();
+  checar('sidebar: o selo do Hoje conta as linhas de "Quem precisa de você" que pedem ação (não conta "Ainda não saiu") e some com 0', (function () {
+    const n = GV2.v5Grupos().grupos.filter(function (g) { return g.sev < 3; }).length, h = GV2.navHTML();
     const m = h.match(/class="gv2-badge">(\d+)</);
-    const orig = GV2.excecoesLista; GV2.excecoesLista = function () { return []; }; const h0 = GV2.navHTML(); GV2.excecoesLista = orig;
+    const orig = GV2.v5Grupos; GV2.v5Grupos = function () { return { grupos: [{ sev: 3 }], sit: {} }; }; const h0 = GV2.navHTML(); GV2.v5Grupos = orig;
     return n > 0 && m && Number(m[1]) === n && h0.indexOf('gv2-badge') < 0 && h0.indexOf('gv2-nav-ponto') < 0;
-  })(), String(GV2.excecoesLista().length));
+  })(), String(GV2.v5Grupos().grupos.length));
   checar('sidebar: símbolo oficial em PNG (nunca o t de texto), um ícone por aba e o ativo marcado', (function () {
     const h = GV2.navHTML();
     const paths = (h.match(/<path d="[^"]+"/g) || []).slice(0, 7);
@@ -250,11 +250,12 @@ tabelas.gv2_falta_etapa = [
     const p = b.pessoas.find(x => x.nome === m.nome);
     return p.funil_mes[K[i - 1]] >= 3 && m.pct > Math.round(F[i] / F[i - 1] * 100);
   }), JSON.stringify(melhor));
-  checar('v4: Pessoas tem a âncora Disciplina entre Ritmo e Funil, o resumo de 5 e nenhum "Chamar"',
-    p3.indexOf('data-p3-sec="disc"') > p3.indexOf('data-p3-sec="ritmo"') && p3.indexOf('data-p3-sec="disc"') < p3.indexOf('data-p3-sec="funil"') && (p3.match(/class="gv2-v4-res"/g) || []).length === 5 && p3.indexOf('p3:chamar') < 0);
-  checar('Pessoas v3: as 5 seções em ordem, a lista "Quem precisa de você", a barra do pé e o botão da rotação',
-    ['agora', 'ritmo', 'funil', 'um', 'campo'].every(function (s, i, a) { return i === 0 || p3.indexOf('data-p3-sec="' + s + '"') > p3.indexOf('data-p3-sec="' + a[i - 1] + '"'); })
-      && /Quem precisa de você/.test(p3) && /class="gv2-p3-pe"/.test(p3) && /data-gv2="p3:rotacao"/.test(p3) && !/Sua rotação de campo/.test(p3));
+  checar('v5 · Pessoas: 3 blocos numa rolagem (Agora e semana → Coaching → Evolução), o resumo de 5, sem segundo nível de abas, sem "Promessa de hoje" e sem "Chamar"',
+    p3.indexOf('1 · Agora e semana') > 0 && p3.indexOf('2 · Coaching') > p3.indexOf('1 · Agora e semana') && p3.indexOf('3 · Evolução') > p3.indexOf('2 · Coaching')
+      && (p3.match(/class="gv2-v5-res"/g) || []).length === 5 && p3.indexOf('gv2-p3-abas') < 0 && p3.indexOf('Promessa de hoje') < 0 && p3.indexOf('p3:chamar') < 0);
+  checar('v5 · Pessoas: "Onde o seu tempo rende" (até 3), a lista pela necessidade de coaching e os atalhos para a gaveta (1:1, disciplina, campo, funil) e a rotação',
+    /Onde o seu tempo rende esta semana/.test(p3) && (p3.match(/class="card gv2-v5-rend"/g) || []).length <= 3 && /pela necessidade de coaching/.test(p3)
+      && ['um', 'disc', 'campo', 'funil'].every(function (t) { return p3.indexOf('data-gv2="v5gav:' + t + ':') > 0; }) && /data-gv2="p3:rotacao"/.test(p3) && !/Sua rotação de campo/.test(p3));
   let telas = p3; try { telas += GV2.render.time(); } catch (e) { falhas.push('time: ' + e.message); }
   checar('v4 · 8: "0 de 0" não aparece em lugar nenhum (Pessoas e Time)', !/(^|[^0-9])0 de 0([^0-9]|$)/.test(telas.replace(/<[^>]+>/g, ' ')), (function () { const t = telas.replace(/<[^>]+>/g, ' '); const i = t.search(/(^|[^0-9])0 de 0([^0-9]|$)/); return i < 0 ? '' : t.slice(Math.max(0, i - 80), i + 40).replace(/s+/g, ' '); })());
   GV2.estado.p3rotacao = true;
@@ -319,6 +320,8 @@ tabelas.gv2_falta_etapa = [
   checar('Visitas, Clientes e Em queda sem ponto na praça viram "sem dado", nunca zero', (px.match(/sem dado<\/span>/g) || []).length === 3, String((px.match(/sem dado<\/span>/g) || []).length));
   /* Pessoas › Funil e o mapa grande (06/10/26) */
   GV2.estado.cz = null; GV2.estado.aba = 'pessoas'; GV2.estado.pmodo = 'funil'; GV2.estado.pessoa = '1';
+  /* v5: o funil da pessoa (Para puxar, Cobrar) abre na gaveta, pelo cartão do funil ou pelo Mês */
+  GV2.estado.v5Gav = { t: 'funil', id: '1' };
   let pf = '';
   try { pf = GV2.render.pessoas(); } catch (e) { falhas.push('Pessoas › Funil: ' + e.message); }
   const ana1 = GV2.base.porId['1'];
@@ -329,6 +332,8 @@ tabelas.gv2_falta_etapa = [
   const pf2 = GV2.render.funilPessoa(ana1);
   checar('Pessoas › Funil: clicar numa etapa lista só os negócios dela, da pessoa', /data-gv2="ficha:a"/.test(pf2) && !/data-gv2="ficha:d"/.test(pf2) && !/data-gv2="ficha:b"/.test(pf2));
   GV2.estado.fpEtapa = null;
+  /* v5: a pauta completa, os combinados e o Registrar abrem na gaveta do 1:1 */
+  GV2.estado.v5Gav = { t: 'um', id: '1' };
   const um = GV2.render.pessoas();
   checar('1:1: + Combinado, Tirar, prazo que troca e Automático | Você confere em cada cartão', /data-gv2="comb:add:1"/.test(um) && /data-gv2="comb:tirar:1:0"/.test(um) && /data-gv2="p3:prazo:1:0"/.test(um) && /data-gv2="p3:conf:1:0:manual"/.test(um));
   /* a barra do pé segue a seção em foco (§8) */
@@ -338,8 +343,9 @@ tabelas.gv2_falta_etapa = [
   checar('barra do pé: sem plano pede o plano até 15h; plano com 0 provadas → Cobrar a primeira visita (v4)', /Pedir o plano até 15h|Pedir o plano de amanhã/.test(pe('agora')) && /v4:cobrarvisita:2/.test(GV2.p3Pe(GV2.base.porId['2'], 'agora')));
   /* nada some: o texto do combinado fica ao trocar de pessoa e voltar */
   GV2.estado.comb1a1['1'][0].texto = 'Texto que não pode sumir';
-  GV2.estado.pessoa = '2'; GV2.render.pessoas(); GV2.estado.pessoa = '1';
-  checar('nada some: digitar num combinado, trocar de pessoa e voltar mantém o texto', /Texto que não pode sumir/.test(GV2.render.pessoas()));
+  GV2.estado.pessoa = '2'; GV2.estado.v5Gav = { t: 'um', id: '2' }; const outra = GV2.render.pessoas(); GV2.estado.pessoa = '1'; GV2.estado.v5Gav = { t: 'um', id: '1' };
+  checar('nada some: digitar num combinado, trocar de pessoa e voltar mantém o texto', !/Texto que não pode sumir/.test(outra) && /Texto que não pode sumir/.test(GV2.render.pessoas()));
+  GV2.estado.v5Gav = null;
   /* Registrar grava prazo, conferência e origem por combinado e manda cada um para o sino */
   {
     const supaOrig = global.supa, cdOrig = GV2.comDesfazer, recOrig = GV2.recado;
@@ -475,6 +481,52 @@ tabelas.gv2_falta_etapa = [
     checar('v5 · Rua › Hoje: uma faixa por pessoa e o mapa ao vivo; o "Agora no mapa" e a "Tomada de contas" saíram da Rua',
       (hh.match(/class="gv2-v5-tl-l is-linha"/g) || []).length === GV2.base.pessoas.length && /data-gv2-mapa="rua"/.test(hh) && !/Agora no mapa/.test(hh) && !/Tomada de contas/.test(hh));
     GV2.estado.ruaSel = '1'; GV2.estado.rotaDia = null;
+  }
+  /* HOJE v5 (08/10/26): a situação de cada um e as linhas de "Quem precisa de você" */
+  {
+    const b5 = GV2.base, minOrig = b5.agora.min, fdjOrig = b5.foraDaJornada, diaOrig = GV2.v5Dia;
+    const p0 = b5.pessoas[0];
+    const comItens = function (horas) { return function () { return { estado: 'ok', itens: horas.map(function (h) { return { horaMin: h, lat: -20 }; }), jornada: null, agenda: { n: 0, itens: [] } }; }; };
+    const fake = function (o) { return Object.assign({}, p0, { hoje: Object.assign({}, p0.hoje, o.hoje), janela: o.janela, ontem: o.ontem || p0.ontem }); };
+    b5.foraDaJornada = false;
+    GV2.v5Dia = comItens([600]);
+    b5.agora.min = 680;
+    const sNao = GV2.v5Situacao(fake({ hoje: { paradas_plano: 5, visitas_com_prova: 0, visitas_todas: 0 }, janela: { min: 840, dias: 9 } }));
+    b5.agora.min = 960;
+    const sTrav = GV2.v5Situacao(fake({ hoje: { paradas_plano: 5, visitas_com_prova: 0, visitas_todas: 0 }, janela: { min: 840, dias: 9 } }));
+    b5.agora.min = 700;
+    const sTravCedo = GV2.v5Situacao(fake({ hoje: { paradas_plano: 5, visitas_com_prova: 0, visitas_todas: 0 }, janela: { min: null, dias: 2 } }));
+    GV2.v5Dia = comItens([]);
+    b5.agora.min = 965;
+    const sPadrao = GV2.v5Situacao(fake({ hoje: { paradas_plano: 1, visitas_com_prova: 0, visitas_todas: 0 }, janela: { min: null, dias: 2 } }));
+    const sRota = GV2.v5Situacao(fake({ hoje: { paradas_plano: 0, visitas_com_prova: 0, visitas_todas: 0 }, janela: null }));
+    const sAnda = GV2.v5Situacao(fake({ hoje: { paradas_plano: 5, visitas_com_prova: 0, visitas_todas: 1 }, janela: null }));
+    GV2.v5Dia = diaOrig; b5.agora.min = minOrig; b5.foraDaJornada = fdjOrig;
+    checar('v5 · C4: com a 1ª parada às 10:00 e a janela às 14:00, às 11:20 "Ainda não saiu" e às 16:00 "Travou"', sNao.k === 'naosaiu' && sTrav.k === 'travou', sNao.k + '/' + sTrav.k);
+    checar('v5 · C7: sem janela habitual (menos de 5 dias) vale a 1ª parada: 10:00 + 1 h → às 11:40 já travou', sTravCedo.k === 'travou', sTravCedo.k);
+    checar('v5 · sem hora no plano nem janela: a referência é 15:00 + 1 h (às 16:05 travou)', sPadrao.k === 'travou', sPadrao.k);
+    checar('v5 · sem parada = "semrota"; visita com prova (mesmo fora do plano) = "andando"', sRota.k === 'semrota' && sAnda.k === 'andando');
+    /* força uma pessoa em cada situação, para a ordem e o "só informa" terem o que medir */
+    const sitOrig = GV2.v5Situacao, ks = ['travou', 'semrota', 'naosaiu', 'andando'];
+    GV2.v5Situacao = function (p) { return { k: ks[b5.pessoas.indexOf(p) % ks.length], prim: 600, jan: null }; };
+    const G5 = GV2.v5Grupos();
+    GV2.v5Situacao = sitOrig;
+    checar('v5 · o caso de teste tem Travou, Sem rota e Ainda não saiu', ['travou', 'semrota', 'naosaiu'].every(function (k) { return G5.grupos.some(function (g) { return g.k === k; }); }), G5.grupos.map(function (g) { return g.k; }).join());
+    const ordem = { travou: 0, semrota: 1, furou: 2, dinheiro: 3, naosaiu: 4 };
+    checar('v5 · as linhas vêm na ordem da gravidade e "Ainda não saiu" só informa (sem botão)',
+      G5.grupos.every(function (g, i, a) { return i === 0 || ordem[g.k] > ordem[a[i - 1].k]; }) && G5.grupos.every(function (g) { return g.k !== 'naosaiu' || (g.info && !g.acao); }), G5.grupos.map(function (g) { return g.k; }).join());
+    const fo = G5.grupos.find(function (g) { return g.k === 'furou'; });
+    const furaram = b5.pessoas.filter(function (p) { return p.ontem.paradas_plano > 0 && p.ontem.visitas_com_prova * 2 < p.ontem.paradas_plano; }).length;
+    checar('v5 · C5: "Furou ontem" = menos da metade do plano de ontem', (fo ? fo.chips.length : 0) === furaram, String(furaram));
+    b5.planoErro = 'planejamento_do_time';
+    const hf = GV2.render.time();
+    const Gf = GV2.v5Grupos();
+    b5.planoErro = null;
+    checar('v5 · 1c: plano fora = "—" com o nome da fonte, nenhum 0 inventado, e Travou/Sem rota somem',
+      /Não li o Planejamento agora/.test(hf) && /planejamento_do_time/.test(hf) && / de —</.test(hf) && !Gf.grupos.some(function (g) { return g.k === 'travou' || g.k === 'semrota' || g.k === 'naosaiu'; }));
+    const ht = GV2.render.time();
+    checar('v5 · Hoje: 5 cartões, cada um com destino; a coluna Jornada; o plano e a jornada abrem o dia na Rua',
+      (ht.match(/class="gv2-v5-kpi" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2);
   }
   /* D1 e D2 (08/10/26): só dá para medir no Google de verdade; aqui, que as travas estão no lugar */
   {
