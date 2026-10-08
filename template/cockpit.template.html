@@ -11597,6 +11597,10 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
 .gv2-devol b{font:700 13px var(--gv2-font);}
 .gv2-devol textarea{min-height:52px;border:1px solid var(--gv2-line-btn);border-radius:10px;padding:8px 10px;font:500 13px/1.4 var(--gv2-font);background:var(--gv2-card);color:var(--gv2-ink);resize:vertical;}
 .gv2-av.is-escuro{background:var(--gv2-ink);color:var(--gv2-inv);}
+/* D5 (08/10/26): a célula da Grade é botão e abre o dia da pessoa em Rua › Rotas */
+.gv2-sem-abre{display:block;width:100%;padding:0;border:0;background:none;font:inherit;color:inherit;cursor:pointer;border-radius:8px;}
+.gv2-sem-abre:hover .gv2-sem-cel{box-shadow:inset 0 0 0 1.5px var(--gv2-ink);}
+.gv2-sem-abre:focus-visible{outline:2px solid var(--gv2-ink);outline-offset:1px;}
 
 
 /* ══ RAIO X › FUNIL (recorte) E PRAÇA (06/10/26, zip-raiox-praca) ══════════════════════ */
@@ -12489,7 +12493,7 @@ button.gv2-v4-chip-av:hover{filter:brightness(1.1);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                            <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -74328,7 +74332,11 @@ GV2.render.ruaSemana = function () {
   const cab = ['Executivo'].concat(dias.map(function (d) { return d.rot + (d.hoje ? ' · hoje' : ''); })).concat(['Feito + plano', prom ? 'Promessa' : null].filter(Boolean));
   const linhas = b.ordem.map(function (p) {
     let tot = 0;
+    /* D5 (08/10/26): a célula abre o dia daquela pessoa em Rua › Rotas (a lista e o mapa do dia) */
     const cels = p.semana.map(function (d) {
+      return '<button type="button" class="gv2-sem-abre" data-gv2="ruadia:' + p.id + ':' + d.iso + '" title="' + GV2.e('Ver a rota de ' + GV2.prim(p.nome) + ' em ' + GV2.ddmm(d.iso)) + '">' + celula(d) + '</button>';
+    });
+    function celula(d) {
       if (d.passado || d.hoje) tot += d.hoje && !b.foraDaJornada ? Math.max(d.planejadas, d.provadas) : d.provadas; else tot += d.planejadas;
       const tl = d.semLugar ? ' title="' + GV2.pl(d.semLugar, 'item sem lugar no mapa: o negócio não tem endereço no HubSpot', 'itens sem lugar no mapa: os negócios não têm endereço no HubSpot') + '"' : '';
       if (d.hoje) return d.planejadas ? '<span class="gv2-sem-cel is-and num"' + tl + '>' + d.provadas + ' de ' + d.planejadas + '</span>' : '<span class="gv2-sem-cel is-sem">' + GV2.e(p.hoje.agenda && p.hoje.agenda.n ? 'sem rota · ' + p.hoje.agenda.n + ' na agenda' : 'sem plano') + '</span>';
@@ -74337,7 +74345,7 @@ GV2.render.ruaSemana = function () {
         return '<span class="gv2-sem-cel num ' + (d.provadas >= d.planejadas ? 'is-ok' : 'is-fur') + '">' + d.provadas + ' de ' + d.planejadas + '</span>';
       }
       return d.planejadas ? '<span class="gv2-sem-cel is-plan num"' + tl + '>' + d.planejadas + ' planej.' + (d.semLugar ? ' · ' + d.semLugar + ' s/ lugar' : '') + '</span>' : '<span class="gv2-sem-cel is-sem">sem plano</span>';
-    });
+    }
     return { acao: 'pessoa:' + p.id, celulas: ['<b class="gv2-ellip">' + GV2.e(p.nome) + '</b>'].concat(cels).concat([
       '<b class="num" title="provadas nos dias que passaram + o plano dos que faltam, contra a meta da semana">' + tot + ' de ' + p.meta_visitas_dia * dias.length + '</b>'
     ].concat(prom ? [
@@ -74900,7 +74908,8 @@ GV2.montar = async function (so) {
     } else ultima = 'nenhum check-in registrado';
     const paradas = (mapa.plano || []).filter(function (x) { return String(x.ownerId) === id && x.lat != null; })
       .map(function (x) { return { lat: Number(x.lat), lng: Number(x.lng), feita: !!x.feita, nome: x.nome, hora: x.hora }; })
-      .sort(function (x, y) { return String(x.hora || '99').localeCompare(String(y.hora || '99')); });
+      /* a mesma ordem do dia de Rua › Rotas: feitas, depois as que faltam pela hora, depois sem hora */
+      .sort(function (x, y) { return (x.feita ? 0 : x.hora ? 1 : 2) - (y.feita ? 0 : y.hora ? 1 : 2) || String(x.hora || '99').localeCompare(String(y.hora || '99')); });
     const semanaP = diasSemana.map(function (iso, i) {
       const d = s.dias[i] || {};
       return { iso: iso, planejadas: Number(d.planejadas) || 0, provadas: Number(d.provadas) || 0, feitasDoPlano: Number(d.feitasDoPlano) || 0, semLugar: Number(d.semLugar) || 0, hoje: iso === agora.iso, passado: iso < agora.iso };
@@ -75252,15 +75261,25 @@ GV2.mapa = {
     if (!maps || !maps.marker) return;
     const escuro = document.documentElement.getAttribute('data-tema') === 'escuro';
     let g = el._gv2;
+    /* o mapa nasce já sobre as pessoas: antes nascia num centro fixo (Vila Velha) e, se o
+       enquadramento se perdia, ficava no mar com só as linhas tracejadas à vista (D1, 08/10/26) */
+    const p0 = pessoas[0], c0 = p0.hoje.posicao || p0.hoje.paradas[0];
     if (!g || !g.google || g.escuro !== escuro) {
       el.innerHTML = '';
       const div = document.createElement('div');
       div.className = 'gv2-mapa-gm';
       el.appendChild(div);
       const mapa = new maps.Map(div, { mapId: (typeof PT6_GM !== 'undefined' && PT6_GM.mapId) || 'DEMO_MAP_ID', colorScheme: escuro ? 'DARK' : 'LIGHT',
-        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: -20.3, lng: -40.3 }, zoom: 12 });
+        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: c0.lat, lng: c0.lng }, zoom: 12 });
       g = el._gv2 = { google: true, mapa: mapa, div: div, escuro: escuro, itens: [], enquadrado: null };
-    } else if (!el.contains(g.div)) { el.innerHTML = ''; el.appendChild(g.div); }
+    } else if (!el.contains(g.div)) { el.innerHTML = ''; el.appendChild(g.div); g.enquadrado = null; }
+    /* a caixa nova (outra aba, outra largura) precisa que o Google remeça o mapa e enquadre de novo */
+    if (typeof ResizeObserver === 'function' && g.obs !== el) {
+      g.obs = el;
+      if (g.ro) g.ro.disconnect();
+      g.ro = new ResizeObserver(function () { if (el.clientWidth && g.enq) { maps.event.trigger(g.mapa, 'resize'); g.enq(); } });
+      g.ro.observe(el);
+    }
     g.itens.forEach(function (x) { if (x.setMap) x.setMap(null); else x.map = null; });
     g.itens = [];
     const d = GV2.estado.destaque;
@@ -75291,7 +75310,6 @@ GV2.mapa = {
     const praca = GV2.estado.praca || GV2.base.pracaPrincipal;
     const chaveEnq = praca + '|' + (d || '');
     if (g.enquadrado !== chaveEnq) {
-      g.enquadrado = chaveEnq;
       const alvo = d ? pessoas.find(function (p) { return p.id === d; }) : null;
       let caixa = bounds;
       if (alvo) {
@@ -75300,10 +75318,13 @@ GV2.mapa = {
         alvo.hoje.paradas.forEach(function (x) { caixa.extend({ lat: x.lat, lng: x.lng }); });
       }
       const so1 = alvo && (alvo.hoje.paradas.length + (alvo.hoje.posicao ? 1 : 0)) <= 1;
-      const enq = function () {
-        if (!el.clientWidth) return;
+      /* só conta como enquadrado quando enquadrou de fato (caixa com largura); antes marcava
+         na entrada e, com a caixa ainda sem tamanho, nunca mais tentava */
+      const enq = g.enq = function () {
+        if (!el.clientWidth || !document.body.contains(el)) return;
         if (so1) { g.mapa.setCenter(caixa.getCenter()); g.mapa.setZoom(15); }
         else g.mapa.fitBounds(caixa, 56);
+        g.enquadrado = chaveEnq;
       };
       enq(); setTimeout(enq, 300);
       /* aba escondida não desenha o mapa e o fitBounds se perde: refaz quando o mapa
@@ -76957,7 +76978,7 @@ GV2.pxMapa = {
     const X = GV2.pxAtual;
     if (!X || X.k !== el.getAttribute('data-gv2-pxmapa')) return;
     const usarGoogle = typeof pt6CarregarGoogle === 'function' && !(typeof PT6_GM !== 'undefined' && PT6_GM.falhou);
-    if (usarGoogle && guardado && guardado.google && guardado.k === X.k) { el.insertBefore(guardado.div, el.firstChild); el._gv2px = guardado; GV2.pxMapa.marcadores(el, X); GV2.pxMapa.desenhar(el); return; }
+    if (usarGoogle && guardado && guardado.google && guardado.k === X.k) { el.insertBefore(guardado.div, el.firstChild); el._gv2px = guardado; GV2.pxMapa.vigiar(el, guardado); GV2.pxMapa.marcadores(el, X); GV2.pxMapa.desenhar(el); return; }
     GV2.pxMapa.simples(el, X);
     if (usarGoogle) pt6CarregarGoogle().then(function () { if (document.body.contains(el)) GV2.pxMapa.google(el, X); }, function () {});
   },
@@ -76985,6 +77006,7 @@ GV2.pxMapa = {
     const g = { google: true, k: X.k, div: div, mapa: mapa, ov: ov, itens: [] };
     g.proj = function (lat, lng) { const pr = ov.getProjection(); if (!pr) return null; const p = pr.fromLatLngToContainerPixel(new maps.LatLng(lat, lng)); return p ? { x: p.x, y: p.y } : null; };
     el._gv2px = g;
+    GV2.pxMapa.vigiar(el, g);
     const c = GV2.pxMapa.caixa(X);
     const enq = function () { if (el.clientWidth) mapa.fitBounds({ south: c[0], north: c[1], west: c[2], east: c[3] }, 24); };
     enq();
@@ -76993,7 +77015,28 @@ GV2.pxMapa = {
     mapa.addListener('bounds_changed', function () { const cv = el.querySelector('canvas.gv2-px-calor'); if (cv) cv.style.opacity = '.35'; });
     /* o simples sai quando o Google entra: os números e os pinos passam a ser marcadores */
     el.querySelectorAll('.gv2-px-sx').forEach(function (n) { n.remove(); });
+    /* o calor do mapa reserva foi projetado na caixa da praça, não nos ladrilhos: some até o Google assentar */
+    const cv0 = el.querySelector('canvas.gv2-px-calor');
+    if (cv0) cv0.style.opacity = '0';
     GV2.pxMapa.marcadores(el, X);
+  },
+  /* D2 (08/10/26): a caixa muda de tamanho depois que o mapa nasce (a coluna assenta, a barra
+     lateral recolhe) e o calor era redesenhado na caixa nova sobre ladrilhos da caixa velha:
+     o calor passava da área do mapa. Agora o Google remede e o calor espera o mapa assentar. */
+  vigiar: function (el, g) {
+    if (typeof ResizeObserver !== 'function' || g.obs === el) return;
+    g.obs = el;
+    if (g.ro) g.ro.disconnect();
+    let w0 = el.clientWidth, h0 = el.clientHeight;
+    g.ro = new ResizeObserver(function () {
+      if (!el.clientWidth || (el.clientWidth === w0 && el.clientHeight === h0)) return;
+      w0 = el.clientWidth; h0 = el.clientHeight;
+      const maps = window.google && window.google.maps;
+      const cv = el.querySelector('canvas.gv2-px-calor');
+      if (cv) cv.style.opacity = '0';
+      if (maps) maps.event.trigger(g.mapa, 'resize');
+    });
+    g.ro.observe(el);
   },
   marcadores: function (el, X) {
     const g = el._gv2px, maps = window.google && window.google.maps;
@@ -77292,15 +77335,32 @@ GV2.rotaLer = async function (seg, forcar) {
   GV2.rota.cache[seg] = itens.erro ? { estado: 'erro', erro: itens.erro } : { estado: 'ok', itens: itens.data, visitas: vis.data };
   if (GV2.estado.aba === 'rua' || GV2.estado.aba === 'pessoas' || GV2.estado.rxGav) GV2.pintar();
 };
-/* as paradas da pessoa num dia (ou na semana), na ordem da hora, com feita/não feita */
+/* as paradas da pessoa num dia (ou na semana), na ORDEM DO DIA (D3, 08/10/26): primeiro as feitas,
+   pela hora do check-in; depois as que faltam, pela hora planejada; depois as sem hora; por último
+   as sem lugar no mapa. Antes ordenava só pela hora planejada: as 18:00 vinham primeiro, as feitas
+   de manhã no meio das sem hora, e a linha do mapa cruzava a cidade em zigue-zague. */
+GV2.rotaGrupo = function (x) { return x.feita ? 0 : x.lat == null ? 3 : x.hora ? 1 : 2; };
+GV2.rotaOrdem = function (a, b) {
+  const ga = GV2.rotaGrupo(a), gb = GV2.rotaGrupo(b);
+  if (ga !== gb) return ga - gb;
+  if (ga === 0) return String(a.feitaEm || '').localeCompare(String(b.feitaEm || '')) || (a.vaga || 0) - (b.vaga || 0);
+  return String(a.hora || '99').localeCompare(String(b.hora || '99')) || (a.vaga || 0) - (b.vaga || 0);
+};
 GV2.rotaParadas = function (p, seg, dia) {
   const c = GV2.rota.cache[seg];
   if (!c || c.estado !== 'ok') return null;
   const feitas = {};
-  c.visitas.forEach(function (v) { if (v.provada && String(v.owner_id) === p.id) feitas[v.client_id + '|' + v.dia] = true; });
+  c.visitas.forEach(function (v) {
+    if (!v.provada || String(v.owner_id) !== p.id) return;
+    const k = v.client_id + '|' + v.dia, t = v.visited_at || '';
+    if (!(k in feitas) || (t && t < feitas[k])) feitas[k] = t;
+  });
   return c.itens.filter(function (x) { return String(x.owner_id) === p.id && (!dia || x.dia === dia); })
-    .map(function (x) { return { dia: x.dia, hora: x.hora, nome: x.nome, proposito: x.proposito, acao: x.acao || null, lat: x.lat != null ? Number(x.lat) : null, lng: x.lng != null ? Number(x.lng) : null, feita: !!feitas[x.client_id + '|' + x.dia], vaga: x.vaga }; })
-    .sort(function (a, b) { return a.dia.localeCompare(b.dia) || String(a.hora || '99').localeCompare(String(b.hora || '99')) || (a.vaga || 0) - (b.vaga || 0); });
+    .map(function (x) {
+      const k = x.client_id + '|' + x.dia, feita = k in feitas;
+      return { dia: x.dia, hora: x.hora, nome: x.nome, proposito: x.proposito, acao: x.acao || null, lat: x.lat != null ? Number(x.lat) : null, lng: x.lng != null ? Number(x.lng) : null, feita: feita, feitaEm: feita && feitas[k] ? new Date(feitas[k]).toISOString() : null, feitaHora: feita && feitas[k] ? GV2.horaDe(feitas[k]) : null, vaga: x.vaga };
+    })
+    .sort(function (a, b) { return a.dia.localeCompare(b.dia) || GV2.rotaOrdem(a, b); });
 };
 GV2.render.rotaPessoa = function (p) {
   const b = GV2.base, seg = GV2.rotaSegunda();
@@ -77328,13 +77388,18 @@ GV2.render.rotaPessoa = function (p) {
   const ag = sel === 'semana' ? null : GV2.compromissosDoDia(p.id, sel);
   const agHtml = ag && ag.n ? '<div class="gv2-rt-ag"><b>' + GV2.e('Na agenda do app · ' + ag.n) + '</b><small>tarefas e reuniões do HubSpot do dia, fora das paradas</small><ul>' + ag.itens.map(function (x) { return '<li><span class="num">' + GV2.e(x.hora) + '</span><span class="gv2-ellip"><b>' + GV2.e(x.titulo) + '</b><small>' + GV2.e(x.tipo + (x.cliente ? ' · ' + x.cliente : '')) + '</small></span></li>'; }).join('') + '</ul></div>' : '';
   const semPino = lista.filter(function (x) { return x.lat == null; }).length;
-  let k = 0, diaAnt = null;
+  let k = 0, diaAnt = null, grupoAnt = null;
+  const GRUPOS = ['Feitas · pela hora do check-in', 'Falta · pela hora do plano', 'Falta · sem hora', 'Sem lugar no mapa'];
   const itens = lista.map(function (x) {
-    if (x.dia !== diaAnt) { k = 0; diaAnt = x.dia; }
+    if (x.dia !== diaAnt) { k = 0; diaAnt = x.dia; grupoAnt = null; }
     k++;
     const cor = GV2.DIA_COR[dias.indexOf(x.dia)] || 'var(--gv2-ink)';
-    return (sel === 'semana' && k === 1 ? '<li class="gv2-rt-sep">' + GV2.e(GV2.DIAS[GV2.dow(x.dia)] + ' ' + GV2.ddmm(x.dia)) + '</li>' : '')
-      + '<li class="' + (x.feita ? 'is-feita' : '') + '"><i style="border-color:' + cor + ';' + (x.feita ? 'background:' + cor + ';color:#fff' : '') + '">' + k + '</i><span class="gv2-ellip"><b>' + GV2.e(x.nome || 'parada') + '</b><small>' + GV2.e([(x.acao && GV2.ACOES[x.acao]) || x.proposito, x.lat == null ? 'sem endereço' : ''].filter(Boolean).join(' · ')) + '</small></span><small>' + GV2.e((x.hora || '—') + (x.feita ? ' · feita' : '')) + '</small></li>';
+    const gr = GV2.rotaGrupo(x);
+    const sepGrupo = sel !== 'semana' && gr !== grupoAnt ? '<li class="gv2-rt-sep">' + GV2.e(GRUPOS[gr]) + '</li>' : '';
+    grupoAnt = gr;
+    const quando = x.feita ? (x.feitaHora ? 'feita ' + x.feitaHora : 'feita') + (x.hora ? ' · plano ' + x.hora : '') : (x.hora || 'sem hora');
+    return (sel === 'semana' && k === 1 ? '<li class="gv2-rt-sep">' + GV2.e(GV2.DIAS[GV2.dow(x.dia)] + ' ' + GV2.ddmm(x.dia)) + '</li>' : sepGrupo)
+      + '<li class="' + (x.feita ? 'is-feita' : '') + '"><i style="border-color:' + cor + ';' + (x.feita ? 'background:' + cor + ';color:#fff' : '') + '">' + k + '</i><span class="gv2-ellip"><b>' + GV2.e(x.nome || 'parada') + '</b><small>' + GV2.e([(x.acao && GV2.ACOES[x.acao]) || x.proposito, x.lat == null ? 'sem endereço' : ''].filter(Boolean).join(' · ')) + '</small></span><small>' + GV2.e(quando) + '</small></li>';
   }).join('');
   return '<div class="gv2-rt">' + nav + '<div class="gv2-rt-dias">' + chips + '</div>'
     + '<div class="gv2-rt-corpo"><div class="gv2-mapa gv2-rt-mapa" data-gv2-rotamapa="' + GV2.e(p.id + '|' + seg + '|' + sel) + '"></div>'
@@ -77412,6 +77477,8 @@ GV2.rotaMapa = {
 GV2.rotaComando = function (cmd, parte) {
   /* trocar de pessoa volta para HOJE: a semana navegada antes mostrava a semana passada ao lado do "hoje" da lista (08/10) */
   if (cmd === 'ruasel') { GV2.estado.ruaSel = parte[1]; GV2.estado.rotaSem = 0; GV2.estado.rotaDia = null; GV2.pintar(); return true; }
+  /* a célula da Grade da semana abre aquele dia daquela pessoa (D5, 08/10/26) */
+  if (cmd === 'ruadia') { GV2.estado.ruaSel = parte[1]; GV2.estado.rotaSem = 0; GV2.estado.rotaDia = parte[2]; GV2.estado.rua = 'rotas'; GV2.pintar(); return true; }
   if (cmd !== 'rota') return false;
   if (parte[1] === 'dia') { GV2.estado.rotaDia = parte[2]; GV2.pintar(); return true; }
   if (parte[1] === 'sem') { GV2.estado.rotaSem = (GV2.estado.rotaSem || 0) + Number(parte[2]); GV2.estado.rotaDia = null; GV2.pintar(); return true; }

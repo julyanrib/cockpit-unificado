@@ -387,6 +387,47 @@ tabelas.gv2_falta_etapa = [
   GV2.estado.rotaDia = 'semana';
   const rs = GV2.render.rua();
   checar('Rua › Rotas › Semana: os dias juntos, e a parada sem endereço contada', /Padaria/.test(rs) && /sem endereço/.test(rs) && /fica fora do mapa/.test(rs));
+  /* D3 (08/10/26): a ordem do DIA — feitas pela hora do check-in, depois o que falta pela hora do
+     plano, depois sem hora, por último sem lugar. Antes: 18:00 primeiro e as feitas no meio. */
+  {
+    const segD3 = '2099-01-05';
+    GV2.rota.cache[segD3] = { estado: 'ok', itens: [
+      { owner_id: '1', dia: '2099-01-05', vaga: 1, hora: '18:00', client_id: 'x1', nome: 'Noite', lat: -20, lng: -40 },
+      { owner_id: '1', dia: '2099-01-05', vaga: 2, hora: null, client_id: 'x2', nome: 'SemHoraFeita', lat: -20, lng: -40 },
+      { owner_id: '1', dia: '2099-01-05', vaga: 3, hora: null, client_id: 'x3', nome: 'SemHora', lat: -20, lng: -40 },
+      { owner_id: '1', dia: '2099-01-05', vaga: 4, hora: '09:00', client_id: 'x4', nome: 'SemLugar', lat: null, lng: null },
+      { owner_id: '1', dia: '2099-01-05', vaga: 5, hora: '19:00', client_id: 'x5', nome: 'PlanoTardeFeitaCedo', lat: -20, lng: -40 },
+      { owner_id: '1', dia: '2099-01-05', vaga: 6, hora: '14:00', client_id: 'x6', nome: 'Tarde', lat: -20, lng: -40 }
+    ], visitas: [
+      { owner_id: '1', provada: true, client_id: 'x2', dia: '2099-01-05', visited_at: '2099-01-05T14:30:00Z' },
+      { owner_id: '1', provada: true, client_id: 'x5', dia: '2099-01-05', visited_at: '2099-01-05T13:58:00Z' }
+    ] };
+    const d3 = GV2.rotaParadas(GV2.base.porId['1'], segD3, '2099-01-05').map(x => x.nome).join();
+    checar('D3: rota na ordem do dia (feitas pelo check-in → falta pela hora → sem hora → sem lugar)',
+      d3 === 'PlanoTardeFeitaCedo,SemHoraFeita,Tarde,Noite,SemHora,SemLugar', d3);
+    delete GV2.rota.cache[segD3];
+  }
+  /* D5 (08/10/26): a célula da Grade abre o dia da pessoa em Rua › Rotas */
+  {
+    GV2.estado.rua = 'semana';
+    const gs = GV2.render.ruaSemana();
+    const iso0 = GV2.base.semana[0].iso;
+    checar('D5: cada célula da Grade é botão para o dia da pessoa', gs.indexOf('data-gv2="ruadia:1:' + iso0 + '"') > 0
+      && (gs.match(/data-gv2="ruadia:/g) || []).length === GV2.base.ordem.length * GV2.base.semana.length);
+    const pintarD5 = GV2.pintar; GV2.pintar = function () {};
+    GV2.rotaComando('ruadia', ['ruadia', '2', iso0]);
+    GV2.pintar = pintarD5;
+    checar('D5: o clique leva a Rua › Rotas com a pessoa e o dia', GV2.estado.rua === 'rotas' && GV2.estado.ruaSel === '2' && GV2.estado.rotaDia === iso0 && GV2.estado.rotaSem === 0);
+    GV2.estado.ruaSel = '1'; GV2.estado.rotaDia = null;
+  }
+  /* D1 e D2 (08/10/26): só dá para medir no Google de verdade; aqui, que as travas estão no lugar */
+  {
+    const mg = codigo.slice(codigo.indexOf('GV2.mapa = {'), codigo.indexOf('GV2.mapa = {') + 9000);
+    checar('D1: o mapa do time nasce sobre as pessoas, não no centro fixo', mg.indexOf("center: { lat: -20.3, lng: -40.3 }") < 0 && /center: \{ lat: c0\.lat, lng: c0\.lng \}/.test(mg));
+    checar('D1: "enquadrado" só marca depois de enquadrar de fato (dentro do enq)', /const enq = g\.enq = function \(\) \{[^}]*clientWidth[\s\S]{0,200}g\.enquadrado = chaveEnq;/.test(mg) && !/g\.enquadrado = chaveEnq;\s*const alvo/.test(mg));
+    const px = codigo.slice(codigo.indexOf('GV2.pxMapa = {'));
+    checar('D2: o calor da Praça some até o Google assentar e o mapa remede quando a caixa muda', /vigiar: function \(el, g\)/.test(px) && /GV2\.pxMapa\.vigiar\(el, g\);/.test(px) && /GV2\.pxMapa\.vigiar\(el, guardado\);/.test(px) && /cv0\.style\.opacity = '0'/.test(px));
+  }
   GV2.estado.rotaDia = null; GV2.estado.aba = 'pessoas';
   let mg = '';
   try { GV2.estado.destaque = '1'; mg = GV2.render.mapaGrande(); } catch (e) { falhas.push('mapa grande: ' + e.message); }
