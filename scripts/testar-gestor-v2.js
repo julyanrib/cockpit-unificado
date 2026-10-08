@@ -362,14 +362,14 @@ tabelas.gv2_falta_etapa = [
     { owner_id: '2', dia: '2026-10-06', vaga: 1, hora: '09:00', client_id: 'c9', nome: 'Da Bia', proposito: 'visita', lat: -20.3, lng: -40.3 }
   ];
   tabelas.visitas_com_prova.push({ owner_id: '1', provada: true, client_id: 'c2', dia: '2026-10-06' });
-  GV2.estado.aba = 'rua'; GV2.estado.rua = 'rotas'; GV2.estado.ruaSel = '1'; GV2.estado.rotaDia = null;
+  GV2.estado.aba = 'rua'; GV2.estado.rua = 'dia'; GV2.estado.ruaSel = '1'; GV2.estado.rotaDia = null;
   const pintarOrig = GV2.pintar; GV2.pintar = function () {};
   await GV2.rotaLer(GV2.rotaSegunda(), true);
   GV2.pintar = pintarOrig;
   const rr = GV2.render.rua();
   const ordem = rr.indexOf('Cantina Sol') >= 0 && rr.indexOf('Cantina Sol') < rr.indexOf('Bar do Zé');
-  checar('Rua › Rotas: hoje, na ordem da hora, a feita marcada, sem o plano dos outros', ordem && /is-feita/.test(rr) && !/Da Bia/.test(rr) && !/Padaria/.test(rr) && /data-gv2-rotamapa="1\|2026-10-05\|2026-10-06"/.test(rr));
-  checar('Rua › Rotas: o chip do pino (0175) aparece com o mesmo rótulo do app', /<b>Cantina Sol<\/b><small>Demo/.test(rr) && /<b>Bar do Zé<\/b><small>visita/.test(rr));
+  checar('Rua › Pessoa · dia: hoje, na ordem do dia, a feita marcada, sem o plano dos outros', ordem && /is-feita/.test(rr) && !/Da Bia/.test(rr) && !/Padaria/.test(rr) && /data-gv2-v5mapa="1\|2026-10-06"/.test(rr));
+  checar('Rua › Pessoa · dia: a ação do pino (0175) aparece com o mesmo rótulo do app', /<b class="gv2-ellip">Bar do Zé<\/b><small[^>]*>Demo|Bar do Zé/.test(rr) && /Demo/.test(rr));
   /* 06/10/26: combinado "decisão em negócio" lia GV2.base na PRIMEIRA carga (null) e
      derrubava o painel inteiro do gestor. A montagem tem de usar a base que monta. */
   {
@@ -384,9 +384,9 @@ tabelas.gv2_falta_etapa = [
     GV2.base = salva; salva.cru.umAUm = umEra; GV2.pessoasMontar(salva);
     checar('primeira carga com combinado de decisão em negócio não derruba o painel', !quebrou);
   }
-  GV2.estado.rotaDia = 'semana';
+  GV2.estado.rotaDia = '2026-10-07';
   const rs = GV2.render.rua();
-  checar('Rua › Rotas › Semana: os dias juntos, e a parada sem endereço contada', /Padaria/.test(rs) && /sem endereço/.test(rs) && /fica fora do mapa/.test(rs));
+  checar('Rua › Pessoa · dia: a parada sem endereço vai para "Sem lugar no mapa" e fica fora da linha', /Padaria/.test(rs) && /Sem lugar no mapa/.test(rs) && /negócio sem endereço/.test(rs) && /1 sem lugar fica fora/.test(rs));
   /* D3 (08/10/26): a ordem do DIA — feitas pela hora do check-in, depois o que falta pela hora do
      plano, depois sem hora, por último sem lugar. Antes: 18:00 primeiro e as feitas no meio. */
   {
@@ -417,7 +417,63 @@ tabelas.gv2_falta_etapa = [
     const pintarD5 = GV2.pintar; GV2.pintar = function () {};
     GV2.rotaComando('ruadia', ['ruadia', '2', iso0]);
     GV2.pintar = pintarD5;
-    checar('D5: o clique leva a Rua › Rotas com a pessoa e o dia', GV2.estado.rua === 'rotas' && GV2.estado.ruaSel === '2' && GV2.estado.rotaDia === iso0 && GV2.estado.rotaSem === 0);
+    checar('D5: o clique leva a Rua › Rotas com a pessoa e o dia', GV2.estado.rua === 'dia' && GV2.estado.ruaSel === '2' && GV2.estado.rotaDia === iso0 && GV2.estado.rotaSem === 0);
+    GV2.estado.ruaSel = '1'; GV2.estado.rotaDia = null;
+  }
+  /* RUA v5 (08/10/26, go.zip): uma conta só para o dia de uma pessoa (GV2.v5Dia) */
+  {
+    const segV = '2099-02-02', diaV = '2099-02-03';
+    GV2.rota.cache[segV] = { estado: 'ok', itens: [
+      { owner_id: '1', dia: diaV, vaga: 1, hora: '14:00', client_id: 'a1', item_id: 'c-a', nome: 'Feita1', proposito: 'funil', lat: -20, lng: -40 },
+      { owner_id: '1', dia: diaV, vaga: 2, hora: null, client_id: 'a2', nome: 'Feita2', proposito: 'funil', lat: -20, lng: -40 },
+      { owner_id: '1', dia: diaV, vaga: 3, hora: null, client_id: 'a2', nome: 'Feita2 repetida', proposito: 'funil', lat: -20, lng: -40 },
+      { owner_id: '1', dia: diaV, vaga: 4, hora: '15:00', client_id: 'a3', nome: 'Declarada', proposito: 'funil', lat: -20, lng: -40 },
+      { owner_id: '1', dia: diaV, vaga: 5, hora: '18:00', client_id: 'a4', nome: 'Falta', proposito: 'nova', lat: -20, lng: -40 },
+      { owner_id: '1', dia: diaV, vaga: 6, hora: '09:00', client_id: null, nome: 'SemLugar', proposito: 'follow', lat: null, lng: null }
+    ], visitas: [
+      { owner_id: '1', provada: true, client_id: 'a1', dia: diaV, visited_at: diaV + 'T17:00:00Z', motivo: 'gps', distancia_m: 22 },
+      { owner_id: '1', provada: true, client_id: 'a2', dia: diaV, visited_at: diaV + 'T17:05:00Z', motivo: 'foto', distancia_m: 900 },
+      { owner_id: '1', provada: false, declarada: true, client_id: 'a3', dia: diaV, visited_at: diaV + 'T17:08:00Z', motivo: 'declarada sem GPS, sem foto' },
+      { owner_id: '1', provada: true, client_id: 'z9', dia: diaV, visited_at: diaV + 'T17:10:00Z', motivo: 'gps', distancia_m: 30 },
+      { owner_id: '1', provada: true, client_id: 'z8', dia: diaV, visited_at: diaV + 'T17:15:00Z', motivo: 'gps', distancia_m: 30 }
+    ] };
+    const dv = GV2.v5Dia(GV2.base.porId['1'], diaV);
+    checar('v5 · x de y: só visita com prova NO plano conta; o mesmo restaurante conta uma vez; a declarada não conta (C6)',
+      dv.x === 2 && dv.y === 5 && GV2.v5Xdy(dv) === '2 de 5', dv.x + ' de ' + dv.y);
+    checar('v5 · a visita com prova fora do plano vai para "Fora do plano"', dv.fora.length === 2, String(dv.fora.length));
+    checar('v5 · ordem do dia: aconteceu pelo check-in → falta pela hora → sem lugar por último',
+      dv.itens.map(function (x) { return x.nome; }).join() === 'Feita1,Feita2,Declarada,Falta,SemLugar', dv.itens.map(function (x) { return x.nome; }).join());
+    checar('v5 · prova na linha: GPS com a distância, ou foto', dv.itens[0].prova === 'GPS 22 m' && dv.itens[1].prova === 'foto' && /^sem prova/.test(dv.itens[2].prova));
+    checar('v5 · jornada: 1º ao último check-in com prova (dentro e fora do plano); 4 portas em 15 min = check-ins colados (C9)',
+      dv.jornada && dv.jornada.n === 4 && dv.jornada.min === 15 && dv.jornada.porta === 5 && dv.jornada.colados === true, JSON.stringify(dv.jornada));
+    /* 2 portas coladas não acusam nada */
+    GV2.rota.cache[segV].visitas = GV2.rota.cache[segV].visitas.slice(0, 2);
+    const dv2 = GV2.v5Dia(GV2.base.porId['1'], diaV);
+    checar('v5 · C9: 2 check-ins colados não viram aviso', dv2.jornada && dv2.jornada.porta === 5 && dv2.jornada.colados === false);
+    /* sem parada + com agenda = "sem rota", nunca "sem plano" */
+    GV2.rota.cache[segV].itens = [];
+    const agOrig = GV2.compromissosDoDia;
+    GV2.compromissosDoDia = function () { return { n: 1, lig: 1, reun: 0, tar: 0, itens: [{ hora: '12:45', titulo: 'Ligar', tipo: 'ligação', cliente: '' }] }; };
+    GV2.estado.aba = 'rua'; GV2.estado.rua = 'dia'; GV2.estado.ruaSel = '1'; GV2.estado.rotaDia = diaV;
+    const hv = GV2.render.rua();
+    GV2.compromissosDoDia = agOrig;
+    checar('v5 · sem parada e com agenda: "Sem rota … com agenda", nunca "sem plano"', /Sem rota neste dia, com agenda/.test(hv) && !/Sem plano neste dia/.test(hv));
+    delete GV2.rota.cache[segV];
+    GV2.estado.rotaDia = null;
+  }
+  {
+    GV2.estado.rua = 'semana';
+    const gv = GV2.render.rua();
+    checar('v5 · Semana: toda célula abre o dia (v5dia) e o total é "feito + plano" contra a meta da semana',
+      (gv.match(/class="gv2-v5-gr-cel [^"]*" data-gv2="v5dia:/g) || []).length === GV2.base.pessoas.length * GV2.base.semana.length && /Feito \+ plano/.test(gv));
+    const pintarV = GV2.pintar; GV2.pintar = function () {};
+    GV2.v5RuaComando('v5dia', ['v5dia', '2', GV2.base.semana[0].iso]);
+    GV2.pintar = pintarV;
+    checar('v5 · o clique leva a Rua › Pessoa · dia com a pessoa e o dia', GV2.estado.aba === 'rua' && GV2.estado.rua === 'dia' && GV2.estado.ruaSel === '2' && GV2.estado.rotaDia === GV2.base.semana[0].iso);
+    GV2.estado.rua = 'hoje';
+    const hh = GV2.render.rua();
+    checar('v5 · Rua › Hoje: uma faixa por pessoa e o mapa ao vivo; o "Agora no mapa" e a "Tomada de contas" saíram da Rua',
+      (hh.match(/class="gv2-v5-tl-l is-linha"/g) || []).length === GV2.base.pessoas.length && /data-gv2-mapa="rua"/.test(hh) && !/Agora no mapa/.test(hh) && !/Tomada de contas/.test(hh));
     GV2.estado.ruaSel = '1'; GV2.estado.rotaDia = null;
   }
   /* D1 e D2 (08/10/26): só dá para medir no Google de verdade; aqui, que as travas estão no lugar */
