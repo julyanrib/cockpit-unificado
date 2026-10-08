@@ -151,6 +151,43 @@ tabelas.gv2_falta_etapa = [
   checar('o combinado é conferido sozinho: plano (não), travados (não), livre (a conferir)', cs[0].ok === false && /hoje sem plano/.test(cs[0].ev) && cs[1].ok === false && /0 de 1 com data/.test(cs[1].ev) && cs[2].ok === null, cs.map(c => c.ok + ':' + c.ev).join(' | '));
   checar('a pauta diz o placar dos combinados', /Cumpriu 0 de 2/.test(GV2.pautaPessoa(ana)[1].t));
   const rt = GV2.roteiro(ana);
+  /* 08/10/26: sem parada não é "sem plano" quando há agenda; a mesma fonte da Agenda do app */
+  (function () {
+    const hoje = GV2.base.agora.iso;
+    const antes = DATA.agenda;
+    DATA.agenda = { itens: [
+      { hubspot_owner_id: ana.id, hs_task_subject: 'OPORTUNIDADE - LIGAÇÃO - Casa X', hs_timestamp: hoje + 'T15:45:00Z', hs_task_status: 'NOT_STARTED' },
+      { hubspot_owner_id: ana.id, hs_task_subject: 'Follow-up', hs_timestamp: hoje + 'T13:00:00Z', hs_task_status: 'COMPLETED' },
+      { hubspot_owner_id: ana.id, hs_note_body: 'nota', hs_timestamp: hoje + 'T13:00:00Z' },
+      { hubspot_owner_id: ana.id, hs_meeting_title: 'Reunião Y', hs_meeting_start_time: hoje + 'T17:00:00Z' }
+    ] };
+    const ag = GV2.compromissosDoDia(ana.id, hoje);
+    DATA.agenda = antes;
+    const p = { hoje: { agenda: ag } }, vazio = { hoje: { agenda: { n: 0 } } };
+    checar('agenda do dia: conta tarefa e reunião, ignora nota e tarefa concluída; quem não tem parada mas tem agenda é "sem rota", não "sem plano"',
+      ag.n === 2 && ag.lig === 1 && ag.reun === 1 && GV2.semRotaHoje(p) === 'sem rota hoje · 1 ligação, 1 reunião na agenda' && GV2.semRotaHoje(vazio) === 'sem plano nem agenda hoje', JSON.stringify(ag));
+  })();
+  /* 08/10/26: no Raio X, cada número abre a gaveta com quem está ali */
+  (function () {
+    GV2.estado.veu = null; GV2.estado.rxGav = null;
+    GV2.rxGavClique(['rxg', 'passo', '1']);
+    const g1 = GV2.estado.rxGav && GV2.estado.veu === GV2.render.rxGav && GV2.render.rxGav().indexOf('gv2-rxg') > 0;
+    GV2.rxGavClique(['rxg', 'etapa', '4', 'sv']);
+    const c = GV2.rxGavConteudo();
+    const g2 = /sem valor/.test(c.tit);
+    GV2.rxGavClique(['rxg', 'filtro', 'travados']);
+    const g3 = /^Travados · \d+/.test(GV2.rxGavConteudo().tit);
+    GV2.rxGavClique(['rxg', 'fechar']);
+    const g4 = GV2.estado.rxGav === null && GV2.estado.veu === null && GV2.estado.passo === null;
+    const h = GV2.render.raiox();
+    const mortos = (h.match(/<button[^>]*data-gv2=""/g) || []).length;
+    checar('raio x: passo, etapa sem valor e KPI abrem a gaveta; fechar limpa; nenhum botão sem destino', g1 && g2 && g3 && g4 && mortos === 0 && /data-gv2="rxg:passo:\d+:\d+"/.test(h) && /data-gv2="rxg:etapa:/.test(h) && /class="gv2-v4-funil-lin[^"]*" data-gv2="rxg:passo:\d+"/.test(h) && /data-gv2="rxg:mes"/.test(h), JSON.stringify({ g1: g1, g2: g2, g3: g3, g4: g4, mortos: mortos }));
+  })();
+  (function () {
+    GV2.estado.rotaSem = -1; GV2.estado.rotaDia = '2026-09-30';
+    GV2.rotaComando('ruasel', ['ruasel', ana.id]);
+    checar('rua: trocar de pessoa volta a rota para esta semana e hoje', GV2.estado.rotaSem === 0 && GV2.estado.rotaDia === null);
+  })();
   /* DESENVOLVIMENTO DO EXECUTIVO (07/10/26): o teste de aceite 1 — os 4 números do topo são os
      do resumo da Pessoas v4 para a mesma pessoa, da mesma base; e a frase segue a ordem das regras */
   (function () {
