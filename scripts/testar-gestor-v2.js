@@ -181,7 +181,7 @@ tabelas.gv2_falta_etapa = [
     const g4 = GV2.estado.rxGav === null && GV2.estado.veu === null && GV2.estado.passo === null;
     const h = GV2.render.raiox();
     const mortos = (h.match(/<button[^>]*data-gv2=""/g) || []).length;
-    checar('raio x: passo, etapa sem valor e KPI abrem a gaveta; fechar limpa; nenhum botão sem destino', g1 && g2 && g3 && g4 && mortos === 0 && /data-gv2="rxg:passo:\d+:\d+"/.test(h) && /data-gv2="rxg:etapa:/.test(h) && /class="gv2-v4-funil-lin[^"]*" data-gv2="rxg:passo:\d+"/.test(h) && /data-gv2="rxg:mes"/.test(h), JSON.stringify({ g1: g1, g2: g2, g3: g3, g4: g4, mortos: mortos }));
+    checar('raio x: passo, etapa sem valor e KPI abrem a gaveta; fechar limpa; nenhum botão sem destino', g1 && g2 && g3 && g4 && mortos === 0 && /data-gv2="rxg:passo:\d+:\d+"/.test(h) && /data-gv2="rxg:etapa:/.test(h) && /class="gv2-v4-funil-lin[^"]*" data-gv2="rxg:passo:\d+"/.test(h) && /data-gv2="rxg:passo:[0-9]" class="gv2-v5-kpi"/.test(h) && /data-gv2="rxg:filtro:todos"/.test(h), JSON.stringify({ g1: g1, g2: g2, g3: g3, g4: g4, mortos: mortos, a: /data-gv2="rxg:passo:\d+:\d+"/.test(h), b: /data-gv2="rxg:etapa:/.test(h), c: /class="gv2-v4-funil-lin[^"]*" data-gv2="rxg:passo:\d+"/.test(h), d: /data-gv2="rxg:passo:[0-9]" class="gv2-v5-kpi"/.test(h), e: /data-gv2="rxg:filtro:todos"/.test(h) }));
   })();
   (function () {
     GV2.estado.veu = null; GV2.estado.rxGav = null;
@@ -291,7 +291,18 @@ tabelas.gv2_falta_etapa = [
   checar('rodapé do dinheiro: o maior MRR em jogo é contra a Saipos', (GV2.maiorMrrContra(b) || {}).s === 'Saipos' && GV2.maiorMrrContra(b).v === 500);
   GV2.estado.filtro = 'todos'; GV2.estado.aba = 'raiox'; GV2.estado.rxm = 'funil';
   const rxf = GV2.render.raiox();
-  checar('Negócios ganha a coluna Sistema, com "não registrado" e o clique para a Praça', /Sistema/.test(rxf) && /não registrado/.test(rxf) && /data-gv2="pxsis:vv:Saipos"/.test(rxf));
+  /* v5: a tabela de Negócios (Sistema, filtros, Cobrar) vive na gaveta "Ver todos os negócios" */
+  GV2.rxGavClique(['rxg', 'filtro', 'todos']);
+  const gNeg = GV2.rxGavConteudo().corpo;
+  GV2.rxGavClique(['rxg', 'fechar']);
+  checar('Negócios (na gaveta "Ver todos") ganha a coluna Sistema, com "não registrado", os filtros e o clique para o Território', /Sistema/.test(gNeg) && /não registrado/.test(gNeg) && /data-gv2="pxsis:vv:Saipos"/.test(gNeg) && /data-gv2="rxg:filtro:semarma"/.test(gNeg));
+  {
+    const pintarT = GV2.pintar, irT = GV2.ir; GV2.pintar = function () {}; GV2.ir = function (a) { GV2.estado.aba = a; };
+    GV2.pxComando('pxsis', ['pxsis', 'vv', 'Saipos']);
+    GV2.pintar = pintarT; GV2.ir = irT;
+    checar('v5 · o clique no sistema abre o Território na praça, com o concorrente', GV2.estado.aba === 'terr' && GV2.estado.pr === 'vv' && GV2.estado.cz === 'Saipos');
+    GV2.estado.aba = 'raiox'; GV2.estado.cz = null;
+  }
   checar('Funil do mês diz que é contagem por passo, não a mesma turma (v4)', /não a mesma turma/.test(rxf));
   checar('a ficha do negócio carrega o bloco das armas (Meu funil do executivo)', tpl.indexOf("GV2.armasNaFicha(l, document.getElementById('gv2ArmasFicha'))") > 0);
   const C = GV2.pracaContra('vv');
@@ -313,7 +324,8 @@ tabelas.gv2_falta_etapa = [
     leads: { data: [{ lat: -20.31, lng: -40.29, bairro: 'Praia do Canto' }, { lat: -20.32, lng: -40.3, bairro: 'PRAIA DO CANTO' }, { lat: -20.33, lng: -40.31, bairro: 'Centro' }] } };
   GV2.estado.rxm = 'praca'; GV2.estado.pr = 'vv'; GV2.estado.cz = 'Saipos';
   let px = '';
-  try { px = GV2.render.raiox(); } catch (e) { falhas.push('Praça: ' + e.message); }
+  /* v5: a Praça mora no Território (Onde atacar + o que ela já tinha, abaixo) */
+  try { px = GV2.render.terr(); } catch (e) { falhas.push('Território: ' + e.message); }
   if (process.env.DEBUG_PX) require('fs').writeFileSync(process.env.DEBUG_PX, px);
   checar('a Praça desenha: Onde atacar por bairro (grafias juntas), Contra quem, armas e o painel do concorrente',
     /Praia do Canto/.test(px) && /<span class="num cel-forte">2<\/span>/.test(px) && /As armas que faltam/.test(px) && /Concorrente · Vitória/.test(px) && /Cobrar os 2/.test(px));
@@ -527,6 +539,42 @@ tabelas.gv2_falta_etapa = [
     const ht = GV2.render.time();
     checar('v5 · Hoje: 5 cartões, cada um com destino; a coluna Jornada; o plano e a jornada abrem o dia na Rua',
       (ht.match(/class="gv2-v5-kpi" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2);
+  }
+  /* FUNIL e TERRITÓRIO v5 (08/10/26) */
+  {
+    const nav = GV2.navHTML();
+    const rots = (nav.match(/<span class="gv2-nav-rot">[^<]+</g) || []).map(function (x) { return x.replace('<span class="gv2-nav-rot">', '').replace('<', ''); });
+    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X nem Prospecção)', rots.join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook', rots.join(' · '));
+    GV2.estado.aba = 'raiox'; GV2.estado.prf = 'todas';
+    const fu = GV2.render.raiox();
+    checar('v5 · Funil: 4 cartões do funil, sem o "Funil · Praça" e com "Negócios travados"', (fu.match(/class="gv2-v5-kpi( is-fixo)?"/g) || []).length === 4 && fu.indexOf('data-gv2="rxm:') < 0 && /Negócios travados/.test(fu) && /<h1>Funil<\/h1>/.test(fu));
+    const fpp = GV2.render.funilPorPessoa();
+    const algumMenor = GV2.base.pessoas.some(function (p) { return p.funil_mes.portas > 0 && p.funil_mes.portas < 3 && p.funil_mes.decisor > 0; });
+    checar('v5 · Funil por pessoa: a taxa só aparece com 3 ou mais no passo anterior (senão "—", nunca 400%)', !/>[0-9]{3,}%</.test(fpp) && /a taxa só aparece com 3 ou mais/.test(fpp) && (!algumMenor || /<small>—<\/small>/.test(fpp)));
+    /* Território: o Abastecer com a regra C8 (estoque ÷ contas que saíram por semana) */
+    const g = global, ant = { R: g.RT7_ESTADO, E: g.rt7Estoque, O: g.rt7Orfao };
+    const ids = GV2.base.pessoas.map(function (p) { return p.id; });
+    const E = {}; E[ids[0]] = { contas: 30, consumo: 36, semanas: 30 / 36 }; E[ids[1]] = { contas: 40, consumo: 30, semanas: 40 / 30 }; E[ids[2]] = { contas: 50, consumo: null, semanas: null };
+    g.RT7_ESTADO = { carregou: true, leads: [{ id: 'x', status: 'pendente', responsavel_owner_id: ids[0], bairro: 'Tijuca', created_at: '2026-10-07T12:00:00Z' }] };
+    g.rt7Estoque = function (id) { return E[id] || { contas: 80, consumo: 20, semanas: 4 }; };
+    g.rt7Orfao = function () { return { paradas: 722, cidades: ['Vitória/ES'] }; };
+    const ab = GV2.render.v5Abastecer();
+    const k0 = GV2.v5Estoque(GV2.base.pessoas[0]).k, k1 = GV2.v5Estoque(GV2.base.pessoas[1]).k, k2 = GV2.v5Estoque(GV2.base.pessoas[2]).k;
+    g.RT7_ESTADO = ant.R; g.rt7Estoque = ant.E; g.rt7Orfao = ant.O;
+    checar('v5 · C8: < 1 semana = sem estoque (Importar), < 1,5 = acompanhar, sem consumo = "consumo não medido"', k0 === 'sem' && k1 === 'acomp' && k2 === 'nao' && /data-gv2="v5rt7:imp:/.test(ab), [k0, k1, k2].join());
+    /* a leitura da praça repinta o Território quando termina (só repintava o Raio X › Praça) */
+    {
+      const pg = GV2.pxGlobal, cm = GV2.camada, pt = GV2.pintar, cacheVv = GV2.px.cache.vv;
+      let pintou = 0;
+      GV2.pxGlobal = async function () { return { vis: { data: [] }, notas: { data: [] } }; };
+      GV2.camada = async function () { return { data: [] }; };
+      GV2.pintar = function () { pintou++; };
+      GV2.estado.aba = 'terr'; delete GV2.px.cache.vv;
+      await GV2.pxLer('vv');
+      GV2.pxGlobal = pg; GV2.camada = cm; GV2.pintar = pt; GV2.px.cache.vv = cacheVv;
+      checar('v5 · Território: a leitura da praça termina e repinta a aba (senão fica no esqueleto)', pintou >= 2, String(pintou));
+    }
+    checar('v5 · Território: fila de aprovação por dono, território sem dono com o número, e sem jargão', /Fila de aprovação/.test(ab) && /data-gv2="v5rt7:fila:/.test(ab) && /Território sem dono · 722 contas/.test(ab) && !/torneira|munição|backlog/i.test(ab + GV2.render.terr()));
   }
   /* D1 e D2 (08/10/26): só dá para medir no Google de verdade; aqui, que as travas estão no lugar */
   {
