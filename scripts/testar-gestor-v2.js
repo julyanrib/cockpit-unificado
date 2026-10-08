@@ -184,6 +184,14 @@ tabelas.gv2_falta_etapa = [
     checar('raio x: passo, etapa sem valor e KPI abrem a gaveta; fechar limpa; nenhum botão sem destino', g1 && g2 && g3 && g4 && mortos === 0 && /data-gv2="rxg:passo:\d+:\d+"/.test(h) && /data-gv2="rxg:etapa:/.test(h) && /class="gv2-v4-funil-lin[^"]*" data-gv2="rxg:passo:\d+"/.test(h) && /data-gv2="rxg:mes"/.test(h), JSON.stringify({ g1: g1, g2: g2, g3: g3, g4: g4, mortos: mortos }));
   })();
   (function () {
+    GV2.estado.veu = null; GV2.estado.rxGav = null;
+    GV2.rxGavClique(['rxg', 'plano', ana.id]);
+    const c = GV2.rxGavConteudo();
+    const tempo = GV2.render.time ? GV2.render.time() : '';
+    GV2.rxGavClique(['rxg', 'fechar']);
+    checar('planejamento de cada um abre do Time (cartão e coluna de paradas) e do Raio X, na gaveta', /^Planejamento de /.test(c.tit) && c.corpo.indexOf('gv2-rt') > 0 && tempo.indexOf('rxg:plano:' + ana.id) > 0 && tempo.indexOf('data-gv2="rxg:plano"') > 0 && GV2.render.raiox().indexOf('data-gv2="rxg:plano"') > 0, c.tit);
+  })();
+  (function () {
     GV2.estado.rotaSem = -1; GV2.estado.rotaDia = '2026-09-30';
     GV2.rotaComando('ruasel', ['ruasel', ana.id]);
     checar('rua: trocar de pessoa volta a rota para esta semana e hoje', GV2.estado.rotaSem === 0 && GV2.estado.rotaDia === null);
