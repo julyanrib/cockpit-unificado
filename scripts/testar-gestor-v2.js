@@ -151,6 +151,34 @@ tabelas.gv2_falta_etapa = [
   checar('o combinado é conferido sozinho: plano (não), travados (não), livre (a conferir)', cs[0].ok === false && /hoje sem plano/.test(cs[0].ev) && cs[1].ok === false && /0 de 1 com data/.test(cs[1].ev) && cs[2].ok === null, cs.map(c => c.ok + ':' + c.ev).join(' | '));
   checar('a pauta diz o placar dos combinados', /Cumpriu 0 de 2/.test(GV2.pautaPessoa(ana)[1].t));
   const rt = GV2.roteiro(ana);
+  /* DESENVOLVIMENTO DO EXECUTIVO (07/10/26): o teste de aceite 1 — os 4 números do topo são os
+     do resumo da Pessoas v4 para a mesma pessoa, da mesma base; e a frase segue a ordem das regras */
+  (function () {
+    const DV = GV2.DV;
+    DV.estado.base = GV2.base; DV.estado.medias = { pessoas: 3, reunioes30: 3, portas7: 10, portasSemFicha: 1, fichasMes: 10, decisorMes: 5, fila7: 1, diasComPlano: 6, diasUteisAteHoje: 3 };
+    const nums = function (html, re) { const m = []; let x; while ((x = re.exec(html))) m.push(x[1].replace(/<[^>]+>/g, '')); return m; };
+    GV2.base.pessoas.forEach(function (p) {
+      DV.estado.p = p; DV.estado.fizEm = {};
+      const h = DV.com(function () { return DV.html(p); });
+      const g = GV2.p3Resumo(p);
+      const dv = nums(h, /class="dv-num"><small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g);
+      const ge = nums(g, /<small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g).slice(1);
+      const so = function (t) { return (String(t).match(/[0-9]+(,[0-9]+)?|—/g) || []).join(' '); };
+      checar('desenvolvimento: os 4 números do topo de ' + p.nome + ' são os do resumo da Pessoas (mesma base)', dv.length === 4 && ge.length >= 4 && dv.every(function (v, i) { return so(v) === so(ge[i]); }), JSON.stringify({ dv: dv, gestor: ge }));
+    });
+    const p = GV2.base.pessoas[0], d = p.disc;
+    const um = { dia: '2026-10-13', hora: '08:30', dias: 5, hoje: false };
+    const salva = { n: d.nReunioes, u: p.ultimo1a1 };
+    d.nReunioes = 25; p.ultimo1a1 = p.ultimo1a1 || { data: '2026-10-05', combinados: [] };
+    const f1 = DV.com(function () { return DV.frase(p, um, [], null); });
+    p.ultimo1a1 = null;
+    const f2 = DV.com(function () { return DV.frase(p, um, null, null); });
+    const f3 = DV.com(function () { return DV.frase(p, { dia: '2026-10-08', hora: '08:30', dias: 1, hoje: false }, [{ r: 'em_aberto' }, { r: 'cumprido' }], null); });
+    d.nReunioes = salva.n; p.ultimo1a1 = salva.u;
+    checar('desenvolvimento: a frase do topo segue a ordem das regras (véspera > primeiro 1:1 > ... > reuniões)', /^Feche as reuniões que passaram: 25 esperando desfecho\.$/.test(f1.t) && f1.ir === 'disc' && /^Seu primeiro 1:1 é terça\./.test(f2.t) && /^Amanhã às 08:30: 1 combinado em aberto\.$/.test(f3.t), [f1.t, f2.t, f3.t].join(' | '));
+    const um2 = DV.proximo1a1({ iso: '2026-10-07', min: 600, dow: 3 });
+    checar('desenvolvimento: 1:1 de segunda que cai em feriado vai para o próximo dia útil, mesma hora', um2.dia === '2026-10-13' && um2.hora === '08:30', JSON.stringify(um2));
+  })();
   checar('sidebar: o selo do Time é o número de exceções da aba Time (a mesma função) e some com 0', (function () {
     const n = GV2.excecoesLista().length, h = GV2.navHTML();
     const m = h.match(/class="gv2-badge">(\d+)</);
