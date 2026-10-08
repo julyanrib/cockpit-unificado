@@ -61,8 +61,8 @@ const tabelas = {
 };
 const q = (dados) => { const o = { then: (a, b) => Promise.resolve({ data: dados, error: null }).then(a, b) }; ['select', 'eq', 'gte', 'lt', 'in', 'order', 'limit'].forEach(k => { o[k] = () => o; }); return o; };
 global.supa = {
-  rpc: (nome, a) => q(nome === 'planejamento_do_time' ? { pessoas: a.p_segunda === SEG ? pessoasRpc : [], mapa: { checkins: [], plano: [] } } : tabelas[nome] || []),
-  from: (t) => q(tabelas[t] || [])
+  rpc: (nome, a) => (global.__rpcLog = (global.__rpcLog || []).concat([nome]), nome === 'gestor_nomes_dos_clientes' && global.__nomesFalha ? Promise.resolve({ data: null, error: { message: 'função fora' } }) : q(nome === 'planejamento_do_time' ? { pessoas: a.p_segunda === SEG ? pessoasRpc : [], mapa: { checkins: [], plano: [] } } : nome === 'gestor_nomes_dos_clientes' ? tabelas.clients : tabelas[nome] || [])),
+  from: (t) => (global.__fromLog = (global.__fromLog || []).concat([t]), q(tabelas[t] || []))
 };
 const lead = (id, dono, dias, mrr, breach, tarefa) => ({ id, ownerId: dono, name: 'N' + id, dias, mrr, slaBreach: breach, tarefas: tarefa ? [{ timestamp: '2026-10-08T12:00:00Z', subject: 'x' }] : [] });
 global.DATA = {
@@ -562,6 +562,19 @@ tabelas.gv2_falta_etapa = [
     const depoisDeMudar = n;
     GV2.v5DiaConta = contaOrig; GV2.estado.aba = 'time';
     checar('v5 · velocidade: cada (pessoa, dia) é contado uma vez por carga; repintar não reconta; visita nova reconta', primeira > 0 && primeira <= GV2.base.pessoas.length * 2 && segunda === 0 && depoisDeMudar === 1, primeira + '/' + segunda + '/' + depoisDeMudar);
+  }
+  /* 0185: os nomes dos clientes vêm da função gestor_nomes_dos_clientes, junto com a carga; se ela
+     falhar, a busca antiga por lotes de ids entra como reserva e nenhum nome some */
+  {
+    global.__rpcLog = []; global.__fromLog = [];
+    const b1 = await GV2.montar();
+    const viaFuncao = global.__rpcLog.indexOf('gestor_nomes_dos_clientes') >= 0 && global.__fromLog.indexOf('clients') < 0 && b1.nomeCliente('c2') === 'Cantina Sol';
+    global.__nomesFalha = true; global.__fromLog = [];
+    const b2 = await GV2.montar();
+    global.__nomesFalha = false;
+    const reserva = global.__fromLog.indexOf('clients') >= 0 && b2.nomeCliente('c2') === 'Cantina Sol';
+    checar('0185: os nomes vêm da função numa ida só (sem a segunda ida por lotes)', viaFuncao, global.__rpcLog.join());
+    checar('0185: com a função fora, a busca antiga por lotes entra e o nome continua lá', reserva);
   }
   /* FUNIL e TERRITÓRIO v5 (08/10/26) */
   {
