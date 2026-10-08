@@ -24,7 +24,17 @@ const montar = require('./montar-dados.js');
 
 const falhas = [];
 let ok = 0;
+/* APOSENTADAS EM 08/10/26: a aba foi refeita pela prancha DESE (o espelho do 1:1, GV2.DV em
+   gv2-dev.js, testada em testar-gestor-v2.js) e a prancha manda TIRAR as três prioridades da
+   semana (são a fila da Hoje), a fala pronta e o FAQ do rodapé (virou \"Como contamos\"). As
+   verificações abaixo protegiam esses blocos; mantê-las seria proteger tela que não existe. */
+const APOSENTADAS = [
+  'a fiação trata os três tipos', 'os destinos reusam os caminhos que já existem', 'as três prioridades saem do funil ao vivo',
+  'o CTA só é desenhado quando existe destino', 'a fala pronta não aparece sem gargalo', 'toda pergunta do rodapé nasce com resposta',
+  'a resposta não vai buscar dado no clique'
+];
 function checar(nome, condicao, porque) {
+  if (APOSENTADAS.some(function (n) { return String(nome).indexOf(n) === 0; })) return;
   if (condicao) { ok++; return; }
   falhas.push(nome + (porque ? ' — ' + porque : ''));
 }
