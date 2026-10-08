@@ -537,8 +537,31 @@ tabelas.gv2_falta_etapa = [
     checar('v5 · 1c: plano fora = "—" com o nome da fonte, nenhum 0 inventado, e Travou/Sem rota somem',
       /Não li o Planejamento agora/.test(hf) && /planejamento_do_time/.test(hf) && / de —</.test(hf) && !Gf.grupos.some(function (g) { return g.k === 'travou' || g.k === 'semrota' || g.k === 'naosaiu'; }));
     const ht = GV2.render.time();
-    checar('v5 · Hoje: 5 cartões, cada um com destino; a coluna Jornada; o plano e a jornada abrem o dia na Rua',
-      (ht.match(/class="gv2-v5-kpi" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2);
+    checar('v5 · Hoje: 5 cartões, cada um com destino; a coluna Jornada; o plano e a jornada abrem o dia na Rua, o nome abre a Pessoa',
+      (ht.match(/class="gv2-v5-kpi" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2 && (ht.match(/class="gv2-v5-pp-p" data-gv2="pessoa:/g) || []).length === b5.pessoas.length);
+  }
+  /* AUDITORIA v5 (08/10/26): velocidade. O Hoje levava 935 ms para desenhar (a conta do dia refeita
+     dezenas de vezes por pintura) e o plano da semana só era pedido depois da primeira pintura. */
+  {
+    const segH = GV2.segundaDe(GV2.base.agora.iso);
+    const cacheAntes = GV2.rota.cache[segH];
+    delete GV2.rota.cache[segH];
+    await GV2.montar();
+    const veioJunto = !!(GV2.rota.cache[segH] && GV2.rota.cache[segH].estado === 'ok');
+    if (!veioJunto) GV2.rota.cache[segH] = cacheAntes;
+    checar('v5 · velocidade: o plano da semana chega JUNTO com a carga (está no cache logo depois do montar)', veioJunto);
+    const contaOrig = GV2.v5DiaConta; let n = 0;
+    GV2.v5DiaConta = function () { n++; return contaOrig.apply(this, arguments); };
+    const cH = GV2.rota.cache[segH]; if (cH) cH._v5b = null;
+    GV2.estado.aba = 'time'; GV2.render.time(); GV2.navHTML();
+    const primeira = n; n = 0;
+    GV2.render.time(); GV2.navHTML(); GV2.estado.aba = 'rua'; GV2.estado.rua = 'hoje'; GV2.render.rua();
+    const segunda = n;
+    if (cH) cH.visitas = cH.visitas.slice();
+    n = 0; GV2.v5Dia(GV2.base.pessoas[0], GV2.base.agora.iso);
+    const depoisDeMudar = n;
+    GV2.v5DiaConta = contaOrig; GV2.estado.aba = 'time';
+    checar('v5 · velocidade: cada (pessoa, dia) é contado uma vez por carga; repintar não reconta; visita nova reconta', primeira > 0 && primeira <= GV2.base.pessoas.length * 2 && segunda === 0 && depoisDeMudar === 1, primeira + '/' + segunda + '/' + depoisDeMudar);
   }
   /* FUNIL e TERRITÓRIO v5 (08/10/26) */
   {

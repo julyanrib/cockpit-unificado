@@ -8233,7 +8233,8 @@ button.gv2-v5-tl-l:hover .gv2-v5-tl-trilho{box-shadow:inset 0 0 0 1px var(--gv2-
 .gv2-v5-pp-l.is-cab{min-height:0;border-top:1px solid var(--gv2-line);background:var(--gv2-sub);font:700 10.5px var(--gv2-font);letter-spacing:.04em;text-transform:uppercase;color:var(--gv2-dim);}
 .gv2-v5-pp-l.is-cab .is-dir{text-align:right;}
 .gv2-v5-pp-l.is-cab .is-meio{text-align:center;}
-.gv2-v5-pp-p{display:flex;align-items:center;gap:10px;min-width:0;}
+.gv2-v5-pp-p{display:flex;align-items:center;gap:10px;min-width:0;border:0;background:transparent;color:inherit;padding:0;text-align:left;cursor:pointer;font-family:var(--gv2-font);}
+.gv2-v5-pp-p:hover b{text-decoration:underline;}
 .gv2-v5-pp-p > span{min-width:0;display:flex;flex-direction:column;}
 .gv2-v5-pp-p b{font:700 13px var(--gv2-font);}
 .gv2-v5-pp-p small{font:500 11px var(--gv2-font);color:var(--gv2-dim);}
@@ -8549,7 +8550,7 @@ button.gv2-v5-pp-c:hover b{text-decoration:underline;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -54664,7 +54665,10 @@ GV2.ler = async function (donos, agora) {
     perfis: supa.from('profiles').select('id,id_hubspot').in('id_hubspot', donos),
     filaFeitas: supa.from('fila_feitas').select('user_id,dia,estado').gte('dia', GV2.somaDias(agora.iso, -6)),
     promessas: supa.from('dailies').select('seller_id,prometido_visitas').eq('data', agora.iso),
-    v4: supa.rpc('gestor_v4_leituras', { p_donos: donos })
+    v4: supa.rpc('gestor_v4_leituras', { p_donos: donos }),
+
+    rotaSem: supa.rpc('rotas_da_semana', { p_segunda: seg, p_donos: donos }),
+    visSem: supa.rpc('visitas_com_prova', { p_de: seg, p_ate: agora.iso, p_pessoa: null })
   };
   const chaves = Object.keys(q);
   const res = await Promise.all(chaves.map(function (k) {
@@ -54732,14 +54736,25 @@ GV2.agregar = function (pessoas, negocios, itensTodos) {
     emJogo: { n: emJogo.length, mrr: emJogo.reduce(function (x, n) { return x + n.mrr; }, 0) } };
 };
 
+GV2.indiceDaAgenda = function () {
+  const it = (typeof DATA !== 'undefined' && DATA && DATA.agenda && DATA.agenda.itens) || [];
+  if (GV2.idxDaAgenda && GV2.idxDaAgenda.src === it && GV2.idxDaAgenda.n === it.length) return GV2.idxDaAgenda.mapa;
+  const mapa = {};
+  it.forEach(function (x) {
+    if (!x || x.hs_note_body !== undefined || x.hs_task_status === 'COMPLETED') return;
+    const q = x.hs_meeting_start_time || x.hs_timestamp;
+    if (!q) return;
+    const k = String(x.hubspot_owner_id || x.lead_owner_id || '') + '|' + GV2.diaDe(q);
+    (mapa[k] = mapa[k] || []).push(x);
+  });
+  GV2.idxDaAgenda = { src: it, n: it.length, mapa: mapa };
+  return mapa;
+};
 GV2.compromissosDoDia = function (id, iso) {
   const out = { n: 0, lig: 0, reun: 0, tar: 0, itens: [] };
-  const it = (typeof DATA !== 'undefined' && DATA && DATA.agenda && DATA.agenda.itens) || [];
+  const it = GV2.indiceDaAgenda()[String(id) + '|' + iso] || [];
   it.forEach(function (x) {
-    if (!x || x.hs_note_body !== undefined) return;
-    if (String(x.hubspot_owner_id || x.lead_owner_id || '') !== String(id)) return;
     const q = x.hs_meeting_start_time || x.hs_timestamp;
-    if (!q || GV2.diaDe(q) !== iso || x.hs_task_status === 'COMPLETED') return;
     const reun = x.hs_meeting_title !== undefined || !!x.hs_meeting_start_time;
     const tit = String(reun ? (x.hs_meeting_title || 'Reunião') : (x.hs_task_subject || 'Tarefa')).trim();
     const lig = !reun && /liga/i.test(tit);
@@ -54765,6 +54780,10 @@ GV2.montar = async function (so) {
   const pbCarga = typeof carregarPlaybookProtegido === 'function'
     ? carregarPlaybookProtegido().catch(function (e) { return { erro: (e && e.message) || 'erro' }; }) : Promise.resolve(null);
   const L = await GV2.ler(donos, agora);
+  if (L.rotaSem && !L.rotaSem.erro && GV2.rota) {
+    const segL = GV2.segundaDe(agora.iso);
+    GV2.rota.cache[segL] = { estado: 'ok', itens: L.rotaSem.data || [], visitas: (L.visSem && L.visSem.data) || [] };
+  }
   await pbCarga;
   const semana = (L.semana.data && L.semana.data.pessoas) || [];
   const anterior = (L.anterior.data && L.anterior.data.pessoas) || [];
@@ -59143,6 +59162,12 @@ GV2.v5Semana = function (iso) {
 GV2.v5Dia = function (p, iso) {
   const c = GV2.v5Semana(iso);
   if (c.estado !== 'ok') return { estado: c.estado, erro: c.erro };
+  if (c._v5b !== GV2.base || c._v5i !== c.itens || c._v5v !== c.visitas) { c._v5 = {}; c._v5b = GV2.base; c._v5i = c.itens; c._v5v = c.visitas; }
+  const chave = p.id + '|' + iso;
+  if (!c._v5[chave]) c._v5[chave] = GV2.v5DiaConta(p, iso, c);
+  return c._v5[chave];
+};
+GV2.v5DiaConta = function (p, iso, c) {
   const b = GV2.base;
   const hoje = b.agora.iso, agoraMin = b.agora.min;
 
@@ -59156,7 +59181,12 @@ GV2.v5Dia = function (p, iso) {
   });
   const vis = (c.visitas || []).filter(function (v) { return String(v.owner_id) === p.id && v.dia === iso; })
     .sort(function (x, y) { return String(x.visited_at).localeCompare(String(y.visited_at)); });
-  const fichas = ((b.cru && b.cru.fichas) || []).filter(function (f) { return String(f.owner_id) === p.id && GV2.diaDe(f.ocorrido_em) === iso; });
+
+  if (!b._v5fichas) {
+    b._v5fichas = {};
+    ((b.cru && b.cru.fichas) || []).forEach(function (f) { const k = String(f.owner_id) + '|' + GV2.diaDe(f.ocorrido_em); (b._v5fichas[k] = b._v5fichas[k] || []).push(f); });
+  }
+  const fichas = b._v5fichas[p.id + '|' + iso] || [];
   const fichaDe = function (cid) { return cid ? fichas.filter(function (f) { return f.client_id === cid; })[0] || null : null; };
   const porCliente = {};
   vis.forEach(function (v) { (porCliente[v.client_id] = porCliente[v.client_id] || []).push(v); });
@@ -59572,7 +59602,14 @@ GV2.v5Grupos = function () {
   return { grupos: g, sit: sit };
 };
 
-GV2.v5Selo = function () { try { return GV2.v5Grupos().grupos.filter(function (x) { return x.sev < 3; }).length; } catch (e) { return 0; } };
+GV2.v5Selo = function () {
+  const b = GV2.base, m = GV2.v5SeloMem;
+  if (m && m.b === b && m.f === GV2.v5Grupos && m.min === b.agora.min && m.pe === b.planoErro) return m.n;
+  let n = 0;
+  try { n = GV2.v5Grupos().grupos.filter(function (x) { return x.sev < 3; }).length; } catch (e) { n = 0; }
+  GV2.v5SeloMem = { b: b, f: GV2.v5Grupos, min: b.agora.min, pe: b.planoErro, n: n };
+  return n;
+};
 
 GV2.render.time = function () {
   const b = GV2.base, t = b.time;
@@ -59642,7 +59679,7 @@ GV2.render.v5PorPessoa = function (sit) {
     else acao = '<button type="button" class="gv2-v5-btn is-linha" data-gv2="' + abre + '">Ver o dia</button>';
     const x = fonte ? p.hoje.visitas_com_prova + ' de —' : plan ? p.hoje.visitas_com_prova + ' de ' + plan : (p.hoje.visitas_todas ? p.hoje.visitas_todas + ' fora do plano' : '—');
     return '<div class="gv2-v5-pp-l">'
-      + '<span class="gv2-v5-pp-p">' + GV2.html.av(p) + '<span><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><small class="gv2-ellip">' + GV2.e(p.praca) + '</small></span></span>'
+      + '<button type="button" class="gv2-v5-pp-p" data-gv2="pessoa:' + p.id + '" title="' + GV2.e('abrir ' + GV2.prim(p.nome) + ' na Pessoas (1:1, campo, funil)') + '">' + GV2.html.av(p) + '<span><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><small class="gv2-ellip">' + GV2.e(p.praca) + '</small></span></button>'
       + '<button type="button" class="gv2-v5-pp-c is-link" data-gv2="' + abre + '"><b class="num">' + GV2.e(planoT) + '</b><small class="' + (p.hoje.sem_lugar && !fonte ? 't-av' : '') + '">' + GV2.e(planoS) + '</small></button>'
       + '<b class="num gv2-v5-pp-x' + (p.hoje.visitas_com_prova ? '' : ' t-dim') + '">' + GV2.e(x) + '</b>'
       + '<button type="button" class="gv2-v5-pp-c" data-gv2="' + abre + '"><b class="num ' + jC + '">' + GV2.e(jT) + '</b><small>' + GV2.e(jS) + '</small></button>'
@@ -59884,7 +59921,7 @@ GV2.v5PessoasComando = function (cmd, parte) {
   }
   if (cmd === 'v5ir') {
     const alvo = document.querySelector('#gv2Raiz #gv2-v5-' + parte[1]);
-    if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (alvo) alvo.scrollIntoView({ block: 'start' });
     return true;
   }
   return false;
