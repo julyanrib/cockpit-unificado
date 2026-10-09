@@ -119,7 +119,15 @@ jobs:
           # existir — e o efeito seria SILENCIOSO: nenhuma rodada agendada geraria mais o
           # gargalo do dia nem o compromisso da semana, e ninguém veria erro nenhum. Se a
           # grade mudar de novo, esta linha muda junto.
+          # 09/10/26: o webhook (origem "webhook") e o botão do gestor (origem "cockpit") também
+          # chegam por workflow_dispatch. O input `origem` existia, mas este portão não o lia:
+          # todo disparo do webhook gerava texto de IA. Só o disparo humano, sem origem, gera.
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -n "${{ github.event.inputs.origem }}" ]; then
+              echo "gerar=nao" >> "$GITHUB_OUTPUT"
+              echo "Disparo de ${{ github.event.inputs.origem }} — atualiza número, não gera texto de IA."
+              exit 0
+            fi
             echo "gerar=sim" >> "$GITHUB_OUTPUT"
             echo "Disparo manual — vai gerar texto de IA."
             exit 0
