@@ -8316,6 +8316,16 @@ body.gv2-mapa-cheio{overflow:hidden;}
 .gv2-v5-foto-grande img{max-width:100%;max-height:calc(100vh - 80px);border-radius:10px;object-fit:contain;}
 .gv2-v5-foto-grande figcaption{color:#fff;font:500 13px var(--gv2-font);text-align:center;}
 
+.gv2-v5-valida{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:0 16px 8px 52px;font:500 11.5px var(--gv2-font);color:var(--gv2-dim);}
+.gv2-v5-valida.is-ok{color:var(--gv2-ok);}
+.gv2-v5-valida.is-aberta{flex-direction:column;align-items:stretch;}
+.gv2-v5-valida label{font:600 12px var(--gv2-font);color:var(--gv2-txt, inherit);}
+.gv2-v5-valida textarea{width:100%;box-sizing:border-box;min-height:56px;padding:8px 10px;border-radius:8px;border:1px solid var(--gv2-chip);background:transparent;color:inherit;font:500 13px/1.4 var(--gv2-font);resize:vertical;}
+.gv2-v5-valida-bts{display:flex;gap:8px;flex-wrap:wrap;}
+.gv2-v5-valida-erro{color:var(--gv2-av);font:600 12px var(--gv2-font);}
+.gv2-v5-lnk{border:0;background:none;padding:6px 0;min-height:32px;color:var(--gv2-av);font:700 12px var(--gv2-font);text-decoration:underline;cursor:pointer;}
+.gv2-v5-valida.is-ok .gv2-v5-lnk{color:var(--gv2-dim);}
+
 .gv2-v5-pes{gap:12px;}
 .gv2-v5-rende-cab{display:flex;flex-direction:column;gap:2px;}
 .gv2-v5-rende-cab b{font:700 15px var(--gv2-font);}
@@ -8748,7 +8758,7 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -59500,6 +59510,7 @@ GV2.v5DiaConta = function (p, iso, c) {
   vis.forEach(function (v) { (porCliente[v.client_id] = porCliente[v.client_id] || []).push(v); });
   const provaTxt = function (v) {
     if (!v.provada) return 'sem prova · ' + (v.motivo || 'declarada');
+    if (v.motivo === 'validada pelo gestor') return 'validada pelo gestor';
     const mov = Math.round(Number(v.pino_movido_m) || 0);
 
     return (v.motivo === 'foto' ? 'foto' : 'GPS ' + Math.round(Number(v.distancia_m) || 0) + ' m') + (mov >= 50 ? ' · pino movido ' + (mov >= 1000 ? GV2.virg(mov / 1000) + ' km' : mov + ' m') : '');
@@ -59512,7 +59523,8 @@ GV2.v5DiaConta = function (p, iso, c) {
     return { nome: x.nome || 'parada', hora: x.hora || null, horaMin: GV2.minHora(x.hora), lat: lat, lng: lng, prop: x.proposito || null, acao: x.acao || null,
       client: x.client_id || null, item: x.item_id || null, vaga: x.vaga,
       feita: !!vp, declarada: !vp && !!v, em: v ? v.visited_at : null, min: v ? GV2.minDe(v.visited_at) : null,
-      prova: v ? provaTxt(v) : null, ficha: v ? fichaDe(x.client_id) : null };
+      prova: v ? provaTxt(v) : null, ficha: v ? fichaDe(x.client_id) : null,
+      visita: v ? v.visit_id : null, validada: !!(v && v.provada && v.motivo === 'validada pelo gestor') };
   });
 
   itens.forEach(function (x) { x.grupo = x.feita || x.declarada ? 0 : x.lat == null ? 3 : x.hora ? 1 : 2; });
@@ -59716,7 +59728,8 @@ GV2.render.v5Dia = function () {
     }
 
     if (x.acao && GV2.ACOES && GV2.ACOES[x.acao]) s = GV2.ACOES[x.acao] + ' · ' + s;
-    corpo += '<div class="gv2-v5-dia-it"><i class="gv2-v5-n ' + nCls + '">' + x.n + '</i><span class="gv2-v5-dia-txt"><b class="gv2-ellip">' + GV2.e(x.nome) + '</b><small class="' + (sAv ? 't-av' : '') + '">' + GV2.e(s) + '</small></span><b class="num ' + hCls + '">' + GV2.e(h) + '</b></div>';
+    corpo += '<div class="gv2-v5-dia-it"><i class="gv2-v5-n ' + nCls + '">' + x.n + '</i><span class="gv2-v5-dia-txt"><b class="gv2-ellip">' + GV2.e(x.nome) + '</b><small class="' + (sAv ? 't-av' : '') + '">' + GV2.e(s) + '</small></span><b class="num ' + hCls + '">' + GV2.e(h) + '</b></div>'
+      + GV2.v5ValidarHTML(x);
   });
   if (!d.y) {
     const comAgenda = d.agenda.n > 0;
@@ -59895,11 +59908,52 @@ GV2.v5Pedir = async function (alvo) {
   GV2.pintar();
 };
 
+GV2.v5ValidarHTML = function (x) {
+  if (!x.visita || x.grupo !== 0) return '';
+  if (x.validada) return '<div class="gv2-v5-valida is-ok"><span>validada pelo gestor · conta no x de y</span><button type="button" class="gv2-v5-lnk" data-gv2="v5desvalidar:' + x.visita + '">desfazer</button></div>';
+  if (!x.declarada) return '';
+  if (GV2.estado.v5Validar === x.visita) {
+    return '<div class="gv2-v5-valida is-aberta"><label for="v5ValidarMotivo">Por que essa visita vale? (fica registrado com o seu nome)</label>'
+      + '<textarea id="v5ValidarMotivo" data-gv2-comp="v5ValidarMotivo" oninput="GV2.estado.v5ValidarTxt=this.value" rows="2" maxlength="300" placeholder="Ex.: pino duplicado a 424 m; o cadastro certo está a 21 m do GPS">' + GV2.e(GV2.estado.v5ValidarTxt || '') + '</textarea>'
+      + '<div class="gv2-v5-valida-bts"><button type="button" class="gv2-v5-btn is-pri" data-gv2="v5validarok:' + x.visita + '">Validar visita</button><button type="button" class="gv2-v5-btn" data-gv2="v5validarnao">Cancelar</button></div>'
+      + (GV2.estado.v5ValidarErro ? '<span class="gv2-v5-valida-erro">' + GV2.e(GV2.estado.v5ValidarErro) + '</span>' : '') + '</div>';
+  }
+  return '<div class="gv2-v5-valida"><button type="button" class="gv2-v5-lnk" data-gv2="v5validar:' + x.visita + '">Validar visita</button><span>se você sabe que ela aconteceu</span></div>';
+};
+GV2.v5ValidarDepois = async function () {
+  const seg = GV2.segundaDe(GV2.estado.rotaDia || GV2.base.agora.iso);
+  await GV2.rotaLer(seg, true);
+
+  if (GV2.carregar) GV2.carregar(true);
+};
+GV2.v5ValidarSalvar = async function (vid) {
+  const el = document.getElementById('v5ValidarMotivo');
+  const motivo = String(el ? el.value : '').trim();
+  GV2.estado.v5ValidarTxt = motivo;
+  if (motivo.length < 5) { GV2.estado.v5ValidarErro = 'Escreva o motivo (5 letras ou mais).'; GV2.pintar(); return; }
+  GV2.estado.v5ValidarErro = 'Gravando…'; GV2.pintar();
+  const r = await Promise.resolve(supa.rpc('validar_visita', { p_visit_id: vid, p_motivo: motivo })).then(function (x) { return x; }, function (e) { return { error: e }; });
+  if (r && r.error) { GV2.estado.v5ValidarErro = 'Não gravou: ' + (r.error.message || r.error); GV2.pintar(); return; }
+  GV2.estado.v5Validar = null; GV2.estado.v5ValidarTxt = ''; GV2.estado.v5ValidarErro = null;
+  GV2.toast('Visita validada · conta no x de y ✓');
+  await GV2.v5ValidarDepois();
+};
+GV2.v5Desvalidar = async function (vid) {
+  const r = await Promise.resolve(supa.rpc('desfazer_validacao_visita', { p_visit_id: vid })).then(function (x) { return x; }, function (e) { return { error: e }; });
+  if (r && r.error) { GV2.toast('Não desfez: ' + (r.error.message || r.error)); return; }
+  GV2.toast('Validação desfeita · a visita volta a "sem prova"');
+  await GV2.v5ValidarDepois();
+};
+
 GV2.v5RuaComando = function (cmd, parte) {
   if (cmd === 'v5rua') { GV2.estado.rua = parte[1]; GV2.pintar(); const c = document.querySelector('#gv2Raiz .gv2-corpo'); if (c) c.scrollTop = 0; return true; }
   if (cmd === 'v5dia') { GV2.estado.aba = 'rua'; GV2.estado.rua = 'dia'; GV2.estado.ruaSel = parte[1]; GV2.estado.rotaDia = parte[2] || null; GV2.estado.rxGav = null; GV2.pintar(); return true; }
   if (cmd === 'v5praca') { const pr = GV2.base.pracas[Number(parte[1])]; if (pr) { GV2.estado.praca = pr; GV2.estado.destaque = null; GV2.pintar(); } return true; }
   if (cmd === 'v5pedir') { GV2.v5Pedir(parte[1]); return true; }
+  if (cmd === 'v5validar') { GV2.estado.v5Validar = parte[1]; GV2.estado.v5ValidarTxt = ''; GV2.estado.v5ValidarErro = null; GV2.pintar(); const t = document.getElementById('v5ValidarMotivo'); if (t) t.focus(); return true; }
+  if (cmd === 'v5validarnao') { GV2.estado.v5Validar = null; GV2.estado.v5ValidarErro = null; GV2.pintar(); return true; }
+  if (cmd === 'v5validarok') { GV2.v5ValidarSalvar(parte[1]); return true; }
+  if (cmd === 'v5desvalidar') { GV2.v5Desvalidar(parte[1]); return true; }
   if (cmd === 'v5foto') { if (GV2.cliqueEl) GV2.v5Fotos.abrir(GV2.cliqueEl); return true; }
   return false;
 };
