@@ -598,6 +598,14 @@ tabelas.gv2_falta_etapa = [
     checar('mapa em tela cheia: todo mapa v5 ganha o botão e o mapa da Pessoa · dia reenquadra quando a caixa muda (09/10/26)',
       typeof GV2.v5MapaAplicar === 'function' && tpl.indexOf('.gv2-v5-mapa-cx.is-cheio{position:fixed;') > 0
         && tpl.indexOf("const enq = g.enq = function () { if (!el.clientWidth) return; if (pts.length === 1)") > 0);
+    {
+      const fsx = require('fs'), px = require('path');
+      const api = fsx.readFileSync(px.join(__dirname, '..', 'api', 'atualizar-hubspot.js'), 'utf8');
+      const wf = fsx.readFileSync(px.join(__dirname, '..', '.github', 'workflows', 'daily-refresh.yml'), 'utf8');
+      checar('Atualizar HubSpot: botão na Hoje, rota só para gestor (is_field_admin), origem cockpit, e o robô não gera IA em disparo com origem (09/10/26)',
+        GV2.render.time().indexOf('data-gv2="hsatu"') > 0 && api.indexOf('/rest/v1/rpc/is_field_admin') > 0 && api.indexOf("inputs: { origem: 'cockpit' }") > 0
+          && api.indexOf('PLACEHOLDER') < 0 && wf.indexOf('if [ -n "${{ github.event.inputs.origem }}" ]; then') > 0);
+    }
     GV2.estado.menu = true;
     const navMenu = GV2.navHTML();
     GV2.estado.menu = false;

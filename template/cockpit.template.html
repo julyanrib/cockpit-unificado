@@ -13007,7 +13007,7 @@ body.gv2-mapa-cheio{overflow:hidden;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -80387,7 +80387,9 @@ GV2.render.time = function () {
   GV2.v5Semana(b.ontemIso);
   const dia = GV2.DIAS_LONGOS[GV2.dow(b.agora.iso)];
   const sub = String(dia).replace(/^./, function (l) { return l.toUpperCase(); }).split('-')[0] + ' ' + GV2.ddmm(b.agora.iso) + ' · ' + b.horaTxt + ' · ' + b.rodapeFonte;
-  const direita = '<button type="button" class="gv2-v5-btn is-prim" data-gv2="daily:abrir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>Conduzir a daily</button>';
+  const hs = GV2.estado.hsAtu, hsRodando = hs && (hs.fase === 'pedindo' || hs.fase === 'rodando');
+  const hsBt = '<button type="button" class="gv2-v5-btn" data-gv2="hsatu"' + (hsRodando ? ' disabled aria-busy="true"' : '') + ' title="Busca agora no HubSpot etapas, travados, quentes e o Mês (leva uns 3 minutos)">' + (hsRodando ? 'Atualizando o HubSpot…' : 'Atualizar HubSpot') + '</button>';
+  const direita = hsBt + '<button type="button" class="gv2-v5-btn is-prim" data-gv2="daily:abrir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>Conduzir a daily</button>';
   const fonte = b.planoErro;
   const G = GV2.v5Grupos();
   const semRota = b.pessoas.filter(function (p) { return !p.hoje.paradas_plano; }).length;
@@ -80490,7 +80492,77 @@ GV2.v5Lote = function (tipo) {
 GV2.v5HojeComando = function (cmd, parte) {
   if (cmd === 'v5lote') { GV2.v5Lote(parte[1]); return true; }
   if (cmd === 'v5recarregar') { GV2.carregar(true); return true; }
+  if (cmd === 'hsatu') { GV2.v5AtualizarHs(); return true; }
   return false;
+};
+
+/* ══ ATUALIZAR HUBSPOT AGORA (09/10/26) ══════════════════════════════════════════════════
+   Julyan: "o cockpit do gestor tem de ser o mais real possível". O que vem do app já é ao vivo;
+   o HubSpot só muda quando o robô roda (2 em 2 h, e a grade do GitHub atrasa). O botão pede ao
+   servidor (api/atualizar-hubspot.js, só gestor) que rode o robô agora, acompanha até terminar
+   e então busca o retrato novo pelo farol e remonta a tela. Não gera texto de IA. */
+GV2.V5_HS_API = 'https://fieldsalestakeat.vercel.app/api/atualizar-hubspot';
+GV2.v5TokenHs = async function () {
+  const s = await supa.auth.getSession();
+  return s && s.data && s.data.session ? s.data.session.access_token : null;
+};
+GV2.v5AtualizarHs = async function () {
+  const st = GV2.estado.hsAtu;
+  if (st && (st.fase === 'pedindo' || st.fase === 'rodando')) return;
+  GV2.estado.hsAtu = { fase: 'pedindo' };
+  GV2.pintar();
+  try {
+    const tk = await GV2.v5TokenHs();
+    if (!tk) throw new Error('a sessão expirou, recarregue a página');
+    const desde = Date.now();
+    const r = await fetch(GV2.V5_HS_API, { method: 'POST', headers: { Authorization: 'Bearer ' + tk } });
+    const j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(j.erro || ('erro ' + r.status));
+    if (j.estado === 'recente') {
+      GV2.estado.hsAtu = null;
+      GV2.toast('O HubSpot foi atualizado há ' + j.minutos + ' min — já é o dado mais novo');
+      GV2.pintar();
+      return;
+    }
+    GV2.estado.hsAtu = { fase: 'rodando', desde: j.disparado ? desde : Date.parse(j.desde) || desde };
+    GV2.toast(j.disparado ? 'Atualizando o HubSpot — leva uns 3 minutos' : 'O HubSpot já estava atualizando — chega em instantes');
+    GV2.pintar();
+    GV2.v5AcompanharHs();
+  } catch (e) {
+    GV2.estado.hsAtu = null;
+    GV2.toast('Não consegui atualizar o HubSpot: ' + e.message, 'erro');
+    GV2.pintar();
+  }
+};
+GV2.v5AcompanharHs = function () {
+  const ini = Date.now();
+  const passo = async function () {
+    const st = GV2.estado.hsAtu;
+    if (!st || st.fase !== 'rodando') return;
+    let j = null;
+    try {
+      const tk = await GV2.v5TokenHs();
+      const r = await fetch(GV2.V5_HS_API + '?desde=' + st.desde, { headers: { Authorization: 'Bearer ' + tk } });
+      j = r.ok ? await r.json() : null;
+    } catch (e) { j = null; }
+    if (j && j.estado === 'pronto') {
+      GV2.estado.hsAtu = null;
+      if (j.conclusao && j.conclusao !== 'success') { GV2.toast('O robô do HubSpot terminou com erro (' + j.conclusao + ') — o dado continua o anterior', 'erro'); GV2.pintar(); return; }
+      /* o farol traz o retrato novo para o DATA; a base do gestor se remonta em cima dele */
+      if (typeof farolBuscarEAplicar === 'function') { try { await farolBuscarEAplicar(true); } catch (e) { /* segue */ } }
+      await GV2.carregar(true);
+      GV2.toast('HubSpot atualizado ✓');
+      return;
+    }
+    if (Date.now() - ini > 12 * 60000) {
+      GV2.estado.hsAtu = null;
+      GV2.toast('O HubSpot ainda não terminou — o dado novo entra sozinho quando chegar', 'erro');
+      GV2.pintar();
+      return;
+    }
+    setTimeout(passo, 20000);
+  };
+  setTimeout(passo, 25000);
 };
 
 /* ══ PESSOAS v5 (08/10/26, go.zip · telas-alvo 3a e 3b) ══════════════════════════════════
