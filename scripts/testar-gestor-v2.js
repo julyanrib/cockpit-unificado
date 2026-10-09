@@ -535,7 +535,7 @@ tabelas.gv2_falta_etapa = [
     const Gf = GV2.v5Grupos();
     b5.planoErro = null;
     checar('v5 · 1c: plano fora = "—" com o nome da fonte, nenhum 0 inventado, e Travou/Sem rota somem',
-      /Não li o Planejamento agora/.test(hf) && /planejamento_do_time/.test(hf) && / de —</.test(hf) && !Gf.grupos.some(function (g) { return g.k === 'travou' || g.k === 'semrota' || g.k === 'naosaiu'; }));
+      /Não li o Planejamento agora/.test(hf) && /planejamento_do_time/.test(hf) && />— de [0-9]+</.test(hf) && !/>0 de [0-9]+</.test(hf.replace(/>0 de 0</g, "")) && !Gf.grupos.some(function (g) { return g.k === 'travou' || g.k === 'semrota' || g.k === 'naosaiu'; }));
     const ht = GV2.render.time();
     checar('v5 · Hoje: 5 cartões, cada um com destino; a coluna Jornada; o plano e a jornada abrem o dia na Rua, o nome abre a Pessoa',
       (ht.match(/class="gv2-v5-kpi" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2 && (ht.match(/class="gv2-v5-pp-p" data-gv2="pessoa:/g) || []).length === b5.pessoas.length);
@@ -575,6 +575,18 @@ tabelas.gv2_falta_etapa = [
     const reserva = global.__fromLog.indexOf('clients') >= 0 && b2.nomeCliente('c2') === 'Cantina Sol';
     checar('0185: os nomes vêm da função numa ida só (sem a segunda ida por lotes)', viaFuncao, global.__rpcLog.join());
     checar('0185: com a função fora, a busca antiga por lotes entra e o nome continua lá', reserva);
+  }
+  /* "OS MESMOS NÚMEROS EM TUDO" (08/10/26): o executivo lê o Plano e as Visitas da mesma fonte do
+     gestor; o "0/5 registrados · 5 esperando" do Planejamento sai; a régua conta repetido uma vez */
+  checar('executivo: Hoje e Planejamento usam Plano e Visitas do planejamento_do_time; sai "registrados · esperando"',
+    tpl.indexOf("supa.rpc('planejamento_do_time', { p_segunda: seg, p_donos: [String(owner)], p_dia: iso })") > 0 && tpl.indexOf("h10Item('Visitas'") > 0
+      && tpl.indexOf("'registrados · ' + ritmo.esperando") < 0 && tpl.indexOf('const m = exMedidoDoDia(hojeIso);') > 0 && tpl.indexOf("' paradas feitas hoje'") < 0);
+  checar('executivo: "régua estourada" conta o negócio repetido uma vez e deixa Ag. Pagamento de fora (como o gestor)',
+    tpl.indexOf('if (/pagamento/i.test(etapa)) return false;') > 0 && tpl.indexOf('GV2.nomeNorm(nome)') > 0 && tpl.indexOf('const acimaDoSlaCount = (r.travados || []).length;') < 0);
+  {
+    const ht2 = GV2.render.time();
+    checar('gestor: "Visitas com prova" é toda visita com prova contra a meta, com o Plano embaixo (o mesmo par do app)',
+      /Visitas com prova<\/small><b class="num">[0-9]+ de [0-9]+<\/b><span>meta do time · plano [0-9]+ de [0-9]+/.test(ht2));
   }
   /* FUNIL e TERRITÓRIO v5 (08/10/26) */
   {
