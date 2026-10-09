@@ -258,8 +258,8 @@ tabelas.gv2_falta_etapa = [
     const p = b.pessoas.find(x => x.nome === m.nome);
     return p.funil_mes[K[i - 1]] >= 3 && m.pct > Math.round(F[i] / F[i - 1] * 100);
   }), JSON.stringify(melhor));
-  checar('v5 · Pessoas: 3 blocos numa rolagem (Agora e semana → Coaching → Evolução), o resumo de 5, sem segundo nível de abas, sem "Promessa de hoje" e sem "Chamar"',
-    p3.indexOf('1 · Agora e semana') > 0 && p3.indexOf('2 · Coaching') > p3.indexOf('1 · Agora e semana') && p3.indexOf('3 · Evolução') > p3.indexOf('2 · Coaching')
+  checar('v6 · Pessoas: 4 blocos numa rolagem (Agora e semana → Rua · 7 dias → Coaching → Evolução), o resumo de 5, sem segundo nível de abas, sem "Promessa de hoje" e sem "Chamar"',
+    p3.indexOf('1 · Agora e semana') > 0 && p3.indexOf('2 · Rua · 7 dias') > p3.indexOf('1 · Agora e semana') && p3.indexOf('3 · Coaching') > p3.indexOf('2 · Rua · 7 dias') && p3.indexOf('4 · Evolução') > p3.indexOf('3 · Coaching')
       && (p3.match(/class="gv2-v5-res"/g) || []).length === 5 && p3.indexOf('gv2-p3-abas') < 0 && p3.indexOf('Promessa de hoje') < 0 && p3.indexOf('p3:chamar') < 0);
   checar('v5 · Pessoas: "Onde o seu tempo rende" (até 3), a lista pela necessidade de coaching e os atalhos para a gaveta (1:1, disciplina, campo, funil) e a rotação',
     /Onde o seu tempo rende esta semana/.test(p3) && (p3.match(/class="card gv2-v5-rend"/g) || []).length <= 3 && /pela necessidade de coaching/.test(p3)
@@ -552,7 +552,7 @@ tabelas.gv2_falta_etapa = [
       /Não li o Planejamento agora/.test(hf) && /planejamento_do_time/.test(hf) && />— de [0-9]+</.test(hf) && !/>0 de [0-9]+</.test(hf.replace(/>0 de 0</g, "")) && !Gf.grupos.some(function (g) { return g.k === 'travou' || g.k === 'semrota' || g.k === 'naosaiu'; }));
     const ht = GV2.render.time();
     checar('v5 · Hoje: 5 cartões, cada um com destino; a coluna Jornada; o plano e a jornada abrem o dia na Rua, o nome abre a Pessoa',
-      (ht.match(/class="gv2-v5-kpi" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2 && (ht.match(/class="gv2-v5-pp-p" data-gv2="pessoa:/g) || []).length === b5.pessoas.length);
+      (ht.match(/class="gv2-v5-kpi( is-duas)?" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2 && (ht.match(/class="gv2-v5-pp-p" data-gv2="pessoa:/g) || []).length === b5.pessoas.length);
   }
   /* AUDITORIA v5 (08/10/26): velocidade. O Hoje levava 935 ms para desenhar (a conta do dia refeita
      dezenas de vezes por pintura) e o plano da semana só era pedido depois da primeira pintura. */
@@ -593,14 +593,14 @@ tabelas.gv2_falta_etapa = [
   /* O cockpit do executivo é do design (pedido de 08/10/26): os números dele não se mexem por aqui */
   {
     const ht2 = GV2.render.time();
-    checar('gestor: "Visitas com prova" é toda visita com prova contra a meta, com o Plano embaixo (o mesmo par do app)',
-      /Visitas com prova<\/small><b class="num">[0-9]+ de [0-9]+<\/b><span>meta do time · plano [0-9]+ de [0-9]+/.test(ht2));
+    checar('gestor v6: "Visitas com prova" em duas linhas rotuladas, x de y do plano em cima e as visitas com prova contra a meta embaixo',
+      /Visitas com prova<\/small><span class="gv2-v5-kpi-l"><b class="num">[0-9]+ de [0-9]+<\/b><em>do plano<\/em><\/span><span class="gv2-v5-kpi-l is-2"><b class="num">[0-9]+ de [0-9]+<\/b><em>meta do time/.test(ht2));
   }
   /* FUNIL e TERRITÓRIO v5 (08/10/26) */
   {
     const nav = GV2.navHTML();
     const rots = (nav.match(/<span class="gv2-nav-rot">[^<]+</g) || []).map(function (x) { return x.replace('<span class="gv2-nav-rot">', '').replace('<', ''); });
-    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X nem Prospecção)', rots.join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook', rots.join(' · '));
+    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X nem Prospecção)', rots.slice(0, 7).join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook' && rots.slice(7).join(' · ') === 'Prova dos números · Ver como executivo' && nav.indexOf('>Do diretor<') > 0, rots.join(' · '));
     checar('rolagem: corpo v5 e gaveta não deixam o cartão encolher (Por pessoa e "Para puxar" sumiam, 09/10/26)',
       tpl.indexOf('.gv2-corpo.gv2-v5 > *{flex-shrink:0;}') > 0 && tpl.indexOf('.gv2-rxg-corpo > *{flex-shrink:0;}') > 0);
     checar('mapa em tela cheia: todo mapa v5 ganha o botão e o mapa da Pessoa · dia reenquadra quando a caixa muda (09/10/26)',
