@@ -522,7 +522,13 @@ tabelas.gv2_falta_etapa = [
     const sitOrig = GV2.v5Situacao, ks = ['travou', 'semrota', 'naosaiu', 'andando'];
     GV2.v5Situacao = function (p) { return { k: ks[b5.pessoas.indexOf(p) % ks.length], prim: 600, jan: null }; };
     const G5 = GV2.v5Grupos();
+    /* 09/10/26: de madrugada "Ainda não saiu" listava o time inteiro; antes das 06:00 a linha some */
+    const minNoite = b5.agora.min; b5.agora.min = 11;
+    const G5noite = GV2.v5Grupos();
+    b5.agora.min = minNoite;
     GV2.v5Situacao = sitOrig;
+    checar('v5 · às 00:11 "Ainda não saiu" não aparece (o dia de rua não começou); Travou e Sem rota continuam',
+      !G5noite.grupos.some(function (g) { return g.k === 'naosaiu'; }) && G5noite.grupos.some(function (g) { return g.k === 'semrota'; }), G5noite.grupos.map(function (g) { return g.k; }).join());
     checar('v5 · o caso de teste tem Travou, Sem rota e Ainda não saiu', ['travou', 'semrota', 'naosaiu'].every(function (k) { return G5.grupos.some(function (g) { return g.k === k; }); }), G5.grupos.map(function (g) { return g.k; }).join());
     const ordem = { travou: 0, semrota: 1, furou: 2, dinheiro: 3, naosaiu: 4 };
     checar('v5 · as linhas vêm na ordem da gravidade e "Ainda não saiu" só informa (sem botão)',
@@ -587,6 +593,8 @@ tabelas.gv2_falta_etapa = [
     const nav = GV2.navHTML();
     const rots = (nav.match(/<span class="gv2-nav-rot">[^<]+</g) || []).map(function (x) { return x.replace('<span class="gv2-nav-rot">', '').replace('<', ''); });
     checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X nem Prospecção)', rots.join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook', rots.join(' · '));
+    checar('rolagem: corpo v5 e gaveta não deixam o cartão encolher (Por pessoa e "Para puxar" sumiam, 09/10/26)',
+      tpl.indexOf('.gv2-corpo.gv2-v5 > *{flex-shrink:0;}') > 0 && tpl.indexOf('.gv2-rxg-corpo > *{flex-shrink:0;}') > 0);
     GV2.estado.menu = true;
     const navMenu = GV2.navHTML();
     GV2.estado.menu = false;
