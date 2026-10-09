@@ -12721,11 +12721,20 @@ button.gv2-v5-pp-c:hover b{text-decoration:underline;}
 }
 /* 09/10/26: mapa em tela cheia (gv2-v5-mapacheio.js). O botão fica no canto de cima à direita,
    longe do zoom do Google (embaixo à direita) e do rótulo (embaixo à esquerda). */
+.gv2-rt-mapa.is-cheio,.gv2-p3-mapa.is-cheio{margin:0;min-height:0;}
 .gv2-v5-cheio-bt{position:absolute;top:10px;right:10px;z-index:4;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--gv2-line);background:var(--gv2-card);color:var(--gv2-ink);font:700 12px var(--gv2-font);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18);}
 .gv2-v5-cheio-bt:hover{background:var(--gv2-sub);}
 .gv2-v5-cheio-bt:focus-visible{outline:2px solid var(--gv2-ink);outline-offset:2px;}
-.gv2-v5-mapa-cx.is-cheio{position:fixed;inset:24px;z-index:70;height:auto !important;border-radius:14px;box-shadow:0 0 0 100vmax rgba(0,0,0,.62);}
+.gv2-rt-mapa.is-cheio,.gv2-p3-mapa.is-cheio,.gv2-v5-mapa-cx.is-cheio{position:fixed;inset:24px;z-index:70;height:auto !important;border-radius:14px;box-shadow:0 0 0 100vmax rgba(0,0,0,.62);}
 body.gv2-mapa-cheio{overflow:hidden;}
+/* 09/10/26 (Julyan: "quando clico na Semana tem de ir direto pro mapa consolidado, eu navego pelo
+   mapa"): na gaveta Planejamento de [pessoa] o mapa tinha a altura da LISTA ao lado — na Semana,
+   30 paradas = 1532 px numa gaveta de 547. O Google enquadrava no meio dessa caixa e a tela só
+   mostrava o topo (pontos lá em cima, o resto mar). Agora mapa e lista têm a altura da tela e a
+   lista rola sozinha; o mapa fica parado e enquadrado ao lado. */
+.gv2-rt-corpo{grid-template-rows:minmax(0,1fr);}
+.gv2-rt-lista{min-height:0;overflow-y:auto;}
+.gv2-rxg-corpo .gv2-rt-corpo{flex:none;height:max(380px, calc(100vh - 275px));min-height:0;}
 
 /* ── PESSOAS v5 (08/10/26, telas-alvo 3a e 3b) ── */
 .gv2-v5-pes{gap:12px;}
@@ -13010,7 +13019,7 @@ body.gv2-mapa-cheio{overflow:hidden;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -78061,8 +78070,18 @@ GV2.rotaMapa = {
       g.itens.push(new maps.marker.AdvancedMarkerElement({ map: g.mapa, position: { lat: x.lat, lng: x.lng }, content: GV2.rotaMapa.num(x, k, dias), zIndex: 2 }));
       bounds.extend({ lat: x.lat, lng: x.lng });
     });
-    const enq = function () { if (!el.clientWidth) return; if (pts.length === 1) { g.mapa.setCenter(bounds.getCenter()); g.mapa.setZoom(15); } else g.mapa.fitBounds(bounds, 48); };
-    enq(); maps.event.addListenerOnce(g.mapa, 'idle', enq);
+    /* 09/10/26 (Julyan: 'quando clico na Semana, tem de ir direto pro mapa consolidado'): ao trocar de dia o
+       mapa é reaproveitado e recolocado na tela; o enquadramento rodava com a caixa ainda sem largura e era
+       pulado, e o 'idle' não vinha de novo (o mapa já estava parado) — a Semana ficava no enquadramento do
+       dia anterior. Agora tenta de novo depois e sempre que a caixa muda de tamanho (tela cheia inclusive). */
+    const enq = g.enq = function () { if (!el.clientWidth || !document.body.contains(el)) return; if (pts.length === 1) { g.mapa.setCenter(bounds.getCenter()); g.mapa.setZoom(15); } else g.mapa.fitBounds(bounds, 48); };
+    if (typeof ResizeObserver === 'function' && g.obs !== el) {
+      g.obs = el;
+      if (g.ro) g.ro.disconnect();
+      g.ro = new ResizeObserver(function () { if (el.clientWidth && g.enq) { maps.event.trigger(g.mapa, 'resize'); g.enq(); } });
+      g.ro.observe(el);
+    }
+    enq(); setTimeout(enq, 120); setTimeout(enq, 450); maps.event.addListenerOnce(g.mapa, 'idle', enq);
   }
 };
 GV2.rotaComando = function (cmd, parte) {
@@ -81025,8 +81044,11 @@ GV2.render.v5Contra = function (X) {
    O botão entra por observação do DOM, então sobrevive ao repintar (a carga refaz a tela a cada
    poucos minutos) e a chave do mapa aberto fica em GV2.v5MapaCheio. */
 GV2.v5MapaCheio = null;
+/* os mapas que abrem em tela cheia: os do v5 (caixa com o mapa dentro) e os de ROTA — a gaveta
+   Planejamento de [pessoa] e a página da Pessoa (o próprio mapa é a caixa) */
+GV2.V5_MAPAS_CHEIOS = '#gv2Raiz .gv2-v5-mapa-cx, #gv2Raiz .gv2-rt-mapa, #gv2Raiz .gv2-p3-mapa';
 GV2.v5MapaChave = function (cx) {
-  const m = cx.querySelector('.gv2-mapa');
+  const m = cx.matches('.gv2-mapa') ? cx : cx.querySelector('.gv2-mapa');
   if (!m) return null;
   for (let i = 0; i < m.attributes.length; i++) {
     const a = m.attributes[i];
@@ -81037,7 +81059,7 @@ GV2.v5MapaChave = function (cx) {
 GV2.v5MapaAplicar = function () {
   if (typeof document === 'undefined') return;
   let algum = false;
-  document.querySelectorAll('#gv2Raiz .gv2-v5-mapa-cx').forEach(function (cx) {
+  document.querySelectorAll(GV2.V5_MAPAS_CHEIOS).forEach(function (cx) {
     let bt = cx.querySelector(':scope > .gv2-v5-cheio-bt');
     if (!bt) {
       bt = document.createElement('button');
@@ -81076,7 +81098,7 @@ GV2.v5MapaAplicar = function () {
     if (!bt) return;
     ev.preventDefault();
     ev.stopPropagation();
-    const cx = bt.closest('.gv2-v5-mapa-cx');
+    const cx = bt.closest('.gv2-v5-mapa-cx, .gv2-rt-mapa, .gv2-p3-mapa');
     const chave = cx ? GV2.v5MapaChave(cx) : null;
     GV2.v5MapaCheio = GV2.v5MapaCheio && GV2.v5MapaCheio === chave ? null : chave;
     GV2.v5MapaAplicar();
@@ -81085,7 +81107,7 @@ GV2.v5MapaAplicar = function () {
     const reenq = function () {
       const maps = window.google && window.google.maps;
       if (!cx || !maps) return;
-      cx.querySelectorAll('.gv2-mapa').forEach(function (el) { const g = el._gv2v5 || el._gv2; if (g && g.mapa) { maps.event.trigger(g.mapa, 'resize'); if (g.enq) g.enq(); g.mapa.panBy(1, 0); setTimeout(function () { g.mapa.panBy(-1, 0); }, 60); } });
+      (cx.matches('.gv2-mapa') ? [cx] : Array.prototype.slice.call(cx.querySelectorAll('.gv2-mapa'))).forEach(function (el) { const g = el._gv2v5 || el._gv2 || el._gv2rt; if (g && g.mapa) { maps.event.trigger(g.mapa, 'resize'); if (g.enq) g.enq(); g.mapa.panBy(1, 0); setTimeout(function () { g.mapa.panBy(-1, 0); }, 60); } });
     };
     setTimeout(reenq, 80); setTimeout(reenq, 450);
   }, true);

@@ -597,7 +597,8 @@ tabelas.gv2_falta_etapa = [
       tpl.indexOf('.gv2-corpo.gv2-v5 > *{flex-shrink:0;}') > 0 && tpl.indexOf('.gv2-rxg-corpo > *{flex-shrink:0;}') > 0);
     checar('mapa em tela cheia: todo mapa v5 ganha o botão e o mapa da Pessoa · dia reenquadra quando a caixa muda (09/10/26)',
       typeof GV2.v5MapaAplicar === 'function' && tpl.indexOf('.gv2-v5-mapa-cx.is-cheio{position:fixed;') > 0
-        && tpl.indexOf("const enq = g.enq = function () { if (!el.clientWidth) return; if (pts.length === 1)") > 0);
+        && tpl.indexOf("const enq = g.enq = function () { if (!el.clientWidth) return; if (pts.length === 1)") > 0
+        && tpl.indexOf('.gv2-rxg-corpo .gv2-rt-corpo{flex:none;height:max(') > 0 && tpl.indexOf('#gv2Raiz .gv2-rt-mapa') > 0 && tpl.indexOf('const enq = g.enq = function () { if (!el.clientWidth || !document.body.contains(el))') > 0);
     {
       const fsx = require('fs'), px = require('path');
       const api = fsx.readFileSync(px.join(__dirname, '..', 'lib', 'atualizar-hubspot.js'), 'utf8');
