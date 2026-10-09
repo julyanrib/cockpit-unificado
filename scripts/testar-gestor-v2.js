@@ -608,6 +608,9 @@ tabelas.gv2_falta_etapa = [
           && api.indexOf('PLACEHOLDER') < 0 && wf.indexOf('if [ -n "${{ github.event.inputs.origem }}" ]; then') > 0
           && fsx.readFileSync(px.join(__dirname, '..', 'api', 'hubspot-webhook.js'), 'utf8').indexOf("req.query.acao === 'atualizar'") > 0 && fsx.readdirSync(px.join(__dirname, '..', 'api')).filter(function (f) { return /\.js$/.test(f); }).length <= 12);
     }
+    checar('executivo · Meu funil: o R$ dos sem próximo passo usa a lista do movimento (não x.semPasso) e Ag. Pagamento vazio não manda puxar munição (09/10/26)',
+      tpl.indexOf('const mrrSemPasso = itens.filter(function (x) { return !(x.est && x.est.passo); })') > 0 && tpl.indexOf('return x.semPasso; })') < 0
+        && tpl.indexOf("col.pagto ? 'Os negócios que aceitarem a proposta em Negociação chegam aqui.'") > 0);
     GV2.estado.menu = true;
     const navMenu = GV2.navHTML();
     GV2.estado.menu = false;
