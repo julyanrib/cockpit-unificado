@@ -8887,7 +8887,7 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                            <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -55317,7 +55317,7 @@ GV2.montar = async function (so) {
     const semanaP = diasSemana.map(function (iso, i) {
       const d = s.dias[i] || {};
 
-      return { iso: iso, planejadas: Number(d.planejadas) || 0, provadas: Number(d.feitasDoPlano) || 0, todas: Number(d.provadas) || 0, fora: Math.max(0, (Number(d.provadas) || 0) - (Number(d.feitasDoPlano) || 0)), feitasDoPlano: Number(d.feitasDoPlano) || 0, semLugar: Number(d.semLugar) || 0, leadNovo: Number(d.provadasLeadNovo) || 0, contatos: Number(d.contatos) || 0, hoje: iso === agora.iso, passado: iso < agora.iso };
+      return { iso: iso, planejadas: Number(d.planejadas) || 0, provadas: Number(d.feitasDoPlano) || 0, todas: Number(d.provadas) || 0, fora: Math.max(0, (Number(d.provadas) || 0) - (Number(d.feitasDoPlano) || 0)), feitasDoPlano: Number(d.feitasDoPlano) || 0, semLugar: Number(d.semLugar) || 0, leadNovo: Number(d.provadasLeadNovo) || 0, leadSemFoto: Number(d.provadasLeadNovoSemFoto) || 0, contatos: Number(d.contatos) || 0, hoje: iso === agora.iso, passado: iso < agora.iso };
     });
     const email = String(L.emails[id] || '').toLowerCase();
     const feitosPb = {};
@@ -55338,7 +55338,7 @@ GV2.montar = async function (so) {
         status: status, ultima_atividade: ultima, posicao: posicao, posicaoOntem: posOntem, paradas: paradas },
       ontem: { paradas_plano: Number(dOntem.planejadas) || 0, visitas_com_prova: Number(dOntem.feitasDoPlano) || 0, visitas_todas: Number(dOntem.provadas) || 0 },
       semana: semanaP, semanaTotal: semanaP.reduce(function (x, d) { return x + d.planejadas; }, 0),
-      semanaAnt: [0, 1, 2, 3, 4].map(function (i) { const d = a.dias[i] || {}; return { iso: GV2.somaDias(diasSemana[0], i - 7), todas: Number(d.provadas) || 0, leadNovo: Number(d.provadasLeadNovo) || 0, contatos: Number(d.contatos) || 0 }; }),
+      semanaAnt: [0, 1, 2, 3, 4].map(function (i) { const d = a.dias[i] || {}; return { iso: GV2.somaDias(diasSemana[0], i - 7), todas: Number(d.provadas) || 0, leadNovo: Number(d.provadasLeadNovo) || 0, leadSemFoto: Number(d.provadasLeadNovoSemFoto) || 0, contatos: Number(d.contatos) || 0 }; }),
       palavra_dada: !!(s.plano && s.plano.promessaDadaEm),
       funil_mes: { portas: portas[id] || 0, decisor: decisor[id] || 0, demo: demos[id] || 0, proposta: prop.mes, fechado: fech },
       propostas: { semana: prop.semana, mes: prop.mes, aceitas_mes: fech },
@@ -60245,9 +60245,9 @@ GV2.v5Grupos = function () {
       chips: pm.map(function (x) { return chip(x.p, x.n + ' pinos · maior ' + GV2.v5Metros(x.max)); }),
       btn: 'Ver o dia', acao: 'v5dia:' + pm[0].p.id + ':' + b.agora.iso });
   }
-  const ln = b.planoErro ? [] : b.pessoas.map(function (p) { const d = (p.semana || []).find(function (x) { return x.hoje; }) || {}; return { p: p, n: d.leadNovo || 0, t: d.todas || 0 }; })
+  const ln = b.planoErro ? [] : b.pessoas.map(function (p) { const d = (p.semana || []).find(function (x) { return x.hoje; }) || {}; return { p: p, n: d.leadSemFoto || 0, t: d.todas || 0 }; })
     .filter(function (x) { return x.t > 0 && x.n * 2 > x.t; });
-  if (ln.length) g.push({ k: 'leadnovo', l: 'Visita em lead criado na hora', sev: 3, regra: 'mais da metade das visitas com prova de hoje · pergunte no 1:1',
+  if (ln.length) g.push({ k: 'leadnovo', l: 'Lead criado na hora sem foto', sev: 3, regra: 'mais da metade das visitas com prova de hoje, sem foto da fachada · pergunte no 1:1',
     chips: ln.map(function (x) { return chip(x.p, x.n + ' de ' + x.t); }),
     btn: 'Ver o dia', acao: 'v5dia:' + ln[0].p.id + ':' + b.agora.iso });
 
@@ -61474,13 +61474,13 @@ GV2.v6Rua7Conta = function (p) {
   const soma = function (k) { return r.dias.reduce(function (a, d) { return a + (Number(d[k]) || 0); }, 0); };
 
   const semPlano = GV2.base.planoErro || null;
-  const todas = semPlano ? null : soma('todas'), leadNovo = semPlano ? null : soma('leadNovo'), contatos = semPlano ? null : soma('contatos');
-  return { estado: 'ok', ini: r.ini, hoje: r.hoje, vis: r.vis, fotos: fotos, pinos: pinos, pinoDia: pinoDia, todas: todas, leadNovo: leadNovo, contatos: contatos, semPlano: semPlano,
-    alerta: (todas > 0 && leadNovo * 2 > todas) || pinoDia };
+  const todas = semPlano ? null : soma('todas'), leadNovo = semPlano ? null : soma('leadNovo'), leadSemFoto = semPlano ? null : soma('leadSemFoto'), contatos = semPlano ? null : soma('contatos');
+  return { estado: 'ok', ini: r.ini, hoje: r.hoje, vis: r.vis, fotos: fotos, pinos: pinos, pinoDia: pinoDia, todas: todas, leadNovo: leadNovo, leadSemFoto: leadSemFoto, contatos: contatos, semPlano: semPlano,
+    alerta: (todas > 0 && leadSemFoto * 2 > todas) || pinoDia };
 };
 GV2.v6RuaTexto = function (c) {
   const partes = [];
-  if (c.todas > 0 && c.leadNovo * 2 > c.todas) partes.push(c.leadNovo + ' de ' + c.todas + ' visitas com prova em lead criado na hora');
+  if (c.todas > 0 && c.leadSemFoto * 2 > c.todas) partes.push(c.leadSemFoto + ' de ' + c.todas + ' visitas com prova em lead criado na hora sem foto da fachada');
   if (c.pinos.length) partes.push(GV2.pl(c.pinos.length, 'pino movido', 'pinos movidos') + ' na semana (maior ' + GV2.v5Metros(Number(c.pinos[0].pino_movido_m)) + ')');
   return partes;
 };
@@ -61508,8 +61508,8 @@ GV2.render.v6Rua7 = function (p) {
   const tiles = '<div class="gv2-v5-quatro">'
     + tile('Fotos', c.vis.length ? c.fotos.length + ' de ' + c.vis.length : '—', c.vis.length ? 'check-ins com foto · ' + (c.vis.length - c.fotos.length) + ' só com GPS' : 'nenhum check-in em 7 dias')
     + tile('Pinos movidos', String(c.pinos.length), c.pinos.length ? 'maior ' + GV2.v5Metros(Number(c.pinos[0].pino_movido_m)) + ' · ' + ((GV2.base.nomeCliente && GV2.base.nomeCliente(c.pinos[0].client_id)) || 'cliente') + ', ' + GV2.diaCurto(c.pinos[0].dia) : 'nenhum pino arrastado na hora do check-in', c.pinoDia ? 't-av' : '')
-    + tile('Lead criado na hora', c.todas ? c.leadNovo + ' de ' + c.todas : '—', c.semPlano ? 'o planejamento não respondeu (' + c.semPlano + ')' : c.todas ? 'visitas com prova · ' + (c.todas - c.leadNovo) + ' em lead que já existia' : 'nenhuma visita com prova em 7 dias', c.todas && c.leadNovo * 2 > c.todas ? 't-av' : '',
-      c.todas ? '<i class="gv2-v6-barra' + (c.leadNovo * 2 > c.todas ? ' is-av' : '') + '"><i style="width:' + pctLead + '%"></i></i>' : '')
+    + tile('Lead criado na hora', c.todas ? c.leadNovo + ' de ' + c.todas : '—', c.semPlano ? 'o planejamento não respondeu (' + c.semPlano + ')' : c.todas ? 'visitas com prova · ' + (!c.leadNovo ? '' : c.leadSemFoto ? c.leadSemFoto + ' sem foto da fachada · ' : 'todas com foto · ') + (c.todas - c.leadNovo) + ' em lead que já existia' : 'nenhuma visita com prova em 7 dias', c.todas && c.leadSemFoto * 2 > c.todas ? 't-av' : '',
+      c.todas ? '<i class="gv2-v6-barra' + (c.leadSemFoto * 2 > c.todas ? ' is-av' : '') + '"><i style="width:' + pctLead + '%"></i></i>' : '')
     + tile('Contatos de campo', c.semPlano ? '—' : String(c.contatos), c.semPlano ? 'o planejamento não respondeu (' + c.semPlano + ')' : c.contatos ? 'WhatsApp e ligação registrados no app' : 'nenhum contato registrado no app em 7 dias')
     + '</div>';
   const alerta = c.alerta ? '<div class="gv2-v6-alerta"><span>' + GV2.e(GV2.lista(GV2.v6RuaTexto(c)).replace(/^./, function (l) { return l.toUpperCase(); }) + '. Vale perguntar no 1:1; o app não trava nada. Já está na pauta.') + '</span>'
