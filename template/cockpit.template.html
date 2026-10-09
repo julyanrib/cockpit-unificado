@@ -12716,6 +12716,13 @@ button.gv2-v5-pp-c:hover b{text-decoration:underline;}
   .gv2-v5-pp-l > button.gv2-v5-pp-c:not(.is-link){display:flex;grid-column:1;grid-row:2;}
   .gv2-v5-pp-l > span.gv2-v5-pp-x{display:flex;grid-column:2;grid-row:1 / span 2;align-items:flex-end;text-align:right;}
 }
+/* 09/10/26: mapa em tela cheia (gv2-v5-mapacheio.js). O botão fica no canto de cima à direita,
+   longe do zoom do Google (embaixo à direita) e do rótulo (embaixo à esquerda). */
+.gv2-v5-cheio-bt{position:absolute;top:10px;right:10px;z-index:4;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--gv2-line);background:var(--gv2-card);color:var(--gv2-ink);font:700 12px var(--gv2-font);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+.gv2-v5-cheio-bt:hover{background:var(--gv2-sub);}
+.gv2-v5-cheio-bt:focus-visible{outline:2px solid var(--gv2-ink);outline-offset:2px;}
+.gv2-v5-mapa-cx.is-cheio{position:fixed;inset:24px;z-index:70;height:auto !important;border-radius:14px;box-shadow:0 0 0 100vmax rgba(0,0,0,.62);}
+body.gv2-mapa-cheio{overflow:hidden;}
 
 /* ── PESSOAS v5 (08/10/26, telas-alvo 3a e 3b) ── */
 .gv2-v5-pes{gap:12px;}
@@ -13000,7 +13007,7 @@ button.gv2-v5-pp-c:hover b{text-decoration:underline;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                            <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -80225,7 +80232,14 @@ GV2.v5Mapa = {
       g.itens.push(new maps.marker.AdvancedMarkerElement({ map: g.mapa, position: { lat: x.lat, lng: x.lng }, content: GV2.v5Mapa.num(el, x), zIndex: x.grupo === 0 ? 3 : 2, title: x.nome }));
       bounds.extend(ll(x));
     });
-    const enq = function () { if (!el.clientWidth) return; if (pts.length === 1) { g.mapa.setCenter(bounds.getCenter()); g.mapa.setZoom(15); } else g.mapa.fitBounds(bounds, 40); };
+    const enq = g.enq = function () { if (!el.clientWidth) return; if (pts.length === 1) { g.mapa.setCenter(bounds.getCenter()); g.mapa.setZoom(15); } else g.mapa.fitBounds(bounds, 40); };
+    /* 09/10/26: a caixa muda de tamanho (tela cheia, outra largura): o Google remede e reenquadra, como no mapa do time */
+    if (typeof ResizeObserver === 'function' && g.obs !== el) {
+      g.obs = el;
+      if (g.ro) g.ro.disconnect();
+      g.ro = new ResizeObserver(function () { if (el.clientWidth && g.enq) { maps.event.trigger(g.mapa, 'resize'); g.enq(); } });
+      g.ro.observe(el);
+    }
     enq(); setTimeout(enq, 300); maps.event.addListenerOnce(g.mapa, 'idle', enq);
   }
 };
@@ -80927,6 +80941,82 @@ GV2.render.v5Contra = function (X) {
       return '<button type="button" class="gv2-v5-ct-l" data-gv2="pxcz:' + GV2.e(x.k) + '" title="' + GV2.e(GV2.pl(x.ab, 'aberto', 'abertos') + ' · ganhamos ' + x.g + ' · perdemos ' + x.p) + '"><span>' + GV2.e(x.k) + '</span><i><i style="width:' + Math.max(4, Math.round(tot(x) / max * 100)) + '%"></i></i><b class="num">' + tot(x) + '</b></button>';
     }).join('') : '<p class="gv2-v5-ab-vazio">Nenhum negócio com sistema registrado nesta praça.</p>') + '</div></section>';
 };
+
+/* ══ MAPA EM TELA CHEIA (09/10/26) ══════════════════════════════════════════════════════════
+   Julyan: "tenho que poder expandir o mapa". O "Expandir" da Hoje só levava para a Rua e o mapa
+   da Rua › Pessoa · dia não tinha botão nenhum. Agora todo mapa v5 (.gv2-v5-mapa-cx) ganha no
+   canto um "Tela cheia" que abre o mesmo mapa ocupando a tela; Esc ou "Fechar" volta.
+   O botão entra por observação do DOM, então sobrevive ao repintar (a carga refaz a tela a cada
+   poucos minutos) e a chave do mapa aberto fica em GV2.v5MapaCheio. */
+GV2.v5MapaCheio = null;
+GV2.v5MapaChave = function (cx) {
+  const m = cx.querySelector('.gv2-mapa');
+  if (!m) return null;
+  for (let i = 0; i < m.attributes.length; i++) {
+    const a = m.attributes[i];
+    if (/^data-gv2-/.test(a.name)) return a.name + '=' + a.value;
+  }
+  return null;
+};
+GV2.v5MapaAplicar = function () {
+  if (typeof document === 'undefined') return;
+  let algum = false;
+  document.querySelectorAll('#gv2Raiz .gv2-v5-mapa-cx').forEach(function (cx) {
+    let bt = cx.querySelector(':scope > .gv2-v5-cheio-bt');
+    if (!bt) {
+      bt = document.createElement('button');
+      bt.type = 'button';
+      bt.className = 'gv2-v5-cheio-bt';
+      cx.appendChild(bt);
+    }
+    const on = !!GV2.v5MapaCheio && GV2.v5MapaChave(cx) === GV2.v5MapaCheio;
+    if (on) algum = true;
+    if (cx.classList.contains('is-cheio') !== on) cx.classList.toggle('is-cheio', on);
+    const txt = on ? 'Fechar' : 'Tela cheia';
+    if (bt.textContent !== txt) { bt.textContent = txt; bt.setAttribute('aria-label', on ? 'Fechar a tela cheia do mapa' : 'Abrir o mapa em tela cheia'); }
+  });
+  /* o mapa aberto sumiu da tela (troca de aba): solta a chave, senão o próximo abre sozinho */
+  if (GV2.v5MapaCheio && !algum) GV2.v5MapaCheio = null;
+  document.body.classList.toggle('gv2-mapa-cheio', !!GV2.v5MapaCheio && algum);
+};
+(function () {
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function' || typeof MutationObserver === 'undefined') return;
+  let pedido = false;
+  const agendar = function () {
+    if (pedido) return;
+    pedido = true;
+    Promise.resolve().then(function () { pedido = false; GV2.v5MapaAplicar(); });
+  };
+  const ligar = function () {
+    const raiz = document.getElementById('gv2Raiz');
+    if (!raiz) return false;
+    new MutationObserver(agendar).observe(raiz, { childList: true, subtree: true });
+    agendar();
+    return true;
+  };
+  if (!ligar()) document.addEventListener('DOMContentLoaded', ligar);
+  document.addEventListener('click', function (ev) {
+    const bt = ev.target && ev.target.closest ? ev.target.closest('.gv2-v5-cheio-bt') : null;
+    if (!bt) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const cx = bt.closest('.gv2-v5-mapa-cx');
+    const chave = cx ? GV2.v5MapaChave(cx) : null;
+    GV2.v5MapaCheio = GV2.v5MapaCheio && GV2.v5MapaCheio === chave ? null : chave;
+    GV2.v5MapaAplicar();
+    /* o Google não busca o mapa da área nova sozinho em toda situação (medido: com o mesmo zoom, só o
+       quadrado antigo tinha imagem): remede, reenquadra e mexe 1 px para ele buscar a área inteira */
+    const reenq = function () {
+      const maps = window.google && window.google.maps;
+      if (!cx || !maps) return;
+      cx.querySelectorAll('.gv2-mapa').forEach(function (el) { const g = el._gv2v5 || el._gv2; if (g && g.mapa) { maps.event.trigger(g.mapa, 'resize'); if (g.enq) g.enq(); g.mapa.panBy(1, 0); setTimeout(function () { g.mapa.panBy(-1, 0); }, 60); } });
+    };
+    setTimeout(reenq, 80); setTimeout(reenq, 450);
+  }, true);
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && GV2.v5MapaCheio) { GV2.v5MapaCheio = null; GV2.v5MapaAplicar(); ev.stopPropagation(); }
+  }, true);
+})();
 
 GV2.instalar();
 </script><!-- /gv2-js -->

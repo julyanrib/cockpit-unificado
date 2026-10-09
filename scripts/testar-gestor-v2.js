@@ -595,6 +595,9 @@ tabelas.gv2_falta_etapa = [
     checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X nem Prospecção)', rots.join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook', rots.join(' · '));
     checar('rolagem: corpo v5 e gaveta não deixam o cartão encolher (Por pessoa e "Para puxar" sumiam, 09/10/26)',
       tpl.indexOf('.gv2-corpo.gv2-v5 > *{flex-shrink:0;}') > 0 && tpl.indexOf('.gv2-rxg-corpo > *{flex-shrink:0;}') > 0);
+    checar('mapa em tela cheia: todo mapa v5 ganha o botão e o mapa da Pessoa · dia reenquadra quando a caixa muda (09/10/26)',
+      typeof GV2.v5MapaAplicar === 'function' && tpl.indexOf('.gv2-v5-mapa-cx.is-cheio{position:fixed;') > 0
+        && tpl.indexOf("const enq = g.enq = function () { if (!el.clientWidth) return; if (pts.length === 1)") > 0);
     GV2.estado.menu = true;
     const navMenu = GV2.navHTML();
     GV2.estado.menu = false;
