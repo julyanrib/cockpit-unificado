@@ -587,6 +587,11 @@ tabelas.gv2_falta_etapa = [
     const nav = GV2.navHTML();
     const rots = (nav.match(/<span class="gv2-nav-rot">[^<]+</g) || []).map(function (x) { return x.replace('<span class="gv2-nav-rot">', '').replace('<', ''); });
     checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X nem Prospecção)', rots.join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook', rots.join(' · '));
+    GV2.estado.menu = true;
+    const navMenu = GV2.navHTML();
+    GV2.estado.menu = false;
+    checar('menu do nome tem "Sair da conta" e o clique chega ao sair do perfil (09/10/26: não havia como sair)',
+      navMenu.indexOf('data-gv2="menu:sair">Sair da conta<') > 0 && tpl.indexOf("if (o === 'sair') { const bt = document.getElementById('perfilSairBtn');") > 0);
     GV2.estado.aba = 'raiox'; GV2.estado.prf = 'todas';
     const fu = GV2.render.raiox();
     checar('v5 · Funil: 4 cartões do funil, sem o "Funil · Praça" e com "Negócios travados"', (fu.match(/class="gv2-v5-kpi( is-fixo)?"/g) || []).length === 4 && fu.indexOf('data-gv2="rxm:') < 0 && /Negócios travados/.test(fu) && /<h1>Funil<\/h1>/.test(fu));
