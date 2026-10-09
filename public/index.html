@@ -12873,20 +12873,7 @@ async function renderMeuPainel() {
     : null;
 
   const meusQuentesCount = agendaQuentes([r]).length;
-
-  const acimaDoSlaCount = (function () {
-    const vistos = {};
-    return (r.travados || []).filter(function (l) {
-      const etapa = String((l && (l.stage || l.etapa || l.stageLabel)) || '');
-      if (/pagamento/i.test(etapa)) return false;
-      const nome = String((l && (l.name || l.dealname || l.nome)) || '');
-      const k = (typeof GV2 !== 'undefined' && GV2.nomeNorm) ? GV2.nomeNorm(nome) : nome.trim().toLowerCase();
-      if (!k) return true;
-      if (vistos[k]) return false;
-      vistos[k] = 1;
-      return true;
-    }).length;
-  })();
+  const acimaDoSlaCount = (r.travados || []).length;
 
   const FUNIL_ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470',
     '1395880471', '1395880472', '1395880473'];
@@ -27192,15 +27179,11 @@ function pl6DadosFinal(rep) {
     kpis: [
       { rot: 'Visitas agendadas', v: String(agendadas), cor: agendadas ? '#1E9E7B' : 'var(--ter)' },
       { rot: 'Dias cobertos', v: diasCobertos + '/5', cor: 'var(--ink)' },
-
-      (function () {
-        const hojeIso = h10HojeISO();
-        const m = exMedidoDoDia(hojeIso);
-        if (!m) { exPlanoMedido(hojeIso, function () { if (typeof renderAgenda === 'function') renderAgenda(); }); return { rot: 'Hoje', v: '…', cor: 'var(--ter)', sub: 'lendo o plano de hoje' }; }
-        if (!m.planejadas) return { rot: 'Hoje', v: '—', cor: 'var(--ter)', sub: m.provadas ? exVisitasTxt(m) + ' · sem plano' : 'nada no plano de hoje' };
-        return { rot: 'Hoje', v: m.feitasDoPlano + '/' + m.planejadas, cor: m.feitasDoPlano >= m.planejadas ? '#1E9E7B' : 'var(--ink)',
-          sub: ['plano com prova', exVisitasTxt(m)].concat(exNotas(m)).join(' · ') };
-      })()
+      { rot: 'Hoje', v: ritmo.passados ? (ritmo.registrados + '/' + ritmo.passados) : '—',
+        cor: !ritmo.passados ? 'var(--ter)' : (ritmo.esperando ? '#E51A31' : '#1E9E7B'),
+        sub: !ritmo.passados ? 'nada passou ainda'
+          : (ritmo.esperando ? 'registrados · ' + ritmo.esperando + ' esperando'
+            : 'registrados · tudo em dia') }
     ],
 
     abasDia: dias.map(function (dd, i) {
@@ -42993,36 +42976,6 @@ function v5TextoDaFaixaPlano(plano, visitas, meta, hora) {
   };
 }
 
-const EX_MEDIDO = { porSegunda: {}, lendo: {} };
-function exSegundaDe(iso) { const d = new Date(iso + 'T12:00:00Z'); const w = d.getUTCDay(); d.setUTCDate(d.getUTCDate() - ((w + 6) % 7)); return d.toISOString().slice(0, 10); }
-function exMedidoDoDia(iso) { const m = EX_MEDIDO.porSegunda[exSegundaDe(iso)]; return m ? (m[iso] || null) : null; }
-async function exPlanoMedido(iso, aoChegar) {
-  const seg = exSegundaDe(iso);
-  if (EX_MEDIDO.porSegunda[seg]) return EX_MEDIDO.porSegunda[seg];
-  if (EX_MEDIDO.lendo[seg]) return EX_MEDIDO.lendo[seg];
-  const owner = typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.ownerId;
-  if (typeof supa === 'undefined' || !supa || !owner) return null;
-  EX_MEDIDO.lendo[seg] = (async function () {
-    try {
-      const r = await supa.rpc('planejamento_do_time', { p_segunda: seg, p_donos: [String(owner)], p_dia: iso });
-      if (r.error) throw r.error;
-      const p = r.data && r.data.pessoas && r.data.pessoas[0];
-      const mapa = {};
-      ((p && p.dias) || []).forEach(function (d) {
-        mapa[d.dia] = { planejadas: Number(d.planejadas) || 0, feitasDoPlano: Number(d.feitasDoPlano) || 0, provadas: Number(d.provadas) || 0,
-          fora: Number(d.fora) || 0, semLugar: Number(d.semLugar) || 0, feitas: Number(d.feitas) || 0, meta: Number(d.meta) || 6 };
-      });
-      EX_MEDIDO.porSegunda[seg] = mapa;
-      if (typeof aoChegar === 'function') { try { aoChegar(); } catch (e) {   } }
-      return mapa;
-    } catch (e) { return null; } finally { delete EX_MEDIDO.lendo[seg]; }
-  })();
-  return EX_MEDIDO.lendo[seg];
-}
-
-function exPlanoTxt(m) { return 'Plano ' + m.feitasDoPlano + ' de ' + m.planejadas; }
-function exVisitasTxt(m) { return m.provadas + ' de ' + m.meta + (m.meta === 1 ? ' visita' : ' visitas') + ' com prova'; }
-function exNotas(m) { const o = []; if (m.semLugar) o.push(m.semLugar + ' sem lugar no mapa'); if (m.fora) o.push('+' + m.fora + ' fora do plano'); return o; }
 const H10 = { dia: null, amanha: null, lendo: false, em: 0, falhou: false };
 function h10HoraBRT() {
   const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hourCycle: 'h23', timeZone: 'America/Sao_Paulo' }));
@@ -43056,16 +43009,14 @@ function h10MancheteBase(nSla) {
 function h10Manchete(dia, nSla, semDesfecho) {
   if (!dia) return h10MancheteBase(nSla);
   if (h10Noite()) {
-    const m = exMedidoDoDia(h10HojeISO());
-    const partes = m ? (m.planejadas ? [exPlanoTxt(m), exVisitasTxt(m)] : ['Nenhuma parada no plano de hoje', exVisitasTxt(m)])
-      : [dia.total ? 'Plano: lendo…' : 'Nenhuma parada no plano de hoje'];
+    const partes = [dia.total ? dia.feitas + ' de ' + dia.total + ' paradas feitas hoje' : 'Nenhuma parada no plano de hoje'];
     if (H10.semFicha && H10.semFicha.semFicha > 0) partes.push(H10.semFicha.semFicha + (H10.semFicha.semFicha === 1 ? ' visita sem ficha' : ' visitas sem ficha'));
     return partes.join(' · ') + '.';
   }
   if (!dia.total) return 'Hoje: nada no plano ainda. ' + (nSla > 0 ? 'Comece pelos ' + nSla + ' que passaram da régua.' : 'Monte a rota no app.');
   let t = 'Hoje: ' + dia.total + (dia.total === 1 ? ' parada' : ' paradas') + (dia.bairro ? ' em ' + dia.bairro : '')
     + (dia.primeira ? ', 1ª ≈ ' + dia.primeira : '') + (dia.fixo ? ' e compromisso às ' + dia.fixo : '') + '.';
-  { const m = exMedidoDoDia(h10HojeISO()); if (m && (m.feitasDoPlano || m.provadas)) t += ' ' + exPlanoTxt(m) + ' · ' + exVisitasTxt(m) + '.'; }
+  if (dia.feitas) t += ' ' + dia.feitas + ' feita' + (dia.feitas === 1 ? '' : 's') + '.';
   if (nSla > 0) t += ' Antes de sair, ' + nSla + (nSla === 1 ? ' lead passou da régua.' : ' leads passaram da régua.');
   return t;
 }
@@ -43078,11 +43029,7 @@ function h10ProntoHTML(r, diag, dia, amanha, semDesfecho) {
   const hoje = h10HojeISO();
   if (h10Noite()) {
     return '<span class="h10-pronto-rot">Fechar o dia</span>'
-      + (function () {
-        const m = exMedidoDoDia(hoje);
-        return h10Item('Visitas', m ? [exVisitasTxt(m)].concat(m.planejadas ? [exPlanoTxt(m).toLowerCase()] : [], exNotas(m)).join(' · ') : (H10.falhou ? 'não carregou' : 'lendo…'),
-          m ? m.provadas >= m.meta : null, h10LinkAgenda(hoje, 'Ver'));
-      })()
+      + h10Item('Check-ins', dia ? (dia.total ? dia.feitas + ' de ' + dia.total + ' paradas' : 'nenhuma parada hoje') : (H10.falhou ? 'não carregou' : 'lendo…'), dia ? (dia.total ? dia.feitas >= dia.total : null) : null, h10LinkAgenda(hoje, 'Ver'))
       + (H10.semFicha
         ? h10Item('Como foi', H10.semFicha.visitas ? (H10.semFicha.semFicha ? H10.semFicha.semFicha + (H10.semFicha.semFicha === 1 ? ' visita sem ficha' : ' visitas sem ficha') : 'todas as ' + H10.semFicha.visitas + ' com ficha') : 'nenhuma visita hoje',
           H10.semFicha.visitas ? !H10.semFicha.semFicha : null, h10LinkAgenda(hoje, 'Registrar'))
@@ -43204,8 +43151,7 @@ async function h10PreencherDia(r, nSla, diag, semDesfecho) {
     if (!uid) throw new Error('sem sessão');
     const hoje = h10HojeISO();
     const res = await Promise.all([h10LerDia(uid, hoje), h10Noite() ? h10LerDia(uid, h10ProximoUtil(hoje)) : Promise.resolve(null),
-      h10LerOntem(uid, h10UtilAnterior(hoje)).catch(function () { return null; }), h10LerSemFicha(uid, hoje).catch(function () { return null; }),
-      exPlanoMedido(hoje).catch(function () { return null; })]);
+      h10LerOntem(uid, h10UtilAnterior(hoje)).catch(function () { return null; }), h10LerSemFicha(uid, hoje).catch(function () { return null; })]);
     H10.dia = res[0]; H10.amanha = res[1]; H10.ontem = res[2]; H10.semFicha = res[3]; H10.em = Date.now(); H10.falhou = false;
   } catch (e) {
     console.warn('[hoje] a rota de hoje não carregou:', e && e.message);
