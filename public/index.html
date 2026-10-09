@@ -8748,7 +8748,7 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -9467,6 +9467,8 @@ async function hidratarSessao(email) {
 
     Object.assign(DATA, corpo.dados);
     sessaoAtual = corpo.sessao;
+
+    if (typeof repForaDoTimeCosturar === 'function') repForaDoTimeCosturar();
     hidratadoPara = email;
 
     if (typeof farolLigar === 'function') farolLigar();
@@ -21204,6 +21206,27 @@ async function tl5Alternar(tipo, alvoOwnerId, titulo, detalhe, chaveDaTela, ritu
 const TM2_ESTADO = { filtro: null, sel: null, etapa: null, deal: null, toast: null };
 
 let TM10_TQ = null;
+
+function repForaDoTimeCosturar() {
+  if (!sessaoAtual || sessaoAtual.role === 'manager' || !sessaoAtual.ownerId || !Array.isArray(DATA.reps)) return;
+  const id = String(sessaoAtual.ownerId);
+  if (DATA.reps.some(function (r) { return r && String(r.ownerId) === id; })) return;
+  const stages = {}, abertos = [];
+  Object.keys(DATA.funilLeads || {}).forEach(function (sid) {
+    const leads = (DATA.funilLeads[sid] || []).filter(function (l) { return l && (!l.ownerId || String(l.ownerId) === id); });
+    stages[sid] = leads.length;
+    leads.forEach(function (l) { abertos.push(l); });
+  });
+  const travados = abertos.filter(function (l) { return l.slaBreach; });
+  const criticos = travados.slice().sort(function (x, y) { return (Number(y.dias) || 0) - (Number(x.dias) || 0); });
+  const quentes = abertos.filter(function (l) { return l.temperatura === 'quente' || Number(l.temp) >= 60; });
+  DATA.reps.push({ ownerId: id, name: sessaoAtual.nome || sessaoAtual.email || 'Você', praca: '', tag: '', tagLabel: '', gargalo: '',
+    boasPraticas: [], compromissos: [], compromissosPrazo: [], open: abertos.length, stages: stages,
+    criticos: criticos, travados: travados, abertos: abertos, quentes: quentes, leadsTravados: travados.length,
+    ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 10, metaMrr: 0, metaReceita: 0, patamarMeta: '',
+    visitasHubspotHoje: 0, avancosHojeNomes: [], propostasHojeNomes: [], avancosHubspotHoje: 0, propostasHubspotHoje: 0, fechamentosHubspotHoje: 0,
+    foraDoTime: true });
+}
 
 function metaClientesDoRep(r) {
   const v = r && r.metaMensal;

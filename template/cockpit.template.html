@@ -13209,7 +13209,7 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -14022,6 +14022,8 @@ async function hidratarSessao(email) {
     // o usuário de volta pro gate com os dados já carregados.
     Object.assign(DATA, corpo.dados);
     sessaoAtual = corpo.sessao;
+    /* 09/10/26: a visão de executivo de quem está fora do time (o Julyan) é a MESMA tela do time */
+    if (typeof repForaDoTimeCosturar === 'function') repForaDoTimeCosturar();
     hidratadoPara = email;
     /* A PARTIR DAQUI A ABA ESCUTA O SNAPSHOT (08/09/26). Depois da sessao existir, e
        nao antes: a politica de leitura do farol e para `authenticated`. */
@@ -30330,6 +30332,34 @@ let TM10_TQ = null;
    justamente tirar. Cinco copias da mesma regra e cinco chances de a regra divergir;
    aqui ela existe uma vez e distingue "nao tem meta" de "nao veio no snapshot".
    O 10 sobrevive como ultimo recurso para snapshot velho, que nao tem o campo. */
+/* ══ QUEM ESTÁ FORA DO TIME VÊ A MESMA TELA DO TIME (09/10/26) ══════════════════════
+   O Julyan (foraDoTime) entra na visão de executivo com o próprio funil já costurado em
+   DATA.funilLeads pelo servidor, mas o robô não calcula a linha dele em DATA.reps. Sem
+   ela, a Hoje parava em "Não encontrei seu cadastro" e o resto caía em "fonte fora".
+   Aqui a linha nasce do funil dele, no mesmo formato da do robô; o que só o robô mede
+   (ganhos da semana, fechados no mês) fica em zero. Só na visão de executivo, só para o
+   próprio dono, e só se a linha não existir: nunca entra na tela do gestor. */
+function repForaDoTimeCosturar() {
+  if (!sessaoAtual || sessaoAtual.role === 'manager' || !sessaoAtual.ownerId || !Array.isArray(DATA.reps)) return;
+  const id = String(sessaoAtual.ownerId);
+  if (DATA.reps.some(function (r) { return r && String(r.ownerId) === id; })) return;
+  const stages = {}, abertos = [];
+  Object.keys(DATA.funilLeads || {}).forEach(function (sid) {
+    const leads = (DATA.funilLeads[sid] || []).filter(function (l) { return l && (!l.ownerId || String(l.ownerId) === id); });
+    stages[sid] = leads.length;
+    leads.forEach(function (l) { abertos.push(l); });
+  });
+  const travados = abertos.filter(function (l) { return l.slaBreach; });
+  const criticos = travados.slice().sort(function (x, y) { return (Number(y.dias) || 0) - (Number(x.dias) || 0); });
+  const quentes = abertos.filter(function (l) { return l.temperatura === 'quente' || Number(l.temp) >= 60; });
+  DATA.reps.push({ ownerId: id, name: sessaoAtual.nome || sessaoAtual.email || 'Você', praca: '', tag: '', tagLabel: '', gargalo: '',
+    boasPraticas: [], compromissos: [], compromissosPrazo: [], open: abertos.length, stages: stages,
+    criticos: criticos, travados: travados, abertos: abertos, quentes: quentes, leadsTravados: travados.length,
+    ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 10, metaMrr: 0, metaReceita: 0, patamarMeta: '',
+    visitasHubspotHoje: 0, avancosHojeNomes: [], propostasHojeNomes: [], avancosHubspotHoje: 0, propostasHubspotHoje: 0, fechamentosHubspotHoje: 0,
+    foraDoTime: true });
+}
+
 function metaClientesDoRep(r) {
   const v = r && r.metaMensal;
   return v != null && v !== '' ? Number(v) : 10;
