@@ -20640,8 +20640,12 @@ function fn2Hero(r, itens, movimentos) {
   /* A MANCHETE É CALCULADA, como na prancha: o MRR em jogo e quanto dele está preso em
      cartão sem próximo passo. Sem valor no CRM, ela diz isso em vez de afirmar R$ 0 —
      a maioria dos negócios da base não tem valor preenchido. */
-  const mrrSemPasso = itens.filter(function (x) { return x.semPasso; })
-    .reduce(function (a, x) { return a + (x.valor || 0); }, 0);
+  /* 09/10/26 (auditoria do executivo, A10): filtrava por x.semPasso, campo que os itens não têm — a lista
+     saía sempre vazia e a manchete dizia 'nenhum com valor no CRM' com 12 cartões mostrando R$, enquanto
+     'Onde o dinheiro para', na mesma aba, dizia 'R$ 1,5k esperando ninguém'. Agora é a MESMA lista do
+     movimento 'sem próximo passo' (fn2Movimentos: !x.est.passo), a que já dá o 48 do lado. */
+  const mrrSemPasso = itens.filter(function (x) { return !(x.est && x.est.passo); })
+    .reduce(function (a, x) { return a + (x.valor > 0 ? x.valor : 0); }, 0);
   const manchete = total === 0
     ? 'Seu funil está vazio — as contas-alvo estão no Planejamento.'
     : (valorTotal > 0
@@ -23089,7 +23093,7 @@ function kb7Coluna(col, itens, acesos) {
     ? '<i class="is-ok" style="width:' + (ok / total * 100) + '%"></i><i class="is-aviso" style="width:' + (aviso / total * 100) + '%"></i><i class="is-erro" style="width:' + (erro / total * 100) + '%"></i>'
     : '';
   const vazio = !n
-    ? (col.ganho ? 'Ninguém pago esperando envio.' : col.onb ? 'Nada enviado ao onboarding ainda.' : col.recic ? 'Nada em reciclagem.' : 'Vazio. Puxe da munição no Planejamento.')
+    ? (col.ganho ? 'Ninguém pago esperando envio.' : col.onb ? 'Nada enviado ao onboarding ainda.' : col.recic ? 'Nada em reciclagem.' : col.pagto ? 'Os negócios que aceitarem a proposta em Negociação chegam aqui.' : 'Vazio. Puxe da munição no Planejamento.')
     : 'Nada neste filtro.';
   const aberta = KB7.abertas.has(col.id);
   const visiveis = aberta ? filtrados : filtrados.slice(0, KB7_POR_COLUNA);
