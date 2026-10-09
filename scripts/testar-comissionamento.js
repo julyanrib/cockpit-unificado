@@ -165,9 +165,10 @@ igual('fração arredonda para baixo', ctx.comissaoTotalDe(6.9), 1800,
 
 /* REVISÃO GERAL (05/10/26): a faixa do variável virou o número "+R$ na próxima venda" do
    herói do Hoje. A regra é a mesma: sem o quadro, nada é desenhado. */
+/* HOJE v3 (09/10/26): o "+R$ na próxima venda" foi para a legenda do cartão Mês, que lê o
+   resultado da Pessoas do gestor (p.resultado.proxima) e só escreve o valor quando ele existe. */
 checar('e a tela não desenha o número sem o quadro',
-  /const cmHero = \(typeof comissaoDe === 'function'/.test(tpl)
-    && /\$\{cmHero \? '<div class="h10-num"/.test(tpl),
+  /'clientes' \+ \(r\.proxima != null \? ' · a próxima vale \+' \+ GV2\.rsCheio\(r\.proxima\) : ''\)/.test(tpl),
   'sem esta saída, a caixa apareceria com undefined onde vai o valor');
 
 checar('a tabela do gestor também não aparece sem config',
@@ -264,7 +265,8 @@ Object.keys(REGRAS).forEach(function (sel) {
 const PALETA_DO_CARD = ['#E7E3DA', '#FBFAF6', '#FDFEFF', '#2B3440', '#7A8494', '#8B93A3',
   '#5B667A', '#E4E0D6'];
 const iCmt = tpl.indexOf('\n  .cmt{');
-const iFimCmt = tpl.indexOf('\n  .h9-grade{', iCmt);
+/* o fim do bloco é o comentário da seção seguinte (Hoje v3, 09/10/26: a regra .h9-grade saiu com a Hoje antiga) */
+const iFimCmt = tpl.indexOf('/* ══ O HOJE DA REVISÃO GERAL (05/10/26)', iCmt);
 checar('o bloco de css do variável do time foi encontrado inteiro',
   iCmt > -1 && iFimCmt > iCmt,
   'sem o recorte a checagem de paleta abaixo não mede nada');

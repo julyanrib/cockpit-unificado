@@ -206,10 +206,18 @@ tabelas.gv2_falta_etapa = [
       DV.estado.p = p; DV.estado.fizEm = {};
       const h = DV.com(function () { return DV.html(p); });
       const g = GV2.p3Resumo(p);
-      const dv = nums(h, /class="dv-num"><small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g);
-      const ge = nums(g, /<small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g).slice(1);
+      /* v3 (09/10/26, ws.zip): os 5 cartões do topo são os da Pessoas v5 do gestor (GV2.render.v5Pessoa),
+         mesma base. Porta → decisor: o gestor mostra a %, o executivo a escada; a % sai da escada. */
+      const dv = nums(h, /class="dv-c5"><small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g);
+      const pg = GV2.render.v5Pessoa ? GV2.render.v5Pessoa(p) : '';
+      const ge = nums(pg, /class="gv2-v5-res"[^>]*><small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g);
       const so = function (t) { return (String(t).match(/[0-9]+(,[0-9]+)?|—/g) || []).join(' '); };
-      checar('desenvolvimento: os 4 números do topo de ' + p.nome + ' são os do resumo da Pessoas (mesma base)', dv.length === 4 && ge.length >= 4 && dv.every(function (v, i) { return so(v) === so(ge[i]); }), JSON.stringify({ dv: dv, gestor: ge }));
+      const fm = p.funil_mes || {};
+      const pdEscada = fm.portas >= 3 ? Math.round(fm.decisor / fm.portas * 100) + '%' : '—';
+      const iguais = dv.length === 5 && ge.length === 5
+        && so(dv[0]) === so(ge[0]) && dv[0].replace(/[0-9 de]/g, '') === ge[0].replace(/[0-9 de]/g, '')
+        && so(dv[1]) === so(ge[1]) && so(dv[2]) === so(ge[2]) && pdEscada === ge[3] && so(dv[4]) === so(ge[4]);
+      checar('desenvolvimento: os 5 cartões do topo de ' + p.nome + ' são os da Pessoas v5 do gestor (mesma base)', iguais, JSON.stringify({ dv: dv, gestor: ge, pdEscada: pdEscada }));
     });
     const p = GV2.base.pessoas[0], d = p.disc;
     const um = { dia: '2026-10-13', hora: '08:30', dias: 5, hoje: false };

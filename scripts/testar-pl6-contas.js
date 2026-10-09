@@ -387,10 +387,14 @@ console.log('');
   /* REVISÃO GERAL (Claude Design, 05/10/26, aprovada): o contador passa a ser "N de M" contra
      a META DA FASE (rampDoOwner), verde quando bate. Continua proibido o teto de vagas
      (PL6_SLOTS) como denominador: vaga não é produto. */
-  checar('o contador do dia é N de M contra a meta, nunca contra as vagas',
-    /cnt: n === 0 \? 'vazio' : \(n \+ ' de ' \+ metaDoDia\)/.test(dadosCod)
-      && !/\/' \+ PL6_SLOTS/.test(dadosCod) && !/de ' \+ PL6_SLOTS/.test(dadosCod),
-    'a revisão manda "N de M" contra a meta da fase; o teto de vagas não é denominador');
+  /* PLANEJAMENTO v3 (09/10/26, ws.zip): o "12 de 6" (paradas contra a meta) confundia paradas com
+     visitas. Nos dias que já começaram o cabeçalho é "Plano x de y · Visitas x de 6", da mesma
+     conta do gestor (pl6ResumoApp); no futuro, "N paradas". O teto de vagas continua proibido. */
+  checar('o cabeçalho do dia é Plano e Visitas (o mesmo do gestor) e, no futuro, N paradas — nunca contra as vagas',
+    dadosCod.indexOf("cnt: n === 0 ? 'vazio' : (n === 1 ? '1 parada' : n + ' paradas'),") > -1
+      && dadosCod.indexOf('resumoApp: d.iso <= hojeISOPl6 ? pl6ResumoApp(d.iso) : null') > -1
+      && dadosCod.indexOf("' + PL6_SLOTS") < 0,
+    'o design v3 manda Plano x de y · Visitas x de 6; o teto de vagas não é denominador');
 
   checar('e a barra de capacidade não voltou',
     telaCod.indexOf('pl6-cap-seg') < 0 && telaCod.indexOf('capSegs') < 0,
