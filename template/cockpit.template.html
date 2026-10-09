@@ -13351,7 +13351,7 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -61614,7 +61614,7 @@ async function tp6AbrirRanking(periodo) {
         + (eu.movimento ? '<small class="' + (eu.movimento > 0 ? 'tp6-sobe' : 'tp6-muted') + '">' + (eu.movimento > 0 ? 'subiu ' + eu.movimento : 'desceu ' + (-eu.movimento)) + '</small>' : '') + '</span></div>'
         + (eu.faltam ? '<b>' + esc(eu.faltam) + '</b>' : '') + (eu.proximo ? '<small class="tp6-muted">' + esc(eu.proximo) + '</small>' : '')
         + (bonus ? '<div class="tp6-caixas"><span><small>Vendas</small><b>' + (eu.vendas || 0) + ' × 100</b></span><span><small>Reuniões com desfecho</small><b>' + (eu.reunioes || 0) + ' × 25</b></span><span><small>Visitas com prova</small><b>' + (eu.visitas || 0) + ' × 3</b></span></div>'
-          + (eu.nao_pontuaram > 0 ? '<small class="tp6-cinza">' + eu.nao_pontuaram + (eu.nao_pontuaram === 1 ? ' visita não pontuou' : ' visitas não pontuaram') + ': acima de 6 no dia, ou em lead criado na hora sem foto da fachada</small>' : '') : '')
+          + (eu.nao_pontuaram > 0 ? '<small class="tp6-cinza">' + eu.nao_pontuaram + (eu.nao_pontuaram === 1 ? ' visita não pontuou' : ' visitas não pontuaram') + ': acima de 6 no dia</small>' : '') : '')
         + (bonus ? '' : '<div class="tp6-caixas"><span><small>Visitas provadas</small><b>' + eu.provadas + '</b></span><span><small>Demos realizadas</small><b>' + eu.demos + '</b></span><span><small>Contratos</small><b>' + eu.contratos + (eu.mrr ? ' · R$ ' + Math.round(eu.mrr) : '') + '</b></span></div>'
         + (eu.declaradas > 0 ? '<small class="tp6-cinza">' + eu.declaradas + (eu.declaradas === 1 ? ' visita declarada' : ' visitas declaradas') + ', sem GPS nem foto: não pontuam</small>' : ''))
         + '</div>' : '')
@@ -61627,7 +61627,7 @@ async function tp6AbrirRanking(periodo) {
         return '<div class="tp6-conquista' + (k.feito ? ' is-feita' : '') + '"><b>' + esc(k.titulo) + '</b><small class="tp6-muted">' + (k.feito ? 'conquistada' : nm ? (k.id === 'quentes_4' ? 'sem quentes na carteira agora' : 'não medido ainda') : k.progresso + ' de ' + k.alvo + ' ' + esc(k.unidade)) + '</small></div>';
       }).join('') + '</div>'
     + '<p class="tp6-regras">' + (bonus
-      ? 'Placar da semana (o mesmo do app e do gestor): venda 100 (negócio em Fechado; Ag. Pagamento não conta) · reunião com desfecho registrado no app 25 (uma por restaurante na semana) · visita com prova 3 (GPS até 200 m ou foto; até 6 por dia; em lead criado na hora, só com foto da fachada). Desempate: vendas, reuniões, visitas. Fecha sexta às 23:59; o ganhador aparece na segunda às 08:00 e o pagamento é com o financeiro.'
+      ? 'Placar da semana (o mesmo do app e do gestor): venda 100 (negócio em Fechado; Ag. Pagamento não conta) · reunião com desfecho registrado no app 25 (uma por restaurante na semana) · visita com prova 3 (check-in com GPS até 200 m; foto só quando o GPS não confirma; até 6 por dia). Desempate: vendas, reuniões, visitas. Fecha sexta às 23:59; o ganhador aparece na segunda às 08:00 e o pagamento é com o financeiro.'
       : 'Pontos: visita provada 20 (GPS ou foto) · demo realizada 50 (o negócio entrou em Demo/Proposta) · contrato 200. Visita declarada não pontua. O ranking é pela % da sua meta; desempate por contratos e MRR. A semana fecha segunda às 9h.') + '</p>';
 }
 
@@ -81035,8 +81035,7 @@ GV2.v5Grupos = function () {
   }
   /* v6 (09/10/26): duas situações de "pergunte no 1:1" — nunca travam e não somam no selo (sev 3).
      Pino movido: 3+ check-ins de hoje com o pino arrastado 50 m ou mais na hora do check-in.
-     Lead criado na hora SEM FOTO: mais da metade das visitas com prova de hoje em lead criado no momento e sem
-     foto da fachada (o pino nasce onde a pessoa está: o GPS não prova a porta; a foto prova). */
+     (o de lead criado na hora saiu no mesmo dia: o check-in com GPS basta) */
   const semHoje = GV2.v5Semana(b.agora.iso);
   if (semHoje && semHoje.estado === 'ok') {
     const pm = [];
@@ -81048,11 +81047,8 @@ GV2.v5Grupos = function () {
       chips: pm.map(function (x) { return chip(x.p, x.n + ' pinos · maior ' + GV2.v5Metros(x.max)); }),
       btn: 'Ver o dia', acao: 'v5dia:' + pm[0].p.id + ':' + b.agora.iso });
   }
-  const ln = b.planoErro ? [] : b.pessoas.map(function (p) { const d = (p.semana || []).find(function (x) { return x.hoje; }) || {}; return { p: p, n: d.leadSemFoto || 0, t: d.todas || 0 }; })
-    .filter(function (x) { return x.t > 0 && x.n * 2 > x.t; });
-  if (ln.length) g.push({ k: 'leadnovo', l: 'Lead criado na hora sem foto', sev: 3, regra: 'mais da metade das visitas com prova de hoje, sem foto da fachada · pergunte no 1:1',
-    chips: ln.map(function (x) { return chip(x.p, x.n + ' de ' + x.t); }),
-    btn: 'Ver o dia', acao: 'v5dia:' + ln[0].p.id + ':' + b.agora.iso });
+  /* 09/10/26: o aviso de lead criado na hora saiu — o check-in com GPS basta, a foto é só para quando o GPS
+     não confirma (Julyan). O número segue como informação na Pessoa › Rua · 7 dias. */
   /* 09/10/26: de madrugada a linha listava o time inteiro ('costuma 14:41' às 00:11) — o dia de rua
      ainda não começou, então antes das 06:00 ela não aparece (só informa, não pede ação). */
   const ns = b.planoErro || b.agora.min < 360 ? [] : b.pessoas.filter(function (p) { return sit[p.id].k === 'naosaiu'; });
@@ -82350,11 +82346,10 @@ GV2.v6Rua7Conta = function (p) {
   const semPlano = GV2.base.planoErro || null;
   const todas = semPlano ? null : soma('todas'), leadNovo = semPlano ? null : soma('leadNovo'), leadSemFoto = semPlano ? null : soma('leadSemFoto'), contatos = semPlano ? null : soma('contatos');
   return { estado: 'ok', ini: r.ini, hoje: r.hoje, vis: r.vis, fotos: fotos, pinos: pinos, pinoDia: pinoDia, todas: todas, leadNovo: leadNovo, leadSemFoto: leadSemFoto, contatos: contatos, semPlano: semPlano,
-    alerta: (todas > 0 && leadSemFoto * 2 > todas) || pinoDia };
+    alerta: pinoDia };
 };
 GV2.v6RuaTexto = function (c) {
   const partes = [];
-  if (c.todas > 0 && c.leadSemFoto * 2 > c.todas) partes.push(c.leadSemFoto + ' de ' + c.todas + ' visitas com prova em lead criado na hora sem foto da fachada');
   if (c.pinos.length) partes.push(GV2.pl(c.pinos.length, 'pino movido', 'pinos movidos') + ' na semana (maior ' + GV2.v5Metros(Number(c.pinos[0].pino_movido_m)) + ')');
   return partes;
 };
@@ -82384,8 +82379,8 @@ GV2.render.v6Rua7 = function (p) {
   const tiles = '<div class="gv2-v5-quatro">'
     + tile('Fotos', c.vis.length ? c.fotos.length + ' de ' + c.vis.length : '—', c.vis.length ? 'check-ins com foto · ' + (c.vis.length - c.fotos.length) + ' só com GPS' : 'nenhum check-in em 7 dias')
     + tile('Pinos movidos', String(c.pinos.length), c.pinos.length ? 'maior ' + GV2.v5Metros(Number(c.pinos[0].pino_movido_m)) + ' · ' + ((GV2.base.nomeCliente && GV2.base.nomeCliente(c.pinos[0].client_id)) || 'cliente') + ', ' + GV2.diaCurto(c.pinos[0].dia) : 'nenhum pino arrastado na hora do check-in', c.pinoDia ? 't-av' : '')
-    + tile('Lead criado na hora', c.todas ? c.leadNovo + ' de ' + c.todas : '—', c.semPlano ? 'o planejamento não respondeu (' + c.semPlano + ')' : c.todas ? 'visitas com prova · ' + (!c.leadNovo ? '' : c.leadSemFoto ? c.leadSemFoto + ' sem foto da fachada · ' : 'todas com foto · ') + (c.todas - c.leadNovo) + ' em lead que já existia' : 'nenhuma visita com prova em 7 dias', c.todas && c.leadSemFoto * 2 > c.todas ? 't-av' : '',
-      c.todas ? '<i class="gv2-v6-barra' + (c.leadSemFoto * 2 > c.todas ? ' is-av' : '') + '"><i style="width:' + pctLead + '%"></i></i>' : '')
+    + tile('Lead criado na hora', c.todas ? c.leadNovo + ' de ' + c.todas : '—', c.semPlano ? 'o planejamento não respondeu (' + c.semPlano + ')' : c.todas ? 'visitas com prova · ' + (c.todas - c.leadNovo) + ' em lead que já existia · o check-in com GPS basta' : 'nenhuma visita com prova em 7 dias', '',
+      c.todas ? '<i class="gv2-v6-barra"><i style="width:' + pctLead + '%"></i></i>' : '')
     + tile('Contatos de campo', c.semPlano ? '—' : String(c.contatos), c.semPlano ? 'o planejamento não respondeu (' + c.semPlano + ')' : c.contatos ? 'WhatsApp e ligação registrados no app' : 'nenhum contato registrado no app em 7 dias')
     + '</div>';
   const alerta = c.alerta ? '<div class="gv2-v6-alerta"><span>' + GV2.e(GV2.lista(GV2.v6RuaTexto(c)).replace(/^./, function (l) { return l.toUpperCase(); }) + '. Vale perguntar no 1:1; o app não trava nada. Já está na pauta.') + '</span>'
@@ -82461,14 +82456,14 @@ GV2.render.v6GavPontos = function () {
     + '<div><span>' + GV2.e(GV2.pl(sel.vendas, 'venda', 'vendas') + ' × 100') + '</span><b class="num">' + sel.vendas * 100 + '</b></div>'
     + '<div><span>' + GV2.e(GV2.pl(sel.reunioes, 'reunião', 'reuniões') + ' × 25') + '</span><b class="num">' + sel.reunioes * 25 + '</b></div>'
     + '<div><span>' + GV2.e(GV2.pl(sel.visitas, 'visita', 'visitas') + ' × 3') + '</span><b class="num">' + sel.visitas * 3 + '</b></div>'
-    + (sel.visitasForaDoTeto || sel.leadNovoSemFoto ? '<div class="is-fora"><span>' + GV2.e('não pontuaram: ' + [sel.visitasForaDoTeto ? sel.visitasForaDoTeto + ' acima de 6 no dia' : '', sel.leadNovoSemFoto ? sel.leadNovoSemFoto + ' em lead criado na hora sem foto' : ''].filter(Boolean).join(' · ')) + '</span><b class="num">0</b></div>' : '')
+    + (sel.visitasForaDoTeto || sel.leadNovoSemFoto ? '<div class="is-fora"><span>' + GV2.e('não pontuaram: ' + [sel.visitasForaDoTeto ? sel.visitasForaDoTeto + ' acima de 6 no dia' : '', ''].filter(Boolean).join(' · ')) + '</span><b class="num">0</b></div>' : '')
     + '<div class="is-total"><b>' + GV2.e('Total · ' + sel.pos + 'º') + '</b><b class="num">' + sel.pontos + ' pts</b></div></div>' : '';
   return it(1, 'Venda feita', 'negócio que chegou em Fechado (Ganho ou Enviado Onboarding) na semana, no HubSpot · Ag. Pagamento não conta', 100)
     + it(2, 'Reunião realizada', 'com desfecho registrado no app · uma por restaurante na semana', 25)
-    + it(3, 'Visita na rua', 'com prova (GPS até 200 m ou foto) · um restaurante por dia · até 6 por dia · em lead criado na hora, só com foto da fachada', 3)
+    + it(3, 'Visita na rua', 'com prova: check-in com GPS até 200 m (foto só quando o GPS não confirma) · um restaurante por dia · até 6 por dia', 3)
     + '<div class="gv2-v6-texto"><small>Prêmio</small><span>O 1º da semana recebe <b>R$ 250</b>. A semana fecha na sexta às 23:59. O ganhador fica gravado na segunda às 08:00, aqui e no app. O pagamento é com o financeiro.</span>'
     + '<small>Desempate</small><span>mais vendas → mais reuniões → mais visitas</span>'
-    + '<small>Não conta</small><span>visita declarada sem prova · a 7ª visita em diante no mesmo dia · visita em lead criado na hora sem foto · reunião sem desfecho · negócio que sai de Fechado antes do fechamento</span></div>'
+    + '<small>Não conta</small><span>visita declarada sem prova · a 7ª visita em diante no mesmo dia · reunião sem desfecho · negócio que sai de Fechado antes do fechamento</span></div>'
     + conta + '<span class="gv2-v6-fonte">Fonte: HubSpot (Fechado) · client_meetings (desfecho) · visitas_com_prova · uma função só: pontos_da_semana</span>';
 };
 
