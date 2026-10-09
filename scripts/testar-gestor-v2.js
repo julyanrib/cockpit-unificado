@@ -576,13 +576,7 @@ tabelas.gv2_falta_etapa = [
     checar('0185: os nomes vêm da função numa ida só (sem a segunda ida por lotes)', viaFuncao, global.__rpcLog.join());
     checar('0185: com a função fora, a busca antiga por lotes entra e o nome continua lá', reserva);
   }
-  /* "OS MESMOS NÚMEROS EM TUDO" (08/10/26): o executivo lê o Plano e as Visitas da mesma fonte do
-     gestor; o "0/5 registrados · 5 esperando" do Planejamento sai; a régua conta repetido uma vez */
-  checar('executivo: Hoje e Planejamento usam Plano e Visitas do planejamento_do_time; sai "registrados · esperando"',
-    tpl.indexOf("supa.rpc('planejamento_do_time', { p_segunda: seg, p_donos: [String(owner)], p_dia: iso })") > 0 && tpl.indexOf("h10Item('Visitas'") > 0
-      && tpl.indexOf("'registrados · ' + ritmo.esperando") < 0 && tpl.indexOf('const m = exMedidoDoDia(hojeIso);') > 0 && tpl.indexOf("' paradas feitas hoje'") < 0);
-  checar('executivo: "régua estourada" conta o negócio repetido uma vez e deixa Ag. Pagamento de fora (como o gestor)',
-    tpl.indexOf('if (/pagamento/i.test(etapa)) return false;') > 0 && tpl.indexOf('GV2.nomeNorm(nome)') > 0 && tpl.indexOf('const acimaDoSlaCount = (r.travados || []).length;') < 0);
+  /* O cockpit do executivo é do design (pedido de 08/10/26): os números dele não se mexem por aqui */
   {
     const ht2 = GV2.render.time();
     checar('gestor: "Visitas com prova" é toda visita com prova contra a meta, com o Plano embaixo (o mesmo par do app)',

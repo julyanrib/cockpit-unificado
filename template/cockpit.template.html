@@ -19006,22 +19006,7 @@ async function renderMeuPainel() {
   // Ag. Pagamento é carteira quente. Evita o painel mostrar menos quentes porque
   // o snapshot global de temperatura é limitado aos 12 primeiros do time.
   const meusQuentesCount = agendaQuentes([r]).length;
-  /* 08/10/26 (auditoria do app do executivo, E4): a mesma conta do gestor v4 — o negócio repetido
-     (mesmo dono, mesmo nome) conta uma vez e Ag. Pagamento é do financeiro, não é travado. O André
-     lia 7 com o Sushi Delícia duas vezes (Conversa com decisor e Visita). */
-  const acimaDoSlaCount = (function () {
-    const vistos = {};
-    return (r.travados || []).filter(function (l) {
-      const etapa = String((l && (l.stage || l.etapa || l.stageLabel)) || '');
-      if (/pagamento/i.test(etapa)) return false;
-      const nome = String((l && (l.name || l.dealname || l.nome)) || '');
-      const k = (typeof GV2 !== 'undefined' && GV2.nomeNorm) ? GV2.nomeNorm(nome) : nome.trim().toLowerCase();
-      if (!k) return true;
-      if (vistos[k]) return false;
-      vistos[k] = 1;
-      return true;
-    }).length;
-  })();
+  const acimaDoSlaCount = (r.travados || []).length;
 
   // (27/08/26) O chip "aderência à Daily" saiu daqui. Ele dividia visitas realizadas
   // pelas PROMETIDAS — então melhorava quando a pessoa prometia menos, e piorava quando
@@ -38582,16 +38567,11 @@ function pl6DadosFinal(rep) {
     kpis: [
       { rot: 'Visitas agendadas', v: String(agendadas), cor: agendadas ? '#1E9E7B' : 'var(--ter)' },
       { rot: 'Dias cobertos', v: diasCobertos + '/5', cor: 'var(--ink)' },
-      /* 08/10/26: era "registrados/passados" (marca manual desta tela) e dizia "0/5 · 5 esperando" em
-         vermelho para quem fez 5 visitas com prova. Agora é o PLANO, a mesma conta do gestor e do app. */
-      (function () {
-        const hojeIso = h10HojeISO();
-        const m = exMedidoDoDia(hojeIso);
-        if (!m) { exPlanoMedido(hojeIso, function () { if (typeof renderAgenda === 'function') renderAgenda(); }); return { rot: 'Hoje', v: '…', cor: 'var(--ter)', sub: 'lendo o plano de hoje' }; }
-        if (!m.planejadas) return { rot: 'Hoje', v: '—', cor: 'var(--ter)', sub: m.provadas ? exVisitasTxt(m) + ' · sem plano' : 'nada no plano de hoje' };
-        return { rot: 'Hoje', v: m.feitasDoPlano + '/' + m.planejadas, cor: m.feitasDoPlano >= m.planejadas ? '#1E9E7B' : 'var(--ink)',
-          sub: ['plano com prova', exVisitasTxt(m)].concat(exNotas(m)).join(' · ') };
-      })()
+      { rot: 'Hoje', v: ritmo.passados ? (ritmo.registrados + '/' + ritmo.passados) : '—',
+        cor: !ritmo.passados ? 'var(--ter)' : (ritmo.esperando ? '#E51A31' : '#1E9E7B'),
+        sub: !ritmo.passados ? 'nada passou ainda'
+          : (ritmo.esperando ? 'registrados · ' + ritmo.esperando + ' esperando'
+            : 'registrados · tudo em dia') }
     ],
     /* ══ 1.7 · A TIRA DE ABAS DO CELULAR ══════════════════════════════════════════
        Cada aba diz o que tem naquele dia, e o que ela diz não é o mesmo em todos:
@@ -60904,42 +60884,6 @@ function v5TextoDaFaixaPlano(plano, visitas, meta, hora) {
    mesma ordem, o mesmo "≈ horário" e os mesmos cadeados do Planejamento e da Agenda do app).
    O dia vem do banco por uma leitura só (field_routes de hoje e do próximo dia útil); antes
    de ela chegar, cada bloco diz "lendo" — nunca um zero inventado. */
-/* ══ OS DOIS NÚMEROS DO DIA DO EXECUTIVO (08/10/26, "os mesmos números em tudo") ══════════════
-   A auditoria da conta do André achou o mesmo dia em sete contas: 4 de 13 no gestor, 5 de 11 aqui no
-   Hoje (paradas da rota feitas, mesmo sem prova), 0/5 "registrados" no Planejamento. Agora há duas,
-   da MESMA fonte do cockpit do gestor (planejamento_do_time, a linha da própria pessoa):
-     PLANO   = paradas do plano com visita provada de paradas do plano (sem lugar no y, à parte);
-     VISITAS = toda visita com prova do dia de meta. Visita sem prova não conta em nenhum. */
-const EX_MEDIDO = { porSegunda: {}, lendo: {} };
-function exSegundaDe(iso) { const d = new Date(iso + 'T12:00:00Z'); const w = d.getUTCDay(); d.setUTCDate(d.getUTCDate() - ((w + 6) % 7)); return d.toISOString().slice(0, 10); }
-function exMedidoDoDia(iso) { const m = EX_MEDIDO.porSegunda[exSegundaDe(iso)]; return m ? (m[iso] || null) : null; }
-async function exPlanoMedido(iso, aoChegar) {
-  const seg = exSegundaDe(iso);
-  if (EX_MEDIDO.porSegunda[seg]) return EX_MEDIDO.porSegunda[seg];
-  if (EX_MEDIDO.lendo[seg]) return EX_MEDIDO.lendo[seg];
-  const owner = typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.ownerId;
-  if (typeof supa === 'undefined' || !supa || !owner) return null;
-  EX_MEDIDO.lendo[seg] = (async function () {
-    try {
-      const r = await supa.rpc('planejamento_do_time', { p_segunda: seg, p_donos: [String(owner)], p_dia: iso });
-      if (r.error) throw r.error;
-      const p = r.data && r.data.pessoas && r.data.pessoas[0];
-      const mapa = {};
-      ((p && p.dias) || []).forEach(function (d) {
-        mapa[d.dia] = { planejadas: Number(d.planejadas) || 0, feitasDoPlano: Number(d.feitasDoPlano) || 0, provadas: Number(d.provadas) || 0,
-          fora: Number(d.fora) || 0, semLugar: Number(d.semLugar) || 0, feitas: Number(d.feitas) || 0, meta: Number(d.meta) || 6 };
-      });
-      EX_MEDIDO.porSegunda[seg] = mapa;
-      if (typeof aoChegar === 'function') { try { aoChegar(); } catch (e) { /* a tela repinta na próxima */ } }
-      return mapa;
-    } catch (e) { return null; } finally { delete EX_MEDIDO.lendo[seg]; }
-  })();
-  return EX_MEDIDO.lendo[seg];
-}
-/* "Plano 4 de 13 · 5 de 6 visitas com prova" — e as notas: sem lugar, fora do plano */
-function exPlanoTxt(m) { return 'Plano ' + m.feitasDoPlano + ' de ' + m.planejadas; }
-function exVisitasTxt(m) { return m.provadas + ' de ' + m.meta + (m.meta === 1 ? ' visita' : ' visitas') + ' com prova'; }
-function exNotas(m) { const o = []; if (m.semLugar) o.push(m.semLugar + ' sem lugar no mapa'); if (m.fora) o.push('+' + m.fora + ' fora do plano'); return o; }
 const H10 = { dia: null, amanha: null, lendo: false, em: 0, falhou: false };
 function h10HoraBRT() {
   const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hourCycle: 'h23', timeZone: 'America/Sao_Paulo' }));
@@ -60973,16 +60917,14 @@ function h10MancheteBase(nSla) {
 function h10Manchete(dia, nSla, semDesfecho) {
   if (!dia) return h10MancheteBase(nSla);
   if (h10Noite()) {
-    const m = exMedidoDoDia(h10HojeISO());
-    const partes = m ? (m.planejadas ? [exPlanoTxt(m), exVisitasTxt(m)] : ['Nenhuma parada no plano de hoje', exVisitasTxt(m)])
-      : [dia.total ? 'Plano: lendo…' : 'Nenhuma parada no plano de hoje'];
+    const partes = [dia.total ? dia.feitas + ' de ' + dia.total + ' paradas feitas hoje' : 'Nenhuma parada no plano de hoje'];
     if (H10.semFicha && H10.semFicha.semFicha > 0) partes.push(H10.semFicha.semFicha + (H10.semFicha.semFicha === 1 ? ' visita sem ficha' : ' visitas sem ficha'));
     return partes.join(' · ') + '.';
   }
   if (!dia.total) return 'Hoje: nada no plano ainda. ' + (nSla > 0 ? 'Comece pelos ' + nSla + ' que passaram da régua.' : 'Monte a rota no app.');
   let t = 'Hoje: ' + dia.total + (dia.total === 1 ? ' parada' : ' paradas') + (dia.bairro ? ' em ' + dia.bairro : '')
     + (dia.primeira ? ', 1ª ≈ ' + dia.primeira : '') + (dia.fixo ? ' e compromisso às ' + dia.fixo : '') + '.';
-  { const m = exMedidoDoDia(h10HojeISO()); if (m && (m.feitasDoPlano || m.provadas)) t += ' ' + exPlanoTxt(m) + ' · ' + exVisitasTxt(m) + '.'; }
+  if (dia.feitas) t += ' ' + dia.feitas + ' feita' + (dia.feitas === 1 ? '' : 's') + '.';
   if (nSla > 0) t += ' Antes de sair, ' + nSla + (nSla === 1 ? ' lead passou da régua.' : ' leads passaram da régua.');
   return t;
 }
@@ -60995,11 +60937,7 @@ function h10ProntoHTML(r, diag, dia, amanha, semDesfecho) {
   const hoje = h10HojeISO();
   if (h10Noite()) {
     return '<span class="h10-pronto-rot">Fechar o dia</span>'
-      + (function () {
-        const m = exMedidoDoDia(hoje);
-        return h10Item('Visitas', m ? [exVisitasTxt(m)].concat(m.planejadas ? [exPlanoTxt(m).toLowerCase()] : [], exNotas(m)).join(' · ') : (H10.falhou ? 'não carregou' : 'lendo…'),
-          m ? m.provadas >= m.meta : null, h10LinkAgenda(hoje, 'Ver'));
-      })()
+      + h10Item('Check-ins', dia ? (dia.total ? dia.feitas + ' de ' + dia.total + ' paradas' : 'nenhuma parada hoje') : (H10.falhou ? 'não carregou' : 'lendo…'), dia ? (dia.total ? dia.feitas >= dia.total : null) : null, h10LinkAgenda(hoje, 'Ver'))
       + (H10.semFicha
         ? h10Item('Como foi', H10.semFicha.visitas ? (H10.semFicha.semFicha ? H10.semFicha.semFicha + (H10.semFicha.semFicha === 1 ? ' visita sem ficha' : ' visitas sem ficha') : 'todas as ' + H10.semFicha.visitas + ' com ficha') : 'nenhuma visita hoje',
           H10.semFicha.visitas ? !H10.semFicha.semFicha : null, h10LinkAgenda(hoje, 'Registrar'))
@@ -61127,8 +61065,7 @@ async function h10PreencherDia(r, nSla, diag, semDesfecho) {
     if (!uid) throw new Error('sem sessão');
     const hoje = h10HojeISO();
     const res = await Promise.all([h10LerDia(uid, hoje), h10Noite() ? h10LerDia(uid, h10ProximoUtil(hoje)) : Promise.resolve(null),
-      h10LerOntem(uid, h10UtilAnterior(hoje)).catch(function () { return null; }), h10LerSemFicha(uid, hoje).catch(function () { return null; }),
-      exPlanoMedido(hoje).catch(function () { return null; })]);
+      h10LerOntem(uid, h10UtilAnterior(hoje)).catch(function () { return null; }), h10LerSemFicha(uid, hoje).catch(function () { return null; })]);
     H10.dia = res[0]; H10.amanha = res[1]; H10.ontem = res[2]; H10.semFicha = res[3]; H10.em = Date.now(); H10.falhou = false;
   } catch (e) {
     console.warn('[hoje] a rota de hoje não carregou:', e && e.message);
@@ -75222,7 +75159,7 @@ GV2.agregar = function (pessoas, negocios, itensTodos) {
     planos: somar(function (p) { return p.hoje.paradas_plano > 0 ? 1 : 0; }), paradas: somar(function (p) { return p.hoje.paradas_plano; }),
     visitas: somar(function (p) { return p.hoje.visitas_com_prova; }), meta: somar(function (p) { return p.meta_visitas_dia; }),
     /* 08/10/26 ("os mesmos números em tudo"): VISITAS = toda visita com prova do dia, contra a META;
-       "visitas" acima é o x do PLANO (só as do plano). O app do executivo mostra os dois iguais. */
+       "visitas" acima é o x do PLANO (só as do plano). */
     visitasTodas: somar(function (p) { return p.hoje.visitas_todas || 0; }),
     esperado: somar(function (p) { return p.esperado; }),
     ontemPlan: somar(function (p) { return p.ontem.paradas_plano; }), ontemProva: somar(function (p) { return p.ontem.visitas_com_prova; }),
@@ -80457,7 +80394,7 @@ GV2.render.v5PorPessoa = function (sit) {
     const abre = 'v5dia:' + p.id + ':' + b.agora.iso;
     const plan = p.hoje.paradas_plano;
     /* 08/10/26: "Plano hoje" é o PLANO (x de y, só do plano) e "Visitas hoje" são as VISITAS com prova
-       contra a meta — os mesmos dois números que o executivo vê no app e no cockpit dele */
+       contra a meta */
     const planoT = fonte ? '—' : plan ? p.hoje.visitas_com_prova + ' de ' + plan : 'sem rota';
     const planoS = fonte ? 'sem resposta' : plan ? (p.hoje.sem_lugar ? GV2.pl(p.hoje.sem_lugar, 'sem lugar no mapa', 'sem lugar no mapa') : ok && d.semHora ? GV2.pl(d.semHora, 'parada sem hora', 'paradas sem hora') : GV2.pl(plan, 'parada', 'paradas') + ', todas com hora') : (p.hoje.agenda && p.hoje.agenda.n ? GV2.resumoDosCompromissos(p.hoje.agenda) : 'nada na agenda');
     const j = ok ? d.jornada : null;
