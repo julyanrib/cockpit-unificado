@@ -103,13 +103,16 @@ checar('não existe uma segunda função de render para o celular',
 console.log('');
 console.log('3 · A TIRA DE ABAS DIZ O QUE TEM EM CADA DIA');
 
-checar('a aba de hoje mostra registrados sobre vencidos',
-  /marca = \(vencidos\.length - semReg\) \+ '\/' \+ vencidos\.length;/.test(codigo),
+/* PLANEJAMENTO v3 (09/10/26): a aba de hoje e dos dias que passaram mostra o PLANO x/y da mesma
+   conta do gestor (pl6ResumoApp) — o "registrados" e a bolinha de "sem registro" saíram com a
+   marca manual que ninguém usava. */
+checar('a aba de hoje e dos dias passados mostra o Plano x/y do app',
+  codigo.indexOf('const r6a = (ehHoje || passado) ? pl6ResumoApp(dd.iso) : null;') > -1
+    && codigo.indexOf("marca = r6a.x + '/' + r6a.y;") > -1,
   'aba que só mostra o nome do dia obriga a tocar em cinco para achar o trabalho');
-checar('dia passado com pendência sai em vermelho, com bolinha',
-  /* v5 (28/09/26): o mesmo vermelho, agora token (--red-ink), que clareia no escuro */
-  /marca = semReg \+ ' ●'; cor = 'var\(--red-ink\)';/.test(codigo),
-  'é o único estado da tira que cobra alguma coisa');
+checar('e a palavra "registrados" não volta para a tira',
+  codigo.indexOf('marca = (vencidos.length - semReg)') < 0,
+  'o design v3 proíbe "registrados" e "esperando" na tela');
 checar('dia futuro mostra quantos tem, e dia vazio diz que está livre',
   /marca = String\(its\.length\); cor = 'var\(--ink\)';/.test(codigo)
     && /marca = passado \? '—' : 'livre';/.test(codigo),

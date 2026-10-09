@@ -25,20 +25,21 @@ const checar = (nome, cond, detalhe) => { if (cond) { ok++; return; } falhas.pus
    O motivo da versão, no handoff: "o problema da versão anterior era desalinhamento".
    Corpo e rodapé compartilham a MESMA grade — é isso que faz as bordas verticais
    descerem retas da fila até o pé da tela. */
-checar('a aba abre um quadro único', template.indexOf('<div class="h9">') > -1);
-checar('o corpo usa a grade do quadro', template.indexOf('<div class="h9-grade">') > -1);
-checar('e o rodapé usa a MESMA grade, não outra',
-  template.indexOf('<div class="h9-pe h9-grade">') > -1,
-  'grades diferentes entre corpo e rodapé = a borda vertical muda de lugar no meio da tela');
-checar('a grade é a do handoff: minmax(0,1fr) 430px',
-  template.indexOf('.h9-grade{display:grid;grid-template-columns:minmax(0,1fr) 430px;}') > -1);
+/* HOJE v3 (09/10/26, ws.zip): o quadro único h9 deu lugar a quatro blocos em ordem — os 5
+   números do gestor, "o que precisa de você", e a grade de baixo (fila | o meu dia). */
+const v3Topo = template.indexOf('<div id="exhTopo"'), v3Prec = template.indexOf('<section id="exhPrecisa"'), v3Grade = template.indexOf('<div class="exh-grade">');
+checar('a Hoje v3 abre com os 5 números, depois "o que precisa de você", depois a grade', v3Topo > -1 && v3Prec > v3Topo && v3Grade > v3Prec);
+checar('a grade de baixo tem a fila à esquerda e o meu dia à direita',
+  template.indexOf('<div class="exh-esq">', v3Grade) > -1 && template.indexOf('<section id="exhDia"', v3Grade) > template.indexOf('<div class="exh-esq">', v3Grade));
+checar('e a fila é a de sempre (h8FilaCardHTML), não uma segunda', template.indexOf('<div id="exhFilaCheia"', v3Grade) > -1 && /exhFilaCheia[^>]*>\$\{h8FilaCardHTML\(r, diagDia\)\}/.test(template));
+checar('a grade é a do handoff v3: fila 1.35fr | o meu dia 1fr',
+  template.indexOf('.exh-grade{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);') > -1);
 /* NADA SOLTO ABAIXO DO CARD: o recado do gestor e os fechamentos eram duas seções
    irmãs do quadro, cada uma com a sua largura. */
-checar('o recado do gestor mora dentro do rodapé do quadro',
-  template.indexOf('<div class="h9-pe-esq">') > -1
-  && template.indexOf('<div id="meuPainelSugestoes"></div>') > template.indexOf('<div class="h9-pe-esq">'));
-checar('os fechamentos da semana também',
-  template.indexOf('<div class="h9-pe-dir">${buildVitoriasHTML(r)}</div>') > -1);
+checar('o recado do gestor saiu da Hoje (foi para "O que combinamos", no Desenvolvimento)',
+  template.indexOf('<div id="meuPainelSugestoes"></div>') < 0 && template.indexOf('DV.recados') > -1);
+checar('os fechamentos da semana continuam, na coluna da direita',
+  template.indexOf('<div class="exh-vit">${buildVitoriasHTML(r)}</div>') > -1);
 
 /* ── 2. O HERO ESCURO ────────────────────────────────────────────────────────────
    A classe nova entra AO LADO da antiga e cuida só da tinta: o layout, os stats e o
@@ -48,11 +49,12 @@ checar('os fechamentos da semana também',
 /* REVISÃO GERAL (05/10/26): o herói do Hoje passou a ser .h10-heroi (manchete por regra, 3
    números, 1 CTA). As regras de cor abaixo seguem valendo para o herói antigo, que outras
    telas ainda usam. */
-checar('o hero recebe a classe da repaginação', template.indexOf('<div class="h10-heroi">') > -1);
-checar('e a regra vence a antiga por especificidade, não por ordem',
-  /* revisão geral (05/10/26): o herói do Hoje é .h10-heroi, escuro nos dois temas */
-  template.indexOf('.h10-heroi{background:var(--hero-grad);') > -1,
-  'com um seletor de uma classe só, .xv3-hero vence e o hero volta a ficar claro');
+checar('os 5 cartões são os da Pessoas do gestor (Plano hoje, Semana, Mês, Porta → decisor, Sem desfecho)',
+  ['card(\'Plano hoje\'', 'card(\'Semana\'', 'card(\'Mês\'', 'card(\'Porta → decisor\'', 'card(\'Sem desfecho\''].every(function (k) { return template.indexOf(k) > -1; }));
+checar('a Hoje v3 usa os tokens do gestor (--gv2-*), nos dois temas',
+  /* v3 (09/10/26): o herói saiu; a tela inteira mora em .gv2-tokens, que tem o claro e o escuro */
+  template.indexOf('<div class="gv2-tokens exh">') > -1 && template.indexOf('.exh-num{') > -1 && /\.exh-num\{[^}]*background:var\(--gv2-card\)/.test(template),
+  'cor solta no lugar do token quebra o escuro');
 /* AS CORES DE ESTADO SOBREVIVEM AO ESCURO: vermelho sobre tinta some, e "visita
    pendente" precisa ser legível justamente no dia em que ela importa. */
 checar('vermelho, âmbar e verde clareiam sobre a tinta',
@@ -113,8 +115,8 @@ checar('nem o contador prontos/total no cabeçalho dele',
    Definir e não chamar é o defeito que mais aparece nesta base — o próprio h8LigarFila
    quase subiu assim. */
 checar('o script existe', template.indexOf('function h9ScriptHTML(r, diag)') > -1);
-checar('e é CHAMADO na coluna, não só definido',
-  template.indexOf('${h9ScriptHTML(r, diagDia)}') > -1);
+checar('e virou o botão "copiar resumo para o gestor", que usa o mesmo texto',
+  template.indexOf('data-exh="copiar"') > -1 && /EXH\.resumoTexto = function[\s\S]{0,1500}h9ScriptTexto\(atual\.r, atual\.diag\)/.test(template));
 /* DELEGADO desde 06/10/26: a daily repinta quando a rota chega, e o ouvinte preso no
    botão morria com ele. O clique é ouvido na raiz da aba, ligado uma vez. */
 checar('o copiar tem caminho',
@@ -164,9 +166,10 @@ checar('sem registro o script não afirma que o dia foi vazio',
 /* REVISÃO GERAL (05/10/26): o parágrafo de fontes virou a dica "de onde vêm os números" no
    herói (a prancha manda). O que a guarda protege continua: a tela diz de onde vem o número
    e explica a ordem da fila. */
-checar('a fonte dos números está no herói', template.indexOf('class="h10-fonte"') > -1);
-checar('e explica a ordem da fila',
-  template.indexOf('cadência quebrada → follow-up → visita → touchpoint') > -1);
+checar('cada número diz de que ação da rua nasce (o cockpit é o cérebro das ações do app)',
+  template.indexOf("'das suas visitas com prova no app'") > -1 && template.indexOf("'das suas fichas no app'") > -1 && template.indexOf("'das reuniões que passaram'") > -1);
+checar('e a fila diz a regra dela em uma linha',
+  template.indexOf('a fila de sempre · ★ é a melhor ação') > -1);
 
 /* ── 8. A COLUNA NÃO SOBRA BRANCO (05/09/26) ─────────────────────────────────────
    O Julyan mandou print: a fila cortada e um vão branco antes do rodapé. Medido na
@@ -175,15 +178,15 @@ checar('e explica a ordem da fila',
    direita não tem teto; a esquerda tinha. Depois da correção: vão de 20px, que é o
    padding, e a lista em 862px. */
 checar('a coluna da fila é flex, para a lista poder preencher',
-  template.indexOf('.h9-esq{padding:20px 22px;min-width:0;display:flex;flex-direction:column;}') > -1);
+  template.indexOf('.exh-esq,.exh-dir{display:flex;flex-direction:column;') > -1);
 /* 06/10/26 (prancha do executivo): a fila deixou de rolar por dentro — era uma caixa de
    560 px com 48 itens dentro da página que também rola, e a repintura a devolvia ao topo.
    Agora mostra 7 e abre de 7 em 7. As duas preocupações das guardas antigas continuam
    cobertas: sem teto não sobra branco embaixo, e o corte de 7 é o que impede a rolagem de
    página sem fim no celular (que antes era o trabalho do teto). */
 checar('a lista não tem teto nem rolagem própria',
-  template.indexOf('.h9-esq .h8-fila{max-height:none;min-height:0;overflow:visible;}') > -1
-    && !/\.h8-fila\{[^}]*overflow-y:auto/.test(template),
+  /* v3: a fila não ganha teto em lugar nenhum (nem na pele nova da Hoje) */
+  !/\.h8-fila\{[^}]*overflow-y:auto/.test(template) && !/\.exh [^{]*\.h8-fila\{[^}]*max-height/.test(template),
   'rolagem dentro da rolagem é o que fazia a fila voltar ao topo e prender o dedo');
 checar('e mostra 7 por vez, abrindo mais no fim',
   /recorte\.slice\(0, h8Ver\)/.test(template) && /let h8Ver = 7;/.test(template)
@@ -200,8 +203,8 @@ checar('trocar o filtro volta aos 7 primeiros',
      /Recado do seu gestor/ e dava 2 — a segunda era o COMENTÁRIO que explica a remoção.
      Assertion que mede o próprio comentário é verde que não protege nada. */
   const rotulos = (template.match(/>Recado do seu gestor</g) || []).length;
-  checar('"Recado do seu gestor" aparece uma vez só na tela',
-    rotulos === 1,
+  checar('"Recado do seu gestor" não aparece duplicado em lugar nenhum',
+    rotulos <= 1,
     rotulos + ' ocorrência(s) em markup — o rótulo da célula e o título do painel eram a'
       + ' mesma frase, uma embaixo da outra');
 })();
@@ -483,9 +486,10 @@ checar('o Seu dia sai da rota do app, pela mesma conta do Planejamento, não de 
 
 checar('o "Pronto pra rua?" fica ACIMA da fila, não ao lado nem embaixo',
   (function () {
-    const f = template.indexOf('<div class="h10-pronto" id="h10Pronto">');
-    const g = template.indexOf('<div class="h9-grade">', f);
-    return f > -1 && g > -1 && f < g;
+    /* v3: ele mora no topo de "o que precisa de você" (EXH.prontoHTML), que vem antes da grade da fila */
+    const f = template.indexOf('<section id="exhPrecisa"');
+    const g = template.indexOf('<div class="exh-grade">', f);
+    return f > -1 && g > -1 && f < g && /const pronto = m === 'manha' \? EXH\.prontoHTML\(p, b\) : ''/.test(template);
   }()),
   'ver "por onde começar" antes de "o que eu já combinei" faz a tela recomendar contra '
     + 'o próprio compromisso dele');
