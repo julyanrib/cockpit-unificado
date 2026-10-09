@@ -109,6 +109,10 @@ const COOLDOWN_MINUTOS = 15;
 const RESERVA_MINUTOS = 110;
 
 module.exports = async function handler(req, res) {
+  /* O BOTÃO "ATUALIZAR HUBSPOT" DO GESTOR (09/10/26) mora aqui: o plano Hobby da Vercel aceita 12
+     funções e api/ já tinha 12 — uma 13a derrubou o deploy. Mesma credencial (GITHUB_PAT), lógica
+     e travas em lib/atualizar-hubspot.js. */
+  if (req.query && req.query.acao === 'atualizar') return require('../lib/atualizar-hubspot.js')(req, res);
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
 
   const appSecret = process.env.HUBSPOT_APP_SECRET;
