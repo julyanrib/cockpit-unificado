@@ -8305,6 +8305,17 @@ body.gv2-mapa-cheio{overflow:hidden;}
 .gv2-rt-lista{min-height:0;overflow-y:auto;}
 .gv2-rxg-corpo .gv2-rt-corpo{flex:none;height:max(380px, calc(100vh - 275px));min-height:0;}
 
+.gv2-v5-fotos-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:6px;}
+.gv2-v5-foto{display:flex;flex-direction:column;gap:2px;min-width:0;padding:0;border:0;background:none;text-align:left;cursor:zoom-in;color:inherit;}
+.gv2-v5-foto-img{display:block;aspect-ratio:1;max-width:100%;border-radius:8px;overflow:hidden;background:var(--gv2-chip);}
+.gv2-v5-foto-img img{width:100%;height:100%;object-fit:cover;display:block;}
+.gv2-v5-foto b{font:600 11.5px/1.3 var(--gv2-font);}
+.gv2-v5-foto small{font:500 11px var(--gv2-font);color:var(--gv2-dim);}
+.gv2-v5-foto-grande{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out;}
+.gv2-v5-foto-grande figure{margin:0;max-width:100%;max-height:100%;display:flex;flex-direction:column;gap:8px;align-items:center;}
+.gv2-v5-foto-grande img{max-width:100%;max-height:calc(100vh - 80px);border-radius:10px;object-fit:contain;}
+.gv2-v5-foto-grande figcaption{color:#fff;font:500 13px var(--gv2-font);text-align:center;}
+
 .gv2-v5-pes{gap:12px;}
 .gv2-v5-rende-cab{display:flex;flex-direction:column;gap:2px;}
 .gv2-v5-rende-cab b{font:700 15px var(--gv2-font);}
@@ -8737,7 +8748,7 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -54748,7 +54759,7 @@ GV2.agoraBR = function () {
 GV2.somaDias = function (iso, n) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 GV2.dow = function (iso) { return new Date(iso + 'T12:00:00Z').getUTCDay(); };
 GV2.segundaDe = function (iso) { const w = GV2.dow(iso); return GV2.somaDias(iso, w === 0 ? -6 : 1 - w); };
-GV2.uteisEntre = function (de, ate) { let n = 0, d = de; while (d <= ate) { const w = GV2.dow(d); if (w > 0 && w < 6) n++; d = GV2.somaDias(d, 1); } return n; };
+GV2.uteisEntre = function (de, ate) { let n = 0, d = de; while (d <= ate) { if (GV2.util(d)) n++; d = GV2.somaDias(d, 1); } return n; };
 GV2.DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 GV2.DIAS_LONGOS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 GV2.MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -54961,10 +54972,10 @@ GV2.montar = async function (so) {
   const seg = GV2.segundaDe(agora.iso);
   const diasSemana = [0, 1, 2, 3, 4].map(function (i) { return GV2.somaDias(seg, i); });
   const idxHoje = diasSemana.indexOf(agora.iso);
-  const fds = agora.dow === 0 || agora.dow === 6;
+  const fds = !GV2.util(agora.iso);
 
   let ontemIso = GV2.somaDias(agora.iso, -1);
-  while (GV2.dow(ontemIso) === 0 || GV2.dow(ontemIso) === 6) ontemIso = GV2.somaDias(ontemIso, -1);
+  while (!GV2.util(ontemIso)) ontemIso = GV2.somaDias(ontemIso, -1);
   const ontemNaAnterior = ontemIso < seg;
 
   const conta = function (linhas, chave, filtro) {
@@ -55231,7 +55242,7 @@ GV2.montar = async function (so) {
       else if (resta === 1) status = 'vence amanhã';
       else if (resta === 2) status = 'vence em 2 dias';
       let ate = agora.iso, k = Math.max(0, resta);
-      while (k > 0) { ate = GV2.somaDias(ate, 1); if (GV2.dow(ate) > 0 && GV2.dow(ate) < 6) k--; }
+      while (k > 0) { ate = GV2.somaDias(ate, 1); if (GV2.util(ate)) k--; }
       return { cliente: n.nome, executivo: GV2.prim(GV2.nomeDeLista(pessoas, n.dono)), dono: n.dono, plano: n.plano || GV2.ETAPAS[n.etapa_idx], mrr: n.mrr,
         valeAteRot: n.etapa_idx === 5 ? '—' : (resta < 0 ? GV2.ddmm(GV2.somaDias(agora.iso, resta)) : GV2.ddmm(ate)), status: status, proximo: n.proximo_passo, deal: n.id, ordem: n.etapa_idx === 5 ? 3 : resta < 0 ? 0 : 1 };
     }).sort(function (x, y) { return (x.ordem - y.ordem) || (y.mrr - x.mrr); });
@@ -55244,7 +55255,7 @@ GV2.montar = async function (so) {
   const mesIdx = Number(agora.iso.slice(5, 7)) - 1;
   const fim = GV2.somaDias(agora.iso.slice(0, 8) + '01', 40).slice(0, 8) + '01';
   const diasUteis = GV2.uteisEntre(agora.iso.slice(0, 8) + '01', GV2.somaDias(fim, -1));
-  const prazo = function (n) { let d = agora.iso, k = n; while (k > 0) { d = GV2.somaDias(d, 1); if (GV2.dow(d) > 0 && GV2.dow(d) < 6) k--; } return GV2.DIAS[GV2.dow(d)] + ' ' + GV2.ddmm(d); };
+  const prazo = function (n) { let d = agora.iso, k = n; while (k > 0) { d = GV2.somaDias(d, 1); if (GV2.util(d)) k--; } return GV2.DIAS[GV2.dow(d)] + ' ' + GV2.ddmm(d); };
   const hsEm = DATA.hubspotUpdatedAtISO || null;
 
   return {
@@ -55401,6 +55412,7 @@ GV2.pintar = function () {
   raiz.querySelectorAll('[data-gv2-pxmapa]').forEach(function (el) { GV2.pxMapa.montar(el, guardados['px:' + el.getAttribute('data-gv2-pxmapa')]); });
   raiz.querySelectorAll('[data-gv2-rotamapa]').forEach(function (el) { GV2.rotaMapa.montar(el, guardados.rota); });
   raiz.querySelectorAll('[data-gv2-v5mapa]').forEach(function (el) { GV2.v5Mapa.montar(el, guardados.v5); });
+  if (GV2.v5Fotos) GV2.v5Fotos.ligar(raiz);
   if (GV2.p3Ligar) GV2.p3Ligar(raiz);
   const host = raiz.querySelector('[data-gv2-vender]');
   GV2.vender(host);
@@ -55720,6 +55732,7 @@ GV2.clique = function (ev) {
   if (!el || !raiz.contains(el) || el.disabled) return;
   const a = el.getAttribute('data-gv2');
   if (!a) return;
+  GV2.cliqueEl = el;
   const parte = a.split(':');
   const cmd = parte[0];
   if (GV2.p3Clique && GV2.p3Clique(cmd, parte)) return;
@@ -55924,7 +55937,10 @@ GV2.FOCOS = {
     observar: ['Conduz a demo pela dor do dono?', 'Pede a decisão com data?', 'Trata objeção de preço com o período?', 'Emite a cobrança Asaas na visita?'] }
 };
 GV2.diasCorridos = function (de, ate) { return Math.round((new Date(ate + 'T12:00:00Z') - new Date(String(de).slice(0, 10) + 'T12:00:00Z')) / 86400000); };
-GV2.uteisAdiante = function (iso, n) { let d = iso, k = n; while (k > 0) { d = GV2.somaDias(d, 1); if (GV2.dow(d) > 0 && GV2.dow(d) < 6) k--; } return d; };
+
+GV2.FERIADOS = ['2026-10-12', '2026-11-02', '2026-11-15', '2026-11-20', '2026-12-25', '2027-01-01'];
+GV2.util = function (iso) { const w = GV2.dow(iso); return w > 0 && w < 6 && GV2.FERIADOS.indexOf(iso) < 0; };
+GV2.uteisAdiante = function (iso, n) { let d = iso, k = n; while (k > 0) { d = GV2.somaDias(d, 1); if (GV2.util(d)) k--; } return d; };
 GV2.diaCurto = function (iso) { return GV2.DIAS[GV2.dow(iso)] + ' ' + GV2.ddmm(iso); };
 GV2.semanaRot = function (ini) { return ini.slice(8, 10) + '–' + GV2.ddmm(GV2.somaDias(ini, 4)); };
 GV2.virg = function (n) { return (Math.round(n * 10) / 10).toFixed(1).replace('.', ','); };
@@ -57773,7 +57789,7 @@ GV2.p3Agora = function (p) {
   if (!c) setTimeout(function () { GV2.rotaLer(seg); }, 0);
   const dias = [0, 1, 2, 3, 4].map(function (i) { return GV2.somaDias(seg, i); });
   const dia = GV2.estado.p3dia[p.id] && dias.indexOf(GV2.estado.p3dia[p.id]) >= 0 ? GV2.estado.p3dia[p.id] : (dias.indexOf(b.agora.iso) >= 0 ? b.agora.iso : dias[0]);
-  const util = GV2.dow(b.agora.iso) > 0 && GV2.dow(b.agora.iso) < 6;
+  const util = GV2.util(b.agora.iso);
   const st = GV2.stAgora(p);
 
   const exc = util && p.hoje.paradas_plano === 0
@@ -57959,10 +57975,10 @@ GV2.p3Pe = function (p, sec) {
     ctx = ida ? ida.praca + ' · ' + GV2.diaCurto(GV2.diaDoCampo(p, ida)) : 'nenhuma ida marcada';
     acao = ida && ida.status !== 'confirmada' ? GV2.html.btn({ texto: 'Confirmar ida', tipo: 'prim', tam: 'lg', acao: 'ida:confirmar:' + ida.id })
       : ida ? GV2.html.btn({ texto: 'Ida confirmada', tam: 'lg', feito: true, off: true }) : GV2.html.btn({ texto: 'Marcar ida', tipo: 'prim', tam: 'lg', acao: 'ida:marcar:' + p.id });
-  } else if (semPlano && GV2.dow(GV2.base.agora.iso) > 0 && GV2.dow(GV2.base.agora.iso) < 6) {
+  } else if (semPlano && GV2.util(GV2.base.agora.iso)) {
     ctx = GV2.semRotaHoje(p) + (p.ontem.paradas_plano ? ' · ontem ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : '');
     acao = GV2.html.btn({ texto: GV2.base.foraDaJornada ? 'Pedir o plano de amanhã' : 'Pedir o plano até 15h', tipo: 'prim', tam: 'lg', acao: 'cobrar:pessoa:' + p.id });
-  } else if (p.hoje.visitas_com_prova === 0 && !GV2.base.antesDaJornada && GV2.dow(GV2.base.agora.iso) > 0 && GV2.dow(GV2.base.agora.iso) < 6) {
+  } else if (p.hoje.visitas_com_prova === 0 && !GV2.base.antesDaJornada && GV2.util(GV2.base.agora.iso)) {
     ctx = '0 de ' + p.hoje.paradas_plano + ' com prova ' + (GV2.base.foraDaJornada ? 'hoje' : 'até ' + GV2.hm());
     acao = GV2.html.btn({ texto: 'Cobrar a primeira visita', tipo: 'prim', tam: 'lg', acao: 'v4:cobrarvisita:' + p.id });
   } else {
@@ -58267,7 +58283,7 @@ GV2.v4Promessa = function (p) {
 };
 
 GV2.v4Ordenar = function (b) {
-  const util = GV2.dow(b.agora.iso) > 0 && GV2.dow(b.agora.iso) < 6;
+  const util = GV2.util(b.agora.iso);
   const C = GV2.PESSOAS;
   b.pessoas.forEach(function (p) {
     const d = p.disc || {};
@@ -58951,8 +58967,8 @@ GV2.rxGavClique = function (parte) {
 const DV = { estado: { base: null, p: null, medias: null, mediasErro: null, carregando: null, erro: null, todas: false, rem: null, aberto: {}, como: false, treino: false, gravando: null, fizEm: {}, recados: null, hist: null } };
 GV2.DV = DV;
 
-DV.feriados = ['2026-10-12', '2026-11-02', '2026-11-15', '2026-11-20', '2026-12-25', '2027-01-01'];
-DV.util = function (iso) { const w = GV2.dow(iso); return w > 0 && w < 6 && DV.feriados.indexOf(iso) < 0; };
+DV.feriados = GV2.FERIADOS;
+DV.util = GV2.util;
 DV.habitosTxt = {
   decisor: { t: 'Pedir pelo dono nos primeiros 30 segundos e anotar o nome', foco: 'acesso_decisor', pb: 'Venda na rua · Chegar ao dono na primeira porta', treino: 'Chegar ao dono' },
   disciplina: { t: 'Dar o desfecho da reunião no app ao sair da mesa', foco: 'registro_crm', pb: 'Processos internos · Agenda do app', treino: 'Desfecho em 10 segundos' },
@@ -59418,7 +59434,7 @@ GV2.V5_IC = {
 };
 GV2.v5Ic = function (k, tam, traco) { return '<svg width="' + (tam || 15) + '" height="' + (tam || 15) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (traco || 2) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + GV2.V5_IC[k] + '"/></svg>'; };
 
-GV2.v5ProxUtil = function (iso) { let d = GV2.somaDias(iso, 1); while (GV2.dow(d) === 0 || GV2.dow(d) === 6) d = GV2.somaDias(d, 1); return d; };
+GV2.v5ProxUtil = function (iso) { return GV2.uteisAdiante(iso, 1); };
 
 GV2.v5Semana = function (iso) {
   const seg = GV2.segundaDe(iso);
@@ -59460,7 +59476,9 @@ GV2.v5DiaConta = function (p, iso, c) {
   vis.forEach(function (v) { (porCliente[v.client_id] = porCliente[v.client_id] || []).push(v); });
   const provaTxt = function (v) {
     if (!v.provada) return 'sem prova · ' + (v.motivo || 'declarada');
-    return v.motivo === 'foto' ? 'foto' : 'GPS ' + Math.round(Number(v.distancia_m) || 0) + ' m';
+    const mov = Math.round(Number(v.pino_movido_m) || 0);
+
+    return (v.motivo === 'foto' ? 'foto' : 'GPS ' + Math.round(Number(v.distancia_m) || 0) + ' m') + (mov >= 50 ? ' · pino movido ' + (mov >= 1000 ? GV2.virg(mov / 1000) + ' km' : mov + ' m') : '');
   };
   const itens = plano.map(function (x) {
     const vs = porCliente[x.client_id] || [];
@@ -59492,7 +59510,14 @@ GV2.v5DiaConta = function (p, iso, c) {
     jornada = { n: n, ini: ini, fim: fim, min: min, porta: porta, colados: n >= 4 && porta != null && porta < 10 };
   }
   const x = itens.filter(function (i) { return i.feita; }).length;
+
+  const nomeDe = {};
+  plano.forEach(function (it) { if (it.client_id) nomeDe[it.client_id] = it.nome; });
+  const fotos = vis.filter(function (v) { return v.foto_caminho; }).map(function (v) {
+    return { caminho: v.foto_caminho, min: GV2.minDe(v.visited_at), nome: nomeDe[v.client_id] || (b.nomeCliente ? b.nomeCliente(v.client_id) : '') || 'fora do plano', provada: !!v.provada };
+  });
   return {
+    fotos: fotos,
     estado: 'ok', iso: iso, hoje: iso === hoje, passado: iso < hoje, futuro: iso > hoje, agoraMin: agoraMin,
     itens: itens, x: x, y: itens.length, semLugar: itens.filter(function (i) { return i.grupo === 3; }).length,
     semHora: itens.filter(function (i) { return i.grupo === 2; }).length,
@@ -59687,7 +59712,36 @@ GV2.render.v5Dia = function () {
   const agenda = '<div class="card gv2-v5-mini"><small>Agenda do HubSpot</small>'
     + (d.agenda.n ? d.agenda.itens.map(function (a) { const k = a.tipo === 'ligação' ? 'lig' : a.tipo === 'reunião' ? 'reu' : 'tar'; return '<div class="gv2-v5-ag"><i>' + GV2.v5Ic(k, 12, 2.6) + '</i><b class="num">' + GV2.e(a.hora) + '</b><span>' + GV2.e(GV2.v5AgTxt(a)) + '</span></div>'; }).join('') : '<span>nenhuma tarefa ou reunião neste dia</span>')
     + '<small class="is-sep">Fora do plano</small><span>' + GV2.e(d.futuro ? '—' : d.fora.length ? d.fora.map(function (f) { return f.nome + ' ' + f.hora; }).join(' · ') + ' · não entra no x de y' : 'nenhuma visita fora do plano neste dia') + '</span></div>';
-  return pessoas + dias + '<div class="gv2-v5-dia">' + esq + '<div class="gv2-v5-dia-dir">' + mapa + '<div class="gv2-v5-dia-cards">' + jornada + agenda + '</div></div></div>';
+  const fotos = '<div class="card gv2-v5-mini gv2-v5-fotos"><small>Fotos dos check-ins</small>'
+    + (d.fotos.length ? '<div class="gv2-v5-fotos-g">' + d.fotos.map(function (f) {
+      return '<button type="button" class="gv2-v5-foto" data-gv2="v5foto" data-gv2-foto="' + GV2.e(f.caminho) + '" title="' + GV2.e(f.nome + ' · ' + GV2.hhmm(f.min)) + '"><span class="gv2-v5-foto-img"></span><b class="gv2-ellip">' + GV2.e(f.nome) + '</b><small class="num">' + GV2.e(GV2.hhmm(f.min)) + '</small></button>';
+    }).join('') + '</div>'
+      : '<span>' + GV2.e(d.futuro ? 'o dia ainda não começou' : 'nenhum check-in com foto neste dia · a prova foi por GPS') + '</span>')
+    + '</div>';
+  return pessoas + dias + '<div class="gv2-v5-dia">' + esq + '<div class="gv2-v5-dia-dir">' + mapa + '<div class="gv2-v5-dia-cards">' + jornada + agenda + fotos + '</div></div></div>';
+};
+
+GV2.v5Fotos = {
+  urls: {},
+  ligar: function (raiz) {
+    const els = Array.prototype.slice.call(raiz.querySelectorAll('[data-gv2-foto]'));
+    if (!els.length) return;
+    const agora = Date.now();
+    const pinta = function () { els.forEach(function (el) { const u = GV2.v5Fotos.urls[el.getAttribute('data-gv2-foto')]; const i = el.querySelector('.gv2-v5-foto-img'); if (u && i && !i.firstChild) { const im = document.createElement('img'); im.alt = ''; im.loading = 'lazy'; im.src = u.url; i.appendChild(im); } }); };
+    const faltam = els.map(function (el) { return el.getAttribute('data-gv2-foto'); }).filter(function (c, i, a) { const u = GV2.v5Fotos.urls[c]; return a.indexOf(c) === i && !(u && u.ate > agora); });
+    if (!faltam.length) return pinta();
+    supa.storage.from('fotos-visita').createSignedUrls(faltam, 3600).then(function (r) {
+      ((r && r.data) || []).forEach(function (s) { if (s && s.signedUrl) GV2.v5Fotos.urls[s.path] = { url: s.signedUrl, ate: agora + 50 * 60000 }; });
+      pinta();
+    }, function () {});
+  },
+  abrir: function (el) {
+    const u = GV2.v5Fotos.urls[el.getAttribute('data-gv2-foto')];
+    if (!u) return;
+    let cx = document.getElementById('gv2FotoGrande');
+    if (!cx) { cx = document.createElement('div'); cx.id = 'gv2FotoGrande'; cx.className = 'gv2-v5-foto-grande'; cx.addEventListener('click', function () { cx.remove(); }); document.body.appendChild(cx); }
+    cx.innerHTML = '<figure><img alt="" src="' + GV2.e(u.url) + '"><figcaption>' + GV2.e(el.getAttribute('title') || '') + ' · toque para fechar</figcaption></figure>';
+  }
 };
 
 GV2.v5Mapa = {
@@ -59822,6 +59876,7 @@ GV2.v5RuaComando = function (cmd, parte) {
   if (cmd === 'v5dia') { GV2.estado.aba = 'rua'; GV2.estado.rua = 'dia'; GV2.estado.ruaSel = parte[1]; GV2.estado.rotaDia = parte[2] || null; GV2.estado.rxGav = null; GV2.pintar(); return true; }
   if (cmd === 'v5praca') { const pr = GV2.base.pracas[Number(parte[1])]; if (pr) { GV2.estado.praca = pr; GV2.estado.destaque = null; GV2.pintar(); } return true; }
   if (cmd === 'v5pedir') { GV2.v5Pedir(parte[1]); return true; }
+  if (cmd === 'v5foto') { if (GV2.cliqueEl) GV2.v5Fotos.abrir(GV2.cliqueEl); return true; }
   return false;
 };
 
