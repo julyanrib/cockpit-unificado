@@ -13456,7 +13456,7 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -75701,7 +75701,7 @@ GV2.agregar = function (pessoas, negocios, itensTodos) {
     quentes: somar(function (p) { return p.quentes.length; }), mrrQuentes: somar(function (p) { return p.mrrQuentes; }),
     quentesSemPasso: somar(function (p) { return p.quentesSemPasso; }),
     travados: somar(function (p) { return p.travados.length; }), mrrTravados: somar(function (p) { return p.mrrTravados; }),
-    fechados: somar(function (p) { return p.funil_mes.fechado; }), metaMes: somar(function (p) { return p.meta_clientes_mes; }),
+    fechados: somar(function (p) { return p.funil_mes.fechado; }), metaMes: (typeof DATA !== 'undefined' && DATA && DATA.kpisHub && Number(DATA.kpisHub.metaMensalFechados)) || somar(function (p) { return p.meta_clientes_mes; }),
     provavel: somar(function (p) { return p.provavel; }),
     agPag: somar(function (p) { return p.agPag.length; }), puxar: somar(function (p) { return p.puxar.length; }),
     funil: ['portas', 'decisor', 'demo', 'proposta', 'fechado'].map(function (k) { return somar(function (p) { return p.funil_mes[k]; }); })
@@ -82867,7 +82867,15 @@ GV2.v7Seg = function () { return GV2.somaDias(GV2.segundaDe(GV2.base.agora.iso),
 GV2.v7Dias = function (seg) { return [0, 1, 2, 3, 4].map(function (i) { return GV2.somaDias(seg, i); }).filter(GV2.util); };
 /* a meta da semana pelo funil inverso: 6 visitas e 1 demo por dia útil, 2 vendas em 5 dias */
 GV2.v7Meta = function (p, nDias) {
-  return { visitas: (Number(p && p.meta_visitas_dia) || 6) * nDias, demos: nDias, vendas: Math.max(1, Math.round(2 * nDias / 5)) };
+  /* 13/10/26: rampa (4 no mês) não tem a mesma semana de quem tem 8. A semana é a fração do mês:
+     vendas = meta do mês × dias úteis da semana ÷ dias úteis do mês; demos = vendas ÷ 40% (funil inverso) */
+  const iso = GV2.base.agora.iso, ini = iso.slice(0, 8) + '01';
+  const fim = GV2.somaDias(GV2.somaDias(ini, 40).slice(0, 8) + '01', -1);
+  const uteisMes = Math.max(1, GV2.uteisEntre(ini, fim));
+  const metaMes = Number(p && p.meta_clientes_mes) || 8;
+  return { visitas: (Number(p && p.meta_visitas_dia) || 6) * nDias,
+    demos: Math.max(1, Math.round(metaMes / 0.4 * nDias / uteisMes)),
+    vendas: Math.max(1, Math.round(metaMes * nDias / uteisMes)) };
 };
 /* verde: bateu visitas e demos · vermelho: menos de 80% das visitas ou de 60% das demos (24 e 3 numa
    semana cheia, o mesmo semáforo do guia do funil) · âmbar: o resto */
@@ -82905,7 +82913,7 @@ GV2.render.v7Passada = function () {
   const dias = GV2.v7Dias(seg);
   const sexta = GV2.somaDias(seg, 4);
   const feriados = [0, 1, 2, 3, 4].map(function (i) { return GV2.somaDias(seg, i); }).filter(function (iso) { return !GV2.util(iso); });
-  const cab = '<div class="gv2-v5-cab"><b>Semana de ' + GV2.e(GV2.ddmm(seg) + ' a ' + GV2.ddmm(sexta)) + '</b><span>' + GV2.e(GV2.pl(dias.length, 'dia útil', 'dias úteis') + (feriados.length ? ' (feriado ' + feriados.map(GV2.ddmm).join(', ') + ')' : '') + ' · meta por pessoa: 6 visitas e 1 demo por dia útil, 2 vendas na semana · venda conta até domingo') + '</span></div>';
+  const cab = '<div class="gv2-v5-cab"><b>Semana de ' + GV2.e(GV2.ddmm(seg) + ' a ' + GV2.ddmm(sexta)) + '</b><span>' + GV2.e(GV2.pl(dias.length, 'dia útil', 'dias úteis') + (feriados.length ? ' (feriado ' + feriados.map(GV2.ddmm).join(', ') + ')' : '') + ' · meta por pessoa: 6 visitas por dia útil; demos e vendas pela meta do mês de cada um (8 ou 4) · venda conta até domingo') + '</span></div>';
   if (!c) return '<section class="card gv2-v7">' + cab + '<div class="gv2-v6-lendo">lendo o placar da semana passada…</div></section>';
   if (c.erro) return '<section class="card gv2-v7">' + cab + '<div class="gv2-v6-lendo">' + GV2.e('— · o placar não respondeu (placar_detalhe: ' + c.erro + ')') + '</div></section>';
   const d = c.d;
