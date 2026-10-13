@@ -216,8 +216,8 @@ tabelas.gv2_falta_etapa = [
       const pdEscada = fm.portas >= 3 ? Math.round(fm.decisor / fm.portas * 100) + '%' : '—';
       const iguais = dv.length === 5 && ge.length === 5
         && so(dv[0]) === so(ge[0]) && dv[0].replace(/[0-9 de]/g, '') === ge[0].replace(/[0-9 de]/g, '')
-        && so(dv[1]) === so(ge[1]) && so(dv[2]) === so(ge[2]) && pdEscada === ge[3] && so(dv[4]) === so(ge[4]);
-      checar('desenvolvimento: os 5 cartões do topo de ' + p.nome + ' são os da Pessoas v5 do gestor (mesma base)', iguais, JSON.stringify({ dv: dv, gestor: ge, pdEscada: pdEscada }));
+        && so(dv[1]) === so(ge[1]) && so(dv[2]) === so(ge[2]); /* v8 (13/10/26): os dois últimos do gestor viraram Quentes e Travados (o resumo da gaveta); Hoje, Semana e Mês seguem iguais aos do executivo */
+      checar('desenvolvimento: Hoje, Semana e Mês de ' + p.nome + ' são os mesmos da Pessoas do gestor (mesma base)', iguais, JSON.stringify({ dv: dv, gestor: ge, pdEscada: pdEscada }));
     });
     const p = GV2.base.pessoas[0], d = p.disc;
     const um = { dia: '2026-10-13', hora: '08:30', dias: 5, hoje: false };
@@ -692,6 +692,7 @@ tabelas.gv2_falta_etapa = [
     checar('v7: das demos, uma virou venda, uma segue aberta e uma saiu do funil', /3 demos na semana passada \(1 virou venda, 1 aberta, 1 saiu do funil\)/.test(v7));
     checar('v7: o quente sem próximo passo e fora do plano aparece em vermelho', /Na<\/b>[\s\S]{0,200}sem próximo passo[\s\S]{0,80}fora do plano/.test(v7));
     checar('v7: o quente que já está no Planejamento desta semana diz o dia', /no plano · qua /.test(v7));
+    checar('v8: a Semana passada marca o melhor (mais pontos) e o mais atrasado, com os pontos embaixo do nome', /gv2-v7-l is-melhor[^]{0,400}melhor da semana · 400 pts/.test(v7) && /gv2-v7-l is-pior[^]{0,400}mais atrasado · /.test(v7) && /Para planejar esta semana/.test(v7));
     checar('v7: Ag. Pagamento só como contagem do financeiro, nunca na lista de quentes', /1 em Ag\. Pagamento \(financeiro\)/.test(v7) && !/>Nc</.test(v7));
     checar('v7: o plano feito da semana passada vem da Grade (1 de 1)', /1<small> de 1<\/small>/.test(v7));
     GV2.FERIADOS.push(segHoje);
@@ -887,6 +888,24 @@ tabelas.gv2_falta_etapa = [
       !noSr && G.sit[alvo.id].k === 'rampa' && visDepois < visAntes && mot === 'rampa' && fila[fila.length - 1].id === alvo.id,
       JSON.stringify({ srAntes: srAntes, noSr: noSr, visAntes: visAntes, visDepois: visDepois, mot: mot }));
     alvo.fase = fase0; alvo.hoje.paradas_plano = par0;
+  }
+  /* v8 etapa 4 (13/10/26): Rua e Pessoas */
+  {
+    const b = GV2.base, ab0 = GV2.estado.aba, rua0 = GV2.estado.rua, pes0 = GV2.estado.pessoa;
+    GV2.estado.aba = 'rua'; GV2.estado.rua = 'hoje';
+    let hr = ''; try { hr = GV2.render.rua(); } catch (e) { falhas.push('rua v8: ' + e.message); }
+    checar('v8 Rua: "Planejamento do time" no cabeçalho e a régua x de y num "i"', /data-gv2="v5rua:semana"[^>]*>Planejamento do time</.test(hr) && /gv2-v8-regra/.test(hr) && !/<span class="gv2-v5-regra">/.test(hr));
+    GV2.estado.rua = 'semana';
+    let hs = ''; try { hs = GV2.render.rua(); } catch (e) { falhas.push('rua semana v8: ' + e.message); }
+    checar('v8 Rua › Semana: o título é o Planejamento do time', /Planejamento do time · semana de/.test(hs));
+    GV2.estado.pessoa = b.pessoas[0].id; GV2.estado.aba = 'pessoas';
+    let hp = ''; try { hp = GV2.render.pessoas(); } catch (e) { falhas.push('pessoas v8: ' + e.message); }
+    const p0 = b.porId[GV2.estado.pessoa];
+    checar('v8 Pessoas: a página começa pelo resumo da gaveta (Mês, Quentes e Travados abrem os negócios dela) e o funil contra o esperado está à vista',
+      hp.indexOf('data-gv2="v8neg:mes:' + p0.id + '"') > 0 && hp.indexOf('data-gv2="v8neg:quentes:' + p0.id + '"') > 0 && hp.indexOf('data-gv2="v8neg:travados:' + p0.id + '"') > 0 && /Funil do mês contra o esperado/.test(hp) && hp.indexOf('data-gv2="v5gav:disc:' + p0.id + '"') > 0);
+    const semDesfecho = b.pessoas.map(function (x) { return GV2.v5Coaching(x).t; }).filter(function (t) { return /sem desfecho/.test(t); });
+    checar('v8 Pessoas: a ordem do coaching não usa mais reunião sem desfecho', !semDesfecho.length && !/reuniões? sem desfecho nos últimos/.test(hp), semDesfecho.join(' | '));
+    GV2.estado.aba = ab0; GV2.estado.rua = rua0; GV2.estado.pessoa = pes0;
   }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
