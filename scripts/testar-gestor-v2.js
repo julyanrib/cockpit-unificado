@@ -549,7 +549,7 @@ tabelas.gv2_falta_etapa = [
     const Gf = GV2.v5Grupos();
     b5.planoErro = null;
     checar('v5 · 1c: plano fora = "—" com o nome da fonte, nenhum 0 inventado, e Travou/Sem rota somem',
-      /Não li o Planejamento agora/.test(hf) && /planejamento_do_time/.test(hf) && />— de [0-9]+</.test(hf) && !/>0 de [0-9]+</.test(hf.replace(/>0 de 0</g, "")) && !Gf.grupos.some(function (g) { return g.k === 'travou' || g.k === 'semrota' || g.k === 'naosaiu'; }));
+      /Não li o Planejamento agora/.test(hf) && /planejamento_do_time/.test(hf) && />— de [0-9]+</.test(hf) && !/>0 de [0-9]+</.test(hf.replace(/>0 de 0</g, "").replace(/<button type="button" class="gv2-v5-pp-c gv2-v8-ppmes[\s\S]*?<\/button>/g, "")) && !Gf.grupos.some(function (g) { return g.k === 'travou' || g.k === 'semrota' || g.k === 'naosaiu'; }));
     const ht = GV2.render.time();
     checar('v5 · Hoje: 5 cartões, cada um com destino; a coluna Jornada; o plano e a jornada abrem o dia na Rua, o nome abre a Pessoa',
       (ht.match(/class="gv2-v5-kpi( is-duas)?" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2 && (ht.match(/class="gv2-v5-pp-p" data-gv2="pessoa:/g) || []).length === b5.pessoas.length);
@@ -594,7 +594,7 @@ tabelas.gv2_falta_etapa = [
   {
     const ht2 = GV2.render.time();
     checar('gestor v6: "Visitas com prova" em duas linhas rotuladas, x de y do plano em cima e as visitas com prova contra a meta embaixo',
-      /Visitas com prova<\/small><span class="gv2-v5-kpi-l"><b class="num">[0-9]+ de [0-9]+<\/b><em>do plano<\/em><\/span><span class="gv2-v5-kpi-l is-2"><b class="num">[0-9]+ de [0-9]+<\/b><em>meta do time/.test(ht2));
+      /Visitas com prova(<i [^>]*>i<\/i>)?<\/small><span class="gv2-v5-kpi-l"><b class="num">[0-9]+ de [0-9]+<\/b><em>do plano<\/em><\/span><span class="gv2-v5-kpi-l is-2">(<b class="num">[0-9]+ de [0-9]+<\/b><em>meta do time|<em>último dia útil)/.test(ht2));
   }
   /* FUNIL e TERRITÓRIO v5 (08/10/26) */
   {
@@ -821,6 +821,24 @@ tabelas.gv2_falta_etapa = [
     GV2.v6Rk.cache[seg] = cache0; GV2.estado.daily = null; GV2.estado.compromissos = {}; GV2.v8dFeitos = null;
     GV2.pintar = pinta0; GV2.recado = rec0; global.supa = supa0; GV2.toast = toast0; GV2.v6RkLer = ler0;
   })();
+  /* v8 etapa 3 · Hoje (13/10/26): KPIs com "i" e comparação; a rua à esquerda; "só informa" numa faixa; Por pessoa com Mês */
+  {
+    const ab0 = GV2.estado.aba; GV2.estado.aba = 'time';
+    let h = ''; try { h = GV2.render.time(); } catch (e) { falhas.push('hoje v8: ' + e.message); }
+    const RT = GV2.v8Ritmo(null);
+    checar('v8 Hoje: os 5 KPIs têm o "i" com a definição', (h.match(/class="gv2-v8-i"/g) || []).length === 5);
+    checar('v8 Hoje: o Mês diz o esperado até hoje e o provável', h.indexOf('esperado ' + GV2.v8Num(RT.cli.esp) + ' até hoje · provável ') > 0);
+    checar('v8 Hoje: a rua vem antes de "Quem precisa de você"', h.indexOf('gv2-v5-ruaagora') > 0 && h.indexOf('gv2-v5-ruaagora') < h.indexOf('gv2-v5-quem'));
+    const linhasPP = (h.match(/class="gv2-v5-pp-l( is-(melhor|pior))?"/g) || []).length;
+    checar('v8 Hoje: Por pessoa tem a coluna Mês (abre o mês da pessoa), melhor e pior marcados, quentes e travados abrem a gaveta',
+      (h.match(/data-gv2="v8neg:mes:/g) || []).length === GV2.base.pessoas.length && /gv2-v5-pp-l is-melhor/.test(h) && /gv2-v5-pp-l is-pior/.test(h)
+      && (h.match(/data-gv2="v8neg:quentes:/g) || []).length === GV2.base.pessoas.length && (h.match(/data-gv2="v8neg:travados:/g) || []).length === GV2.base.pessoas.length && linhasPP === GV2.base.pessoas.length);
+    /* a régua de melhor/pior: empate em 0 desempata pela distância ao esperado; quem está em Preparação não disputa */
+    const mk = function (id, meta, fech, fase) { return { id: id, nome: id, meta_clientes_mes: meta, fase: fase || 'Pleno', funil_mes: { portas: 0, decisor: 0, demo: 0, proposta: 0, fechado: fech } }; };
+    const rk = GV2.v8Ranking([mk('z4zero', 4, 0), mk('a8zero', 8, 0), mk('c4dois', 4, 2), mk('novato', 4, 0, 'Preparação')]);
+    checar('v8: mais longe do ritmo é quem está mais longe do esperado (não o primeiro do alfabeto), e o novato não disputa', rk.melhor === 'c4dois' && rk.pior === 'a8zero', JSON.stringify(rk));
+    GV2.estado.aba = ab0;
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
