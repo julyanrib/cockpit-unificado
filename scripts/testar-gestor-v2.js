@@ -907,6 +907,23 @@ tabelas.gv2_falta_etapa = [
     checar('v8 Pessoas: a ordem do coaching não usa mais reunião sem desfecho', !semDesfecho.length && !/reuniões? sem desfecho nos últimos/.test(hp), semDesfecho.join(' | '));
     GV2.estado.aba = ab0; GV2.estado.rua = rua0; GV2.estado.pessoa = pes0;
   }
+  /* v8 etapa 5 (13/10/26): o modo apresentação e as Propostas */
+  {
+    const ab0 = GV2.estado.aba; GV2.estado.aba = 'time';
+    let h0 = ''; try { h0 = GV2.render.time(); } catch (e) { falhas.push('hoje ap: ' + e.message); }
+    checar('v8 Apresentar: o botão está no cabeçalho do Hoje', /data-gv2="ap:abrir"/.test(h0));
+    const telas = [], erros = [];
+    for (let i = 0; i < 4; i++) { GV2.estado.ap = i; try { telas.push(GV2.render.v8Apresentar()); } catch (e) { erros.push(i + ': ' + e.message); } }
+    GV2.estado.ap = null;
+    checar('v8 Apresentar: as 4 telas abrem, sem botão de cobrança, sem MRR de pessoa e com navegação',
+      !erros.length && telas.length === 4 && telas.every(function (t) { return !/data-gv2="(cobrar|ligar|v5lote|rxg:|ficha:)/.test(t) && !/não abriu/.test(t) && /data-gv2="ap:sair"/.test(t); })
+      && /meta do time/.test(telas[0]) && /Funil do time no mês/.test(telas[2]) && /negócios? para planejar/.test(telas[3]) && !/R\$/.test(telas[0] + telas[2] + telas[3]),
+      erros.join(' | '));
+    GV2.estado.aba = 'propostas'; GV2.estado.prop = 'acomp';
+    let hp = ''; try { hp = GV2.render.propostas(); } catch (e) { falhas.push('propostas v8: ' + e.message); }
+    checar('v8 Propostas: "Venceu ontem · ligar hoje" separado de "Esquecidas" (ou o aviso de que não leu)', /Venceu ontem · ligar hoje/.test(hp) && /Esquecidas/.test(hp) || /Lendo as propostas|Não consegui ler as propostas/.test(hp));
+    GV2.estado.aba = ab0;
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
