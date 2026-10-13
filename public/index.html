@@ -6240,6 +6240,18 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .v5-portao .v5-tag{align-self:flex-start;}
   .rx-g-cobrar{margin-top:10px;align-self:flex-start;}
   .pb-mz-rola{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .pb-quem{padding:12px 16px;}
+  .pb-quem-cab{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .pb-quem-cab b{font-size:13px;}
+  .pb-quem-cab span{font-size:12px;color:var(--muted);}
+  .pb-quem-l{display:flex;flex-wrap:wrap;gap:6px;}
+  .pb-quem-p{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-size:12.5px;font-variant-numeric:tabular-nums;}
+  .pb-quem-p b{font-weight:600;}
+  .pb-quem-p.is-zero{color:var(--muted);border-style:dashed;}
+  .pb-quem-p.is-tudo{border-color:var(--ok, #1D9688);}
+  .pb-quem-mais{margin-top:8px;}
+  .pb-quem-mais > summary{cursor:pointer;font-size:12px;color:var(--muted);min-height:32px;display:flex;align-items:center;}
+  .pb-quem-mais[open] > summary{margin-bottom:8px;}
   .pb-mz-tab{border-collapse:collapse;min-width:720px;width:100%;font-size:13px;}
   .pb-mz-tab th,.pb-mz-tab td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;}
   .pb-mz-tab thead th{font-weight:600;color:var(--muted);font-size:12px;}
@@ -8977,7 +8989,7 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -9865,7 +9877,8 @@ function aplicarVisaoPorPapel() {
 
   }
 
-  if (!souRep) {
+  const gv2Cobre = !souRep && typeof GV2 !== 'undefined' && GV2.ligado && GV2.ligado();
+  if (!souRep && !gv2Cobre) {
     if (typeof tl5Iniciar === 'function') tl5Iniciar();
     if (typeof sm9Iniciar === 'function') sm9Iniciar();
 
@@ -9884,7 +9897,7 @@ function aplicarVisaoPorPapel() {
 
   const prefetchOcioso = () => {
     if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova();
-    if (!souRep) {
+    if (!souRep && !gv2Cobre) {
       if (typeof renderDecisoes === 'function') renderDecisoes();
     }
   };
@@ -20956,12 +20969,17 @@ function pbPlaybookDoTimeHTML(res) {
       'Antes de cobrar na Daily, confirme com um executivo que marcou um guia — se ele marcou e não aparece aqui, é acesso, não estudo.'
     : notaNinguem + notaSemNada + notaSemEmail;
 
-  return '<div class="gx-secao">' +
-    '<div class="gx-secao-cab"><b>O que o time estudou</b>' +
-      '<span>guias marcados como lidos' + (paginas.length ? ', de ' + paginas.length + ' no repertório' : '') + ' · quem lê, marca — o gestor não marca no lugar de ninguém</span></div>' +
-    (nenhumaLinha ? '' : '<div class="gx-forma">' + linhas + '</div>') +
-    '<div class="gx-secao-nota">' + corpo + '</div>' +
-  '</div>' + (nenhumaLinha ? '' : pbMatrizHTML(pessoas, paginas, cat.categorias));
+  const quem = pessoas.map(p => '<span class="pb-quem-p' + (p.leituras === 0 ? ' is-zero' : p.leituras >= total ? ' is-tudo' : '') + '" title="' + esc(p.ultima ? 'última leitura em ' + p.ultima.split('-').reverse().join('/') : 'nenhuma leitura') + '"><b>' + esc(p.nome) + '</b>' + p.leituras + (paginas.length ? '/' + paginas.length : '') + '</span>').join('');
+  return '<div class="gx-secao pb-quem">' +
+    '<div class="pb-quem-cab"><b>Quem leu o Playbook</b><span>guias marcados como lidos' + (paginas.length ? ', de ' + paginas.length : '') + ' · quem lê, marca</span></div>' +
+    (nenhumaLinha
+      ? '<div class="gx-secao-nota">' + corpo + '</div>'
+      : '<div class="pb-quem-l">' + quem + '</div>' +
+        '<details class="pb-quem-mais"><summary>Ver por guia e por módulo</summary>' +
+          '<div class="gx-forma">' + linhas + '</div><div class="gx-secao-nota">' + corpo + '</div>' +
+          pbMatrizHTML(pessoas, paginas, cat.categorias) +
+        '</details>') +
+  '</div>';
 }
 
 function pbMatrizHTML(pessoas, paginas, categorias) {
@@ -54646,7 +54664,8 @@ GV2.render.daily = function () {
   if (!p) return '';
   const ok = p.hoje.visitas_com_prova >= p.esperado;
   const pd = p.funil_mes.portas ? Math.round(p.funil_mes.decisor / p.funil_mes.portas * 100) : null;
-  const destravar = p.travados.concat(p.quentes.filter(function (n) { return !n.agPag && !n.proximo_passo && !n.travado; }));
+  const destravar = p.travados.concat(p.quentes.filter(function (n) { return !n.agPag && !n.proximo_passo && !n.travado; }))
+    .sort(function (x, y) { return (y.etapa_idx - x.etapa_idx) || ((y.mrr || 0) - (x.mrr || 0)) || (y.dias - x.dias); });
   const rasc = GV2.estado.compromissos[p.id] || '';
   const ultimo = i >= b.ordem.length - 1;
   const ontemTem = p.ontem.paradas_plano || p.ontem.visitas_com_prova;
@@ -56255,10 +56274,11 @@ GV2.pessoasMontar = function (b) {
         const n = cru.visitas4.filter(function (v) { return v.provada && String(v.owner_id) === p.id && v.dia >= ini && v.dia <= fim; }).length;
 
         const hojeConta = n > 0 && cru.visitas4.some(function (v) { return v.provada && String(v.owner_id) === p.id && v.dia === hoje; });
-        const uteis = i < 3 ? 5 : Math.max(1, GV2.uteisEntre(ini, hojeConta ? hoje : GV2.somaDias(hoje, -1)));
+        const uteis = i < 3 ? Math.max(1, GV2.uteisEntre(ini, GV2.somaDias(ini, 4))) : Math.max(1, GV2.uteisEntre(ini, hojeConta ? hoje : GV2.somaDias(hoje, -1)));
         return n / uteis;
       });
     }
+    p.wParcial = GV2.uteisEntre(semanas[3], GV2.somaDias(hoje, -1)) < 2;
     p.pd = p.funil_mes.portas ? Math.round(p.funil_mes.decisor / p.funil_mes.portas * 100) : null;
     p.pdT = pdT;
     const C = GV2.PESSOAS;
@@ -57431,7 +57451,7 @@ GV2.pxMapa = {
     const usarGoogle = typeof pt6CarregarGoogle === 'function' && !(typeof PT6_GM !== 'undefined' && PT6_GM.falhou);
     if (usarGoogle && guardado && guardado.google && guardado.k === X.k) { el.insertBefore(guardado.div, el.firstChild); el._gv2px = guardado; GV2.pxMapa.vigiar(el, guardado); GV2.pxMapa.marcadores(el, X); GV2.pxMapa.desenhar(el); return; }
     GV2.pxMapa.simples(el, X);
-    if (usarGoogle) pt6CarregarGoogle().then(function () { if (document.body.contains(el)) GV2.pxMapa.google(el, X); }, function () {});
+    if (usarGoogle) pt6CarregarGoogle().then(function () { if (document.body.contains(el)) GV2.pxMapa.quandoTiverLargura(el, function () { GV2.pxMapa.google(el, GV2.pxAtual || X); }); }, function () {});
   },
   simples: function (el, X) {
     const c = GV2.pxMapa.caixa(X);
@@ -57472,6 +57492,12 @@ GV2.pxMapa = {
     GV2.pxMapa.marcadores(el, X);
   },
 
+  quandoTiverLargura: function (el, fn) {
+    if (el.clientWidth > 40) return fn();
+    if (typeof ResizeObserver !== 'function') return fn();
+    const ro = new ResizeObserver(function () { if (el.clientWidth > 40 && document.body.contains(el)) { ro.disconnect(); fn(); } });
+    ro.observe(el);
+  },
   vigiar: function (el, g) {
     if (typeof ResizeObserver !== 'function' || g.obs === el) return;
     g.obs = el;
@@ -57483,7 +57509,13 @@ GV2.pxMapa = {
       const maps = window.google && window.google.maps;
       const cv = el.querySelector('canvas.gv2-px-calor');
       if (cv) cv.style.opacity = '0';
-      if (maps) maps.event.trigger(g.mapa, 'resize');
+
+      if (maps && g.google && GV2.pxAtual && document.body.contains(el)) {
+        g.ro.disconnect();
+        g.itens.forEach(function (m) { m.map = null; });
+        if (g.div && g.div.parentNode) g.div.parentNode.removeChild(g.div);
+        GV2.pxMapa.google(el, GV2.pxAtual);
+      }
     });
     g.ro.observe(el);
   },
@@ -60556,7 +60588,9 @@ GV2.v5Coaching = function (p) {
   const cs = (p.combinados || []).map(function (c) { return GV2.p3Resultado(c, p.ultimo1a1 && p.ultimo1a1.data); });
   const cump = cs.filter(function (c) { return c.r === 'cumprido'; }).length;
   const naoCump = cs.filter(function (c) { return c.r === 'nao_cumprido'; }).length;
-  if (d.nReunioes >= 5) return { g: 90, t: GV2.pl(d.nReunioes, 'reunião sem desfecho', 'reuniões sem desfecho') };
+  const tVD = b.time.funil && b.time.funil[0] ? b.time.funil[2] / b.time.funil[0] : null;
+  const vd = p.funil_mes.portas >= 10 ? p.funil_mes.demo / p.funil_mes.portas : null;
+  if (vd != null && tVD != null && vd < tVD * 0.6) return { g: 90, t: p.funil_mes.portas + ' visitas e ' + GV2.pl(p.funil_mes.demo, 'demo', 'demos') + ' no mês · visita → demo ' + Math.round(vd * 100) + '%, o time faz ' + Math.round(tVD * 100) + '%' };
   if (p.travados.length >= 4 && pd != null && tPD != null && pd <= tPD) return { g: 85, t: GV2.pl(p.travados.length, 'travado', 'travados') + ' · porta → decisor ' + Math.round(pd * 100) + '%' };
   if (cs.length && naoCump) return { g: 80, t: cump + ' de ' + cs.length + ' combinados de ' + GV2.ddmm(p.ultimo1a1.data) };
   if (p.u1 == null) return { g: 75, t: 'sem nenhum 1:1 ainda' };
@@ -60564,6 +60598,7 @@ GV2.v5Coaching = function (p) {
   if (d.nSemFicha >= 3) return { g: 60, t: GV2.pl(d.nSemFicha, 'porta sem como foi', 'portas sem como foi') };
   if (p.u1 > GV2.PESSOAS.CADENCIA_1A1) return { g: 55, t: '1:1 há ' + p.u1 + ' dias' };
   if (p.uv == null || p.uv > GV2.PESSOAS.LIMITE_CAMPO) return { g: 50, t: p.uv == null ? 'nunca foi a campo com você' : 'campo há ' + p.uv + ' dias' };
+  if (d.nReunioes >= 5) return { g: 40, t: GV2.pl(d.nReunioes, 'reunião sem desfecho', 'reuniões sem desfecho') + ' no app' };
   if (cs.length && cump === cs.length) return { g: 10, t: 'combinados ' + cump + ' de ' + cs.length + ' · reconhecer', ok: true };
   return { g: 0, t: 'em dia', ok: true };
 };
@@ -60585,20 +60620,31 @@ GV2.v5Rende = function () {
       bts: [['Marcar ida', 'v5gav:campo:' + campo.id, true], ['Ver ' + GV2.prim(campo.nome), 'pessoa:' + campo.id]] });
   }
 
-  const queda = function (p) { const w = p.w || []; return w.length >= 2 ? w[0] - w[w.length - 1] : 0; };
+  const wDe = function (p) { const w = p.w || []; return p.wParcial ? w.slice(0, -1) : w; };
+  const queda = function (p) { const w = wDe(p); return w.length >= 2 ? w[0] - w[w.length - 1] : 0; };
   const um = b.pessoas.filter(function (p) { return livre(p) && (p.u1 == null || p.u1 > GV2.PESSOAS.CADENCIA_1A1); })
     .sort(function (x, y) { return queda(y) - queda(x); })[0];
   if (um) {
     usados[um.id] = 1;
-    const w = um.w || [];
+    const w = wDe(um);
     out.push({ k: 'um', rot: '1:1', tom: 'is-acao', tit: '1:1 com ' + GV2.prim(um.nome),
       t: [um.u1 == null ? 'Primeiro 1:1' : '1:1 há ' + um.u1 + ' dias', um.ontem.paradas_plano ? um.ontem.visitas_com_prova + ' de ' + um.ontem.paradas_plano + ' ontem' : null,
-        w.length >= 2 && queda(um) > 0.4 ? 'o ritmo caiu de ' + GV2.virg(w[0]) + ' para ' + GV2.virg(w[w.length - 1]) + ' visitas por dia em ' + w.length + ' semanas' : null].filter(Boolean).join(' · '),
+        w.length >= 2 && queda(um) > 0.4 ? 'o ritmo caiu de ' + GV2.virg(w[0]) + ' para ' + GV2.virg(w[w.length - 1]) + ' visitas por dia em ' + w.length + ' semanas completas' : null].filter(Boolean).join(' · '),
       bts: [['Abrir pauta', 'v5gav:um:' + um.id, true], ['Ver ' + GV2.prim(um.nome), 'pessoa:' + um.id]] });
   }
 
-  const cob = b.pessoas.filter(function (p) { return livre(p) && p.disc && p.disc.nReunioes >= 3; })
+  const mrrSemPasso = function (p) { return p.quentes.filter(function (n) { return !n.agPag && !n.proximo_passo; }).reduce(function (a, n) { return a + (n.mrr || 0); }, 0); };
+  const cobQ = b.pessoas.filter(function (p) { return livre(p) && p.quentesSemPasso > 0; })
+    .sort(function (x, y) { return (y.quentesSemPasso - x.quentesSemPasso) || (mrrSemPasso(y) - mrrSemPasso(x)); })[0];
+  const cob = cobQ ? null : b.pessoas.filter(function (p) { return livre(p) && p.disc && p.disc.nReunioes >= 3; })
     .sort(function (x, y) { return y.disc.nReunioes - x.disc.nReunioes; })[0];
+  if (cobQ) {
+    usados[cobQ.id] = 1;
+    const m = mrrSemPasso(cobQ);
+    out.push({ k: 'cobrar', rot: 'Cobrar', tom: 'is-av', tit: 'Cobrar ' + GV2.prim(cobQ.nome),
+      t: GV2.pl(cobQ.quentesSemPasso, 'quente sem próximo passo', 'quentes sem próximo passo') + (m ? ' · ' + GV2.rs(m) + ' parados' : '') + ' · negócio em Negociação sem tarefa marcada',
+      bts: [['Ver os quentes', 'rxg:filtro:sempasso-quentes', true], ['Ver ' + GV2.prim(cobQ.nome), 'pessoa:' + cobQ.id]] });
+  }
   if (cob) {
     usados[cob.id] = 1;
     const dOnt = GV2.v5Dia(cob, b.ontemIso);
@@ -60649,7 +60695,7 @@ GV2.render.v5Pessoa = function (p) {
   const tF = b.time.funil || [];
   const tPD = tF[0] ? Math.round(tF[1] / tF[0] * 100) : null;
   const pd = p.funil_mes.portas >= 3 ? Math.round(p.funil_mes.decisor / p.funil_mes.portas * 100) : null;
-  const metaSem = p.meta_visitas_dia * b.semana.length;
+  const metaSem = p.meta_visitas_dia * b.semana.filter(function (x) { return GV2.util(x.iso); }).length;
   const feitoSem = p.semana.reduce(function (a, x) { return a + (x.passado || x.hoje ? (x.todas || 0) : 0); }, 0);
   const prox1a1 = p.u1 == null ? '1:1 a combinar' : '1:1 há ' + GV2.pl(p.u1, 'dia', 'dias');
   const cab = '<div class="gv2-v5-pcab">' + GV2.html.av(p, 'is-g') + '<div><b>' + GV2.e(p.nome) + '</b><span>' + GV2.e(p.praca + ' · ' + prox1a1) + '</span></div>'
@@ -60672,7 +60718,8 @@ GV2.render.v5Pessoa = function (p) {
   const jS = j ? GV2.pl(j.n, 'check-in', 'check-ins') + (j.porta != null ? ' · ' + j.porta + ' min por porta' : '') : (sit.k === 'semrota' ? 'sem rota hoje' : 'nenhum check-in hoje') + (p.janela && p.janela.min != null ? ' · costuma sair ' + GV2.hhmm(p.janela.min) : '');
   const dias = p.semana.map(function (x) {
     let cls, v;
-    if (x.passado) { if (!x.planejadas) { cls = 'is-sem'; v = '—'; } else { cls = x.provadas >= x.planejadas ? 'is-ok' : 'is-fur'; v = x.provadas + ' de ' + x.planejadas; } }
+    if (!GV2.util(x.iso)) { cls = 'is-sem'; v = 'feriado'; }
+    else if (x.passado) { if (!x.planejadas) { cls = 'is-sem'; v = '—'; } else { cls = x.provadas >= x.planejadas ? 'is-ok' : 'is-fur'; v = x.provadas + ' de ' + x.planejadas; } }
     else if (x.hoje) { cls = x.planejadas ? 'is-hoje' : 'is-sem'; v = x.planejadas ? x.provadas + ' de ' + x.planejadas : '—'; }
     else { cls = x.planejadas ? 'is-plan' : 'is-sem'; v = x.planejadas ? GV2.pl(x.planejadas, 'parada', 'paradas') : '—'; }
     return '<button type="button" class="gv2-v5-pd ' + cls + '" data-gv2="v5dia:' + p.id + ':' + x.iso + '"><small>' + GV2.e(GV2.DIAS[GV2.dow(x.iso)].replace(/^./, function (l) { return l.toUpperCase(); }) + ' ' + GV2.ddmm(x.iso)) + '</small><b class="num">' + GV2.e(v) + '</b></button>';
@@ -60876,12 +60923,12 @@ GV2.render.raiox = function () {
 
   const trav = b.negocios.filter(function (n) { return n.puxar && !n.agPag; }).sort(function (x, y) { return (y.mrr - x.mrr) || (y.dias - x.dias); });
   const cob = GV2.estado.cobrados;
-  const negs = '<section class="card gv2-v5-trav"><div class="gv2-v5-cab is-acao"><div><b>Negócios travados</b><span>mais dinheiro primeiro · travados e quentes sem próximo passo</span></div>'
+  const negs = '<section class="card gv2-v5-trav"><div class="gv2-v5-cab is-acao"><div><b>Negócios para puxar</b><span>' + GV2.e(GV2.pl(trav.filter(function (n) { return n.travado; }).length, 'travado', 'travados') + ' (passou do prazo da etapa) · ' + GV2.pl(trav.filter(function (n) { return !n.travado; }).length, 'sem próximo passo', 'sem próximo passo') + ' (no prazo, mas sem tarefa marcada) · mais dinheiro primeiro') + '</span></div>'
     + '<button type="button" class="gv2-v5-btn" data-gv2="rxg:filtro:todos">Ver todos os negócios</button>' + (trav.length ? '<button type="button" class="gv2-v5-btn is-prim" data-gv2="v5lote:travados">' + GV2.e(GV2.cobrarN(Math.min(40, trav.length))) + '</button>' : '') + '</div>'
     + (trav.length ? trav.slice(0, 12).map(function (n) {
       const cc = cob['neg:' + n.id];
       return '<div class="gv2-v5-trav-l"><button type="button" class="gv2-v5-trav-n" data-gv2="ficha:' + n.id + '"><b class="gv2-ellip">' + GV2.e(n.nome) + '</b><small class="gv2-ellip">' + GV2.e(GV2.nomeDe(n.dono) + ' · ' + GV2.ETAPAS[n.etapa_idx]) + '</small></button>'
-        + '<span class="gv2-v5-trav-d t-av">' + GV2.e('há ' + GV2.pl(n.dias, 'dia', 'dias') + (n.proximo_passo ? ' · travado' : ' · sem passo')) + '</span>'
+        + '<span class="gv2-v5-trav-d ' + (n.travado ? 't-av' : 't-mute') + '">' + GV2.e(n.travado ? 'travado · ' + n.dias + ' de ' + n.regua + ' dias na etapa' + (n.proximo_passo ? '' : ' · sem passo') : 'sem próximo passo · ' + GV2.pl(n.dias, 'dia', 'dias') + ' na etapa') + '</span>'
         + '<b class="num gv2-v5-trav-v">' + GV2.e(n.mrr ? GV2.rsCheio(n.mrr) : '—') + '</b>'
         + '<button type="button" class="gv2-v5-btn is-linha" data-gv2="cobrar:neg:' + n.id + '"' + (cc ? ' disabled' : '') + '>' + GV2.e(cc ? 'cobrado ' + cc : 'Cobrar') + '</button></div>';
     }).join('') + (trav.length > 12 ? '<p class="gv2-v5-ab-vazio">' + GV2.e('mais ' + (trav.length - 12) + ' em "Ver todos os negócios"') + '</p>' : '')
@@ -60909,7 +60956,7 @@ GV2.render.funilPorPessoa = function () {
   const cel = function (f, i, ehTime, dono) {
     const tag = function (cls, dentro) { return f[i] ? '<button type="button" class="' + cls + '" data-gv2="rxg:passo:' + i + (dono ? ':' + dono : '') + '" title="' + (i < 4 ? 'ver quem está parado nesta etapa hoje' : 'ver os ' + f[i] + ' fechados do mês') + '">' + dentro + '</button>' : '<span class="' + cls + '">' + dentro + '</span>'; };
     if (i === 0) return tag('gv2-v4-fpp-c', '<b class="num">' + f[0] + '</b>');
-    const r = taxa(f, i), rt = taxa(T, i);
+    const r0 = taxa(f, i), r = r0 != null && r0 <= 100 ? r0 : null, rt0 = taxa(T, i), rt = rt0 != null && rt0 <= 100 ? rt0 : null;
     const pior = !ehTime && r != null && rt != null && r < rt;
     return tag('gv2-v4-fpp-c' + (pior ? ' is-pior' : ''), '<b class="num">' + f[i] + '</b><small>' + (r == null ? '—' : r + '%') + '</small>');
   };
