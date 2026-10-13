@@ -189,7 +189,7 @@ tabelas.gv2_falta_etapa = [
     const c = GV2.rxGavConteudo();
     const tempo = GV2.render.time ? GV2.render.time() : '';
     GV2.rxGavClique(['rxg', 'fechar']);
-    checar('planejamento: o cartão do Hoje e o Raio X abrem a gaveta; o plano de cada um abre o dia na Rua (v5)', /^Planejamento de /.test(c.tit) && c.corpo.indexOf('gv2-rt') > 0 && tempo.indexOf('v5dia:' + ana.id + ':') > 0 && tempo.indexOf('data-gv2="rxg:plano"') > 0 && GV2.render.raiox().indexOf('data-gv2="rxg:plano"') > 0, c.tit);
+    checar('planejamento: o cartão do Hoje abre a gaveta, o Funil leva à Rua › Semana (v8); o plano de cada um abre o dia na Rua', /^Planejamento de /.test(c.tit) && c.corpo.indexOf('gv2-rt') > 0 && tempo.indexOf('v5dia:' + ana.id + ':') > 0 && tempo.indexOf('data-gv2="rxg:plano"') > 0 && GV2.render.raiox().indexOf('data-gv2="v8ir:rua:semana"') > 0, c.tit);
   })();
   (function () {
     GV2.estado.rotaSem = -1; GV2.estado.rotaDia = '2026-09-30';
@@ -766,6 +766,14 @@ tabelas.gv2_falta_etapa = [
     checar('v8: visitas esperadas = 6 por dia útil para todos; demos = meta ÷ 40%; clientes = meta', R.vis.meta === 6 * M.uteis && Math.abs(R.vis.esp - 6 * M.passados) < 1e-9 && R.dem.meta === R.cli.meta / 0.4, JSON.stringify({ meta: R.vis.meta, esp: R.vis.esp, uteis: M.uteis, passados: M.passados }));
     checar('v8: taxa acima de 100% vira — e só com 3 ou mais no passo anterior', GV2.v8Tx(4, 5) === '—' && GV2.v8Tx(2, 1) === '—' && GV2.v8Tx(10, 3) === '30%');
     GV2.estado.aba = aba0; GV2.estado.rxGav = gav0; GV2.estado.pessoa = pes0; GV2.pintar = pinta0;
+  }
+  /* v8 etapa 2 (13/10/26): o Funil lido de cima para baixo, e nenhum clique da grade antiga se perde */
+  {
+    let fu = ''; try { fu = GV2.render.raiox(); } catch (e) { falhas.push('funil v8: ' + e.message); }
+    const pos = ['1 · O mês contra a meta', 'Funil do mês', '3 · Por pessoa', '4 · Negócios para puxar', 'gv2-v8-fl5'].map(function (x) { return fu.indexOf(x); });
+    checar('v8 Funil: o mês contra a meta → funil e dinheiro → por pessoa → para puxar → perdas', pos.every(function (x, i) { return x > 0 && (i === 0 || x > pos[i - 1]); }), pos.join());
+    checar('v8 Funil: cada pessoa tem o nome que abre a gaveta e os passos que abrem os parados dela', GV2.base.pessoas.every(function (pp) { return fu.indexOf('data-gv2="pessoa:' + pp.id + '"') > 0; }) && /data-gv2="rxg:passo:[0-9]:[0-9]+"/.test(fu));
+    checar('v8 Funil: os 4 KPIs de antes continuam (porta → fechado, decisor → demo, ciclo, perdas)', /Porta → fechado/.test(fu) && /Decisor → Demo/.test(fu) && /Ciclo · mediana/.test(fu) && /Perdas do mês/.test(fu));
   }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
