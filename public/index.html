@@ -9239,7 +9239,7 @@ button.gv2-v5-pp-n:hover{text-decoration:underline;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -45443,7 +45443,7 @@ async function pt6EnviarRecado(oid, texto, nome, botao) {
       autor: (sessaoAtual && (sessaoAtual.nome || sessaoAtual.email)) || 'gestor',
     });
     if (error) throw error;
-    mostrarToast('No sino do app de ' + v5Esc(pt6PrimeiroNome(nome)) + ' · "' + v5Esc(texto) + '"', 'sucesso');
+    mostrarToast('Abriu no app de ' + v5Esc(pt6PrimeiroNome(nome)) + ' (tela inicial) · "' + v5Esc(texto) + '"', 'sucesso');
     return true;
   } catch (e) {
     mostrarToast('Não saiu: ' + v5Esc((e && e.message) || 'erro desconhecido') + '. Tente de novo.', 'erro');
@@ -56145,6 +56145,14 @@ GV2.recado = async function (p, texto) {
   if (typeof pt6EnviarRecado === 'function') return pt6EnviarRecado(p.id, texto, p.nome);
   return false;
 };
+
+GV2.cobrarNoApp = async function (p, texto, chave) {
+  if (!p) return false;
+  const ok = await GV2.recado(p, texto);
+  if (ok && chave) GV2.marcarCobrado(chave);
+  GV2.pintar();
+  return ok;
+};
 GV2.cobrarNegocio = async function (id) {
   const n = GV2.base.negocios.find(function (x) { return x.id === id; });
   if (!n || n.agPag) return;
@@ -56153,25 +56161,20 @@ GV2.cobrarNegocio = async function (id) {
   try {
     await GV2.tarefaNoNegocio(n);
     GV2.marcarCobrado('neg:' + id);
-    GV2.wa(GV2.textoNegocios(p, [n]));
-    GV2.toast('Virou tarefa no app de ' + GV2.prim(p ? p.nome : 'quem é dono') + ' ✓');
+    if (p) await GV2.recado(p, GV2.textoNegocios(p, [n]));
+    GV2.toast('Virou tarefa e abriu no app de ' + GV2.prim(p ? p.nome : 'quem é dono') + ' ✓');
   } catch (e) { delete GV2.estado.cobrados['neg:' + id]; GV2.toast('A cobrança não saiu: ' + e.message, 'erro'); }
   GV2.pintar();
 };
 GV2.cobrarPessoa = async function (id) {
   const p = GV2.base.porId[id];
   if (!p) return;
-  const txt = GV2.textoSemPlano(p);
-  GV2.wa(txt);
-  const ok = await GV2.recado(p, GV2.recadoPlano());
-  if (ok) GV2.marcarCobrado('pessoa:' + id);
-  GV2.pintar();
+  await GV2.cobrarNoApp(p, GV2.textoSemPlano(p), 'pessoa:' + id);
 };
 GV2.chamarPessoa = function (id) {
   const p = GV2.base.porId[id];
   if (!p) return;
-  GV2.wa('Oi ' + GV2.prim(p.nome) + ', vi que o plano de hoje tem ' + GV2.pl(p.hoje.paradas_plano, 'parada', 'paradas') + ' e nenhuma visita com prova até ' + GV2.hm() + '. Tudo certo? Me liga quando puder.');
-  GV2.marcarCobrado('pessoa:' + id);
+  GV2.cobrarNoApp(p, 'Oi ' + GV2.prim(p.nome) + ', vi que o plano de hoje tem ' + GV2.pl(p.hoje.paradas_plano, 'parada', 'paradas') + ' e nenhuma visita com prova até ' + GV2.hm() + '. Tudo certo? Me liga quando puder.', 'pessoa:' + id);
 };
 
 GV2.loteAbrir = function (tipo) {
@@ -56197,23 +56200,29 @@ GV2.render.lote = function () {
   return '<div class="gv2-veu"><section class="card gv2-modal" role="dialog" aria-label="Cobrar em lote"><div class="card-cab"><span class="card-titulo">'
     + (L.tipo === 'semplano' ? 'Cobrar o plano de ' + GV2.pl(L.grupos.length, 'pessoa', 'pessoas') : 'Cobrar ' + GV2.pl(nNeg, 'negócio', 'negócios') + ' de ' + GV2.pl(L.grupos.length, 'pessoa', 'pessoas'))
     + '</span></div><div class="gv2-modal-corpo">'
-    + '<p class="t-mute" style="margin:0;font:var(--gv2-mini)">' + (L.tipo === 'semplano' ? '"Enviar" põe o pedido no sino do app de cada um. O WhatsApp de cada pessoa abre com o texto pronto.' : '"Enviar" vira tarefa com data de hoje no app de cada dono, um negócio por vez. O WhatsApp de cada pessoa abre com o texto pronto.') + '</p>'
+    + '<p class="t-mute" style="margin:0;font:var(--gv2-mini)">' + (L.tipo === 'semplano' ? '"Enviar" manda a mensagem de cada um direto para o app dele: abre na tela inicial. Dá para editar antes.' : '"Enviar" manda a mensagem de cada um direto para o app dele (abre na tela inicial) e vira tarefa com data de hoje em cada negócio.') + '</p>'
     + L.grupos.map(function (g, i) {
       return '<div class="gv2-msg"><div class="gv2-msg-cab">' + (g.p ? GV2.html.av(g.p) : '') + '<b>' + GV2.e(g.p ? g.p.nome : 'fora do time') + (g.ns.length ? ' · ' + GV2.pl(g.ns.length, 'negócio', 'negócios') : '') + '</b>'
-        + GV2.html.btn({ texto: 'WhatsApp', icone: 'wa', acao: 'lote:wa:' + i }) + '</div><textarea data-gv2-lote="' + i + '">' + GV2.e(g.texto) + '</textarea></div>';
+        + GV2.html.btn({ texto: 'Só para ' + GV2.prim(g.p ? g.p.nome : ''), acao: 'lote:um:' + i, off: !g.p || !!GV2.estado.lote }) + '</div><textarea data-gv2-lote="' + i + '">' + GV2.e(g.texto) + '</textarea></div>';
     }).join('') + '</div><div class="gv2-modal-pe">' + GV2.html.btn({ texto: 'Cancelar', tam: 'lg', acao: 'lote:fechar' })
     + GV2.html.btn({ texto: GV2.estado.lote || ('Enviar os ' + (L.tipo === 'semplano' ? L.grupos.length : nNeg)), tipo: 'prim', tam: 'lg', acao: 'lote:enviar', off: !!GV2.estado.lote }) + '</div></section></div>';
 };
-GV2.enviarLote = async function () {
+GV2.enviarLote = async function (so) {
   const L = GV2.estado.loteDados;
   if (!L || GV2.estado.lote) return;
+
+  const textos = L.grupos.map(function (g, ix) { const ta = typeof document !== 'undefined' && document.querySelector ? document.querySelector('[data-gv2-lote="' + ix + '"]') : null; return ta ? ta.value : g.texto; });
+  const alvo = typeof so === 'number' ? [so] : L.grupos.map(function (g, ix) { return ix; });
   let ok = 0, falhas = 0;
-  const total = L.tipo === 'semplano' ? L.grupos.length : L.grupos.reduce(function (x, g) { return x + g.ns.length; }, 0);
+  const total = alvo.reduce(function (x, ix) { return x + (L.tipo === 'semplano' ? 1 : L.grupos[ix].ns.length); }, 0);
   let i = 0;
-  for (const g of L.grupos) {
+  for (const ix of alvo) {
+    const g = L.grupos[ix];
+    if (!g || !g.p) { falhas++; continue; }
+    const foi = await GV2.recado(g.p, String(textos[ix] || g.texto).trim() || L.recado || GV2.recadoPlano());
     if (L.tipo === 'semplano') {
       i++; GV2.estado.lote = 'Enviando ' + i + ' de ' + total + '…'; GV2.pintar();
-      if (await GV2.recado(g.p, L.recado || GV2.recadoPlano())) { ok++; GV2.marcarCobrado((L.chave || 'pessoa:') + g.p.id); } else falhas++;
+      if (foi) { ok++; GV2.marcarCobrado((L.chave || 'pessoa:') + g.p.id); } else falhas++;
       continue;
     }
     for (const n of g.ns) {
@@ -56221,10 +56230,12 @@ GV2.enviarLote = async function () {
       try { await GV2.tarefaNoNegocio(n); ok++; GV2.marcarCobrado('neg:' + n.id); } catch (e) { falhas++; }
     }
   }
-  GV2.estado.lote = null; GV2.estado.veu = null; GV2.estado.loteDados = null;
+  GV2.estado.lote = null;
+  if (typeof so === 'number' && L.grupos.length > 1) { L.grupos = L.grupos.filter(function (g, ix) { return ix !== so; }); }
+  else { GV2.estado.veu = null; GV2.estado.loteDados = null; }
   GV2.pintar();
   if (falhas) GV2.toast(ok + ' saíram; ' + falhas + ' não. Clique de novo para tentar as que faltam.', 'atencao');
-  else GV2.toast((L.tipo === 'semplano' ? 'No sino do app de ' + GV2.pl(ok, 'pessoa', 'pessoas') : 'Virou tarefa no app de cada dono · ' + GV2.pl(ok, 'cobrança', 'cobranças')) + ' ✓');
+  else GV2.toast((L.tipo === 'semplano' ? 'Abriu no app de ' + GV2.pl(ok, 'pessoa', 'pessoas') : 'Abriu no app e virou tarefa · ' + GV2.pl(ok, 'cobrança', 'cobranças')) + ' ✓');
 };
 
 GV2.gravarUmAUm = async function (p, resumo, compromissos) {
@@ -56333,7 +56344,7 @@ GV2.clique = function (ev) {
   if (cmd === 'lote') {
     if (parte[1] === 'fechar') { GV2.estado.veu = null; GV2.estado.loteDados = null; return GV2.pintar(); }
     if (parte[1] === 'enviar') return GV2.enviarLote();
-    if (parte[1] === 'wa') { const ta = raiz.querySelector('[data-gv2-lote="' + parte[2] + '"]'); if (ta) GV2.wa(ta.value); return; }
+    if (parte[1] === 'um') return GV2.enviarLote(Number(parte[2]));
   }
   if (cmd === 'um' && parte[1] === 'registrar') return GV2.registrarUmAUm(parte[2]);
   if (cmd === 'daily') {
@@ -57880,8 +57891,7 @@ GV2.pxCobrar = async function (id) {
   if (!X) return;
   const l = X.armas.linhas.find(function (y) { return y.p.id === id; });
   if (!l || !l.tot) return;
-  GV2.wa(GV2.textoArmas(l));
-  const ok = await GV2.recado(l.p, 'Completar as armas dos negócios de Demo em diante: ' + ['sistema', 'dor', 'decisor', 'horario'].filter(function (k) { return l.c[k]; }).map(function (k) { return l.c[k] + ' sem ' + (k === 'horario' ? 'horário' : k); }).join(', ') + '.');
+  const ok = await GV2.recado(l.p, GV2.textoArmas(l) || 'Completar as armas dos negócios de Demo em diante: ' + ['sistema', 'dor', 'decisor', 'horario'].filter(function (k) { return l.c[k]; }).map(function (k) { return l.c[k] + ' sem ' + (k === 'horario' ? 'horário' : k); }).join(', ') + '.');
   if (ok) GV2.marcarCobrado('armas:' + id);
   GV2.pintar();
 };
@@ -59062,10 +59072,10 @@ GV2.v4Clique = function (parte) {
   if (acao === 'antigas') { GV2.estado.v4antigas[parte[2]] = !GV2.estado.v4antigas[parte[2]]; GV2.pintar(); return true; }
   if (acao === 'todas') { GV2.estado.v4todas[parte[2]] = !GV2.estado.v4todas[parte[2]]; GV2.pintar(); return true; }
   if (acao === 'como') { GV2.estado.v4como = !GV2.estado.v4como; GV2.pintar(); return true; }
-  if (acao === 'cobrardisc' && p) { GV2.wa(GV2.v4TextoDisc(p)); return true; }
-  if (acao === 'cobrarvisita' && p) { GV2.wa('Oi ' + GV2.prim(p.nome) + '! Até agora nenhuma visita com prova no app. Tudo bem por aí? Me avisa quando fizer a primeira.'); return true; }
+  if (acao === 'cobrardisc' && p) { GV2.cobrarNoApp(p, GV2.v4TextoDisc(p), 'disc:' + p.id); return true; }
+  if (acao === 'cobrarvisita' && p) { GV2.cobrarNoApp(p, 'Oi ' + GV2.prim(p.nome) + '! Até agora nenhuma visita com prova no app. Tudo bem por aí? Me avisa quando fizer a primeira.', 'visita:' + p.id); return true; }
   if (acao === 'repetidos' && p) {
-    GV2.wa('Oi ' + GV2.prim(p.nome) + '! Achei negócios repetidos na sua carteira: ' + p.repetidos.map(function (n) { return n.nome + ' (' + [GV2.ETAPAS[n.etapa_idx]].concat(n.outros).join(', ') + ')'; }).join('; ') + '. Fecha os que sobram como Perdido no HubSpot (motivo: duplicado)?');
+    GV2.cobrarNoApp(p, 'Oi ' + GV2.prim(p.nome) + '! Achei negócios repetidos na sua carteira: ' + p.repetidos.map(function (n) { return n.nome + ' (' + [GV2.ETAPAS[n.etapa_idx]].concat(n.outros).join(', ') + ')'; }).join('; ') + '. Fecha os que sobram como Perdido no HubSpot (motivo: duplicado)?');
     return true;
   }
   if (acao === 'verrua' && p) { GV2.estado.ruaSel = p.id; GV2.ir('rua', 'rotas'); return true; }
@@ -60523,8 +60533,7 @@ GV2.v5Pedir = async function (alvo) {
   if (!quem.length) return;
   if (quem.length === 1) {
     const p = quem[0];
-    GV2.wa('Oi ' + GV2.prim(p.nome) + '! Ainda não vi seu plano de ' + dia + ' na Agenda. Monta até 9h?');
-    if (await GV2.recado(p, recado)) { GV2.marcarCobrado('amanha:' + p.id); GV2.toast('Pedido no sino do app de ' + GV2.prim(p.nome) + ' ✓'); }
+    if (await GV2.recado(p, 'Oi ' + GV2.prim(p.nome) + '! Ainda não vi seu plano de ' + dia + ' na Agenda. Monta até 9h?')) GV2.marcarCobrado('amanha:' + p.id);
     GV2.pintar();
     return;
   }
@@ -60667,7 +60676,9 @@ GV2.render.time = function () {
   const sub = String(dia).replace(/^./, function (l) { return l.toUpperCase(); }).split('-')[0] + ' ' + GV2.ddmm(b.agora.iso) + ' · ' + b.horaTxt + ' · ' + b.rodapeFonte;
   const hs = GV2.estado.hsAtu, hsRodando = hs && (hs.fase === 'pedindo' || hs.fase === 'rodando');
   const hsBt = '<button type="button" class="gv2-v5-btn" data-gv2="hsatu"' + (hsRodando ? ' disabled aria-busy="true"' : '') + ' title="Busca agora no HubSpot etapas, travados, quentes e o Mês (leva uns 3 minutos)">' + (hsRodando ? 'Atualizando o HubSpot…' : 'Atualizar HubSpot') + '</button>';
-  const direita = hsBt + '<button type="button" class="gv2-v5-btn is-prim" data-gv2="daily:abrir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>Conduzir a daily</button>';
+
+  const comBt = GV2.render.v6Gav ? '<button type="button" class="gv2-v5-btn" data-gv2="v6gav:com" title="Escrever um comunicado ao time: abre no app de cada um, e você vê quem leu">Comunicado</button>' : '';
+  const direita = hsBt + comBt + '<button type="button" class="gv2-v5-btn is-prim" data-gv2="daily:abrir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>Conduzir a daily</button>';
   const fonte = b.planoErro;
   const G = GV2.v5Grupos();
   const semRota = b.pessoas.filter(function (p) { return !p.hoje.paradas_plano; }).length;
@@ -60714,7 +60725,7 @@ GV2.render.time = function () {
     + '<div class="gv2-v5-mapa-cx is-hoje"><div class="gv2-mapa gv2-v5-mapa" data-gv2-mapa="time"></div>' + (reserva ? '<span class="gv2-v5-mapa-aviso">Mapa reserva · o Google não carregou. Os pinos e a lista continuam.</span>' : '') + '</div>'
     + '<div class="gv2-v5-leg">' + ['visita', 'desloc', 'sem'].map(function (k) { return '<span><i class="lg-st" style="background:' + GV2.STATUS[k].cor + '"></i>' + GV2.e(k === 'sem' ? 'sem check-in hoje (último ponto)' : GV2.STATUS[k].rot) + '</span>'; }).join('') + '</div></section>';
   return GV2.cabHTML('Hoje', sub, direita)
-    + '<div class="gv2-corpo gv2-v5">' + aviso + kpis + '<div class="gv2-v5-meio is-v8">' + rua + quem + '</div>' + GV2.render.v5PorPessoa(G.sit) + GV2.faltaHTML() + '</div>';
+    + '<div class="gv2-corpo gv2-v5">' + aviso + kpis + '<div class="gv2-v5-meio is-v8">' + rua + quem + '</div>' + GV2.render.v5PorPessoa(G.sit) + GV2.faltaHTML() + '</div>' + (GV2.render.v6Gav && GV2.estado.v6Gav ? GV2.render.v6Gav() : '');
 };
 
 GV2.render.v5PorPessoa = function (sit) {
@@ -62064,7 +62075,7 @@ GV2.render.v6GavCom = function () {
   const C = GV2.v6Com, pes = GV2.base.pessoas;
   let lista;
   if (C.estado !== 'ok') lista = '<div class="gv2-v6-lendo">' + GV2.e(C.estado === 'erro' ? '— · os comunicados não responderam (' + C.erro + ')' : 'lendo os comunicados…') + '</div>';
-  else if (!C.lista.length) lista = '<div class="gv2-v6-lendo">Nenhum comunicado nos últimos 30 dias. O que você mandar chega no sino e no aviso do topo do app.</div>';
+  else if (!C.lista.length) lista = '<div class="gv2-v6-lendo">Nenhum comunicado nos últimos 30 dias. O que você mandar abre na tela inicial do app de cada um, até tocar em Entendi.</div>';
   else lista = C.lista.map(function (c) {
     const falta = GV2.v6ComFaltam(c), leram = pes.length - falta.length;
     const lembrado = GV2.estado.cobrados && GV2.estado.cobrados['com:' + c.id];
@@ -62084,7 +62095,7 @@ GV2.render.v6GavComNovo = function () {
     + '<label class="gv2-v6-rot" for="v6ComTit">Título</label><input id="v6ComTit" class="gv2-v6-in" data-gv2-comp="v6ComTit" maxlength="80" value="' + GV2.e(f.titulo) + '" oninput="GV2.estado.v6ComForm=Object.assign(GV2.estado.v6ComForm||{},{titulo:this.value})">'
     + '<label class="gv2-v6-rot" for="v6ComMsg">Mensagem</label><textarea id="v6ComMsg" class="gv2-v6-in is-area" data-gv2-comp="v6ComMsg" maxlength="500" rows="8" oninput="GV2.estado.v6ComForm=Object.assign(GV2.estado.v6ComForm||{},{msg:this.value});var c=document.getElementById(\'v6ComN\');if(c)c.textContent=this.value.length+\' de 500\'">' + GV2.e(f.msg) + '</textarea>'
     + '<span class="gv2-v6-cont" id="v6ComN">' + f.msg.length + ' de 500</span>'
-    + '<div class="gv2-v6-nota">Chega no sino e num aviso no topo do app. <b>Não trava a tela</b>: quem estiver sem sinal lê quando voltar. Você vê aqui quem tocou em "Entendi".</div>'
+    + '<div class="gv2-v6-nota">Abre na tela inicial do app de cada um e só sai quando ele toca em "Entendi". Quem estiver sem sinal lê quando voltar. Você vê aqui quem tocou em "Entendi".</div>'
     + (GV2.estado.v6ComErro ? '<span class="gv2-v5-valida-erro">' + GV2.e(GV2.estado.v6ComErro) + '</span>' : '')
     + '<div class="gv2-v6-com-bts"><button type="button" class="gv2-v5-btn is-prim" data-gv2="v6comenviar">Enviar para ' + n + '</button><button type="button" class="gv2-v5-btn" data-gv2="v6gav:com">Cancelar</button></div>';
 };
@@ -62106,7 +62117,7 @@ GV2.v6ComLembrar = async function (id) {
   if (!c) return;
   const falta = GV2.v6ComFaltam(c);
   let ok = 0;
-  for (let i = 0; i < falta.length; i++) { if (await GV2.recado(falta[i], 'Comunicado para ler: "' + (c.titulo || 'comunicado') + '". Abra o aviso no topo do app e toque em Entendi.')) ok++; }
+  for (let i = 0; i < falta.length; i++) { if (await GV2.recado(falta[i], 'Comunicado para ler: "' + (c.titulo || 'comunicado') + '". Ele abre na tela inicial do app: toque em Entendi.')) ok++; }
   if (ok) { GV2.estado.cobrados = GV2.estado.cobrados || {}; GV2.estado.cobrados['com:' + id] = 1; GV2.toast('Lembrete no sino de ' + GV2.pl(ok, 'pessoa', 'pessoas') + ' ✓'); }
   else GV2.toast('Não consegui mandar o lembrete agora.');
   GV2.pintar();
@@ -62117,7 +62128,7 @@ GV2.render.v6Gav = function () {
   if (!g) return '';
   const T = { pontos: ['Como a pontuação é feita', 'a mesma conta no app e no cockpit · visita e demo de segunda a sexta, venda até domingo', GV2.render.v6GavPontos],
     com: ['Comunicados', 'o que o time recebeu no app · últimos 30 dias', GV2.render.v6GavCom],
-    comnovo: ['Novo comunicado', 'vai para o sino e para o aviso no topo do app', GV2.render.v6GavComNovo],
+    comnovo: ['Novo comunicado', 'abre na tela inicial do app de cada um até tocar em Entendi', GV2.render.v6GavComNovo],
     ranking: ['Ranking da semana', 'quem merece o bônus de R$ 250 · tudo o que está por trás dos pontos', function () { return GV2.render.v6GavRanking(); }] }[g];
   if (!T) return '';
   return '<div class="gv2-rxg-veu" data-gv2="v6gav:fechar"></div><aside class="gv2-rxg gv2-v5-gav gv2-v6-gav' + (g === 'ranking' ? ' is-larga' : '') + '" role="dialog" aria-label="' + GV2.e(T[0]) + '">'
