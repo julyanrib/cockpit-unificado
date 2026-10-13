@@ -429,7 +429,8 @@ conferir("ponto fora da caixa da cidade não decide nada",
   "coordenada de outro estado escolhendo dono é o pior caso: o lead entra com dono errado e ninguém percebe");
 
 conferir("e o divisor não vaza para outras cidades",
-  q("sao paulo", "mooca", -23.55, -46.60) === "Renata" &&
+  q("sao paulo", "vila mariana", -23.59, -46.63) === "Renata" &&
+  /^Fabio/.test(q("sao paulo", "mooca", -23.55, -46.60) || "") && /* 13/10/26: Centro e Zona Leste passaram ao Fabio */
   q("suzano", "jardim cacique", null, null) === "Renata" &&
   q("guarulhos", "vila augusta", -23.55, -46.60) === "Sérgio",
   "o meridiano de Guarulhos aplicado em São Paulo cortaria a cidade errada");
