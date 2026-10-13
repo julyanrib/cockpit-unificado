@@ -670,6 +670,40 @@ tabelas.gv2_falta_etapa = [
   GV2.estado.destaque = null;
   checar('só um bloco vermelho na Praça (as armas que faltam)', (px.match(/is-falta"/g) || []).length <= 1 && /gv2-px-l3 is-falta/.test(px));
 
+  /* v7 (13/10/26): Rua › Semana passada — o placar fechado contra a meta do funil, o que ficou quente e se está no plano desta semana */
+  {
+    const segAnt = GV2.somaDias(GV2.segundaDe(GV2.base.agora.iso), -7);
+    const segHoje = GV2.segundaDe(GV2.base.agora.iso);
+    const rotaEra = GV2.rota.cache[segHoje];
+    GV2.rota.cache[segAnt] = { estado: 'ok', itens: [{ owner_id: '1', dia: segAnt, vaga: 1, client_id: 'k1', item_id: 'c-k1', nome: 'K1', lat: -20, lng: -40 }], visitas: [{ owner_id: '1', provada: true, client_id: 'k1', dia: segAnt, visited_at: segAnt + 'T13:00:00Z' }] };
+    GV2.rota.cache[segHoje] = { estado: 'ok', itens: [{ owner_id: '2', dia: GV2.somaDias(segHoje, 2), vaga: 1, client_id: 'kb', item_id: 'c-b', nome: 'Nb', lat: -20, lng: -40 }], visitas: [] };
+    GV2.v6Rk.cache[segAnt] = { em: Date.now(), d: { segunda: segAnt, sexta: GV2.somaDias(segAnt, 4), premio: 250, fechada: true, gravado: { nome: 'Ana Lima', pontos: 400 }, linhas: [
+      { ownerId: '1', nome: 'Ana Lima', pontos: 400, visitas: 31, reunioes: 3, vendas: 2, vendasLista: [{ id: 'v1', mrr: 400 }, { id: 'v2', mrr: 350 }], reunioesLista: [{ id: 'a', cliente: 'Na', dia: GV2.somaDias(segAnt, 2) }, { id: 'v1', cliente: 'V1', dia: segAnt }, { id: 'z', cliente: 'Z', dia: segAnt }] },
+      { ownerId: '2', nome: 'Bia Souza', pontos: 30, visitas: 10, reunioes: 0, vendas: 0, vendasLista: [], reunioesLista: [] }] } };
+    const lidas = [];
+    const lerEra = GV2.v6RkLer; GV2.v6RkLer = function (sg) { lidas.push(sg); };
+    GV2.estado.rua = 'passada';
+    let v7 = '';
+    try { v7 = GV2.render.rua(); } catch (e) { falhas.push('v7 Semana passada: ' + e.message); }
+    GV2.v6RkLer = lerEra;
+    checar('v7: a Rua tem a aba Semana passada e ela lê o placar da semana anterior', /Semana passada/.test(v7) && lidas[0] === segAnt, lidas.join());
+    checar('v7: a meta da semana é a do funil (30 visitas, 5 demos, 2 vendas) e o semáforo separa no ritmo de fora', /31<small> \/ 30/.test(v7) && /fora do ritmo/.test(v7) && /atenção/.test(v7));
+    checar('v7: o MRR da semana soma as vendas', /R\$ 750/.test(v7));
+    checar('v7: das demos, uma virou venda, uma segue aberta e uma saiu do funil', /3 demos na semana passada \(1 virou venda, 1 aberta, 1 saiu do funil\)/.test(v7));
+    checar('v7: o quente sem próximo passo e fora do plano aparece em vermelho', /Na<\/b>[\s\S]{0,200}sem próximo passo[\s\S]{0,80}fora do plano/.test(v7));
+    checar('v7: o quente que já está no Planejamento desta semana diz o dia', /no plano · qua /.test(v7));
+    checar('v7: Ag. Pagamento só como contagem do financeiro, nunca na lista de quentes', /1 em Ag\. Pagamento \(financeiro\)/.test(v7) && !/>Nc</.test(v7));
+    checar('v7: o plano feito da semana passada vem da Grade (1 de 1)', /1<small> de 1<\/small>/.test(v7));
+    GV2.FERIADOS.push(segHoje);
+    GV2.estado.rua = 'semana';
+    let gf = '';
+    try { gf = GV2.render.rua(); } catch (e) { falhas.push('grade com feriado: ' + e.message); }
+    GV2.FERIADOS.pop();
+    checar('feriado na Grade: a segunda vira "feriado", não "furou", e a meta da semana tira o dia', (gf.match(/<small>feriado/g) || []).length === 3 && (gf.match(/<small>furou/g) || []).length === 0 && /feriado não conta/.test(gf), gf.slice(gf.indexOf('gv2-v5-cab'), gf.indexOf('gv2-v5-cab') + 400));
+    delete GV2.rota.cache[segAnt]; delete GV2.v6Rk.cache[segAnt];
+    if (rotaEra) GV2.rota.cache[segHoje] = rotaEra; else delete GV2.rota.cache[segHoje];
+    GV2.estado.rua = 'hoje';
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
