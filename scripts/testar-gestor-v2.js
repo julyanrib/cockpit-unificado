@@ -775,6 +775,46 @@ tabelas.gv2_falta_etapa = [
     checar('v8 Funil: cada pessoa tem o nome que abre a gaveta e os passos que abrem os parados dela', GV2.base.pessoas.every(function (pp) { return fu.indexOf('data-gv2="pessoa:' + pp.id + '"') > 0; }) && /data-gv2="rxg:passo:[0-9]:[0-9]+"/.test(fu));
     checar('v8 Funil: os 4 KPIs de antes continuam (porta → fechado, decisor → demo, ciclo, perdas)', /Porta → fechado/.test(fu) && /Decisor → Demo/.test(fu) && /Ciclo · mediana/.test(fu) && /Perdas do mês/.test(fu));
   }
+  /* v8 etapa 3 (13/10/26): a Daily · fila pelo motivo, 6 blocos, o dinheiro primeiro, compromisso do último dia útil e o resumo */
+  await (async function () {
+    const pinta0 = GV2.pintar, rec0 = GV2.recado, supa0 = global.supa, toast0 = GV2.toast, ler0 = GV2.v6RkLer;
+    GV2.pintar = function () {}; GV2.recado = async function () { return true; }; GV2.toast = function () {}; GV2.v6RkLer = function () {};
+    const b = GV2.base, seg = GV2.segundaDe(b.agora.iso);
+    const cache0 = GV2.v6Rk.cache[seg];
+    GV2.v6Rk.cache[seg] = { em: Date.now(), d: { linhas: b.pessoas.map(function (x, i) { return { ownerId: x.id, pos: i + 1, pontos: 100 - i * 10 }; }) } };
+    const fila = GV2.v8dFila(), rank = { plano: 0, furou: 1, travados: 2, ritmo: 3 };
+    checar('v8 Daily: a fila vai de sem plano → furou → travados → no ritmo', fila.every(function (x, i) { return i === 0 || rank[GV2.v8dMotivo(fila[i - 1]).k] <= rank[GV2.v8dMotivo(x).k]; }), fila.map(function (x) { return GV2.v8dMotivo(x).k; }).join());
+    let erros = [], htmls = [];
+    for (let i = 0; i < fila.length; i++) { GV2.estado.daily = i; try { htmls.push(GV2.render.daily()); } catch (e) { erros.push(i + ': ' + e.message); } }
+    const blocos = ['1 · O mês', '2 · Onde o funil trava', '3 · Último dia útil', '4 · Pra destravar', '5 · Compromisso', '6 · A semana'];
+    checar('v8 Daily: cada pessoa da fila abre com os 6 blocos, sem erro', !erros.length && htmls.every(function (h) { return blocos.every(function (x) { return h.indexOf(x) > 0; }); }), erros.join(' | ') || blocos.filter(function (x) { return htmls[0].indexOf(x) < 0; }).join());
+    checar('v8 Daily: a faixa diz por que a pessoa abre a daily, e o nome abre a gaveta', htmls.every(function (h, i) { return h.indexOf(GV2.e(GV2.v8dMotivo(fila[i]).t)) > 0 && h.indexOf('data-gv2="pessoa:' + fila[i].id + '"') > 0; }));
+    const comD = b.pessoas.find(function (x) { return GV2.v8dDestravar(x).length >= 2; });
+    if (comD) { const d = GV2.v8dDestravar(comD); const ids = d.map(function (n) { return n.id; });
+      checar('v8 Daily: pra destravar vem pelo dinheiro, sem repetir negócio e sem Ag. Pagamento', d.every(function (n, i) { return !n.agPag && (i === 0 || (d[i - 1].mrr || 0) >= (n.mrr || 0)); }) && new Set(ids).size === ids.length, d.map(function (n) { return n.mrr; }).join()); }
+    else checar('v8 Daily: o mundo de teste tem alguém com 2+ negócios para destravar', false);
+    const p0 = fila[0];
+    const linha = { id: 'dl1', owner_id: p0.id, data: b.ontemIso, created_at: b.ontemIso + 'T12:00:00Z', canal: 'video', resumo: 'Daily ' + GV2.ddmm(b.ontemIso), compromissos: ['montar o plano até 12h'], combinados: null };
+    b.cru = b.cru || { umAUm: [], idas: [], visitas4: null }; b.cru.umAUm.unshift(linha);
+    GV2.estado.daily = 0; const hc = GV2.render.daily();
+    checar('v8 Daily: o compromisso do último dia útil aparece com cumpriu / em parte / não cumpriu', hc.indexOf('montar o plano até 12h') > 0 && hc.indexOf('daily:marca:' + p0.id + ':parcial') > 0);
+    const so0 = b.cru.umAUm; b.cru.umAUm = [linha]; GV2.pessoasMontar(b); const u1 = p0.ultimo1a1; b.cru.umAUm = so0; GV2.pessoasMontar(b);
+    checar('v8 Daily: a linha "Daily" do um_a_um não vira o último 1:1 da Pessoas', u1 === null);
+    let upd = null;
+    global.supa = { from: function () { return {
+      update: function (v) { upd = v; return { eq: async function () { return { error: null }; } }; },
+      insert: function (l) { return { select: async function () { return { data: [Object.assign({ id: 'novo', created_at: b.agora.iso + 'T12:00:00Z', combinados: null }, l)], error: null }; } }; } }; } };
+    await GV2.v8dMarcar(p0.id, 'parcial');
+    checar('v8 Daily: marcar "em parte" grava no próprio registro da daily', upd && upd.combinados && upd.combinados[0].resultado === 'parcial' && GV2.v8dCompromissoAnt(p0).resultado === 'parcial');
+    GV2.estado.compromissos = {}; GV2.estado.compromissos[p0.id] = 'duas demos marcadas até sexta';
+    await GV2.v8dEncerrar();
+    const res = GV2.render.daily();
+    checar('v8 Daily: encerrar grava o compromisso e mostra o resumo do time', GV2.estado.daily === 'fim' && /Resumo do time/.test(res) && res.indexOf('duas demos marcadas até sexta') > 0 && b.cru.umAUm[0].resumo === 'Daily ' + GV2.ddmm(b.agora.iso), b.cru.umAUm[0].resumo);
+    checar('v8 Daily: o resumo copiado tem uma linha por pessoa', GV2.v8dTexto().split('\n').length === fila.length + 1);
+    b.cru.umAUm = b.cru.umAUm.filter(function (x) { return x.id !== 'dl1' && x.id !== 'novo'; }); GV2.pessoasMontar(b);
+    GV2.v6Rk.cache[seg] = cache0; GV2.estado.daily = null; GV2.estado.compromissos = {}; GV2.v8dFeitos = null;
+    GV2.pintar = pinta0; GV2.recado = rec0; global.supa = supa0; GV2.toast = toast0; GV2.v6RkLer = ler0;
+  })();
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
