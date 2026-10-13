@@ -186,7 +186,10 @@ const METAS = (function () {
     // exatamente o que aconteceu com os 80.
     ['clientes', 'mrr', 'receita'].forEach(function (k) {
       const esperado = (bruto.time || {})[k];
-      if (esperado != null && soma[k] !== esperado) {
+      /* a gordura é DECLARADA no arquivo (time.gordura, 13/10/26: meta do time 52 com as pessoas
+         somando 44); fora dela, a soma tem de bater exatamente como antes */
+      const gordura = Number(((bruto.time || {}).gordura || {})[k]) || 0;
+      if (esperado != null && soma[k] + gordura !== esperado) {
         throw new Error('data/metas.json: a soma de ' + k + ' da ' + soma[k]
           + ' e o total do time diz ' + esperado);
       }
