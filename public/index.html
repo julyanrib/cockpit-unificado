@@ -8889,6 +8889,10 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   .gv2-v5-barra .gv2-seg{max-width:100%;min-width:0;overflow-x:auto;}
   .gv2-v5-barra .gv2-seg button{flex-shrink:0;white-space:nowrap;padding:0 10px;}
 }
+
+.gv2-rxg-mes{margin-top:12px;border-top:1px solid var(--gv2-line);padding-top:8px;}
+.gv2-rxg-mes > summary{cursor:pointer;font:600 12.5px var(--gv2-font);color:var(--gv2-dim);min-height:36px;display:flex;align-items:center;}
+.gv2-rxg-mes .card{margin-top:8px;}
 </style><!-- /gv2-css -->
 </head>
 <body>
@@ -8973,7 +8977,7 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                  <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -59038,6 +59042,8 @@ GV2.render.pxFonte = function (X) {
 GV2.estado.rxGav = null;
 GV2.estado.rxNomes = {};
 
+GV2.PASSO_ETAPA = [1, 2, 3, 4, null];
+
 GV2.rxGavAbrir = function (o) {
   GV2.estado.rxGav = o;
   GV2.estado.passo = o.t === 'passo' ? o.i : null;
@@ -59087,7 +59093,19 @@ GV2.rxGavConteudo = function () {
   if (o.t === 'passo') {
     const card = GV2.render.passoLista().replace(GV2.html.btn({ texto: 'Voltar aos negócios', acao: 'passo:fechar' }), '');
     const dono = o.dono ? GV2.prim(GV2.nomeDe(o.dono)) + ' · ' : '';
-    return { tit: GV2.PASSOS[o.i] + ' no mês', sub: dono + 'cada lead que contou neste passo, com a etapa em que está hoje · toque para abrir a ficha', corpo: card };
+
+    const etapa = GV2.PASSO_ETAPA[o.i];
+    if (etapa == null) return { tit: GV2.PASSOS[o.i] + ' no mês', sub: dono + 'cada lead que contou neste passo, com a etapa em que está hoje · toque para abrir a ficha', corpo: card };
+    const aqui = b.negocios.filter(function (n) { return n.etapa_idx === etapa; });
+    const meus = aqui.filter(function (n) { return !o.dono || n.dono === o.dono; });
+    const trav = meus.filter(function (n) { return n.travado; }).length;
+    const nPux = meus.filter(function (n) { return n.puxar; }).length;
+    const mes = ((b.funilItens && b.funilItens[o.i]) || []).filter(function (x) { return !o.dono || x.dono === o.dono; }).length;
+    return { tit: 'Parados em ' + GV2.ETAPAS[etapa] + ' · ' + meus.length,
+      sub: dono + 'cada negócio aparece só na etapa em que está hoje · ' + GV2.pl(trav, 'travado', 'travados') + ' (passou da régua da etapa) · travados e sem próximo passo primeiro',
+      corpo: GV2.rxChips(aqui, o.dono) + GV2.rxTabelaNeg(ordem(meus), 'Ninguém parado nesta etapa.')
+        + '<details class="gv2-rxg-mes"><summary>' + GV2.e('Contagem do mês neste passo · ' + mes + ' (o número da tabela: inclui quem já avançou para a etapa seguinte)') + '</summary>' + card + '</details>',
+      acao: nPux ? GV2.html.btn({ texto: GV2.estado.lote || 'Cobrar os ' + Math.min(40, nPux), tipo: 'prim', icone: 'wa', acao: 'rxg:lote', off: !!GV2.estado.lote }) : '' };
   }
   if (o.t === 'neg') {
     let lista, tit, sub;
@@ -59200,7 +59218,8 @@ GV2.rxGavClique = function (parte) {
   if (a === 'lote') {
     const o = GV2.estado.rxGav; if (!o) return true;
 
-    const lista = (o.e != null ? GV2.rx().negocios.filter(function (n) { return n.etapa_idx === o.e && (!o.sv || !n.mrr); }) : GV2.filtroNegocios(o.f || 'todos'))
+    const ePasso = o.t === 'passo' ? GV2.PASSO_ETAPA[o.i] : null;
+    const lista = (ePasso != null ? GV2.rx().negocios.filter(function (n) { return n.etapa_idx === ePasso; }) : o.e != null ? GV2.rx().negocios.filter(function (n) { return n.etapa_idx === o.e && (!o.sv || !n.mrr); }) : GV2.filtroNegocios(o.f || 'todos'))
       .filter(function (n) { return n.puxar && (!o.dono || n.dono === o.dono); });
     const por = {};
     lista.filter(function (n) { return !n.agPag; }).slice(0, 40).forEach(function (n) { (por[n.dono] = por[n.dono] || []).push(n); });
@@ -60888,7 +60907,7 @@ GV2.render.funilPorPessoa = function () {
   const K = ['portas', 'decisor', 'demo', 'proposta', 'fechado'];
   const taxa = function (f, i) { return f[i - 1] >= 3 ? Math.round(f[i] / f[i - 1] * 100) : null; };
   const cel = function (f, i, ehTime, dono) {
-    const tag = function (cls, dentro) { return f[i] ? '<button type="button" class="' + cls + '" data-gv2="rxg:passo:' + i + (dono ? ':' + dono : '') + '" title="ver os ' + f[i] + ' leads">' + dentro + '</button>' : '<span class="' + cls + '">' + dentro + '</span>'; };
+    const tag = function (cls, dentro) { return f[i] ? '<button type="button" class="' + cls + '" data-gv2="rxg:passo:' + i + (dono ? ':' + dono : '') + '" title="' + (i < 4 ? 'ver quem está parado nesta etapa hoje' : 'ver os ' + f[i] + ' fechados do mês') + '">' + dentro + '</button>' : '<span class="' + cls + '">' + dentro + '</span>'; };
     if (i === 0) return tag('gv2-v4-fpp-c', '<b class="num">' + f[0] + '</b>');
     const r = taxa(f, i), rt = taxa(T, i);
     const pior = !ehTime && r != null && rt != null && r < rt;
@@ -60899,7 +60918,7 @@ GV2.render.funilPorPessoa = function () {
     return '<div class="gv2-v4-fpp-lin"><button type="button" class="gv2-v4-fpp-nome gv2-ellip" data-gv2="rx:pessoa:' + p.id + '" title="abrir ' + GV2.e(GV2.prim(p.nome)) + ' na Pessoas">' + GV2.e(p.nome) + '</button>' + K.map(function (k, i) { return cel(f, i, false, p.id); }).join('') + '</div>';
   }).join('');
   const ft = b.time.funil;
-  return '<section class="card"><div class="card-cab"><span class="card-titulo">Funil por pessoa</span><span class="card-sub">contagem do mês por passo, não a mesma turma · a taxa só aparece com 3 ou mais no passo anterior · âmbar: converte menos que o time</span><span class="card-acao">' + GV2.html.btn({ texto: 'Planejamento do time', acao: 'rxg:plano', icone: 'mapa' }) + '</span></div>'
+  return '<section class="card"><div class="card-cab"><span class="card-titulo">Funil por pessoa</span><span class="card-sub">contagem do mês por passo, não a mesma turma · o clique mostra quem está parado na etapa hoje · a taxa só aparece com 3 ou mais no passo anterior · âmbar: converte menos que o time</span><span class="card-acao">' + GV2.html.btn({ texto: 'Planejamento do time', acao: 'rxg:plano', icone: 'mapa' }) + '</span></div>'
     + '<div class="gv2-v4-fpp"><div class="gv2-v4-fpp-lin is-cab"><span>Pessoa</span><span>Portas</span><span>Decisor</span><span>Demo</span><span>Proposta</span><span>Fechado</span></div>'
     + linhas + '<div class="gv2-v4-fpp-lin is-time"><b>Time</b>' + K.map(function (k, i) { return cel(ft, i, true, null); }).join('') + '</div></div></section>';
 };
