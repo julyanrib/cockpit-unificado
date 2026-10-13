@@ -860,6 +860,17 @@ tabelas.gv2_falta_etapa = [
     GV2.estado.loteDados = null; GV2.estado.veu = null; GV2.estado.lote = null; GV2.estado.cobrados = {};
     GV2.wa = wa0; GV2.recado = rec0; GV2.tarefaNoNegocio = tar0; GV2.pintar = pin0; GV2.toast = toa0;
   })();
+  /* MAPA COM A ABA OCULTA (13/10/26): nasce quebrado; então não nasce, e a tela redesenha quando a aba volta */
+  {
+    const doc0 = global.document, pin0 = GV2.pintar; let pintou = 0, ouvinte = null;
+    global.document = { visibilityState: 'hidden', addEventListener: function (t, f) { if (t === 'visibilitychange') ouvinte = f; }, removeEventListener: function () { ouvinte = null; } };
+    GV2.pintar = function () { pintou++; }; GV2.mapaEsperando = false;
+    const esperou = GV2.mapaEsperarAba();
+    global.document.visibilityState = 'visible'; if (ouvinte) ouvinte();
+    const visivel = GV2.mapaEsperarAba();
+    checar('mapa: com a aba oculta não nasce; quando a aba volta, a tela redesenha; com a aba visível nasce na hora', esperou === true && pintou === 1 && visivel === false, JSON.stringify({ esperou: esperou, pintou: pintou, visivel: visivel }));
+    global.document = doc0; GV2.pintar = pin0; GV2.mapaEsperando = false;
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
