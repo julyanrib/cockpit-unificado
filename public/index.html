@@ -9239,7 +9239,7 @@ button.gv2-v5-pp-n:hover{text-decoration:underline;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -56046,12 +56046,13 @@ GV2.mapa = {
 
     const p0 = pessoas[0], c0 = p0.hoje.posicao || p0.hoje.paradas[0];
     if (!g || !g.google || g.escuro !== escuro) {
+      if (GV2.mapaEsperarAba && GV2.mapaEsperarAba()) return;
       el.innerHTML = '';
       const div = document.createElement('div');
       div.className = 'gv2-mapa-gm';
       el.appendChild(div);
       const mapa = new maps.Map(div, { mapId: (typeof PT6_GM !== 'undefined' && PT6_GM.mapId) || 'DEMO_MAP_ID', colorScheme: escuro ? 'DARK' : 'LIGHT',
-        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: c0.lat, lng: c0.lng }, zoom: 12 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa);
+        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: c0.lat, lng: c0.lng }, zoom: 12 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa, el, '_gv2');
       g = el._gv2 = { google: true, mapa: mapa, div: div, escuro: escuro, itens: [], enquadrado: null };
     } else if (!el.contains(g.div)) { el.innerHTML = ''; el.appendChild(g.div); g.enquadrado = null; }
 
@@ -57736,6 +57737,7 @@ GV2.pxMapa = {
     const maps = window.google && window.google.maps;
     if (!maps || !maps.marker) return;
     const escuro = document.documentElement.getAttribute('data-tema') === 'escuro';
+    if (GV2.mapaEsperarAba && GV2.mapaEsperarAba()) return;
     const div = document.createElement('div');
     div.className = 'gv2-px-gm';
     el.insertBefore(div, el.firstChild);
@@ -58175,12 +58177,13 @@ GV2.rotaMapa = {
     const escuro = document.documentElement.getAttribute('data-tema') === 'escuro';
     let g = el._gv2rt;
     if (!g || g.escuro !== escuro) {
+      if (GV2.mapaEsperarAba && GV2.mapaEsperarAba()) return;
       el.innerHTML = '';
       const div = document.createElement('div');
       div.className = 'gv2-mapa-gm';
       el.appendChild(div);
       const mapa = new maps.Map(div, { mapId: (typeof PT6_GM !== 'undefined' && PT6_GM.mapId) || 'DEMO_MAP_ID', colorScheme: escuro ? 'DARK' : 'LIGHT',
-        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa);
+        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa, el, '_gv2rt');
       g = el._gv2rt = { google: true, mapa: mapa, div: div, escuro: escuro, itens: [] };
     }
     g.itens.forEach(function (m) { if (m.setMap) m.setMap(null); else m.map = null; });
@@ -60457,12 +60460,13 @@ GV2.v5Mapa = {
     const escuro = document.documentElement.getAttribute('data-tema') === 'escuro';
     let g = el._gv2v5;
     if (!g || g.escuro !== escuro) {
+      if (GV2.mapaEsperarAba && GV2.mapaEsperarAba()) return;
       el.innerHTML = '';
       const div = document.createElement('div');
       div.className = 'gv2-mapa-gm';
       el.appendChild(div);
       const mapa = new maps.Map(div, { mapId: (typeof PT6_GM !== 'undefined' && PT6_GM.mapId) || 'DEMO_MAP_ID', colorScheme: escuro ? 'DARK' : 'LIGHT',
-        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa);
+        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa, el, '_gv2v5');
       g = el._gv2v5 = { google: true, mapa: mapa, div: div, escuro: escuro, itens: [] };
     }
     g.itens.forEach(function (m) { if (m.setMap) m.setMap(null); else m.map = null; });
@@ -62556,17 +62560,37 @@ GV2.render.v8PorPessoa = function () {
   };
 })();
 
+GV2.mapaEsperarAba = function () {
+  if (typeof document === 'undefined' || document.visibilityState !== 'hidden') return false;
+  if (!GV2.mapaEsperando) {
+    GV2.mapaEsperando = true;
+    const volta = function () { if (document.visibilityState !== 'visible') return; document.removeEventListener('visibilitychange', volta); GV2.mapaEsperando = false; GV2.pintar(); };
+    document.addEventListener('visibilitychange', volta);
+  }
+  return true;
+};
 GV2.mapasVivos = [];
-GV2.mapaCutucar = function (mapa) {
+GV2.mapaCutucar = function (mapa, el, chave) {
   const maps = window.google && window.google.maps;
   if (!maps || !mapa) return;
-  const cutuca = function () { try { const z = mapa.getZoom(); if (z != null) { mapa.setZoom(z + 0.0001); setTimeout(function () { mapa.setZoom(z); }, 120); } } catch (e) {   } };
-  maps.event.addListenerOnce(mapa, 'tilesloaded', function () { setTimeout(cutuca, 60); });
-  GV2.mapasVivos.push(cutuca);
-  if (GV2.mapasVivos.length > 12) GV2.mapasVivos.shift();
-  if (!GV2.mapaCutucarOuvindo) {
-    GV2.mapaCutucarOuvindo = true;
-    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') GV2.mapasVivos.forEach(function (f) { f(); }); });
+  const reg = { mapa: mapa, el: el, chave: chave, ok: false };
+  maps.event.addListenerOnce(mapa, 'tilesloaded', function () { reg.ok = true; });
+  GV2.mapasVivos = GV2.mapasVivos.filter(function (x) { return x.el && document.body.contains(x.el); });
+  GV2.mapasVivos.push(reg);
+  if (!GV2.mapaVigiando) {
+    GV2.mapaVigiando = true;
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState !== 'visible') return;
+      let refazer = false;
+      GV2.mapasVivos.forEach(function (x) {
+        if (x.ok || !x.el || !document.body.contains(x.el)) return;
+        if (x.chave) x.el[x.chave] = null;
+        x.el.innerHTML = '';
+        x.morto = true; refazer = true;
+      });
+      GV2.mapasVivos = GV2.mapasVivos.filter(function (x) { return !x.morto; });
+      if (refazer) GV2.pintar();
+    });
   }
 };
 
