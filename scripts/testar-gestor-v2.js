@@ -839,6 +839,27 @@ tabelas.gv2_falta_etapa = [
     checar('v8: mais longe do ritmo é quem está mais longe do esperado (não o primeiro do alfabeto), e o novato não disputa', rk.melhor === 'c4dois' && rk.pior === 'a8zero', JSON.stringify(rk));
     GV2.estado.aba = ab0;
   }
+  /* COBRAR = NO APP (13/10/26): nenhuma cobrança abre o WhatsApp; a mensagem vai para o app da pessoa */
+  await (async function () {
+    const wa0 = GV2.wa, rec0 = GV2.recado, tar0 = GV2.tarefaNoNegocio, pin0 = GV2.pintar, toa0 = GV2.toast;
+    let wa = 0; const recs = [];
+    GV2.wa = function () { wa++; }; GV2.recado = async function (pp, t) { recs.push([pp.id, t]); return true; };
+    GV2.tarefaNoNegocio = async function () {}; GV2.pintar = function () {}; GV2.toast = function () {};
+    const p0 = GV2.base.pessoas[0];
+    await GV2.cobrarPessoa(p0.id);
+    GV2.chamarPessoa(p0.id); await new Promise(function (r) { setTimeout(r, 0); });
+    const n0 = GV2.base.negocios.find(function (n) { return !n.agPag && GV2.base.porId[n.dono]; });
+    if (n0) await GV2.cobrarNegocio(n0.id);
+    GV2.estado.loteDados = { tipo: 'semplano', grupos: GV2.base.pessoas.slice(0, 2).map(function (pp) { return { p: pp, ns: [], texto: 'texto de ' + pp.id }; }) };
+    GV2.estado.lote = null;
+    await GV2.enviarLote(1);
+    const sobrou = GV2.estado.loteDados && GV2.estado.loteDados.grupos.length;
+    checar('cobrar no app: Cobrar, Chamar, cobrar negócio e "Só para X" não abrem o WhatsApp e mandam a mensagem ao app',
+      wa === 0 && recs.length === (n0 ? 4 : 3) && recs[0][1] === GV2.textoSemPlano(p0) && recs[recs.length - 1][1] === 'texto de ' + GV2.base.pessoas[1].id && sobrou === 1,
+      JSON.stringify({ wa: wa, recs: recs.length, sobrou: sobrou }));
+    GV2.estado.loteDados = null; GV2.estado.veu = null; GV2.estado.lote = null; GV2.estado.cobrados = {};
+    GV2.wa = wa0; GV2.recado = rec0; GV2.tarefaNoNegocio = tar0; GV2.pintar = pin0; GV2.toast = toa0;
+  })();
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
