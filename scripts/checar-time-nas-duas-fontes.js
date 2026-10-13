@@ -39,6 +39,13 @@ const ARQ_JSON = path.join(root, 'data', 'usuarios.json');
    dívida que fica na lista para sempre deixa de ser vista. */
 const SEM_ACESSO_AINDA = [];
 
+/* SÓ NO APP OUTBOUND (13/10/26). Quem entrou DEPOIS da unificação não tem linha em mapa_usuarios:
+   essa tabela é do banco antigo do Cockpit avulso, que não se toca mais. O acesso dessa pessoa
+   é equipe_cockpit + profiles.id_hubspot no APP Outbound (é o que cockpit-dados lê). A lista é
+   nominal de propósito: um e-mail novo fora dela continua reprovando, e quem entra precisa
+   aparecer aqui E em equipe_cockpit, senão a tela de gestão não abre para ele. */
+const SO_NO_APP = ['fabiopanciera.takeat@gmail.com'];
+
 function lerEspelhoDoBanco() {
   if (!fs.existsSync(ARQ_TIME)) {
     console.error('GUARDA 25 REPROVADA: falta supabase/TIME.txt.');
@@ -192,6 +199,7 @@ if (iReps < 0) {
 Object.keys(tela).forEach(function (email) {
   if (email in banco) return;
   if (SEM_ACESSO_AINDA.indexOf(email) > -1) { dividaVista.push(email); return; }
+  if (SO_NO_APP.indexOf(email) > -1) return;
   problemas.push(email + ' está em data/usuarios.json e NÃO está em mapa_usuarios — a RLS '
     + 'não acha o e-mail dele, então ele não alcança nem o próprio dado, e a tela mostra '
     + '"não tem dado" em vez de erro.');
