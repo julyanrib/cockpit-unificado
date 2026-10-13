@@ -626,7 +626,7 @@ tabelas.gv2_falta_etapa = [
       navMenu.indexOf('data-gv2="menu:sair">Sair da conta<') > 0 && tpl.indexOf("if (o === 'sair') { const bt = document.getElementById('perfilSairBtn');") > 0);
     GV2.estado.aba = 'raiox'; GV2.estado.prf = 'todas';
     const fu = GV2.render.raiox();
-    checar('v5 · Funil: 4 cartões do funil, sem o "Funil · Praça" e com "Negócios travados"', (fu.match(/class="gv2-v5-kpi( is-fixo)?"/g) || []).length === 4 && fu.indexOf('data-gv2="rxm:') < 0 && /Negócios travados/.test(fu) && /<h1>Funil<\/h1>/.test(fu));
+    checar('v5 · Funil: 4 cartões do funil, sem o "Funil · Praça" e com "Negócios para puxar" (travado separado de sem passo)', (fu.match(/class="gv2-v5-kpi( is-fixo)?"/g) || []).length === 4 && fu.indexOf('data-gv2="rxm:') < 0 && /Negócios para puxar/.test(fu) && /passou do prazo da etapa/.test(fu) && /<h1>Funil<\/h1>/.test(fu));
     const fpp = GV2.render.funilPorPessoa();
     const algumMenor = GV2.base.pessoas.some(function (p) { return p.funil_mes.portas > 0 && p.funil_mes.portas < 3 && p.funil_mes.decisor > 0; });
     checar('v5 · Funil por pessoa: a taxa só aparece com 3 ou mais no passo anterior (senão "—", nunca 400%)', !/>[0-9]{3,}%</.test(fpp) && /a taxa só aparece com 3 ou mais/.test(fpp) && (!algumMenor || /<small>—<\/small>/.test(fpp)));
@@ -714,6 +714,33 @@ tabelas.gv2_falta_etapa = [
     checar('passo Proposta abre os parados em Negociação (Na e Nb), não o decisor', /Parados em Negociação · 2/.test(g3.tit || '') && />Na</.test(g3.corpo || '') && />Nb</.test(g3.corpo || '') && !/>Nd</.test((g3.corpo || '').split('gv2-rxg-mes')[0]), g3.tit);
     checar('passo Decisor abre só quem está em Conversa com decisor hoje (Nd)', /Parados em Conversa com decisor · 1/.test(g1.tit || '') && />Nd</.test(g1.corpo || '') && !/>Na</.test((g1.corpo || '').split('gv2-rxg-mes')[0]), g1.tit);
     checar('a contagem do mês continua na gaveta, recolhida', /<details class="gv2-rxg-mes">/.test(g3.corpo || ''));
+  }
+  /* 13/10/26: as 8 correções da auditoria do gestor */
+  {
+    const p1 = GV2.base.porId['1'];
+    const fm = Object.assign({}, p1.funil_mes), tr = p1.travados, qs = p1.quentes, ord = GV2.estado.daily;
+    /* 5 · taxa acima de 100% vira — */
+    p1.funil_mes = Object.assign({}, fm, { portas: 20, decisor: 4, demo: 5, proposta: 1, fechado: 0 });
+    let fpp = ''; try { fpp = GV2.render.funilPorPessoa(); } catch (e) { falhas.push('funil por pessoa: ' + e.message); }
+    checar('Funil por pessoa: demo maior que decisor não mostra 125%', fpp.indexOf('125%') < 0);
+    /* 4 · coaching: visita que não vira demo pesa mais que reunião sem desfecho */
+    p1.funil_mes = Object.assign({}, fm, { portas: 40, decisor: 10, demo: 0, proposta: 0, fechado: 0 });
+    const c4 = GV2.v5Coaching(p1);
+    checar('coaching: 40 visitas e 0 demo é o motivo nº 1 (visita → demo)', c4.g === 90 && /visita → demo/.test(c4.t), JSON.stringify(c4));
+    p1.funil_mes = fm;
+    /* 3 · Pra destravar: o dinheiro primeiro */
+    p1.travados = [{ id: 'z1', nome: 'ProspeccaoParada', etapa_idx: 0, mrr: 0, dias: 30, travado: true }];
+    p1.quentes = [{ id: 'z2', nome: 'NegociacaoSemPasso', etapa_idx: 4, mrr: 500, dias: 3, travado: false, agPag: false, proximo_passo: null }];
+    GV2.estado.daily = GV2.base.ordem.indexOf(p1);
+    let dl = ''; try { dl = GV2.render.daily(); } catch (e) { falhas.push('daily: ' + e.message); }
+    checar('daily › Pra destravar: Negociação com MRR antes de Prospecção parada', dl.indexOf('NegociacaoSemPasso') > 0 && dl.indexOf('NegociacaoSemPasso') < dl.indexOf('ProspeccaoParada'));
+    p1.travados = tr; p1.quentes = qs; GV2.estado.daily = ord;
+    /* 1 · ficha da pessoa: o feriado aparece como feriado */
+    GV2.FERIADOS.push(GV2.base.semana[0].iso);
+    GV2.estado.aba = 'pessoas'; GV2.estado.pessoa = '1';
+    let pf = ''; try { pf = GV2.render.pessoas(); } catch (e) { falhas.push('pessoas: ' + e.message); }
+    GV2.FERIADOS.pop();
+    checar('Pessoas › ficha: o dia de feriado diz "feriado", não x de y', /<b class="num">feriado<\/b>/.test(pf));
   }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
