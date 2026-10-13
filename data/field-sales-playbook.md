@@ -262,7 +262,7 @@ No asfalto, a disciplina metodológica é a sua maior vantagem competitiva. O ta
 
 * **A Regra Inegociável da Noite Anterior:** A sua microrota de amanhã deve estar desenhada, higienizada e roteirizada no sistema hoje à noite. Saiba exatamente por qual rua vai começar e onde vai terminar o seu dia de campo. Tempo perdido decidindo para onde ir no início da manhã é comissão escorrendo pelo ralo.
 
-* **Volume Matemático de Campo:** O sucesso no Field Sales é pura estatística combinada com consistência de rota. O piso mínimo inegociável são **6 visitas qualificadas por dia**, com foco em colocar **no mínimo 2 Demos de alto nível na agenda diariamente**. Se você não está na frente de um cliente gerando valor, você não está produzindo.
+* **Volume Matemático de Campo:** O sucesso no Field Sales é pura estatística combinada com consistência de rota. O piso mínimo inegociável são **6 visitas qualificadas por dia**, com foco em colocar **1 demo de alto nível na agenda todos os dias (5 na semana)**. Se você não está na frente de um cliente gerando valor, você não está produzindo.
 
 * **O Fenômeno da Contaminação de Vizinhança:** Se você acabou de fechar um contrato ou agendar uma Demo de impacto, use essa tração imediatamente para "cercar" o perímetro. Use o nome do vizinho como gatilho para abrir as portas das próximas 3 casas da calçada:
 
@@ -442,29 +442,30 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 | Indicador            | Meta oficial                   | Observação                                                                                                        |
 | -------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | Visitas qualificadas | 6 por dia                      | Qualidade acima de quantidade: decisor identificado, hipótese preparada e registro no CRM na saída de cada porta |
-| Demos de alto nível  | 2 por dia                      | Só conta com o decisor final sentado à mesa                                                                      |
+| Demos de alto nível  | 1 por dia (5 por semana)       | Conta quando o negócio entra em Demo/Proposta no HubSpot (plano, MRR e data) — e só acontece com o decisor final sentado à mesa |
 | Dias de rua          | Mínimo 4 por semana            | Auditado via CRM                                                                                                 |
 | Registro no CRM      | Em tempo real                  | "Saiu do cliente, alimentou o app" — nunca de memória à noite                                                    |
 | Microrrota           | 8 a 12 pontos mapeados         | Raio caminhável de 2–3 quarteirões; 6 viram visita qualificada                                                   |
 | Divisão do bloco     | 60% prospecção / 40% follow-up | Dentro da mesma microrrota                                                                                       |
 
-## Funil matemático oficial (20 dias úteis)
+## Funil matemático oficial (20 dias úteis) — o funil inverso
 
-| Etapa                 | Dia     | Mês     | Conversão      |
-| --------------------- | ------- | ------- | -------------- |
-| Visitas qualificadas  | 6       | 120     | 100% (entrada) |
-| Conversas com decisor | 3       | 60      | 50%            |
-| Demos                 | 2       | 40      | 66%            |
-| Propostas             | 2       | 40      | 100%           |
-| Contratos fechados    | 1       | 20      | 50%            |
+Recalibrado em outubro/2026 com os números reais do time (31/08 a 09/10: 446 visitas com check-in, 83 demos, 33 clientes, ticket médio R$ 367). A conta é feita de trás para frente: parte da meta do mês e divide pela conversão de cada etapa. A explicação completa, com o porquê de cada número, está na [Rotina](playbook:rotina-executivo).
 
-**Conversão final: 16,7%** — a cada 6 visitas qualificadas, 1 contrato. Resultado previsível: 20 clientes/mês. Mesmo resultado do modelo antigo de 8 visitas frias, com menos porta e mais profundidade por porta.
+| Etapa                                   | Dia | Semana  | Mês      | Conversão           |
+| --------------------------------------- | --- | ------- | -------- | ------------------- |
+| Visitas com check-in                    | 6   | 30      | 120      | entrada             |
+| Demos (negócio entra em Demo/Proposta)  | 1   | 5       | 20       | 1 a cada 6 visitas  |
+| Clientes (Ganho / Enviado Onboarding)   | —   | 2       | 8        | 40% das demos       |
+| MRR                                     | —   | R$ 750  | R$ 3.000 | ticket médio R$ 375 |
+
+**Conversão final: 1 cliente a cada 15 visitas.** Meta do executivo pleno: **8 clientes e R$ 3.000 de MRR por mês**. Em rampa, a meta de clientes é 2 e a cadência segue a tabela da rampagem, mais abaixo. A conversa com o decisor é o caminho entre a visita e a demo: sem decisor não há demo, e é nessa passagem que o funil do time mais perde hoje.
 
 ## Régua de preço e MRR
 
 **O valor de plano vive na aba Precificação do Cockpit, não nesta página.** Tabela de plano muda; página decorada não muda junto. Antes de qualquer proposta, abra a Precificação e leia o valor de lá — é a única fonte que o financeiro reconhece. Aqui fica a regra, que não muda quando a tabela muda.
 
-* **R$ 349 é o ticket médio ideal da carteira, não um piso.** Média se faz com casos acima e casos abaixo dela. Fechar acima puxa a sua média para cima; fechar abaixo continua sendo venda, contrato e território.
+* **R$ 375 é o ticket médio que a meta pede (R$ 3.000 ÷ 8 clientes), não um piso.** Média se faz com casos acima e casos abaixo dela. Fechar acima puxa a sua média para cima; fechar abaixo continua sendo venda, contrato e território.
 
 * **Ninguém está isento de ofertar os planos de entrada.** Existem planos vendáveis abaixo do ticket ideal e eles são para usar: a operação menor que entra hoje é mancha de bairro, é prova social na rua e é upsell no ano que vem. Recusar o plano de entrada é recusar território — e território é o ativo do executivo.
 
@@ -524,7 +525,7 @@ Detalhe completo na página ONBOARDING DE NOVOS EXECUTIVOS.
 
 * **"Use o totem que quiser"** — o Totem tem regra própria com TEF Fiserv obrigatório; o discurso de hardware livre vale para os outros módulos.
 
-Versão 1.0 · Agosto 2026 · Responsável: Gestor de Field Sales. Qualquer alteração de meta passa por esta página primeiro, e depois nas páginas que a referenciam.
+Versão 1.1 · Outubro 2026 (funil recalibrado com os números reais do time) · Responsável: Gestor de Field Sales. Qualquer alteração de meta passa por esta página primeiro, e depois nas páginas que a referenciam.
 
 ***
 
@@ -546,6 +547,67 @@ Versão 1.0 · Agosto 2026 · Responsável: Gestor de Field Sales. Qualquer alte
 
 A regra é clara, inegociável e auditada via CRM: **Mínimo de 4 dias inteiros por semana em rota externa (asfalto).**\
 O escritório ou a mesa de casa servem para organizar o dia; a praça se conquista na calçada do lojista.
+
+## O funil inverso: de onde vem o seu dia
+
+> *"Cliente fechado é consequência. Visita bem feita é o que está na sua mão todos os dias."*
+
+A meta do executivo pleno é **8 clientes e R$ 3.000 de MRR por mês**. O funil inverso faz a pergunta ao contrário: *"quero 8 clientes; quanto preciso fazer em cada etapa para chegar lá?"* Nem toda visita vira demo e nem toda demo vira cliente. Então partimos da meta e dividimos pela conversão de cada etapa. O resultado é o número que está na sua mão todo dia: **6 visitas bem feitas → 1 demo**.
+
+### Por que cobramos o processo, e não só a venda
+
+* **A venda chega atrasada.** A demo de hoje vira cliente em uma, duas ou três semanas. Quem olha só a venda descobre no dia 25 que o mês não fecha, quando já não dá tempo. A visita avisa antes.
+* **A visita é o que está na sua mão.** Você não decide se o dono assina. Você decide quantas portas abre e como conduz a conversa.
+* **O check-in é a sua prova.** Visita sem check-in não entra no placar, não pontua no bônus e não mostra o seu esforço.
+* **A conversão mostra onde ajudar.** Quem visita muito e não gera demo precisa de abordagem. Quem gera demo e não fecha precisa de proposta e follow-up. Sem medir cada etapa, a única resposta seria "visite mais", e muitas vezes não é isso.
+
+### A conta, de trás para frente
+
+As taxas são as do próprio time (31/08 a 09/10/2026): 446 visitas com check-in, 83 demos e 33 clientes. Isso dá 1 demo a cada 5,4 visitas e 40% das demos virando cliente. Usamos 1 demo a cada 6 visitas para deixar margem.
+
+| Passo                    | Conta        | Mês          | Semana  | Dia   |
+| ------------------------ | ------------ | ------------ | ------- | ----- |
+| 1. Clientes (a meta)     | —            | **8**        | 2       | —     |
+| 2. Demos                 | 8 ÷ 40%      | **20**       | 5       | 1     |
+| 3. Visitas com check-in  | 20 × 6       | **120**      | 30      | **6** |
+| 4. MRR                   | 8 × R$ 375   | **R$ 3.000** | R$ 750  | —     |
+
+O mês tem cerca de 20 dias úteis de rua: 120 visitas ÷ 20 dias = **6 visitas por dia**. No ritmo real do time, as mesmas 120 visitas rendem cerca de 22 demos e 9 clientes: a meta é alcançável.
+
+### O ticket faz parte da meta
+
+MRR = clientes × ticket médio. Para 8 clientes darem R$ 3.000, cada um precisa valer em média **R$ 375 por mês**. Vender mais barato custa visitas:
+
+| Ticket médio | Clientes para R$ 3.000 | Visitas por dia |
+| ------------ | ---------------------- | --------------- |
+| R$ 300       | 10                     | 7,5             |
+| R$ 350       | 8,6                    | 6,4             |
+| **R$ 375**   | **8**                  | **6**           |
+
+Apresente o plano que resolve o problema daquele restaurante (monte na Calculadora de Planos), mostre o valor antes do preço e evite desconto só para fechar. Cada R$ 25 a menos no ticket custa cerca de 9 visitas a mais no mês.
+
+### Cada dia fora da rua aumenta o dia seguinte
+
+As 120 visitas precisam caber nos dias de rua que sobram: com 20 dias, 6 por dia; com 18, 6,7; com 16, 7,5. E uma demo feita na última semana pode fechar só no mês seguinte. **O ritmo começa no dia 1**: quem deixa para acelerar no fim do mês não recupera.
+
+### Como saber se você está no caminho (toda sexta)
+
+| Na sexta      | Visitas na semana | Demos na semana |
+| ------------- | ----------------- | --------------- |
+| No ritmo      | 30 ou mais        | 5 ou mais       |
+| Atenção       | 24 a 29           | 3 a 4           |
+| Fora do ritmo | menos de 24       | menos de 3      |
+
+O placar da semana, no app e no cockpit, pontua exatamente estas etapas: **visita com check-in 3 · demo 25 · venda 100**.
+
+**Atrasou? Ache a etapa que quebrou.** Mais visita só resolve quando o problema é volume:
+
+* **Poucas visitas:** o problema é rota e tempo de rua. Planeje melhor o dia e reduza o deslocamento.
+* **Visitas sem decisor:** o problema é horário e abordagem. Volte quando o dono estiver.
+* **Conversas sem demo:** o problema é qualificação e convite. Saia sempre com a demo marcada.
+* **Demos sem cliente:** o problema é proposta e follow-up. Revise o plano oferecido e retorne em 48 horas.
+
+Executivo em rampa: a meta de clientes é 2 e a cadência segue a rampagem em [Metas & Cadência](playbook:metas-cadencia).
 
 ## O cronograma integrado
 
@@ -577,7 +639,7 @@ Este é o bloco de preparação final. Antes de sair, o executivo precisa estar 
 
 > *Sem divisões, sem travas. O seu dia de rua é um fluxo contínuo de geração de valor, olho no olho e fechamento. Se o lojista abre cedo ou o decisor só está na casa à tarde, você se adapta e domina o perímetro comercial.*
 
-* **As Demos de Alto Nível (O Coração do KPI):** O seu dia só é considerado bem-sucedido se você realizar, no mínimo, **2 Demonstrações Práticas de alto nível na mesa por dia**. A regra de ouro: *A Demo só acontece se o decisor final (o dono ou o sócio operador) estiver sentado com você.* Não faça apresentação para quem não tem o poder de assinar o contrato.
+* **As Demos de Alto Nível (O Coração do KPI):** O seu dia só é considerado bem-sucedido se você realizar, no mínimo, **1 Demonstração Prática de alto nível na mesa por dia** (5 na semana). A regra de ouro: *A Demo só acontece se o decisor final (o dono ou o sócio operador) estiver sentado com você.* Não faça apresentação para quem não tem o poder de assinar o contrato.
 
 * **Visitas PAP de Oportunidade (Contaminação de Vizinhança):** Entre as reuniões agendadas, o executivo Takeat domina o quarteirão. Visite todas as portas abertas da calçada. Use o nome do restaurante vizinho que você acabou de demonstrar ou instalar como alavanca de curiosidade: *"Seu [Nome], acabei de estruturar o fluxo ali do [Vizinho] e notei que o senhor sofre com o mesmo gargalo..."*
 
@@ -604,6 +666,7 @@ O aplicativo de Field Sales é a sua arma de agilidade. Ele existe para te liber
 - Monte a rota de amanhã **hoje, antes de sair da última visita**. Rota montada na véspera é a diferença entre trabalhar e improvisar.
 - Bloqueie no calendário o horário de registro (o seu, não o do gestor) e trate como compromisso com cliente.
 - Escolha o horário fixo do seu bloco de follow-up. Follow-up sem hora marcada é follow-up que não acontece.
+- Toda sexta, confira o seu semáforo: visitas e demos da semana contra 30 e 5. Se ficou abaixo, diga ao gestor qual etapa quebrou.
 
 
 
@@ -619,19 +682,18 @@ O aplicativo de Field Sales é a sua arma de agilidade. Ele existe para te liber
 
 No Field Sales que dá resultado, o sucesso não depende da sorte, do humor do mercado ou do talento improvisado; depende estritamente de **processo, consistência e volume controlado**. Entender a matemática do funil dá ao executivo a clareza de que cada "não" recebido na calçada é apenas uma etapa estatística previsível que o aproxima do próximo fechamento.
 
-O nosso modelo é movido a taxas de conversão claras. Para garantir previsibilidade total e alcançar o resultado de 10 a 20 clientes novos no mês, o ritmo diário obrigatório de campo é a métrica oficial de **6 visitas por dia com qualidade** — menos porta, mais profundidade por porta: decisor identificado, hipótese preparada e registro completo em cada uma. É essa qualidade que sustenta a conversão maior por etapa e entrega o mesmo resultado final com menos desgaste de rua.
+O nosso modelo é movido a taxas de conversão claras. Para garantir previsibilidade total e alcançar os 8 clientes novos do mês, o ritmo diário obrigatório de campo é a métrica oficial de **6 visitas por dia com qualidade** — menos porta, mais profundidade por porta: decisor identificado, hipótese preparada e registro completo em cada uma. É essa qualidade que sustenta a conversão maior por etapa e entrega o mesmo resultado final com menos desgaste de rua.
 
 ### O Funil de Conversões (Baseado em 20 Dias Úteis)
 
-| **Etapa do Pipeline**        | **Métrica Diária**          | **Volume Mensal**            | **Taxa de Conversão** | **Objetivo Operacional**                                                                                |
-| ---------------------------- | --------------------------- | ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
-| **1. Visitas / Abordagens**  | **6** visitas com qualidade | **120** visitas qualificadas | 100% (Entrada)        | Abrir portas certas na microrrota — decisor mapeado e registro no CRM em cada uma.                      |
-| **2. Conversas c/ Decisor**  | **3** contatos              | **60** decisores             | 50% (de Visitas)      | Vencer o filtro do staff e dialogar com quem decide a compra.                                           |
-| **3. Demonstrações (Demos)** | **2** Demos                 | **40** Demos                 | 66% (de Decisores)    | A visita qualificada converte mais que a fria — é por isso que 6 boas visitas rendem as mesmas 2 Demos. |
-| **4. Propostas na Mesa**     | **2** Propostas             | **40** Propostas             | **100%** (Avanço)     | Envio de proposta comercial e alinhamento de termos técnicos.                                           |
-| **5. Contratos Fechados**    | **1** Fechamento            | **20** Clientes              | 50% (de Demos)        | **Sucesso Total.** Assinatura e link do Asaas enviado.                                                  |
+| **Etapa do Pipeline**                      | **Métrica Diária**          | **Volume Mensal**   | **Conversão**          | **Objetivo Operacional**                                                           |
+| ------------------------------------------ | --------------------------- | ------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| **1. Visitas / Abordagens**                | **6** visitas com qualidade | **120** visitas     | entrada                | Abrir portas certas na microrrota, com check-in e registro em cada uma.            |
+| **2. Conversa com o decisor**              | o caminho da demo           | —                   | —                      | Vencer o filtro do staff e dialogar com quem decide. Sem decisor não há demo.      |
+| **3. Demonstrações (Demos)**               | **1** demo                  | **20** demos        | 1 a cada 6 visitas     | Negócio entra em Demo/Proposta com plano, MRR e data.                              |
+| **4. Contratos fechados**                  | **2** por semana            | **8** clientes      | 40% das demos          | **Sucesso total.** Assinatura e link do Asaas enviado.                             |
 
-**Nota de Conversão Geral:** o modelo opera com uma taxa de conversão final de **16,7%** (a cada 6 visitas qualificadas na rua, 1 se transforma em contrato fechado). Se o executivo mantiver a consistência de 6 visitas diárias com qualidade, ele constrói um resultado previsível de 1 novo cliente por dia — exatamente o mesmo resultado do modelo antigo de 8 visitas frias.
+**Nota de Conversão Geral:** com as taxas reais do time, 1 a cada 6 visitas vira demo e 2 em cada 5 demos viram cliente: **1 cliente a cada 15 visitas**. Mantendo 6 visitas por dia com qualidade, o resultado previsível é **8 clientes no mês** e, com ticket médio de R$ 375, **R$ 3.000 de MRR**. A conta completa, de trás para frente, está na [Rotina](playbook:rotina-executivo).
 
 >  **O que a matemática do funil não mostra sozinha:** 6 visitas de qualidade batidas em 3 quarteirões valem mais que 15 visitas espalhadas em 3 bairros diferentes. É exatamente isso que a seção seguinte resolve.
 
@@ -736,7 +798,7 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
 1. **Ele mede qualidade E densidade, não só volume.** 6 visitas em microrrota com decisor mapeado valem mais que 15 visitas espalhadas e superficiais — é justamente por isso que o padrão oficial baixou o número e subiu a régua.
 
-2. **Ele trata "não" como dado, não como rejeição pessoal.** Cada porta fechada é uma etapa estatística esperada dentro dos 16,7% de conversão — não motivo pra desacelerar o ritmo do dia.
+2. **Ele trata "não" como dado, não como rejeição pessoal.** Cada porta fechada é uma etapa estatística esperada dentro da conversão do funil (1 cliente a cada 15 visitas) — não motivo pra desacelerar o ritmo do dia.
 
 3. **Ele registra no calor da ação, nunca à noite de memória.** Dado reconstruído de memória é sempre pior que dado capturado na hora — e o app existe exatamente para eliminar essa perda de qualidade.
 
@@ -1556,7 +1618,7 @@ São as abordagens de oportunidade no PAP ao longo das ruas mapeadas na sua rota
 
 ### A caça: MRR de alto valor
 
-São as **2 Demos diárias de alta qualidade** agendadas previamente na sua agenda. Aqui, você está diante de operações robustas (operações de canal próprio forte, o ICP prioritário). É o momento de abrir o tablet e provar por meio de dados matemáticos simples que, se o sistema evitar apenas dois erros de pedido ou o desperdício de duas mesas no final de semana, o investimento no ecossistema já se pagou sozinho.
+É a **demo do dia, de alta qualidade**, agendada previamente na sua agenda. Aqui, você está diante de operações robustas (operações de canal próprio forte, o ICP prioritário). É o momento de abrir o tablet e provar por meio de dados matemáticos simples que, se o sistema evitar apenas dois erros de pedido ou o desperdício de duas mesas no final de semana, o investimento no ecossistema já se pagou sozinho.
 
 >  **O mantra do time:**\
 > *"O volume de ativações nos dá autoridade e domínio na rua; o faturamento de MRR alto nos traz poder de comissão e rentabilidade; a presença física e o relacionamento presencial com o cliente blindam as chaves do nosso território."*
@@ -2144,7 +2206,7 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 ## Política comercial, preços e condições
 
-**RÉGUA OFICIAL — leia antes de qualquer negociação.** Os valores estão na aba Precificação do Cockpit; esta página traz a regra, não a tabela. **R$ 349 é o ticket médio ideal da carteira, não um piso** — existem planos vendáveis abaixo dele e ninguém está isento de ofertá-los quando a operação pede. O **ICP prioritário** é definido pela operação, não pelo nosso preço: casa que fatura **mais de R$ 70 mil por mês no canal próprio** (salão e delivery próprio). **Atendemos todos os portes** — o critério prioriza a ordem das portas, não recusa cliente. **Plano Inovação** destrava a Precificação Dinâmica (ver [a parte técnica, nesta mesma página](playbook:faq#faq-parte-tecnica-equipamentos-e-integracoes)). **Adicionais** fora do plano padrão: Teka, Roteirização Inteligente, Totem + TEF Fiserv — upsell de eficiência, valores na Precificação. **Desconto só via prazo** (trimestral/semestral/anual).
+**RÉGUA OFICIAL — leia antes de qualquer negociação.** Os valores estão na aba Precificação do Cockpit; esta página traz a regra, não a tabela. **R$ 375 é o ticket médio que a meta pede (R$ 3.000 ÷ 8 clientes), não um piso** — existem planos vendáveis abaixo dele e ninguém está isento de ofertá-los quando a operação pede. O **ICP prioritário** é definido pela operação, não pelo nosso preço: casa que fatura **mais de R$ 70 mil por mês no canal próprio** (salão e delivery próprio). **Atendemos todos os portes** — o critério prioriza a ordem das portas, não recusa cliente. **Plano Inovação** destrava a Precificação Dinâmica (ver [a parte técnica, nesta mesma página](playbook:faq#faq-parte-tecnica-equipamentos-e-integracoes)). **Adicionais** fora do plano padrão: Teka, Roteirização Inteligente, Totem + TEF Fiserv — upsell de eficiência, valores na Precificação. **Desconto só via prazo** (trimestral/semestral/anual).
 
 ### Posso dar desconto na mensalidade padrão?
 
