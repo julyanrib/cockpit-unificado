@@ -782,7 +782,7 @@ tabelas.gv2_falta_etapa = [
     const b = GV2.base, seg = GV2.segundaDe(b.agora.iso);
     const cache0 = GV2.v6Rk.cache[seg];
     GV2.v6Rk.cache[seg] = { em: Date.now(), d: { linhas: b.pessoas.map(function (x, i) { return { ownerId: x.id, pos: i + 1, pontos: 100 - i * 10 }; }) } };
-    const fila = GV2.v8dFila(), rank = { plano: 0, furou: 1, travados: 2, ritmo: 3 };
+    const fila = GV2.v8dFila(), rank = { plano: 0, furou: 1, travados: 2, ritmo: 3, rampa: 4 };
     checar('v8 Daily: a fila vai de sem plano → furou → travados → no ritmo', fila.every(function (x, i) { return i === 0 || rank[GV2.v8dMotivo(fila[i - 1]).k] <= rank[GV2.v8dMotivo(x).k]; }), fila.map(function (x) { return GV2.v8dMotivo(x).k; }).join());
     let erros = [], htmls = [];
     for (let i = 0; i < fila.length; i++) { GV2.estado.daily = i; try { htmls.push(GV2.render.daily()); } catch (e) { erros.push(i + ': ' + e.message); } }
@@ -870,6 +870,23 @@ tabelas.gv2_falta_etapa = [
     const visivel = GV2.mapaEsperarAba();
     checar('mapa: com a aba oculta não nasce; quando a aba volta, a tela redesenha; com a aba visível nasce na hora', esperou === true && pintou === 1 && visivel === false, JSON.stringify({ esperou: esperou, pintou: pintou, visivel: visivel }));
     global.document = doc0; GV2.pintar = pin0; GV2.mapaEsperando = false;
+  }
+  /* RAMPAGEM (13/10/26): quem está em Preparação não é cobrado de rua nem entra nas visitas esperadas */
+  {
+    const b = GV2.base, alvo = b.pessoas.find(function (x) { return !x.hoje.paradas_plano; }) || b.pessoas[0];
+    const fase0 = alvo.fase, par0 = alvo.hoje.paradas_plano;
+    alvo.hoje.paradas_plano = 0;
+    const visAntes = GV2.v8Ritmo(null).vis.meta;
+    const srAntes = (GV2.v5Grupos().grupos.find(function (g) { return g.k === 'semrota'; }) || { chips: [] }).chips.length;
+    alvo.fase = 'Preparação';
+    const G = GV2.v5Grupos(), sr = G.grupos.find(function (g) { return g.k === 'semrota'; });
+    const noSr = !!(sr && sr.chips.some(function (c) { return c.tip === alvo.nome; }));
+    const visDepois = GV2.v8Ritmo(null).vis.meta;
+    const mot = GV2.v8dMotivo(alvo).k, fila = GV2.v8dFila();
+    checar('rampagem: não aparece em Sem rota, sai das visitas esperadas do time e vai para o fim da Daily',
+      !noSr && G.sit[alvo.id].k === 'rampa' && visDepois < visAntes && mot === 'rampa' && fila[fila.length - 1].id === alvo.id,
+      JSON.stringify({ srAntes: srAntes, noSr: noSr, visAntes: visAntes, visDepois: visDepois, mot: mot }));
+    alvo.fase = fase0; alvo.hoje.paradas_plano = par0;
   }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
