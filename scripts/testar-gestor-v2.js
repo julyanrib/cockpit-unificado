@@ -742,6 +742,31 @@ tabelas.gv2_falta_etapa = [
     GV2.FERIADOS.pop();
     checar('Pessoas › ficha: o dia de feriado diz "feriado", não x de y', /<b class="num">feriado<\/b>/.test(pf));
   }
+  /* v8 etapa 1 (13/10/26): clicar abre gaveta, não troca de aba; o ritmo com 6 visitas por dia para todos */
+  {
+    const pinta0 = GV2.pintar; GV2.pintar = function () {};
+    const aba0 = GV2.estado.aba, gav0 = GV2.estado.rxGav, pes0 = GV2.estado.pessoa;
+    GV2.estado.aba = 'time';
+    GV2.v8Comando('pessoa', ['pessoa', '1']);
+    checar('v8: o nome no Hoje abre a gaveta da Pessoa, sem trocar de aba', GV2.estado.rxGav && GV2.estado.rxGav.t === 'pessoa' && GV2.estado.aba === 'time', JSON.stringify(GV2.estado.rxGav));
+    let gp = {}; try { gp = GV2.rxGavConteudo(); } catch (e) { falhas.push('gaveta da pessoa: ' + e.message); }
+    checar('v8: a gaveta da Pessoa tem hoje, semana, mês, quentes, travados, o funil contra o esperado e a página completa', /Funil do mês contra o esperado/.test(gp.corpo || '') && (gp.corpo.match(/class="gv2-v8-tile[ "]/g) || []).length === 5 && /v8pagina:1/.test(gp.corpo) && /Ver o dia na Rua/.test(gp.corpo), gp.tit + ' :: ' + [/Funil do mês contra o esperado/.test(gp.corpo || ''), (gp.corpo.match(/gv2-v8-tile/g) || []).length, /v8pagina:1/.test(gp.corpo), /Ver o dia na Rua/.test(gp.corpo)].join());
+    GV2.rxGavFechar();
+    GV2.estado.aba = 'raiox'; GV2.v8Comando('rx', ['rx', 'pessoa', '2']);
+    checar('v8: o nome no Funil por pessoa abre a gaveta (não pula para Pessoas)', GV2.estado.rxGav && GV2.estado.rxGav.t === 'pessoa' && GV2.estado.rxGav.id === '2' && GV2.estado.aba === 'raiox');
+    GV2.rxGavFechar(); GV2.estado.aba = 'time';
+    GV2.v8Comando('ir', ['ir', 'raiox', 'quentes']);
+    const gq = GV2.rxGavConteudo();
+    checar('v8: o KPI Quentes abre a gaveta de Negócios com o mesmo total do KPI', GV2.estado.aba === 'time' && GV2.estado.rxGav.t === 'neg' && new RegExp('Quentes · ' + GV2.base.time.quentes + '$').test(gq.tit), gq.tit);
+    GV2.rxGavFechar();
+    const ir0 = GV2.ir; GV2.ir = function (x) { GV2.estado.aba = x; }; GV2.v8Comando('v8pagina', ['v8pagina', '3']); GV2.ir = ir0;
+    checar('v8: "Abrir a página completa" vai para a Pessoas na pessoa certa', GV2.estado.aba === 'pessoas' && GV2.estado.pessoa === '3');
+    checar('v8: dentro da Pessoas, o nome continua escolhendo a pessoa da página', GV2.v8Comando('pessoa', ['pessoa', '1']) === false);
+    const R = GV2.v8Ritmo(GV2.base.porId['3']), M = GV2.v8Mes();
+    checar('v8: visitas esperadas = 6 por dia útil para todos; demos = meta ÷ 40%; clientes = meta', R.vis.meta === 6 * M.uteis && Math.abs(R.vis.esp - 6 * M.passados) < 1e-9 && R.dem.meta === R.cli.meta / 0.4, JSON.stringify({ meta: R.vis.meta, esp: R.vis.esp, uteis: M.uteis, passados: M.passados }));
+    checar('v8: taxa acima de 100% vira — e só com 3 ou mais no passo anterior', GV2.v8Tx(4, 5) === '—' && GV2.v8Tx(2, 1) === '—' && GV2.v8Tx(10, 3) === '30%');
+    GV2.estado.aba = aba0; GV2.estado.rxGav = gav0; GV2.estado.pessoa = pes0; GV2.pintar = pinta0;
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
