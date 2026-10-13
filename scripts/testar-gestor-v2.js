@@ -917,7 +917,7 @@ tabelas.gv2_falta_etapa = [
     GV2.estado.ap = null;
     checar('v8 Apresentar: as 4 telas abrem, sem botão de cobrança, sem MRR de pessoa e com navegação',
       !erros.length && telas.length === 4 && telas.every(function (t) { return !/data-gv2="(cobrar|ligar|v5lote|rxg:|ficha:)/.test(t) && !/não abriu/.test(t) && /data-gv2="ap:sair"/.test(t); })
-      && /meta do time/.test(telas[0]) && /Funil do time no mês/.test(telas[2]) && /negócios? para planejar/.test(telas[3]) && !/R\$/.test(telas[0] + telas[2] + telas[3]),
+      && /meta do time/.test(telas[0]) && /Funil do time no mês/.test(telas[2]) && /negócios? para planejar/.test(telas[3]) && !/R\$/.test(telas[0] + telas[2] + telas[3]) && !/\/mês/.test(telas[1]),
       erros.join(' | '));
     GV2.estado.aba = 'propostas'; GV2.estado.prop = 'acomp';
     let hp = ''; try { hp = GV2.render.propostas(); } catch (e) { falhas.push('propostas v8: ' + e.message); }
