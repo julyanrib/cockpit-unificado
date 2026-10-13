@@ -13712,7 +13712,7 @@ button.gv2-v5-pp-n:hover{text-decoration:underline;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -76619,7 +76619,7 @@ GV2.mapa = {
       div.className = 'gv2-mapa-gm';
       el.appendChild(div);
       const mapa = new maps.Map(div, { mapId: (typeof PT6_GM !== 'undefined' && PT6_GM.mapId) || 'DEMO_MAP_ID', colorScheme: escuro ? 'DARK' : 'LIGHT',
-        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: c0.lat, lng: c0.lng }, zoom: 12 });
+        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: c0.lat, lng: c0.lng }, zoom: 12 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa);
       g = el._gv2 = { google: true, mapa: mapa, div: div, escuro: escuro, itens: [], enquadrado: null };
     } else if (!el.contains(g.div)) { el.innerHTML = ''; el.appendChild(g.div); g.enquadrado = null; }
     /* a caixa nova (outra aba, outra largura) precisa que o Google remeça o mapa e enquadre de novo */
@@ -78362,7 +78362,7 @@ GV2.pxMapa = {
     div.className = 'gv2-px-gm';
     el.insertBefore(div, el.firstChild);
     const mapa = new maps.Map(div, { mapId: (typeof PT6_GM !== 'undefined' && PT6_GM.mapId) || 'DEMO_MAP_ID', colorScheme: escuro ? 'DARK' : 'LIGHT',
-      disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: -22.9, lng: -43.2 }, zoom: 11 });
+      disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: -22.9, lng: -43.2 }, zoom: 11 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa);
     const ov = new maps.OverlayView();
     ov.onAdd = function () {}; ov.onRemove = function () {}; ov.draw = function () {};
     ov.setMap(mapa);
@@ -78829,7 +78829,7 @@ GV2.rotaMapa = {
       div.className = 'gv2-mapa-gm';
       el.appendChild(div);
       const mapa = new maps.Map(div, { mapId: (typeof PT6_GM !== 'undefined' && PT6_GM.mapId) || 'DEMO_MAP_ID', colorScheme: escuro ? 'DARK' : 'LIGHT',
-        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13 });
+        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa);
       g = el._gv2rt = { google: true, mapa: mapa, div: div, escuro: escuro, itens: [] };
     }
     g.itens.forEach(function (m) { if (m.setMap) m.setMap(null); else m.map = null; });
@@ -81256,7 +81256,7 @@ GV2.v5Mapa = {
       div.className = 'gv2-mapa-gm';
       el.appendChild(div);
       const mapa = new maps.Map(div, { mapId: (typeof PT6_GM !== 'undefined' && PT6_GM.mapId) || 'DEMO_MAP_ID', colorScheme: escuro ? 'DARK' : 'LIGHT',
-        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13 });
+        disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative', center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13 }); if (GV2.mapaCutucar) GV2.mapaCutucar(mapa);
       g = el._gv2v5 = { google: true, mapa: mapa, div: div, escuro: escuro, itens: [] };
     }
     g.itens.forEach(function (m) { if (m.setMap) m.setMap(null); else m.map = null; });
@@ -83482,6 +83482,25 @@ GV2.render.v8PorPessoa = function () {
     return c0(cmd, parte);
   };
 })();
+
+/* O MAPA QUE NASCE ACHATADO (13/10/26). O mapa vetorial do Google às vezes faz o primeiro desenho
+   com a câmera 3D errada (os ladrilhos viram um retângulo pequeno no meio da caixa, com inclinação 0
+   e enquadramento certos) — visto no Hoje na abertura e ao carregar com a aba em segundo plano.
+   Qualquer movimento de câmera conserta: um zoom de 0,0001 quando os ladrilhos chegam e quando a
+   aba volta a ficar visível. Não se vê e não muda o enquadramento. */
+GV2.mapasVivos = [];
+GV2.mapaCutucar = function (mapa) {
+  const maps = window.google && window.google.maps;
+  if (!maps || !mapa) return;
+  const cutuca = function () { try { const z = mapa.getZoom(); if (z != null) { mapa.setZoom(z + 0.0001); setTimeout(function () { mapa.setZoom(z); }, 120); } } catch (e) { /* mapa já saiu */ } };
+  maps.event.addListenerOnce(mapa, 'tilesloaded', function () { setTimeout(cutuca, 60); });
+  GV2.mapasVivos.push(cutuca);
+  if (GV2.mapasVivos.length > 12) GV2.mapasVivos.shift();
+  if (!GV2.mapaCutucarOuvindo) {
+    GV2.mapaCutucarOuvindo = true;
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') GV2.mapasVivos.forEach(function (f) { f(); }); });
+  }
+};
 
 /* ══ GESTOR v8 · etapa 3 · A DAILY (13/10/26, aff.zip) ═════════════════════════════════════════
    Uma pessoa por tela, sem rolar a 1366 × 768. Fila: sem plano → furou o último dia útil → mais
