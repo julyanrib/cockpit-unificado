@@ -9336,7 +9336,7 @@ button.gv2-v5-pp-n:hover{text-decoration:underline;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                  <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -62710,29 +62710,39 @@ GV2.mapaEsperarAba = function () {
   }
   return true;
 };
+
+GV2.mapaPreso = function (el) {
+  if (!el || !el.querySelectorAll) return false;
+  const img = Array.prototype.find.call(el.querySelectorAll('img'), function (i) { return /StaticMapService/.test(i.src || ''); });
+  if (!img) return false;
+  const r = img.getBoundingClientRect();
+  return r.width > 0 && getComputedStyle(img.parentElement || img).opacity !== '0' && getComputedStyle(img).visibility !== 'hidden';
+};
 GV2.mapasVivos = [];
 GV2.mapaCutucar = function (mapa, el, chave) {
   const maps = window.google && window.google.maps;
-  if (!maps || !mapa) return;
-  const reg = { mapa: mapa, el: el, chave: chave, ok: false };
-
-  maps.event.addListenerOnce(mapa, 'tilesloaded', function () { reg.ok = true; });
-  maps.event.addListenerOnce(mapa, 'idle', function () { if (document.visibilityState === 'visible') reg.ok = true; });
-  GV2.mapasVivos = GV2.mapasVivos.filter(function (x) { return x.el && document.body.contains(x.el); });
+  if (!maps || !mapa || !el) return;
+  const reg = { mapa: mapa, el: el, chave: chave };
+  const confere = function () {
+    if (reg.morto || document.visibilityState !== 'visible' || !document.body.contains(el)) return;
+    if (!GV2.mapaPreso(el)) return;
+    el._gv2Tentativas = (el._gv2Tentativas || 0) + 1;
+    if (el._gv2Tentativas > 3) return;
+    reg.morto = true;
+    if (chave) el[chave] = null;
+    el.innerHTML = '';
+    GV2.pintar();
+  };
+  reg.confere = confere;
+  maps.event.addListener(mapa, 'idle', function () { setTimeout(confere, 2500); });
+  setTimeout(confere, 6000);
+  GV2.mapasVivos = GV2.mapasVivos.filter(function (x) { return !x.morto && x.el && document.body.contains(x.el); });
   GV2.mapasVivos.push(reg);
   if (!GV2.mapaVigiando) {
     GV2.mapaVigiando = true;
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState !== 'visible') return;
-      let refazer = false;
-      GV2.mapasVivos.forEach(function (x) {
-        if (x.ok || !x.el || !document.body.contains(x.el)) return;
-        if (x.chave) x.el[x.chave] = null;
-        x.el.innerHTML = '';
-        x.morto = true; refazer = true;
-      });
-      GV2.mapasVivos = GV2.mapasVivos.filter(function (x) { return !x.morto; });
-      if (refazer) GV2.pintar();
+      setTimeout(function () { GV2.mapasVivos.forEach(function (x) { if (x.confere) x.confere(); }); }, 2500);
     });
   }
 };
@@ -63006,7 +63016,8 @@ GV2.v8apPlacar = function () {
   const c = GV2.v6Rk.cache[seg];
   if (!c) { setTimeout(function () { if (GV2.estado.ap != null) GV2.pintar(); }, 1500); return '<div class="gv2-ap-cab"><h2>Placar da semana passada</h2><span>lendo o placar…</span></div>'; }
   if (c.erro || !c.d) return '<div class="gv2-ap-cab"><h2>Placar da semana passada</h2><span>' + GV2.e('o placar não respondeu (' + (c.erro || 'sem dados') + ')') + '</span></div>';
-  const ls = (c.d.linhas || []).slice().sort(function (x, y) { return (y.pontos || 0) - (x.pontos || 0); });
+
+  const ls = (c.d.linhas || []).filter(function (l) { const p = GV2.base.porId[String(l.ownerId)]; return !(p && GV2.emRampa && GV2.emRampa(p)); }).sort(function (x, y) { return (y.pontos || 0) - (x.pontos || 0); });
   const top = ls[0], max = Math.max(1, top ? top.pontos : 1);
   const nome = function (l) { const p = GV2.base.porId[String(l.ownerId)]; return p ? p.nome : (l.nome || '—'); };
   const det = function (l) { return GV2.pl(l.vendas || 0, 'venda', 'vendas') + ' · ' + GV2.pl(l.reunioes || 0, 'demo', 'demos') + ' · ' + GV2.pl(l.visitas || 0, 'visita', 'visitas'); };
