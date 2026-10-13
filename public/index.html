@@ -9239,7 +9239,7 @@ button.gv2-v5-pp-n:hover{text-decoration:underline;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -60722,8 +60722,7 @@ GV2.render.v5PorPessoa = function (sit) {
   const fonte = b.planoErro;
 
   const ritmo = {}; b.pessoas.forEach(function (p) { ritmo[p.id] = GV2.v8Ritmo ? GV2.v8Ritmo(p) : null; });
-  const ord = b.pessoas.filter(function (p) { return ritmo[p.id]; }).slice().sort(function (x, y) { return (ritmo[y.id].cli.feito / Math.max(0.1, ritmo[y.id].cli.esp)) - (ritmo[x.id].cli.feito / Math.max(0.1, ritmo[x.id].cli.esp)) || x.nome.localeCompare(y.nome); });
-  const melhor = ord.length > 1 && ord[0].id, pior = ord.length > 1 && ord[ord.length - 1].id;
+  const rk = GV2.v8Ranking ? GV2.v8Ranking(b.pessoas) : {}, melhor = rk.melhor, pior = rk.pior;
   const linhas = b.pessoas.map(function (p) {
     const s = sit[p.id] || { k: 'andando' };
     const R = ritmo[p.id];
@@ -62412,6 +62411,15 @@ GV2.v8Ritmo = function (p) {
     dem: linha('Demos', f.demo || 0, metaCli / 0.4),
     cli: linha('Clientes', f.fechado || 0, metaCli) };
 };
+GV2.v8Ranking = function (pessoas) {
+  const l = pessoas.filter(function (p) { return Number(p.meta_clientes_mes) > 0 && p.fase !== 'Preparação'; })
+    .map(function (p) { return { p: p, R: GV2.v8Ritmo(p) }; })
+    .sort(function (x, y) {
+      return (y.R.cli.feito / Math.max(0.1, y.R.cli.esp)) - (x.R.cli.feito / Math.max(0.1, x.R.cli.esp))
+        || (y.R.cli.feito - y.R.cli.esp) - (x.R.cli.feito - x.R.cli.esp) || x.p.nome.localeCompare(y.p.nome);
+    });
+  return { melhor: l.length > 1 ? l[0].p.id : null, pior: l.length > 1 ? l[l.length - 1].p.id : null };
+};
 GV2.v8Gargalo = function (R) {
   const rv = R.vis.esp ? R.vis.feito / R.vis.esp : 1, rd = R.dem.esp ? R.dem.feito / R.dem.esp : 1;
   const pv = Math.round(rv * 100), pd = Math.round(rd * 100), dd = GV2.v8Tx(R.f.decisor || 0, R.f.demo || 0);
@@ -62513,7 +62521,7 @@ GV2.render.v8PorPessoa = function () {
   const K = ['portas', 'decisor', 'demo', 'proposta', 'fechado'], ROT = ['portas', 'decisor', 'demo', 'proposta', 'fechado'];
   const linhas = b.pessoas.slice().map(function (p) { return { p: p, R: GV2.v8Ritmo(p) }; })
     .sort(function (x, y) { return (y.R.cli.feito / Math.max(0.1, y.R.cli.esp)) - (x.R.cli.feito / Math.max(0.1, x.R.cli.esp)) || x.p.nome.localeCompare(y.p.nome); });
-  const melhor = linhas[0] && linhas[0].p.id, pior = linhas.length > 1 && linhas[linhas.length - 1].p.id;
+  const rk = GV2.v8Ranking(b.pessoas), melhor = rk.melhor, pior = rk.pior;
   const html = linhas.map(function (x) {
     const p = x.p, R = x.R, G = GV2.v8Gargalo(R), f = R.f;
     const passos = K.map(function (k, i) {

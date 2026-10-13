@@ -833,6 +833,10 @@ tabelas.gv2_falta_etapa = [
     checar('v8 Hoje: Por pessoa tem a coluna Mês (abre o mês da pessoa), melhor e pior marcados, quentes e travados abrem a gaveta',
       (h.match(/data-gv2="v8neg:mes:/g) || []).length === GV2.base.pessoas.length && /gv2-v5-pp-l is-melhor/.test(h) && /gv2-v5-pp-l is-pior/.test(h)
       && (h.match(/data-gv2="v8neg:quentes:/g) || []).length === GV2.base.pessoas.length && (h.match(/data-gv2="v8neg:travados:/g) || []).length === GV2.base.pessoas.length && linhasPP === GV2.base.pessoas.length);
+    /* a régua de melhor/pior: empate em 0 desempata pela distância ao esperado; quem está em Preparação não disputa */
+    const mk = function (id, meta, fech, fase) { return { id: id, nome: id, meta_clientes_mes: meta, fase: fase || 'Pleno', funil_mes: { portas: 0, decisor: 0, demo: 0, proposta: 0, fechado: fech } }; };
+    const rk = GV2.v8Ranking([mk('z4zero', 4, 0), mk('a8zero', 8, 0), mk('c4dois', 4, 2), mk('novato', 4, 0, 'Preparação')]);
+    checar('v8: mais longe do ritmo é quem está mais longe do esperado (não o primeiro do alfabeto), e o novato não disputa', rk.melhor === 'c4dois' && rk.pior === 'a8zero', JSON.stringify(rk));
     GV2.estado.aba = ab0;
   }
   if (falhas.length) {
