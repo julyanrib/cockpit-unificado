@@ -951,6 +951,7 @@ tabelas.gv2_falta_etapa = [
     let h = ''; try { h = GV2.render.terr(); } catch (e) { falhas.push('v9 terr: ' + e.message); }
     checar('v9 Território: 4 números com "i", a frase com Decidir dono, Abastecer, Decidir, Radar e Ações desta sessão',
       (h.match(/class="gv2-v5-kpi gv2-v9-kpi"/g) || []).length === 4 && /data-gv2="v9g:dono">Decidir dono</.test(h) && /2 · Abastecer/.test(h) && /3 · Decidir/.test(h) && /4 · Radar de leads/.test(h) && /Ações desta sessão/.test(h));
+    checar('v9 Território: o mapa de calor tem altura própria (o .gv2-px-mapa base é flex:1 e saiu com 0 px em 13/10)', /\n\.gv2-v9-terr \.gv2-px-mapa\{height:[1-9]\d{2}px;flex:none;\}/.test(tpl));
     checar('v9 Território: nenhum botão abre a tela antiga (sem v5rt7, sem "Prospecção completa", sem "munição")',
       !/data-gv2="v5rt7|Prospecção completa|munição|torneira/.test(h));
     const P = GV2.v9Pendencias();
