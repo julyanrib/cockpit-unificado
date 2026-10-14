@@ -33,7 +33,15 @@
 //   SUPABASE_URL / SUPABASE_ANON_KEY -> para validar a sessão do gestor
 
 const { CIDADES, buscarCidade, importarLote } = require('../scripts/backfill-casa-dos-dados.js');
-const { montarDadosCompletos } = require('../scripts/montar-dados.js');
+/* QUEM PODE DISPARAR (14/10/26): a lista vem de data/usuarios.json, como em criar-negocio e
+   desfazer-negocio. Antes vinha de montarDadosCompletos(), que abre o snapshot do CRM; sem ele
+   (Vercel e APP Outbound) a montagem quebrava e a rota respondia "Não foi possível validar a
+   sessão" a todo mundo desde 26/09. No APP este arquivo vem vivo de equipe_cockpit. */
+let USUARIOS = [];
+try {
+  const raw = require('../data/usuarios.json');
+  USUARIOS = Array.isArray(raw) ? raw : ((raw && raw.usuarios) || []);
+} catch (e) { USUARIOS = []; }
 
 /* teto de segurança: o botão é do gestor, mas uma requisição HTTP não pode paginar a
    Casa dos Dados por minutos. 100 é o topo que a própria tela oferece. */
@@ -70,7 +78,6 @@ module.exports = async (req, res) => {
     });
     if (!check.ok) return res.status(401).json({ erro: 'Sessão inválida ou expirada.' });
     const email = String(((await check.json()) || {}).email || '').toLowerCase();
-    const USUARIOS = (montarDadosCompletos().usuarios) || [];
     const u = email ? USUARIOS.find(x => String(x.email).toLowerCase() === email) : null;
     if (!u || u.role !== 'manager') {
       return res.status(403).json({ erro: 'Só o gestor dispara importação de praça.' });
@@ -110,12 +117,17 @@ module.exports = async (req, res) => {
       });
     }
     const r = await importarLote(leads, importSecret);
+    /* o lote que falhou não vira "0 inseridas" na tela: diz o motivo (14/10/26) */
+    if (r.erro && !(r.inseridos || r.duplicados)) {
+      return res.status(502).json({ erro: 'A busca trouxe ' + leads.length + ' contas, mas a importação falhou: ' + r.erro });
+    }
     return res.status(200).json({
       ok: true,
       municipio: cfgOriginal.municipio,
       encontrados: leads.length,
       inseridos: r.inseridos || 0,
       duplicados: r.duplicados || 0,
+      aviso: r.erro ? 'Parte do lote falhou: ' + r.erro : undefined,
       pedidoPor: quemPediu
     });
   } catch (e) {

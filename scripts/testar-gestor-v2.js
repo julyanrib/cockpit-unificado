@@ -612,8 +612,9 @@ tabelas.gv2_falta_etapa = [
       const fsx = require('fs'), px = require('path');
       const api = fsx.readFileSync(px.join(__dirname, '..', 'lib', 'atualizar-hubspot.js'), 'utf8');
       const wf = fsx.readFileSync(px.join(__dirname, '..', '.github', 'workflows', 'daily-refresh.yml'), 'utf8');
-      checar('Atualizar HubSpot: botão na Hoje, rota só para gestor (is_field_admin), origem cockpit, e o robô não gera IA em disparo com origem (09/10/26)',
-        GV2.render.time().indexOf('data-gv2="hsatu"') > 0 && api.indexOf('/rest/v1/rpc/is_field_admin') > 0 && api.indexOf("inputs: { origem: 'cockpit' }") > 0
+      /* 14/10/26: a regra de gestor é eh_gestor_cockpit (gestor do app OU manager do cockpit); is_field_admin sozinho barrava o gestor que só existe no cockpit */
+      checar('Atualizar HubSpot: botão na Hoje, rota só para gestor (eh_gestor_cockpit), origem cockpit, e o robô não gera IA em disparo com origem (09/10/26)',
+        GV2.render.time().indexOf('data-gv2="hsatu"') > 0 && api.indexOf('/rest/v1/rpc/eh_gestor_cockpit') > 0 && api.indexOf('/rest/v1/rpc/is_field_admin') < 0 && api.indexOf("inputs: { origem: 'cockpit' }") > 0
           && api.indexOf('PLACEHOLDER') < 0 && wf.indexOf('if [ -n "${{ github.event.inputs.origem }}" ]; then') > 0
           && fsx.readFileSync(px.join(__dirname, '..', 'api', 'hubspot-webhook.js'), 'utf8').indexOf("req.query.acao === 'atualizar'") > 0 && fsx.readdirSync(px.join(__dirname, '..', 'api')).filter(function (f) { return /\.js$/.test(f); }).length <= 12);
     }
@@ -1057,6 +1058,9 @@ tabelas.gv2_falta_etapa = [
     GV2.ir = ir0; GV2.pintar = p0; GV2.estado.aba = ab0; GV2.estado.rua = rua0; if (global.document) global.document.querySelector = qs0;
     checar('auditoria · v5rua fora da Rua leva para a Rua na visão pedida (antes o clique não fazia nada)', ok, String(foi));
   }
+  /* auditoria 14/10/26: a carga pede as visitas com prova UMA vez (mês, 4 semanas e semana saem por recorte) */
+  checar('auditoria · a carga do gestor pede visitas_com_prova uma vez só e recorta as três janelas',
+    codigo.indexOf("visJanela: supa.rpc('visitas_com_prova'") > 0 && codigo.indexOf("visitas4: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf("visSem: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf("visitasMes: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf('out.visitas4 = recorte(GV2.somaDias(seg, -21));') > 0);
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
