@@ -1087,6 +1087,15 @@ tabelas.gv2_falta_etapa = [
     tabelas.rotas_da_semana = rotasOrig;
     GV2.pintar = pintarOrig2;
   }
+  /* 14/10/26: o combinado "6 visitas por dia" conta toda visita com prova, do plano ou não */
+  {
+    const pz = { semana: [], hoje: { paradas_plano: 0 }, ontem: { paradas_plano: 0, visitas_com_prova: 0, visitas_todas: 6 }, meta_visitas_dia: 6, w: [], travados: [] };
+    const c1 = GV2.conferir(pz, { regra: 'visitas_dia' }, {});
+    pz.ontem = { paradas_plano: 8, visitas_com_prova: 4, visitas_todas: 5 };
+    const c2 = GV2.conferir(pz, { regra: 'visitas_dia' }, {});
+    checar('visitas_dia: 6 visitas de rua sem plano cumprem; 5 (4 do plano) não',
+      c1.ok === true && c2.ok === false && /4 do plano de 8/.test(c2.ev), JSON.stringify([c1, c2]));
+  }
   /* 14/10/26: o PDI volta na Pessoas (bloco 5 + gaveta de anexo) */
   {
     const pintarOrig3 = GV2.pintar; GV2.pintar = function () {};
