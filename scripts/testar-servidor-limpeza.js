@@ -118,6 +118,49 @@ const gestor = USUARIOS.find(u => u.role === 'manager' && u.email);
     checar('Atualizar HubSpot: a regra é eh_gestor_cockpit', fonte.indexOf('/rest/v1/rpc/eh_gestor_cockpit') > 0 && fonte.indexOf('/rest/v1/rpc/is_field_admin') < 0);
   }
 
+  /* 7. quem saiu do time não é dono também no APP, onde usuarios.json só traz ativos sem a marca */
+  {
+    const Module = require('module');
+    const arqTerr = path.join(raiz, 'lib', 'territorios.js');
+    const arqUsu = path.join(raiz, 'data', 'usuarios.json');
+    const arqDesl = path.join(raiz, 'data', 'desligados.json');
+    const desligados = USUARIOS.filter(u => u.desligado && u.ownerId);
+    const resolver0 = Module._resolveFilename;
+    const carregarComo = (usuarios, deslig) => {
+      delete require.cache[arqTerr];
+      const cacheUsu = require.cache[arqUsu];
+      require.cache[arqUsu] = { id: arqUsu, filename: arqUsu, loaded: true, exports: usuarios };
+      if (deslig) {
+        Module._resolveFilename = function (pedido, pai) { return /desligados\.json$/.test(pedido) ? arqDesl : resolver0.apply(this, arguments); };
+        require.cache[arqDesl] = { id: arqDesl, filename: arqDesl, loaded: true, exports: deslig };
+      }
+      try { return require(arqTerr); } finally {
+        Module._resolveFilename = resolver0;
+        delete require.cache[arqDesl];
+        if (cacheUsu) require.cache[arqUsu] = cacheUsu; else delete require.cache[arqUsu];
+        delete require.cache[arqTerr];
+      }
+    };
+    // o APP: lista só de ativos, sem a marca, e os desativados à parte (preenchidos DEPOIS do carregamento)
+    const ativos = [], deslApp = [];
+    const tApp = carregarComo(ativos, deslApp);
+    USUARIOS.filter(u => !u.desligado).forEach(u => ativos.push(Object.assign({}, u)));
+    desligados.forEach(u => deslApp.push({ ownerId: u.ownerId }));
+    const zApp = tApp.donoPorZonaEscrita('São Paulo', 'Vila Mariana (Zona Sul)');
+    checar('território no APP: zona escrita de quem saiu fica sem dono (desligados.json)',
+      desligados.some(u => String(u.ownerId) === '89842507') && !(zApp && zApp.owner === '89842507'), JSON.stringify(zApp));
+    const pApp = tApp.donoPorProximidade('São Paulo', -23.6520, -46.7080);
+    checar('território no APP: centro de zona de quem saiu não vale (desligados.json)', !!pApp && pApp.owner !== '89842507', JSON.stringify(pApp));
+    // sem desligados.json e sem a marca (o pacote antigo), a regra antiga voltaria a dar o dono que saiu
+    const tSem = carregarComo(USUARIOS.filter(u => !u.desligado), null);
+    const zSem = tSem.donoPorZonaEscrita('São Paulo', 'Vila Mariana (Zona Sul)');
+    checar('território: a medição acima mede algo (sem as duas fontes, quem saiu ainda seria dono)', !!zSem && zSem.owner === '89842507', JSON.stringify(zSem));
+    // fora do APP: a marca em usuarios.json basta, como antes
+    const tVercel = carregarComo(usuariosRaw, null);
+    const zV = tVercel.donoPorZonaEscrita('São Paulo', 'Vila Mariana (Zona Sul)');
+    checar('território fora do APP: a marca desligado continua bastando', !(zV && zV.owner === '89842507'), JSON.stringify(zV));
+  }
+
   global.fetch = fetch0;
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
