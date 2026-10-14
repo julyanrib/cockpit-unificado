@@ -924,6 +924,85 @@ tabelas.gv2_falta_etapa = [
     checar('v8 Propostas: "Venceu ontem · ligar hoje" separado de "Esquecidas" (ou o aviso de que não leu)', /Venceu ontem · ligar hoje/.test(hp) && /Esquecidas/.test(hp) || /Lendo as propostas|Não consegui ler as propostas/.test(hp));
     GV2.estado.aba = ab0;
   }
+  /* v9 (13/10/26): a aba Território absorve a tela antiga; três gavetas; toda escrita conta o que voltou */
+  {
+    const g = global, b = GV2.base, ids = b.pessoas.map(function (p) { return p.id; });
+    const ant = { R: g.RT7_ESTADO, A: g.rt7Ativos, F: g.rt7FilaDoExec, S: g.rt7Score, M: g.rt7Marcado, P: g.rt7ProximaSegunda, E: g.rt7Estoque, G: g.rt7Registrar, C: g.rt7Carteira, supa: g.supa, pintar: GV2.pintar, ir: GV2.ir, aba: GV2.estado.aba };
+    const L = function (id, dono, st, cidade, extra) { return Object.assign({ id: id, nome: 'Conta ' + id, status: st, responsavel_owner_id: dono, cidade: cidade, bairro: 'Centro', created_at: '2026-10-12T12:00:00Z' }, extra || {}); };
+    g.RT7_ESTADO = { carregou: true, cargas: [], leads: [
+      L('f1', '97353029', 'atribuido', 'Nova Iguaçu', { estado: 'RJ' }), L('f2', '97353029', 'atribuido', 'NOVA IGUACU', { estado: 'RJ' }),
+      L('f3', '97353029', 'na_rota', 'Nova Iguaçu'),
+      L('s1', null, 'pendente', 'Rio de Janeiro'),
+      L('a1', ids[0], 'atribuido', 'Rio de Janeiro', { nota: 4.9, avaliacoes: 1200, telefone: '21999990000' }),
+      L('a2', ids[0], 'atribuido', 'Rio de Janeiro')] };
+    g.rt7Ativos = function () { return b.pessoas.map(function (p) { return { ownerId: p.id, nome: p.nome, role: 'rep' }; }); };
+    g.rt7FilaDoExec = function (id, todas) { return g.RT7_ESTADO.leads.filter(function (l) { return ['pendente', 'atribuido'].indexOf(l.status) >= 0 && String(l.responsavel_owner_id) === String(id); }).map(function (l) { return { l: l, sc: l.nota ? 98 : null, orfa: false }; }); };
+    g.rt7Score = function (l) { return l.nota ? 98 : null; };
+    g.rt7Marcado = function (s, l) { const v = (s || {})[String(l.id)]; return v === undefined ? !l.responsavel_owner_id : !!v; };
+    g.rt7ProximaSegunda = function () { return '2026-10-19'; };
+    g.rt7Estoque = function (id) { return id === ids[0] ? { contas: 2, consumo: 4, semanas: 0.5 } : { contas: 80, consumo: null, semanas: null }; };
+    g.rt7Registrar = function (e) { g.RT7_ESTADO.cargas = g.RT7_ESTADO.cargas.concat([e]); };
+    g.rt7Carteira = function () { return { ativas: 1, cap: 60 }; };
+    g.RT7_TETO = 0.75;
+    const pedidos = [];
+    g.supa = { from: function (tab) { return { update: function (c) { return { in: function (col, lista) { return { select: async function () { pedidos.push({ tab: tab, c: c, ids: lista.slice() }); return { data: lista.map(function (i) { return { id: i }; }), error: null }; } }; } }; } }; } };
+    GV2.pintar = function () {}; GV2.ir = function (a) { GV2.estado.aba = a; };
+    GV2.estado.aba = 'terr'; GV2.estado.v9g = null;
+    let h = ''; try { h = GV2.render.terr(); } catch (e) { falhas.push('v9 terr: ' + e.message); }
+    checar('v9 Território: 4 números com "i", a frase com Decidir dono, Abastecer, Decidir, Radar e Ações desta sessão',
+      (h.match(/class="gv2-v5-kpi gv2-v9-kpi"/g) || []).length === 4 && /data-gv2="v9g:dono">Decidir dono</.test(h) && /2 · Abastecer/.test(h) && /3 · Decidir/.test(h) && /4 · Radar de leads/.test(h) && /Ações desta sessão/.test(h));
+    checar('v9 Território: nenhum botão abre a tela antiga (sem v5rt7, sem "Prospecção completa", sem "munição")',
+      !/data-gv2="v5rt7|Prospecção completa|munição|torneira/.test(h));
+    const P = GV2.v9Pendencias();
+    const fora = P.filter(function (x) { return x.tipo === 'fora'; });
+    checar('v9 Decidir: conta de quem saiu entra uma vez por grafia de cidade, e só a que ainda pode mudar (na_rota fica)',
+      fora.length === 1 && fora[0].n === 2 && fora[0].titulo === 'Nova Iguaçu/RJ', JSON.stringify(fora.map(function (x) { return [x.n, x.titulo]; })));
+    checar('v9 Abastecer: abaixo de 1 semana = "importe hoje" com Importar em destaque', /importe hoje/.test(h) && h.indexOf('data-gv2="v9g:imp:' + ids[0] + '">Importar') > 0);
+    GV2.v9Comando('v9g', ['v9g', 'contas', ids[0]]);
+    let gav = GV2.render.v9Gav();
+    checar('v9 Contas: abre na pessoa com o total e o rodapé; marcar conta muda o número do Aprovar',
+      /Contas de [^<]* · 2</.test(gav) && /Aprovar selecionadas \(0\)/.test(gav));
+    GV2.v9Comando('v9marcar', ['v9marcar', 'a1']);
+    GV2.v9Comando('v9conf', ['v9conf', 'aprovar']);
+    gav = GV2.render.v9Gav();
+    checar('v9 Contas: Aprovar pede confirmação na gaveta (sem confirm do navegador) dizendo a segunda', /Pôr 1 conta na rota de [^<]* na segunda 19\/10\?/.test(gav) && /data-gv2="v9aprovar"/.test(gav));
+    await GV2.v9Aprovar();
+    const a1 = g.RT7_ESTADO.leads.find(function (l) { return l.id === 'a1'; });
+    checar('v9 Contas: aprovar grava status na rota + data_rota da segunda + dono, e só a marcada',
+      pedidos.length === 1 && pedidos[0].c.status === 'na_rota' && pedidos[0].c.data_rota === '2026-10-19' && pedidos[0].c.responsavel_owner_id === ids[0] && pedidos[0].ids.join() === 'a1' && a1.status === 'na_rota', JSON.stringify(pedidos));
+    gav = GV2.render.v9Gav();
+    checar('v9 Contas: depois de aprovar, a faixa verde com a segunda e o Desfazer', /1 aprovada · rota da próxima segunda \(19\/10\)/.test(gav) && /data-gv2="v9desfazer:0"/.test(gav));
+    await GV2.v9Desfazer(0);
+    checar('v9 Desfazer: a conta volta ao status e ao dia de antes', a1.status === 'atribuido' && a1.data_rota == null && pedidos[1] && pedidos[1].c.status === 'atribuido', JSON.stringify(pedidos[1]));
+    GV2.v9Comando('v9g', ['v9g', 'dono']);
+    const kFora = fora[0].k;
+    GV2.v9Comando('v9conf', ['v9conf', 'dar', kFora, ids[1]]);
+    gav = GV2.render.v9Gav();
+    checar('v9 Decidir dono: dar dono pede confirmação no bloco', /Dar 2 contas para/.test(gav) && gav.indexOf('data-gv2="v9dar:' + kFora + ':' + ids[1] + '"') > 0);
+    await GV2.v9Dar(kFora, ids[1]);
+    const P2 = GV2.v9Pendencias();
+    gav = GV2.render.v9Gav();
+    checar('v9 Decidir dono: grava o dono nas contas, o bloco fica verde e o número de sem dono cai',
+      pedidos[2] && pedidos[2].c.responsavel_owner_id === ids[1] && !P2.some(function (x) { return x.tipo === 'fora'; }) && /dono decidido/.test(gav) && GV2.v9SemDono(P2) === 1, JSON.stringify(pedidos[2]));
+    let pedidosAntes = pedidos.length;
+    g.supa = { from: function () { return { update: function () { return { in: function () { return { select: async function () { return { data: [], error: null }; } }; } }; } }; } };
+    GV2.v9Comando('v9g', ['v9g', 'contas', ids[0]]);
+    GV2.v9Comando('v9marcar', ['v9marcar', 'a2']);
+    await GV2.v9Aprovar();
+    checar('v9 Contas: banco que devolve 0 linhas é "nada foi gravado", nunca ✓', /Nada foi gravado/.test(GV2.estado.v9g.erro || '') && !GV2.estado.v9g.ok);
+    g.RT7_FONTES = [{ id: 'casa_dos_dados', rot: 'Casa dos Dados', ativa: true }, { id: 'google_places', rot: 'Google Places', ativa: false, porque: 'x' }, { id: 'tripadvisor', rot: 'TripAdvisor', ativa: false, porque: 'y' }];
+    GV2.v9Comando('v9g', ['v9g', 'imp', ids[0]]);
+    gav = GV2.render.v9Gav();
+    checar('v9 Importar: fontes indisponíveis dizem o porquê e o Disparar desliga sem cidade',
+      /sem cobrança no Google/.test(gav) && /termos de uso/.test(gav) && (/data-gv2="v9disparar" disabled/.test(gav) || /data-gv2="v9cid:/.test(gav)));
+    GV2.estado.aba = 'time'; try { GV2.visitar('rotas'); } catch (e) { /* a antiga não existe aqui: conta como não ter vindo para o Território */ }
+    checar('v9: "Rotas & Prospecção" não abre mais: visitar rotas cai no Território', GV2.estado.aba === 'terr');
+    const fab = b.pessoas[2]; const fase0 = fab.fase; fab.fase = 'Preparação';
+    const abR = GV2.v9Abastecer(); fab.fase = fase0;
+    checar('v9 Abastecer: quem está em rampagem não é cobrado por consumo (selo próprio, no fim)', abR[abR.length - 1].id === fab.id && abR[abR.length - 1].e.k === 'rampa');
+    g.RT7_ESTADO = ant.R; g.rt7Ativos = ant.A; g.rt7FilaDoExec = ant.F; g.rt7Score = ant.S; g.rt7Marcado = ant.M; g.rt7ProximaSegunda = ant.P; g.rt7Estoque = ant.E; g.rt7Registrar = ant.G; g.rt7Carteira = ant.C; g.supa = ant.supa;
+    GV2.pintar = ant.pintar; GV2.ir = ant.ir; GV2.estado.aba = ant.aba; GV2.estado.v9g = null; GV2.estado.v9feito = null; GV2.estado.v9conf = null;
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
