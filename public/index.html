@@ -9788,7 +9788,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -55441,7 +55441,7 @@ GV2.render.ruaAgora = function () {
     + '<div class="gv2-mapa" data-gv2-mapa="time"></div>'
     + (fora.length ? '<div class="gv2-outras"><span>Outras praças:</span>' + fora.map(function (p) {
       return '<button type="button" class="gv2-chip" data-gv2="praca:' + GV2.e(p.praca) + '"><i class="gv2-ponto" style="background:' + GV2.STATUS[p.hoje.status].cor + '"></i>'
-        + GV2.e(GV2.prim(p.nome) + ' · ' + p.praca + ' · ' + (p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : GV2.semRota(p))) + '</button>';
+        + GV2.e(GV2.prim(p.nome) + ' · ' + p.praca + ' · ' + (GV2.temRua(p) ? GV2.visHoje(p) : GV2.semRota(p))) + '</button>';
     }).join('') + '</div>' : '<div style="height:12px"></div>')
     + '</section>';
 };
@@ -55497,14 +55497,14 @@ GV2.render.porPessoa = function () {
   const linhas = b.ordem.map(function (p) {
     const plan = p.hoje.paradas_plano;
     const alvo = plan || p.meta_visitas_dia;
-    const ok = p.hoje.visitas_com_prova >= p.esperado;
+    const ok = (p.hoje.visitas_todas || 0) >= p.esperado;
     const a = GV2.acaoDaLinha(p);
     const ult = p.praca !== (GV2.estado.praca || b.pracaPrincipal) ? p.praca + ' · ' + p.hoje.ultima_atividade : p.hoje.ultima_atividade;
     return { acao: 'pessoa:' + p.id, celulas: [
       '<div class="gv2-pessoa">' + GV2.html.av(p) + '<div class="gv2-pessoa-txt"><b>' + GV2.e(p.nome) + '</b><span>' + GV2.e(ult) + '</span></div></div>',
       '<button type="button" class="gv2-celplano ' + (plan ? 'cel-forte' : 't-av cel-forte') + '" data-gv2="rxg:plano:' + p.id + '" title="ver o planejamento de ' + GV2.e(GV2.prim(p.nome)) + '">' + (plan ? GV2.pl(plan, 'parada', 'paradas') : GV2.semRota(p)) + '</button>',
       '<div class="gv2-celvis"><div><b class="num">' + p.hoje.visitas_com_prova + ' de ' + alvo + '</b>' + (plan && !b.antesDaJornada ? '<span class="' + (ok ? 't-ok' : 't-av') + '" style="font:var(--gv2-mini)">' + (ok ? 'no ritmo' : 'abaixo') + '</span>' : '') + '</div>'
-        + GV2.html.barra(alvo ? p.hoje.visitas_com_prova / alvo * 100 : 0, ok ? 'ok' : 'av') + '</div>',
+        + GV2.html.barra(alvo ? (p.hoje.visitas_todas || 0) / alvo * 100 : 0, ok ? 'ok' : 'av') + '</div>',
       '<span class="num ' + (p.furou > 0 ? 't-av' : '') + '">' + (p.ontem.paradas_plano || p.ontem.visitas_com_prova ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano + (p.furou > 0 ? ' · furou ' + p.furou : '') : '—') + '</span>',
       '<span class="num">' + (p.quentes.length ? p.quentes.length + ' · ' + GV2.rs(p.mrrQuentes) : '—') + '</span>',
       '<span class="num ' + (p.travados.length >= 3 ? 't-av' : '') + '">' + p.travados.length + '</span>',
@@ -55522,7 +55522,7 @@ GV2.render.daily = function () {
   const i = Math.max(0, Math.min(b.ordem.length - 1, GV2.estado.daily));
   const p = b.ordem[i];
   if (!p) return '';
-  const ok = p.hoje.visitas_com_prova >= p.esperado;
+  const ok = (p.hoje.visitas_todas || 0) >= p.esperado;
   const pd = p.funil_mes.portas ? Math.round(p.funil_mes.decisor / p.funil_mes.portas * 100) : null;
   const destravar = p.travados.concat(p.quentes.filter(function (n) { return !n.agPag && !n.proximo_passo && !n.travado; }))
     .sort(function (x, y) { return (y.etapa_idx - x.etapa_idx) || ((y.mrr || 0) - (x.mrr || 0)) || (y.dias - x.dias); });
@@ -55545,7 +55545,7 @@ GV2.render.daily = function () {
     + '<ul>' + (pd != null ? '<li><i class="gv2-ponto" style="background:var(--gv2-faint)"></i>Porta → decisor no mês: ' + pd + '%</li>' : '')
     + '<li><i class="gv2-ponto" style="background:var(--gv2-faint)"></i>' + GV2.pl(p.funil_mes.demo, 'demo', 'demos') + ' e ' + GV2.pl(p.funil_mes.fechado, 'fechado', 'fechados') + ' no mês</li></ul></section>'
     + '<section class="card gv2-daily-col"><h3>Hoje</h3>'
-    + (p.hoje.paradas_plano ? '<div class="gv2-daily-num ' + (ok ? 't-ok' : 't-av') + '">' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + '</div>'
+    + (p.hoje.paradas_plano ? '<div class="gv2-daily-num ' + (ok ? 't-ok' : 't-av') + '">' + GV2.visHoje(p) + '</div>'
       + '<div class="t-mute">' + GV2.e(GV2.statusRot(p) + ' · ' + p.hoje.ultima_atividade) + '</div>'
       + '<ul><li><i class="gv2-ponto" style="background:var(--gv2-vivo)"></i>' + GV2.pl(p.hoje.paradas.filter(function (x) { return x.feita; }).length, 'parada feita', 'paradas feitas') + ' com GPS</li>'
       + '<li><i class="gv2-ponto" style="background:var(--gv2-faint)"></i>' + p.hoje.paradas.filter(function (x) { return !x.feita; }).length + ' por fazer</li></ul>'
@@ -55711,7 +55711,7 @@ GV2.render.ruaHoje = function () {
       const fora = p.praca !== praca ? p.praca + ' · ' : '';
       return '<div class="gv2-rua-it' + (GV2.estado.destaque === p.id ? ' is-sel' : '') + '" data-gv2="destaque:' + p.id + '">' + GV2.html.av(p)
         + '<div class="gv2-pessoa-txt"><b>' + GV2.e(p.nome) + '</b><span class="' + (sem ? 't-av' : '') + '">' + GV2.e(fora + (p.hoje.paradas_plano ? GV2.statusRot(p) : GV2.semRotaHoje(p)) + ' · ' + p.hoje.ultima_atividade) + '</span></div>'
-        + '<b class="num">' + (p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : (p.hoje.visitas_com_prova ? p.hoje.visitas_com_prova + ' fora do plano' : '—')) + '</b></div>';
+        + '<b class="num">' + (GV2.temRua(p) ? GV2.visHoje(p) : (p.hoje.visitas_com_prova ? p.hoje.visitas_com_prova + ' fora do plano' : '—')) + '</b></div>';
     }).join('') + '</div></section></div>';
 };
 GV2.render.ruaSemana = function () {
@@ -55770,7 +55770,7 @@ GV2.pautaDe = function (p) {
   const itens = [];
   itens.push(p.hoje.paradas_plano === 0
     ? 'Hoje sem rota' + (p.hoje.agenda && p.hoje.agenda.n ? ' (' + GV2.resumoDosCompromissos(p.hoje.agenda) + ')' : '') + '. ' + (b.ontemRot ? 'Ontem' : 'No último dia') + (p.ontem.paradas_plano ? ' provou ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : ' também não teve plano') + '. O que impediu?'
-    : 'Hoje: ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + (b.foraDaJornada ? ', dia encerrado' : ' até ' + b.horaTxt) + (p.furou > 0 ? '. Ontem furou ' + p.furou + '.' : '.'));
+    : 'Hoje: ' + GV2.visHoje(p) + (b.foraDaJornada ? ', dia encerrado' : ' até ' + b.horaTxt) + (p.furou > 0 ? '. Ontem furou ' + p.furou + '.' : '.'));
   itens.push(p.travados.length ? GV2.pl(p.travados.length, 'travado', 'travados') + ': ' + p.travados.slice(0, 2).map(function (n) { return n.nome + ' (' + n.dias + 'd em ' + GV2.ETAPAS[n.etapa_idx] + ')'; }).join(', ') + '.' : 'Nenhum negócio travado.');
   if (pd != null && pdT != null) itens.push(pd < pdT ? 'Chega na porta mas não no decisor: ' + pd + '% contra ' + pdT + '% do time.' : 'Porta → decisor em ' + pd + '%, no nível do time (' + pdT + '%).');
   else itens.push(p.quentesSemPasso ? GV2.pl(p.quentesSemPasso, 'quente sem próximo passo', 'quentes sem próximo passo') + '.' : 'Nenhuma visita com prova no mês ainda.');
@@ -56106,6 +56106,8 @@ GV2.resumoDosCompromissos = function (a) {
   return [a.lig ? GV2.pl(a.lig, 'ligação', 'ligações') : null, a.reun ? GV2.pl(a.reun, 'reunião', 'reuniões') : null, a.tar ? GV2.pl(a.tar, 'tarefa', 'tarefas') : null].filter(Boolean).join(', ') + ' na agenda';
 };
 
+GV2.visHoje = function (p) { return (p.hoje.visitas_todas || 0) + ' de ' + p.meta_visitas_dia; };
+GV2.temRua = function (p) { return p.hoje.paradas_plano > 0 || (p.hoje.visitas_todas || 0) > 0; };
 GV2.semRota = function (p) { const a = p && p.hoje && p.hoje.agenda; return a && a.n ? 'sem rota · ' + GV2.resumoDosCompromissos(a) : 'sem plano nem agenda'; };
 GV2.semRotaHoje = function (p) { const a = p && p.hoje && p.hoje.agenda; return a && a.n ? 'sem rota hoje · ' + GV2.resumoDosCompromissos(a) : 'sem plano nem agenda hoje'; };
 GV2.montar = async function (so) {
@@ -56636,7 +56638,7 @@ GV2.mapa = {
     b.style.opacity = apagado ? '.35' : '1';
     b.title = p.nome;
     b.innerHTML = '<i style="background:' + st.cor + '">' + GV2.e(p.iniciais) + '</i>'
-      + (mostraRot ? '<span class="gv2-mapa-rot is-v5"><b>' + GV2.e(GV2.prim(p.nome) + ' · ' + (p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem rota')) + '</b></span>' : '');
+      + (mostraRot ? '<span class="gv2-mapa-rot is-v5"><b>' + GV2.e(GV2.prim(p.nome) + ' · ' + (GV2.temRua(p) ? GV2.visHoje(p) : 'sem rota')) + '</b></span>' : '');
     return b;
   },
 
@@ -58602,7 +58604,7 @@ GV2.render.mapaGrande = function () {
         const st = GV2.STATUS[p.hoje.status];
         return '<button type="button" class="gv2-mg-pessoa' + (sel && sel.id === p.id ? ' is-ativo' : '') + '" data-gv2="mg:pessoa:' + p.id + '">'
           + '<span class="gv2-av is-30">' + GV2.e(p.iniciais) + '<i style="background:' + st.cor + '"></i></span>'
-          + '<span class="gv2-mg-pessoa-txt"><b>' + GV2.e(p.nome) + '</b><span>' + GV2.e((p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' · ' : GV2.semRota(p) + ' · ') + GV2.statusRot(p)) + '</span></span></button>';
+          + '<span class="gv2-mg-pessoa-txt"><b>' + GV2.e(p.nome) + '</b><span>' + GV2.e((GV2.temRua(p) ? GV2.visHoje(p) + ' · ' : GV2.semRota(p) + ' · ') + GV2.statusRot(p)) + '</span></span></button>';
       }).join('') + '</div>';
   }).join('');
   let roteiro = '';
@@ -58870,7 +58872,7 @@ GV2.render.ruaRotas = function () {
         const st = GV2.STATUS[p.hoje.status];
         return '<button type="button" class="gv2-mg-pessoa' + (sel.id === p.id ? ' is-ativo' : '') + '" data-gv2="ruasel:' + p.id + '">'
           + '<span class="gv2-av is-30">' + GV2.e(p.iniciais) + '<i style="background:' + st.cor + '"></i></span>'
-          + '<span class="gv2-mg-pessoa-txt"><b>' + GV2.e(p.nome) + '</b><span>' + GV2.e((p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' hoje · ' + (p.hoje.agenda && p.hoje.agenda.n ? p.hoje.agenda.n + ' na agenda · ' : '') : GV2.semRotaHoje(p) + ' · ') + GV2.statusRot(p)) + '</span></span></button>';
+          + '<span class="gv2-mg-pessoa-txt"><b>' + GV2.e(p.nome) + '</b><span>' + GV2.e((GV2.temRua(p) ? GV2.visHoje(p) + ' hoje · ' + (p.hoje.agenda && p.hoje.agenda.n ? p.hoje.agenda.n + ' na agenda · ' : '') : GV2.semRotaHoje(p) + ' · ') + GV2.statusRot(p)) + '</span></span></button>';
       }).join('') + '</div>';
   }).join('');
   return '<div class="gv2-rr"><section class="card gv2-rr-lado"><div class="card-cab"><span class="card-titulo">O time</span><span class="card-sub">' + GV2.e('hoje · ' + b.horaTxt) + '</span></div><div class="gv2-mg-lista">' + lista + '</div></section>'
@@ -58963,9 +58965,9 @@ GV2.p3Lista = function (b, sel) {
       const semPlano = p.hoje.paradas_plano === 0;
       const ok = p.motivo === 'no ritmo';
       return '<button type="button" class="gv2-p3-it' + (p.id === sel.id ? ' is-sel' : '') + '" data-gv2="pessoa:' + p.id + '">' + GV2.html.av(p)
-        + '<span class="gv2-p3-it-txt"><span class="gv2-p3-it-l1"><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><span class="' + (semPlano ? 't-av' : '') + '">' + GV2.e(semPlano ? GV2.semRota(p) : p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano) + '</span></span>'
+        + '<span class="gv2-p3-it-txt"><span class="gv2-p3-it-l1"><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><span class="' + (semPlano ? 't-av' : '') + '">' + GV2.e(semPlano ? GV2.semRota(p) : GV2.visHoje(p)) + '</span></span>'
         + '<span class="gv2-p3-it-l2">' + GV2.e((st.rot || 'sem check-in hoje') + ' · ' + p.praca) + '</span>'
-        + '<span class="gv2-p3-it-l3 ' + (ok ? 't-ok' : 't-av') + '">' + GV2.e(ok ? 'no ritmo · ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : p.motivo) + '</span>' + chip(p) + '</span></button>';
+        + '<span class="gv2-p3-it-l3 ' + (ok ? 't-ok' : 't-av') + '">' + GV2.e(ok ? 'no ritmo · ' + GV2.visHoje(p) : p.motivo) + '</span>' + chip(p) + '</span></button>';
     }).join('') + '</section>';
 };
 
@@ -58978,7 +58980,7 @@ GV2.p3Subtitulos = function (p) {
   const w = p.w.length ? p.w[p.w.length - 1] : null;
   const dr = p.disc ? p.disc.nReunioes : null;
   return {
-    agora: { t: p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem rota', av: !p.hoje.paradas_plano },
+    agora: { t: GV2.temRua(p) ? GV2.visHoje(p) : 'sem rota', av: !p.hoje.paradas_plano },
     ritmo: { t: w == null ? '—' : GV2.virg(w) + '/dia', av: w != null && w < p.meta_visitas_dia * 0.9 },
     disc: { t: dr == null ? '—' : String(dr), av: dr > 0 },
     funil: { t: pend ? pend + ' a puxar' : 'em dia', av: false },
@@ -59186,7 +59188,7 @@ GV2.p3Pe = function (p, sec) {
     ctx = '0 de ' + p.hoje.paradas_plano + ' com prova ' + (GV2.base.foraDaJornada ? 'hoje' : 'até ' + GV2.hm());
     acao = GV2.html.btn({ texto: 'Cobrar a primeira visita', tipo: 'prim', tam: 'lg', acao: 'v4:cobrarvisita:' + p.id });
   } else {
-    ctx = p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' com prova · ' + ((GV2.stAgora(p)).rot || 'sem check-in hoje');
+    ctx = GV2.visHoje(p) + ' com prova · ' + ((GV2.stAgora(p)).rot || 'sem check-in hoje');
     acao = GV2.html.btn({ texto: 'Ver na Rua', tipo: 'prim', tam: 'lg', icone: 'mapa', acao: 'v4:verrua:' + p.id });
   }
   const nome = (GV2.P3.secoes.find(function (s) { return s[0] === sec; }) || [, 'Agora'])[1];
@@ -59518,7 +59520,7 @@ GV2.p3Lista = function (b, sel) {
       const semPlano = p.hoje.paradas_plano === 0;
       const ok = p.v4grav === 0;
       return '<button type="button" class="gv2-p3-it' + (p.id === sel.id ? ' is-sel' : '') + '" data-gv2="pessoa:' + p.id + '">' + GV2.html.av(p)
-        + '<span class="gv2-p3-it-txt"><span class="gv2-p3-it-l1"><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><span class="' + (semPlano ? 't-av' : '') + '">' + GV2.e(semPlano ? GV2.semRota(p) : p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano) + '</span></span>'
+        + '<span class="gv2-p3-it-txt"><span class="gv2-p3-it-l1"><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><span class="' + (semPlano ? 't-av' : '') + '">' + GV2.e(semPlano ? GV2.semRota(p) : GV2.visHoje(p)) + '</span></span>'
         + '<span class="gv2-p3-it-l2 gv2-ellip">' + GV2.e([p.praca, st.rot || 'sem check-in hoje', GV2.v4Promessa(p)].filter(Boolean).join(' · ')) + '</span>'
         + '<span class="gv2-p3-it-l3 ' + (ok ? 't-ok' : 't-av') + '">' + GV2.e(p.v4motivo) + '</span></span></button>';
     }).join('') + '</div></section>';
@@ -59533,7 +59535,7 @@ GV2.p3Resumo = function (p) {
   };
   const reun = d.nReunioes;
   return '<div class="gv2-v4-resumo">'
-    + cartao('agora', 'Hoje', semPlano ? 'sem rota' : p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' provadas', (semPlano && p.hoje.agenda && p.hoje.agenda.n ? GV2.resumoDosCompromissos(p.hoje.agenda) : '') || GV2.v4Promessa(p) || (GV2.base.foraDaJornada ? 'dia encerrado' : 'até ' + GV2.base.horaTxt), p.v4grav >= 800)
+    + cartao('agora', 'Hoje', semPlano ? 'sem rota' : GV2.visHoje(p) + ' provadas', (semPlano && p.hoje.agenda && p.hoje.agenda.n ? GV2.resumoDosCompromissos(p.hoje.agenda) : '') || GV2.v4Promessa(p) || (GV2.base.foraDaJornada ? 'dia encerrado' : 'até ' + GV2.base.horaTxt), p.v4grav >= 800)
     + cartao('funil', 'Mês', r.meta ? r.fechados + ' de ' + r.meta + ' ' + (r.meta === 1 ? 'cliente' : 'clientes') : GV2.pl(r.fechados, 'cliente', 'clientes') + ' · sem meta', 'faltam ' + r.faltam + (r.variavel != null ? ' · variável ' + GV2.rsCheio(r.variavel) : ''), false)
     + cartao('ritmo', 'Ritmo', z == null ? '—' : GV2.virg(z) + '/dia', 'meta ' + p.meta_visitas_dia + (w.length ? ' · ' + GV2.virg(w[0]) + ' → ' + GV2.virg(z) + ' em 4 sem.' : ''), z != null && z < p.meta_visitas_dia * 0.9)
     + cartao('disc', 'Disciplina', reun == null ? '— reuniões' : GV2.pl(reun, 'reunião', 'reuniões'),
@@ -61156,7 +61158,7 @@ GV2.render.v5Amanha = function () {
       ? '<div class="gv2-v5-am-det"><b class="num">' + GV2.e(GV2.pl(l.d.y, 'parada', 'paradas')) + '</b>' + Object.keys(l.props).map(function (k) { return '<span class="gv2-v5-tag">' + GV2.e(k + ' ' + l.props[k]) + '</span>'; }).join('')
         + '<span class="t-mute">' + GV2.e(GV2.pl(l.alvo, 'conta-alvo', 'contas-alvo') + ' · ' + GV2.pl(l.quentes, 'quente', 'quentes') + ' · ' + p.praca + (l.d.semLugar ? ' · ' + l.d.semLugar + ' sem lugar no mapa' : '')) + '</span>'
         + (l.grande ? '<span class="gv2-v5-tag is-av">' + GV2.e('plano maior que o dia: faz ' + GV2.virg(p.ritmo) + ' por dia (4 sem.)') + '</span>' : '') + '</div>'
-      : '<span class="t-dim">' + GV2.e('Hoje ' + (p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem rota') + ' · ontem ' + (p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : 'sem plano')) + '</span>';
+      : '<span class="t-dim">' + GV2.e('Hoje ' + (GV2.temRua(p) ? GV2.visHoje(p) : 'sem rota') + ' · ontem ' + (p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : 'sem plano')) + '</span>';
     const cobrado = GV2.estado.cobrados && GV2.estado.cobrados['amanha:' + p.id];
     const ramp = rampa(l);
     const btn = ramp ? '' : ok ? '<button type="button" class="gv2-v5-btn is-rota" data-gv2="v5dia:' + p.id + ':' + iso + '">Ver o plano</button>'
@@ -61334,17 +61336,18 @@ GV2.render.time = function () {
   const info = function (t) { return '<i class="gv2-v8-i" title="' + GV2.e(t) + '" aria-label="' + GV2.e(t) + '">i</i>'; };
   const kpi = function (rot, val, s, acao, tom, def, sTom) { return '<button type="button" class="gv2-v5-kpi" data-gv2="' + acao + '"><small>' + GV2.e(rot) + info(def) + '</small><b class="num' + (tom ? ' ' + tom : '') + '">' + GV2.e(val) + '</b><span' + (sTom ? ' class="' + sTom + '"' : '') + '>' + GV2.e(s) + '</span></button>'; };
   const RT = GV2.v8Ritmo ? GV2.v8Ritmo(null) : null;
-  const oT = b.pessoas.reduce(function (a, p) { a.v += p.ontem.visitas_com_prova || 0; a.y += p.ontem.paradas_plano || 0; return a; }, { v: 0, y: 0 });
+
+  const oT = b.pessoas.reduce(function (a, p) { a.v += p.ontem.visitas_todas || 0; a.y += p.meta_visitas_dia || 0; return a; }, { v: 0, y: 0 });
 
   const janelas = b.pessoas.map(function (p) { return p.janela && p.janela.min != null ? p.janela.min : null; }).filter(function (x) { return x != null; }).sort(function (x, y) { return x - y; });
   const comeca = janelas.length ? janelas[Math.floor(janelas.length / 2)] : null;
   const cedo = !fonte && !(t.visitasTodas || 0) && comeca != null && b.agora.min < comeca;
   const K = GV2.v9Kpi;
-  const visI = 'check-in com GPS a até 200 m do pino (foto só quando o GPS não confirma) · x de y = visitas com prova ÷ paradas do plano do dia'
-    + (fonte ? '' : ' · ' + (t.visitasTodas || 0) + ' de ' + t.meta + ' = meta do time' + (t.visitasTodas > t.visitas ? ' · ' + (t.visitasTodas - t.visitas) + ' fora do plano' : ''));
+  const visI = 'check-in com GPS a até 200 m do pino (foto só quando o GPS não confirma) · x de y = TODAS as visitas com prova do dia, do plano ou não, ÷ meta do time (6 por pessoa)'
+    + (fonte ? '' : ' · do plano: ' + t.visitas + ' de ' + t.paradas + ' paradas' + (t.visitasTodas > t.visitas ? ' · ' + (t.visitasTodas - t.visitas) + ' fora do plano' : ''));
   const kpis = '<div class="gv2-v5-kpis">'
-    + K({ rot: 'Visitas com prova', def: visI, acao: 'ir:rua:hoje', num: fonte ? '—' : t.visitas + ' de ' + t.paradas, unid: fonte ? '' : 'do plano',
-      cmp: fonte ? 'plano sem resposta (' + fonte + ')' : cedo ? b.ontemRot + ' ' + oT.v + ' de ' + oT.y + ' · a rua começa ~' + GV2.hhmm(comeca) : 'meta ' + t.meta + ' · ' + b.ontemRot + ' ' + oT.v + ' de ' + oT.y })
+    + K({ rot: 'Visitas com prova', def: visI, acao: 'ir:rua:hoje', num: fonte ? '—' : (t.visitasTodas || 0) + ' de ' + t.meta, unid: fonte ? '' : 'da meta',
+      cmp: fonte ? 'plano sem resposta (' + fonte + ')' : cedo ? b.ontemRot + ' ' + oT.v + ' de ' + oT.y + ' · a rua começa ~' + GV2.hhmm(comeca) : 'do plano ' + t.visitas + ' de ' + t.paradas + ((t.visitasTodas || 0) > t.visitas ? ' · ' + ((t.visitasTodas || 0) - t.visitas) + ' fora' : '') + ' · ' + b.ontemRot + ' ' + oT.v + ' de ' + oT.y })
     + K({ rot: 'Planos de hoje', def: 'quem montou o plano do dia no app (pelo menos uma parada) · sem rota = nenhuma parada hoje' + (comAgenda ? ' · ' + comAgenda + ' sem rota com agenda no HubSpot' : '') + (rampa ? ' · ' + rampa + ' em rampagem (fora da conta)' : ''), acao: 'rxg:plano',
       num: fonte ? '—' : t.planos + ' de ' + naRua.length, unid: fonte ? '' : 'com plano', cmp: fonte ? fonte + ' não respondeu' : GV2.pl(t.paradas, 'parada', 'paradas') + ' · ' + (semRota ? semRota + ' sem rota' : 'ninguém sem rota') })
     + K({ rot: 'Quentes', def: 'negócio em Negociação ou Ag. Pagamento · sem próximo passo = sem tarefa ou reunião futura no HubSpot e fora do Planejamento', acao: 'ir:raiox:quentes',
@@ -61620,7 +61623,7 @@ GV2.render.pessoas = function () {
       const p = x.p;
       return '<button type="button" class="gv2-v5-pit' + (p.id === sel.id ? ' is-sel' : '') + '" data-gv2="pessoa:' + p.id + '">' + GV2.html.av(p)
         + '<span class="gv2-v5-pit-txt"><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><small class="gv2-ellip ' + (x.c.ok ? 't-ok' : '') + '">' + GV2.e(x.c.t) + '</small></span>'
-        + '<b class="num">' + GV2.e(p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : GV2.emRampa && GV2.emRampa(p) ? 'rampagem' : 'sem rota') + '</b></button>';
+        + '<b class="num">' + GV2.e(GV2.temRua(p) ? GV2.visHoje(p) : GV2.emRampa && GV2.emRampa(p) ? 'rampagem' : 'sem rota') + '</b></button>';
     }).join('') + '</section>';
   const semLer = GV2.v6ComSemLer ? (GV2.v6ComLer(false), GV2.v6ComSemLer()) : null;
   const comBt = '<button type="button" class="gv2-v5-btn" data-gv2="v6gav:com"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4h4l5 4V6L7 10H3zM16 9a4 4 0 010 6"/></svg>Comunicados'
@@ -61654,7 +61657,7 @@ GV2.render.v5Pessoa = function (p) {
 
   const R = GV2.v8Ritmo ? GV2.v8Ritmo(p) : null;
   const resumo = !R ? resumoAntigo : '<div class="gv2-v5-ress">'
-    + res('Hoje', p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : GV2.emRampa && GV2.emRampa(p) ? 'rampagem' : 'sem rota', p.hoje.paradas_plano ? 'do plano · ' + (p.hoje.visitas_todas || 0) + ' de ' + GV2.V8_VISITAS_DIA + ' visitas' : (p.hoje.agenda && p.hoje.agenda.n ? GV2.pl(p.hoje.agenda.n, 'item', 'itens') + ' na agenda' : 'nenhuma parada'), 'v5dia:' + p.id + ':' + b.agora.iso)
+    + res('Hoje', GV2.temRua(p) ? GV2.visHoje(p) : GV2.emRampa && GV2.emRampa(p) ? 'rampagem' : 'sem rota', p.hoje.paradas_plano ? 'do plano · ' + (p.hoje.visitas_todas || 0) + ' de ' + GV2.V8_VISITAS_DIA + ' visitas' : (p.hoje.agenda && p.hoje.agenda.n ? GV2.pl(p.hoje.agenda.n, 'item', 'itens') + ' na agenda' : 'nenhuma parada'), 'v5dia:' + p.id + ':' + b.agora.iso)
     + res('Semana', feitoSem + ' de ' + metaSem, 'visitas com prova', 'v5rua:semana')
     + res('Mês', R.cli.feito + ' de ' + R.cli.meta, 'clientes · esperado ' + GV2.v8Num(R.cli.esp), 'v8neg:mes:' + p.id, 't-' + R.cli.selo.k)
     + res('Quentes', String(p.quentes.length), p.quentesSemPasso ? p.quentesSemPasso + ' sem próximo passo' : 'negócios', 'v8neg:quentes:' + p.id, p.quentesSemPasso ? 't-av' : '')
@@ -63139,7 +63142,7 @@ GV2.v8GavPessoa = function (id) {
   if (!p) return { tit: 'Pessoa', sub: '', corpo: GV2.html.estado('vazio', 'Essa pessoa não está no time desta carga.') };
   const R = GV2.v8Ritmo(p), G = GV2.v8Gargalo(R);
   const hojeIso = b.agora.iso;
-  const xdy = p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem rota';
+  const xdy = GV2.temRua(p) ? GV2.visHoje(p) : 'sem rota';
   const uteisSem = b.semana.filter(function (d) { return GV2.util(d.iso); }).length;
   const feitoSem = p.semana.reduce(function (a, x) { return a + (x.passado || x.hoje ? (x.todas || 0) : 0); }, 0);
   const metaSem = GV2.V8_VISITAS_DIA * uteisSem;
@@ -63429,7 +63432,7 @@ GV2.render.daily = function () {
       : '<div class="gv2-v8d-num t-faint">—</div><p class="gv2-v8d-s">' + GV2.e('sem plano nem visita' + (fer.length ? ' · ' + fer.map(GV2.diaCurto).join(', ') + ' foi feriado' : '')) + '</p>')
     + '<hr><h3>Hoje · ' + GV2.e(GV2.diaCurto(b.agora.iso)) + '</h3>'
     + (p.hoje.paradas_plano
-      ? '<div class="gv2-v8d-num ' + (p.hoje.visitas_com_prova >= p.esperado ? 't-ok' : 't-av') + '">' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + '</div>'
+      ? '<div class="gv2-v8d-num ' + ((p.hoje.visitas_todas || 0) >= p.esperado ? 't-ok' : 't-av') + '">' + GV2.visHoje(p) + '</div>'
         + '<p class="gv2-v8d-s">' + GV2.e(GV2.statusRot(p)) + '</p>'
       : '<div class="gv2-v8d-num t-erro">sem plano</div><p class="gv2-v8d-s">' + GV2.e('nenhuma parada no plano' + (ag ? ' · ' + GV2.pl(ag.n, 'item', 'itens') + ' na agenda' + (ag.itens && ag.itens[0] && ag.itens[0].hora ? ' ' + ag.itens[0].hora : '') : '')) + '</p>')
     + GV2.v8dPlanoHTML(p)

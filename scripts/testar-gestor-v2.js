@@ -594,8 +594,15 @@ tabelas.gv2_falta_etapa = [
   {
     const ht2 = GV2.render.time();
     /* v9 (13/10/26): o cartão do kit tem UMA linha de comparação; o "x de meta do time" foi para o "i" */
-    checar('gestor v6/v9: "Visitas com prova" com o x de y do plano no número, a meta na comparação e as visitas contra a meta do time no "i"',
-      /Visitas com prova<i class="gv2-v8-i" title="[^"]*[0-9]+ de [0-9]+ = meta do time[^"]*"[^>]*>i<\/i><\/small><div class="gv2-v9-num"><b class="num">[0-9]+ de [0-9]+<\/b><em>do plano<\/em><\/div><span class="gv2-v9-cmp"[^>]*>(meta [0-9]+ · |[a-zçãé]{3} [0-9]{2}\/[0-9]{2} [0-9]+ de [0-9]+ · a rua começa)/.test(ht2));
+    /* 14/10/26 (Julyan: "eles estão na rua, preciso disso correto"): o número é TODA visita com
+       prova do dia contra a META do time; o plano vai para a comparação */
+    const tt = GV2.base.time;
+    checar('gestor v10: "Visitas com prova" = todas as visitas do dia ÷ meta do time; o plano fica na comparação',
+      /Visitas com prova<i class="gv2-v8-i" title="[^"]*TODAS as visitas com prova do dia[^"]*"[^>]*>i<\/i><\/small><div class="gv2-v9-num"><b class="num">[0-9]+ de [0-9]+<\/b><em>da meta<\/em><\/div><span class="gv2-v9-cmp"[^>]*>(do plano [0-9]+ de [0-9]+|[a-zçãé]{3} [0-9]{2}\/[0-9]{2} [0-9]+ de [0-9]+ · a rua começa)/.test(ht2)
+        && ht2.indexOf('<b class="num">' + (tt.visitasTodas || 0) + ' de ' + tt.meta + '</b>') > 0, (tt.visitasTodas || 0) + ' de ' + tt.meta);
+    const pz = GV2.base.pessoas[0];
+    checar('v10: o x de y da pessoa é o total de visitas ÷ meta do dia, não o plano',
+      GV2.visHoje(pz) === (pz.hoje.visitas_todas || 0) + ' de ' + pz.meta_visitas_dia);
   }
   /* FUNIL e TERRITÓRIO v5 (08/10/26) */
   {
