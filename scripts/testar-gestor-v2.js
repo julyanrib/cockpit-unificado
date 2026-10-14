@@ -1044,6 +1044,19 @@ tabelas.gv2_falta_etapa = [
     checar('v9 Rua › Amanhã: quem está em rampagem não leva "Pedir o plano" nem entra no "Pedir o plano a N", e o texto não promete WhatsApp',
       pedidos === b.pessoas.length - 1 && h.indexOf('Pedir o plano a ' + (b.pessoas.length - 1)) > 0 && /em rampagem · não é cobrado/.test(h) && !/WhatsApp/.test(h), pedidos + ' pedidos');
   }
+  /* auditoria 13/10/26: o "Semana" da gaveta e da página da Pessoa (v5rua) não fazia nada fora da Rua */
+  {
+    const ab0 = GV2.estado.aba, rua0 = GV2.estado.rua, ir0 = GV2.ir, p0 = GV2.pintar;
+    let foi = null;
+    GV2.ir = function (a) { foi = a; GV2.estado.aba = a; };
+    GV2.pintar = function () {};
+    GV2.estado.aba = 'pessoas'; GV2.estado.rua = 'hoje';
+    const qs0 = global.document && global.document.querySelector; if (global.document) global.document.querySelector = function () { return null; };
+    try { GV2.v5RuaComando('v5rua', ['v5rua', 'semana']); } catch (e) { falhas.push('v5rua: ' + e.message); }
+    const ok = foi === 'rua' && GV2.estado.rua === 'semana';
+    GV2.ir = ir0; GV2.pintar = p0; GV2.estado.aba = ab0; GV2.estado.rua = rua0; if (global.document) global.document.querySelector = qs0;
+    checar('auditoria · v5rua fora da Rua leva para a Rua na visão pedida (antes o clique não fazia nada)', ok, String(foi));
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
