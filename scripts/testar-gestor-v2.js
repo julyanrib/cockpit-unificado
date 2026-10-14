@@ -1061,6 +1061,32 @@ tabelas.gv2_falta_etapa = [
   /* auditoria 14/10/26: a carga pede as visitas com prova UMA vez (mês, 4 semanas e semana saem por recorte) */
   checar('auditoria · a carga do gestor pede visitas_com_prova uma vez só e recorta as três janelas',
     codigo.indexOf("visJanela: supa.rpc('visitas_com_prova'") > 0 && codigo.indexOf("visitas4: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf("visSem: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf("visitasMes: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf('out.visitas4 = recorte(GV2.somaDias(seg, -21));') > 0);
+  /* 14/10/26: negócio no Planejamento de hoje em diante TEM próximo passo (Julyan: "a partir do
+     momento que eles planejam e agendam, tem próximo passo"); plano que já passou não conta */
+  {
+    const pintarOrig2 = GV2.pintar; GV2.pintar = function () {};
+    const rotasOrig = tabelas.rotas_da_semana;
+    tabelas.rotas_da_semana = [];
+    const b0 = await GV2.montar();
+    const semPasso = [].concat.apply([], b0.pessoas.map(p => p.negocios || [])).filter(n => n.semPasso && !n.agPag);
+    const hojeIso = b0.agora.iso;
+    const futuro = semPasso[0], passado = semPasso[1];
+    tabelas.rotas_da_semana = [
+      { owner_id: futuro && futuro.dono, dia: GV2.somaDias(hojeIso, 2), vaga: 1, item_id: 'c-' + (futuro && futuro.id), nome: 'x', proposito: 'funil' },
+      { owner_id: passado && passado.dono, dia: GV2.somaDias(hojeIso, -1), vaga: 1, item_id: 'c-' + (passado && passado.id), nome: 'y', proposito: 'funil' }
+    ];
+    const b1 = await GV2.montar();
+    const achar = (b, id) => [].concat.apply([], b.pessoas.map(p => p.negocios || [])).find(n => n.id === id);
+    const f1 = futuro && achar(b1, futuro.id), p1 = passado && achar(b1, passado.id);
+    checar('no plano = próximo passo: o quente planejado para depois de amanhã sai de "sem próximo passo"',
+      semPasso.length >= 2 && f1 && !f1.semPasso && /^no plano · /.test(f1.proximo_passo || '') && !f1.puxar === !f1.travado,
+      JSON.stringify([semPasso.length, f1 && f1.semPasso, f1 && f1.proximo_passo]));
+    checar('no plano = próximo passo: plano que já passou não conta', p1 && p1.semPasso && !p1.proximo_passo, JSON.stringify([p1 && p1.semPasso, p1 && p1.proximo_passo]));
+    checar('no plano = próximo passo: a carga lê também a semana que vem',
+      codigo.indexOf("rotaProx: supa.rpc('rotas_da_semana', { p_segunda: GV2.somaDias(seg, 7)") > 0);
+    tabelas.rotas_da_semana = rotasOrig;
+    GV2.pintar = pintarOrig2;
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
