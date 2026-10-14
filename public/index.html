@@ -9771,7 +9771,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -10525,6 +10525,7 @@ function reidratarPosLogin() {
       await carregarDailies();
       if (typeof carregarPdiCompromissos === 'function') await carregarPdiCompromissos();
       if (typeof carregarAgendaDoApp === 'function') await carregarAgendaDoApp();
+      if (typeof carregarPlanoDosNegocios === 'function') await carregarPlanoDosNegocios();
 
       const viewAberta = (document.querySelector('.view.active') || {}).id;
       if (viewAberta === 'viewMeuPainel' && typeof renderMeuPainel === 'function') renderMeuPainel();
@@ -12590,6 +12591,7 @@ function abrirRegistroDeDesfechoPorNome(nomeCliente, evento) {
   abrirRegistroDeDesfecho(candidatos[0], evento);
 }
 
+var PLANO_POR_NEGOCIO = {};
 function proximoPassoDoLead(lead) {
   if (!lead) return null;
   const agora = new Date();
@@ -12599,15 +12601,19 @@ function proximoPassoDoLead(lead) {
   (Array.isArray(lead.tarefas) ? lead.tarefas : []).forEach(t => {
     if (t && t.timestamp) candidatos.push({ data: t.timestamp, rotulo: t.subject || 'tarefa' });
   });
+  const diaNoPlano = (typeof PLANO_POR_NEGOCIO !== 'undefined' && PLANO_POR_NEGOCIO && lead.id != null) ? PLANO_POR_NEGOCIO[String(lead.id)] : null;
+  if (diaNoPlano) candidatos.push({ data: diaNoPlano + 'T12:00:00Z', rotulo: 'no plano', plano: true });
 
   const hojeK = isoDate(agora);
   return candidatos
     .map(x => ({ ...x, quando: new Date(x.data) }))
     .filter(x => !Number.isNaN(x.quando.getTime()) && isoDate(x.quando) >= hojeK)
-    .sort((a, b) => a.quando - b.quando)[0] || null;
+    .sort((a, b) => (a.quando - b.quando) || ((a.plano ? 1 : 0) - (b.plano ? 1 : 0)))[0] || null;
 }
 
 function leadTemProximoPasso(lead) { return !!proximoPassoDoLead(lead); }
+
+function dataDoProximoPasso(lead) { const p = proximoPassoDoLead(lead); return p ? p.data : null; }
 
 function passoVencidoDoLead(lead) {
   if (!lead) return null;
@@ -22089,7 +22095,7 @@ function tl5Medir() {
 
     let semTarefaDele = 0;
     etapas.forEach(e => {
-      semTarefaDele += e.leads.filter(l => String(l.ownerId) === String(r.ownerId) && !l.proximaAtividade).length;
+      semTarefaDele += e.leads.filter(l => String(l.ownerId) === String(r.ownerId) && !dataDoProximoPasso(l)).length;
     });
     return {
       ownerId: String(r.ownerId), nome: r.name, praca: r.praca || '',
@@ -22112,7 +22118,7 @@ function tl5Medir() {
   };
 
   const todos = [].concat.apply([], etapas.map(e => e.leads));
-  const semTarefa = todos.filter(l => !l.proximaAtividade).length;
+  const semTarefa = todos.filter(l => !dataDoProximoPasso(l)).length;
 
   return { etapas, maxN, gargalo, porRep, time, semTarefa, totalLeads: todos.length };
 }
@@ -23716,8 +23722,8 @@ function tm2Dados() {
 
         temp: String(l.temp),
         tCor: tm2CorTemp(l.temp),
-        prox: l.proximaAtividade ? esc('próximo toque ' + tm2DataCurta(l.proximaAtividade)) : 'sem próximo passo — cobre',
-        pCor: l.proximaAtividade ? '#1E9E7B' : '#E51A31',
+        prox: dataDoProximoPasso(l) ? esc('próximo toque ' + tm2DataCurta(dataDoProximoPasso(l))) : 'sem próximo passo — cobre',
+        pCor: dataDoProximoPasso(l) ? '#1E9E7B' : '#E51A31',
         on: 'deal:' + l.id
       })),
       dCad: cad ? cad.serie.map(n => ({
@@ -23771,10 +23777,10 @@ function tm2Dados() {
             + (lSel.tempDiasSemToque != null ? ' · há ' + lSel.tempDiasSemToque + 'd' : ''))
           : 'sem último toque registrado no HubSpot')),
       dlTl: toques.length ? toques.map(x => ({ t: esc(x.t), q: esc(x.q) })) : [],
-      dlProx: lSel.proximaAtividade
-        ? esc('próximo passo ' + tm2DataCurta(lSel.proximaAtividade))
+      dlProx: dataDoProximoPasso(lSel)
+        ? esc('próximo passo ' + tm2DataCurta(dataDoProximoPasso(lSel)))
         : 'sem próximo passo registrado — é isso que você cobra',
-      dlProxCor: lSel.proximaAtividade ? '#1E9E7B' : '#FF8D9A',
+      dlProxCor: dataDoProximoPasso(lSel) ? '#1E9E7B' : '#FF8D9A',
       dlCbRot: cobrado ? '✓ na pauta da Daily' : 'cobrar este negócio na Daily ▸',
       dlCbBg: cobrado ? '#1F3B33' : '#E51A31',
       dlCbCor: cobrado ? '#7FD9BE' : '#FFFDF8',
@@ -23798,8 +23804,8 @@ function tm2Dados() {
     tempPct: l.temp + '%',
     tCor: tm2CorTemp(l.temp),
     valor: tm2ValorDoNegocio(l).txt,
-    prox: l.proximaAtividade ? esc(tm2DataCurta(l.proximaAtividade)) : 'sem próximo passo <svg class=v5-ico viewBox=0,0,24,24 fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d=M12,3L2,20h20zM12,9v5M12,17h.01></path></svg>',
-    pCor: l.proximaAtividade ? 'var(--muted)' : '#E51A31',
+    prox: dataDoProximoPasso(l) ? esc(tm2DataCurta(dataDoProximoPasso(l))) : 'sem próximo passo <svg class=v5-ico viewBox=0,0,24,24 fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round aria-hidden=true><path d=M12,3L2,20h20zM12,9v5M12,17h.01></path></svg>',
+    pCor: dataDoProximoPasso(l) ? 'var(--muted)' : '#E51A31',
     borda: i === 0 ? 'var(--red-line)' : 'var(--line-soft)',
     on: 'deal:' + l.id
   }));
@@ -25447,7 +25453,7 @@ async function tm2Executar(acao) {
       l.dias != null ? l.dias + 'd na etapa' + (l.slaBreach ? ' (régua estourada)' : '') : 'tempo na etapa não medido',
       tm2ValorDoNegocio(l).txt,
       l.temp == null ? 'temperatura não medida' : (l.temp + '°' + (l.tempParcial ? ' (parcial, sem último toque)' : '')),
-      l.proximaAtividade ? 'próximo passo ' + tm2DataCurta(l.proximaAtividade) : 'sem próximo passo registrado'
+      dataDoProximoPasso(l) ? 'próximo passo ' + tm2DataCurta(dataDoProximoPasso(l)) : 'sem próximo passo registrado'
     ].join(' · ');
     await tl5Alternar('cobranca_negocio', l.ownerId, 'Cobrar ' + nome + ' na Daily', contexto, 'cobranca_negocio:' + l.id);
     await tl5CarregarPauta();
@@ -27276,7 +27282,7 @@ function pl6ReguaDaEtapa(stageId) {
 }
 
 function pl6PassoFuturo(l) {
-  const q = l && l.proximaAtividade;
+  const q = l && (l.proximaAtividade || (typeof dataDoProximoPasso === 'function' ? dataDoProximoPasso(l) : null));
   if (!q) return null;
   const d = new Date(q);
   if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
@@ -27756,6 +27762,8 @@ async function pl6Gravar(rep, campos, segundaPedida) {
     return { error: new Error('O banco aceitou e não devolveu a linha — não dá para confirmar a gravação.') };
   }
   pl6Plano = data[0];
+
+  if (typeof carregarPlanoDosNegocios === 'function') carregarPlanoDosNegocios();
   return { error: null, plano: pl6Plano };
 }
 
@@ -27893,10 +27901,11 @@ function pl6Motivo(l) {
   if (!isC) return 'sem negócio no HubSpot — criar + agendar é 1 clique';
   if (l.sla) return 'acima do SLA — é o que mais precisa de você hoje';
 
-  if (!l.proximaAtividade) return 'sem próximo passo datado';
+  const pp = proximoPassoDoLead(l);
+  if (!pp) return 'sem próximo passo datado';
   const quando = (typeof fn2Quando === 'function')
-    ? fn2Quando(l.proximaAtividade) : l.proximaAtividade;
-  return 'próximo passo no CRM: ' + quando;
+    ? fn2Quando(pp.data) : pp.data;
+  return (pp.plano ? 'próximo passo no Planejamento: ' : 'próximo passo no CRM: ') + quando;
 }
 
 const PF_HORAS_OPT = ['08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19'];
@@ -28844,10 +28853,10 @@ function pl6FichaCamposFinal(l) {
     linhas.push(pfCampo('última interação',
       (typeof l2ProximoTexto === 'function' ? l2ProximoTexto(bruto) : null)
         || 'nenhum toque registrado', '#2B3440'));
-    linhas.push(pfCampo('próximo passo', l.proximaAtividade
-      ? (typeof fn2Quando === 'function' ? fn2Quando(l.proximaAtividade) : l.proximaAtividade)
-      : 'sem tarefa datada — é isso que segura o negócio',
-      l.proximaAtividade ? '#2B3440' : '#E51A31'));
+    linhas.push(pfCampo('próximo passo', dataDoProximoPasso(l)
+      ? (typeof fn2Quando === 'function' ? fn2Quando(dataDoProximoPasso(l)) : dataDoProximoPasso(l))
+      : 'sem tarefa datada nem item no Planejamento — é isso que segura o negócio',
+      dataDoProximoPasso(l) ? '#2B3440' : '#E51A31'));
 
     linhas.push(pfCampo('sistema hoje', bruto.nome_do_sistema));
     linhas.push(pfCampo('gargalo', bruto.gargalo_operacional));
@@ -33172,7 +33181,7 @@ function buscarLeadFunilPorId(leadId) {
 
 function proximaMelhorAcaoLead(l) {
   const etapa = String(l.stageId || '');
-  const temPasso = !!(l.proximaAtividade || l.proximaReuniao);
+  const temPasso = !!(l.proximaAtividade || l.proximaReuniao || dataDoProximoPasso(l));
   const sla = etapa && DATA.stageMeta && DATA.stageMeta.slaDays ? DATA.stageMeta.slaDays[etapa] : null;
   const dias = Number(l.dias || 0);
   const estourou = !!l.slaBreach || (sla != null && dias > sla);
@@ -34886,6 +34895,7 @@ async function salvarPlanoDoDia(ownerId, dataISO, campos) {
   const { data, error } = await supa.from('planos_diarios').upsert(linha, { onConflict: 'owner_id,data' }).select();
   if (error) { console.error('Erro ao salvar plano do dia:', error.message); return { error }; }
   if (data && data[0]) planoDiaCache = data[0];
+  if (typeof carregarPlanoDosNegocios === 'function') carregarPlanoDosNegocios();
   return { error: null, plano: planoDiaCache };
 }
 
@@ -39591,7 +39601,7 @@ function dg4Dados(ctx) {
   const temNota = Object.keys(mapaFunil).some(function (k) { return mapaFunil[k].temp != null; });
   const corteQuente = Number(((DATA.temperaturaRegua || {}).faixas || {}).quente) || 70;
   const eQuente = function (d) {
-    if (d.proximaAtividade) return false;
+    if (d.proximaAtividade || dataDoProximoPasso(d)) return false;
     if (ETAPAS_AVANCADAS.indexOf(d.stageId) >= 0) return true;
     return d.temp != null && d.temp >= corteQuente;
   };
@@ -44810,6 +44820,49 @@ async function tm10PreencherCobPessoas(tentativa) {
     }).join('')
     + '</tbody></table></div>'
     + '<span class="tm10-cob-leg">O check-in conclui a tarefa: tarefa feita e visita com GPS costumam ser o mesmo toque, não some. Nota não entra — chega do HubSpot sem dono.</span>';
+}
+
+let PLANO_NEGOCIOS_VOO = null;
+async function carregarPlanoDosNegocios() {
+  if (!supa || typeof DATA === 'undefined' || !DATA || !sessaoAtual) return;
+  if (PLANO_NEGOCIOS_VOO) return PLANO_NEGOCIOS_VOO;
+  PLANO_NEGOCIOS_VOO = (async function () {
+    const hoje = isoDate(new Date());
+    const d = new Date(hoje + 'T12:00:00');
+    const dw = d.getDay();
+    d.setDate(d.getDate() + (dw === 0 ? -6 : 1 - dw));
+    const seg = isoDate(d);
+    const prox = addDays(seg, 7);
+    const donos = new Set();
+    Object.values(DATA.funilLeads || {}).forEach(function (lista) { (lista || []).forEach(function (l) { if (l && l.ownerId) donos.add(String(l.ownerId)); }); });
+    if (sessaoAtual.ownerId) donos.add(String(sessaoAtual.ownerId));
+    if (!donos.size) return;
+    const p_donos = Array.from(donos);
+    const [a, b] = await Promise.all([
+      supa.rpc('rotas_da_semana', { p_segunda: seg, p_donos: p_donos }),
+      supa.rpc('rotas_da_semana', { p_segunda: prox, p_donos: p_donos })
+    ]);
+    if (a.error || b.error) { console.log('[plano dos negócios]', (a.error || b.error).message); return; }
+    const itens = (a.data || []).concat(b.data || []).filter(function (x) { return x && String(x.dia) >= hoje; });
+    const semDeal = Array.from(new Set(itens.filter(function (x) { return String(x.item_id || '').indexOf('c-') !== 0 && x.client_id; }).map(function (x) { return x.client_id; })));
+    const dealDe = {};
+    if (semDeal.length) {
+      const c = await supa.from('clients').select('id, id_hubspot').in('id', semDeal.slice(0, 150));
+      if (!c.error) (c.data || []).forEach(function (x) { if (x.id_hubspot) dealDe[x.id] = String(x.id_hubspot); });
+    }
+    const novo = {};
+    itens.forEach(function (x) {
+      const k = String(x.item_id || '');
+      const deal = k.indexOf('c-') === 0 ? k.slice(2) : dealDe[x.client_id];
+      if (deal && (!novo[deal] || String(x.dia) < novo[deal])) novo[deal] = String(x.dia);
+    });
+    const antes = JSON.stringify(PLANO_POR_NEGOCIO);
+    PLANO_POR_NEGOCIO = novo;
+    if (antes !== JSON.stringify(novo) && typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
+  })();
+  try { return await PLANO_NEGOCIOS_VOO; }
+  catch (e) { console.log('[plano dos negócios]', e && e.message); }
+  finally { PLANO_NEGOCIOS_VOO = null; }
 }
 
 let AGENDA_APP_VOO = null;
@@ -56117,6 +56170,8 @@ GV2.montar = async function (so) {
     });
   });
   GV2.noPlanoDe = noPlanoDe;
+
+  if (typeof PLANO_POR_NEGOCIO !== 'undefined' && PLANO_POR_NEGOCIO) Object.keys(noPlanoDe).forEach(function (k) { if (!PLANO_POR_NEGOCIO[k] || noPlanoDe[k] < PLANO_POR_NEGOCIO[k]) PLANO_POR_NEGOCIO[k] = noPlanoDe[k]; });
   GV2.ETAPA_IDS.forEach(function (sid, idx) {
     ((DATA.funilLeads || {})[sid] || []).forEach(function (l) {
       if (!l || donos.indexOf(String(l.ownerId)) < 0) return;
@@ -56127,7 +56182,7 @@ GV2.montar = async function (so) {
       if (pp && pp.quando) {
         const di = GV2.diaDe(pp.quando);
         const h = GV2.horaDe(pp.quando);
-        ppTxt = (di === agora.iso ? 'hoje' : GV2.DIAS[GV2.dow(di)] + ' ' + GV2.ddmm(di)) + (h && h !== '09:00' ? ' ' + h : '');
+        ppTxt = (pp.plano ? 'no plano · ' : '') + (di === agora.iso ? 'hoje' : GV2.DIAS[GV2.dow(di)] + ' ' + GV2.ddmm(di)) + (h && h !== '09:00' ? ' ' + h : '');
       }
       const dp = noPlanoDe[String(l.id)];
       if (!ppTxt && dp) ppTxt = 'no plano · ' + (dp === agora.iso ? 'hoje' : GV2.DIAS[GV2.dow(dp)] + ' ' + GV2.ddmm(dp));
