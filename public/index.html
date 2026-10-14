@@ -9687,6 +9687,23 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   .gv2-v9-fc-s small{display:none;}
   .gv2-v9-fc-c span{white-space:nowrap;}
 }
+
+.gv2-v9-pdi-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;}
+.gv2-v9-pdi-lista > li{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gv2-line-soft);min-width:0;}
+.gv2-v9-pdi-lista > li:last-child{border-bottom:0;}
+.gv2-v9-pdi-lista > li > div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.gv2-v9-pdi-lista b{display:flex;align-items:center;gap:8px;font:700 14px var(--gv2-font);color:var(--gv2-ink);}
+.gv2-v9-pdi-lista small{font:500 12px var(--gv2-font);color:var(--gv2-mute);}
+.gv2-v9-pdi-lista .gv2-v5-btn{flex:none;text-decoration:none;}
+.gv2-v9-pdi-vazio{padding:12px 0;font:500 13px var(--gv2-font);color:var(--gv2-mute);}
+.gv2-v9-pdi-form{display:flex;flex-direction:column;gap:12px;margin-bottom:18px;}
+.gv2-v9-pdi-form label{display:flex;flex-direction:column;gap:6px;}
+.gv2-v9-pdi-form label > span{font:700 12px var(--gv2-font);color:var(--gv2-mute);}
+.gv2-v9-pdi-form input[type=text],.gv2-v9-pdi-form textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--gv2-line-btn);border-radius:10px;background:var(--gv2-card);color:var(--gv2-ink);font:500 14px var(--gv2-font);}
+.gv2-v9-pdi-form textarea{resize:vertical;min-height:120px;line-height:1.45;}
+.gv2-v9-pdi-form input[type=file]{font:500 13px var(--gv2-font);color:var(--gv2-ink);min-height:44px;}
+.gv2-v9-pdi-form small{font:500 12px var(--gv2-font);}
+.gv2-v9-pdi-comp{margin:10px 0 0;padding-left:20px;font:500 13px var(--gv2-font);color:var(--gv2-corpo);display:flex;flex-direction:column;gap:6px;}
 </style><!-- /gv2-css -->
 </head>
 <body>
@@ -9771,7 +9788,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -64240,6 +64257,159 @@ GV2.v9GargaloCurto = function (R) {
   if (rv >= 0.9) return 'perde na demo';
   return 'faltam portas e perde na demo';
 };
+
+GV2.pdi = { cache: {} };
+
+GV2.pdiLer = function (id, forcar) {
+  const c = GV2.pdi.cache[id];
+  if (c && (c.estado === 'lendo' || (c.estado === 'ok' && !forcar))) return;
+  GV2.pdi.cache[id] = { estado: 'lendo', lista: c && c.lista };
+  (async function () {
+    try {
+      const r = await supa.from('pdi_documentos').select('id,titulo,data,nome_arquivo,caminho_arquivo,compromissos,autor').eq('owner_id', String(id)).order('data', { ascending: false });
+      if (r.error) throw r.error;
+      const lista = r.data || [];
+      const caminhos = lista.map(function (d) { return d.caminho_arquivo; }).filter(Boolean);
+      const urls = {};
+      if (caminhos.length) {
+        const s = await supa.storage.from('pdi-documentos').createSignedUrls(caminhos, 3600);
+        ((s && s.data) || []).forEach(function (x) { if (x && x.path && x.signedUrl) urls[x.path] = x.signedUrl; });
+      }
+      lista.forEach(function (d) { d.url = urls[d.caminho_arquivo] || null; });
+      GV2.pdi.cache[id] = { estado: 'ok', lista: lista };
+    } catch (e) {
+      GV2.pdi.cache[id] = { estado: 'erro', erro: (e && e.message) || 'erro', lista: c && c.lista };
+    }
+
+    if (typeof DV !== 'undefined' && DV && DV.ligado && DV.ligado() && DV.el) DV.pintar();
+    else GV2.pintar();
+  })();
+};
+
+GV2.pdiData = function (d) { return d && d.data ? GV2.ddmm(String(d.data).slice(0, 10)) + '/' + String(d.data).slice(0, 4) : '—'; };
+
+GV2.pdiBloco = function (p) {
+  GV2.pdiLer(p.id);
+  const c = GV2.pdi.cache[p.id] || { estado: 'lendo' };
+  const lista = c.lista || [];
+  let corpo;
+  if (c.estado === 'lendo' && !c.lista) corpo = '<div class="gv2-v9-pdi-vazio">lendo os PDIs…</div>';
+  else if (c.estado === 'erro' && !c.lista) corpo = '<div class="gv2-v9-pdi-vazio t-av">' + GV2.e('Não consegui ler os PDIs: ' + c.erro) + '</div>';
+  else if (!lista.length) corpo = '<div class="gv2-v9-pdi-vazio">Nenhum PDI anexado ainda.</div>';
+  else corpo = '<ul class="gv2-v9-pdi-lista">' + lista.map(function (d, i) {
+    const comp = Array.isArray(d.compromissos) ? d.compromissos : [];
+    return '<li><div class="gv2-ellip"><b>' + GV2.e(d.titulo || d.nome_arquivo || 'PDI') + (i === 0 ? ' <em class="gv2-v9-selo is-ok">vigente</em>' : '') + '</b>'
+      + '<small>' + GV2.e(GV2.pdiData(d) + (comp.length ? ' · ' + GV2.pl(comp.length, 'compromisso', 'compromissos') : '') + (d.autor ? ' · ' + d.autor : '')) + '</small></div>'
+      + (d.url ? '<a class="gv2-v5-btn" href="' + GV2.e(d.url) + '" target="_blank" rel="noopener">Abrir</a>' : '<span class="t-mute">sem arquivo</span>') + '</li>';
+  }).join('') + '</ul>';
+  return '<section class="gv2-v5-blo" id="gv2-v5-pdi"><div class="gv2-v5-blo-cab"><b>5 · PDI</b><span>' + GV2.e(lista.length ? GV2.pl(lista.length, 'documento', 'documentos') + ' · o mais recente é o vigente' : 'plano de desenvolvimento anexado') + '</span></div>'
+    + '<div class="card gv2-v5-coach">' + corpo + '<span class="gv2-v5-coach-pe"><button type="button" class="gv2-v5-btn is-prim is-largo" data-gv2="v5gav:pdi:' + p.id + '">Anexar PDI</button></span></div></section>';
+};
+
+GV2.pdiGaveta = function (p) {
+  const r = (GV2.estado.pdiRasc && GV2.estado.pdiRasc.id === p.id) ? GV2.estado.pdiRasc : (GV2.estado.pdiRasc = { id: p.id, titulo: '', comp: '', arq: null, status: '' });
+  const enviando = r.status === 'enviando';
+  const corpo = '<div class="gv2-v9-pdi-form">'
+    + '<label><span>Título</span><input type="text" data-gv2-pdi="titulo" maxlength="120" placeholder="ex: PDI semana 12 a 16/10" value="' + GV2.e(r.titulo) + '"></label>'
+    + '<label><span>Compromissos · um por linha (viram checklist)</span><textarea data-gv2-pdi="comp" rows="6" placeholder="Cumprir 6 visitas com prova por dia útil…">' + GV2.e(r.comp) + '</textarea></label>'
+    + '<label><span>Arquivo · PDF ou Word</span><input type="file" data-gv2-pdi="arq" accept=".pdf,.doc,.docx"></label>'
+    + (r.arq ? '<small class="t-mute">' + GV2.e('escolhido: ' + r.arq.name) + '</small>' : '')
+    + (r.status && !enviando ? '<small class="' + (/^✓/.test(r.status) ? 't-ok' : 't-av') + '">' + GV2.e(r.status) + '</small>' : '')
+    + '<button type="button" class="gv2-v5-btn is-prim is-largo" data-gv2="v9pdi:anexar:' + p.id + '"' + (enviando ? ' disabled' : '') + '>' + (enviando ? 'Enviando…' : 'Anexar PDI de ' + GV2.e(GV2.prim(p.nome))) + '</button>'
+    + '<small class="t-mute">' + GV2.e(GV2.prim(p.nome) + ' vê o documento na aba Desenvolvimento. O mais recente vira o vigente.') + '</small>'
+    + '</div>';
+  return '<div class="gv2-rxg-veu" data-gv2="v5gav:fechar"></div><aside class="gv2-rxg gv2-v5-gav" role="dialog" aria-label="Anexar PDI">'
+    + '<header class="gv2-rxg-cab"><div><b>' + GV2.e('PDI de ' + GV2.prim(p.nome)) + '</b><span>anexar o documento e os compromissos</span></div><button type="button" class="gv2-rxg-x" data-gv2="v5gav:fechar" aria-label="Fechar">×</button></header>'
+    + '<div class="gv2-rxg-corpo">' + corpo + GV2.pdiBloco(p).replace(/<span class="gv2-v5-coach-pe">[\s\S]*?<\/span><\/div><\/section>$/, '</div></section>') + '</div></aside>';
+};
+
+GV2.pdiAnexar = async function (id) {
+  const r = GV2.estado.pdiRasc;
+  if (!r || r.id !== id || r.status === 'enviando') return;
+  const titulo = String(r.titulo || '').trim();
+  if (!titulo || !r.arq) { r.status = 'Preencha o título e escolha o arquivo.'; GV2.pintar(); return; }
+  const compromissos = String(r.comp || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+  r.status = 'enviando'; GV2.pintar();
+  try {
+    const nome = String(r.arq.name || 'pdi').replace(/[^\w.\-]+/g, '_');
+    const caminho = String(id) + '/' + Date.now() + '_' + nome;
+    const up = await supa.storage.from('pdi-documentos').upload(caminho, r.arq);
+    if (up.error) throw new Error('o arquivo não subiu: ' + up.error.message);
+    const quem = (typeof sessaoAtual !== 'undefined' && sessaoAtual) ? (sessaoAtual.nome || sessaoAtual.email) : null;
+
+    const ins = await supa.from('pdi_documentos').insert({ owner_id: String(id), titulo: titulo, caminho_arquivo: caminho, nome_arquivo: r.arq.name, autor: quem, compromissos: compromissos }).select('id');
+    if (ins.error) throw new Error('o documento subiu, mas a linha não gravou: ' + ins.error.message);
+    if (!ins.data || !ins.data.length) throw new Error('o banco não confirmou a gravação');
+    GV2.estado.pdiRasc = { id: id, titulo: '', comp: '', arq: null, status: '✓ Anexado: ' + titulo };
+    GV2.toast('PDI anexado ✓');
+    GV2.pdiLer(id, true);
+  } catch (e) {
+    r.status = 'Não anexou: ' + ((e && e.message) || 'erro');
+    GV2.pintar();
+  }
+};
+
+GV2.pdiCartaoExec = function (id) {
+  GV2.pdiLer(id);
+  const c = GV2.pdi.cache[id] || { estado: 'lendo' };
+  const lista = c.lista || [];
+  let corpo;
+  if (c.estado === 'lendo' && !c.lista) corpo = '<div class="gv2-v9-pdi-vazio">lendo…</div>';
+  else if (c.estado === 'erro' && !c.lista) corpo = '<div class="gv2-v9-pdi-vazio">' + GV2.e('Não consegui ler o seu PDI agora: ' + c.erro) + '</div>';
+  else if (!lista.length) corpo = '<div class="gv2-v9-pdi-vazio">Seu gestor ainda não anexou um PDI. Combine no próximo 1:1.</div>';
+  else {
+    const v = lista[0], comp = Array.isArray(v.compromissos) ? v.compromissos : [];
+    corpo = '<ul class="gv2-v9-pdi-lista">' + lista.slice(0, 3).map(function (d, i) {
+      return '<li><div class="gv2-ellip"><b>' + GV2.e(d.titulo || d.nome_arquivo || 'PDI') + (i === 0 ? ' <em class="gv2-v9-selo is-ok">vigente</em>' : '') + '</b><small>' + GV2.e(GV2.pdiData(d)) + '</small></div>'
+        + (d.url ? '<a class="gv2-v5-btn" href="' + GV2.e(d.url) + '" target="_blank" rel="noopener">Abrir</a>' : '') + '</li>';
+    }).join('') + '</ul>'
+      + (comp.length ? '<ol class="gv2-v9-pdi-comp">' + comp.map(function (x) { return '<li>' + GV2.e(x) + '</li>'; }).join('') + '</ol>' : '');
+  }
+  return '<section class="dv-card" id="dvPdi"><div class="dv-card-cab"><h3>Seu PDI</h3>' + (lista.length ? '<span>' + GV2.e(GV2.pl(lista.length, 'documento', 'documentos')) + '</span>' : '') + '</div>' + corpo + '</section>';
+};
+
+(function () {
+  if (typeof DV !== 'undefined' && DV && typeof DV.html === 'function') {
+    const dv0 = DV.html;
+    DV.html = function (p) {
+      const h = dv0.apply(this, arguments);
+      const id = DV.meuId && DV.meuId();
+
+      const marca = '</div><div class="dv-col dv-col-dir">';
+      return id && h.indexOf(marca) > 0 ? h.replace(marca, GV2.pdiCartaoExec(id) + marca) : h;
+    };
+  }
+  const pag0 = GV2.render.v5Pessoa;
+  GV2.render.v5Pessoa = function (p) {
+    const h = pag0.apply(this, arguments);
+    if (!p || !h) return h;
+    const fim = h.lastIndexOf('</div></section>');
+    return fim < 0 ? h : h.slice(0, fim) + GV2.pdiBloco(p) + h.slice(fim);
+  };
+  const gav0 = GV2.render.v5Gav;
+  GV2.render.v5Gav = function () {
+    const g = GV2.estado.v5Gav;
+    if (g && g.t === 'pdi') { const p = GV2.base && GV2.base.porId[g.id]; return p ? GV2.pdiGaveta(p) : ''; }
+    return gav0.apply(this, arguments);
+  };
+  const cmd0 = GV2.v5PessoasComando;
+  GV2.v5PessoasComando = function (cmd, parte) {
+    if (cmd === 'v9pdi' && parte[1] === 'anexar') { GV2.pdiAnexar(parte[2]); return true; }
+    return cmd0.apply(this, arguments);
+  };
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  const guarda = function (ev) {
+    const el = ev.target;
+    const k = el && el.getAttribute && el.getAttribute('data-gv2-pdi');
+    const r = GV2.estado.pdiRasc;
+    if (!k || !r) return;
+    if (k === 'titulo') r.titulo = el.value;
+    else if (k === 'comp') r.comp = el.value;
+    else if (k === 'arq' && ev.type === 'change') { r.arq = (el.files && el.files[0]) || null; r.status = ''; GV2.pintar(); }
+  };
+  document.addEventListener('input', guarda);
+  document.addEventListener('change', guarda);
+})();
 
 GV2.instalar();
 </script><!-- /gv2-js -->

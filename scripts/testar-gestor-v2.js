@@ -1087,6 +1087,24 @@ tabelas.gv2_falta_etapa = [
     tabelas.rotas_da_semana = rotasOrig;
     GV2.pintar = pintarOrig2;
   }
+  /* 14/10/26: o PDI volta na Pessoas (bloco 5 + gaveta de anexo) */
+  {
+    const pintarOrig3 = GV2.pintar; GV2.pintar = function () {};
+    const b0 = await GV2.montar(); GV2.base = b0; GV2.pessoasMontar(b0);
+    const p0 = b0.pessoas[0];
+    GV2.pdi.cache[p0.id] = { estado: 'ok', lista: [{ titulo: 'PDI semana teste', data: '2026-10-14', url: 'https://x/pdi.pdf', compromissos: ['a', 'b'] }] };
+    const pag = GV2.render.v5Pessoa(p0);
+    checar('PDI: a página da pessoa tem o bloco 5 com o documento e o Anexar PDI',
+      pag.indexOf('5 · PDI') > 0 && pag.indexOf('PDI semana teste') > 0 && pag.indexOf('data-gv2="v5gav:pdi:' + p0.id + '"') > 0 && pag.indexOf('href="https://x/pdi.pdf"') > 0);
+    GV2.estado.v5Gav = { t: 'pdi', id: p0.id };
+    const gav = GV2.render.v5Gav();
+    checar('PDI: a gaveta tem título, compromissos, arquivo e o botão de anexar',
+      gav.indexOf('data-gv2-pdi="titulo"') > 0 && gav.indexOf('data-gv2-pdi="comp"') > 0 && gav.indexOf('data-gv2-pdi="arq"') > 0 && gav.indexOf('data-gv2="v9pdi:anexar:' + p0.id + '"') > 0);
+    GV2.estado.v5Gav = { t: 'um', id: p0.id };
+    checar('PDI: as outras gavetas da pessoa seguem abrindo', GV2.render.v5Gav().indexOf('1:1 com') > 0);
+    GV2.estado.v5Gav = null;
+    GV2.pintar = pintarOrig3;
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
