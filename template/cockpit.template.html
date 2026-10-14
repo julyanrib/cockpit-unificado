@@ -14274,7 +14274,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -76445,13 +76445,16 @@ GV2.ler = async function (donos, agora) {
   const q = {
     semana: supa.rpc('planejamento_do_time', { p_segunda: seg, p_donos: donos, p_dia: agora.iso }),
     anterior: supa.rpc('planejamento_do_time', { p_segunda: segAnt, p_donos: donos, p_dia: GV2.somaDias(segAnt, 4) }),
-    visitasMes: supa.rpc('visitas_com_prova', { p_de: mes, p_ate: agora.iso, p_pessoa: null }),
+    /* 14/10/26: UMA consulta de visitas com prova, da janela maior (o mês ou as 4 semanas, o que
+       vier antes); o mês, as 4 semanas e a semana saem dela por recorte, logo abaixo. Antes eram três
+       consultas iguais com janelas sobrepostas. A regra só olha a visita anterior em 3 min, então
+       recortar dá o mesmo que pedir cada janela. */
+    visJanela: supa.rpc('visitas_com_prova', { p_de: mes < GV2.somaDias(seg, -21) ? mes : GV2.somaDias(seg, -21), p_ate: agora.iso, p_pessoa: null }),
     decisor: supa.from('fichas_de_rua').select('owner_id,client_id,deal_id,ocorrido_em').eq('como_foi', 'falou_com_decisor').gte('ocorrido_em', tsMes),
     pontos: supa.from('pontos_eventos').select('owner_id,tipo,ref_em,negocio_id,negocio_nome').in('tipo', ['demo_realizada', 'contrato', 'estorno']).gte('ref_em', tsMes),
     negociacao: supa.from('client_stage_changes').select('client_id,created_at').eq('to_stage', 'Negociação').gte('created_at', tsMes),
     umAUm: supa.from('um_a_um').select('id,owner_id,data,canal,resumo,compromissos,combinados,devolutiva,created_at').in('owner_id', donos).order('data', { ascending: false }).order('created_at', { ascending: false }).limit(300),
     /* Pessoas: as 4 semanas de visitas com prova (a mesma regra) e a rotação de campo do gestor */
-    visitas4: supa.rpc('visitas_com_prova', { p_de: GV2.somaDias(seg, -21), p_ate: agora.iso, p_pessoa: null }),
     idas: supa.from('gestor_idas_campo').select('*').gte('inicio', GV2.somaDias(seg, -120)).order('inicio', { ascending: true }),
     /* Raio X (06/10/26): as armas de cada negócio — fichas da rua (sistema, dor, decisor, horário) e os
        avanços pela folha do app (gv2_falta_etapa: o que faltou e o que se sabia) */
@@ -76472,8 +76475,7 @@ GV2.ler = async function (donos, agora) {
     rotaSem: supa.rpc('rotas_da_semana', { p_segunda: seg, p_donos: donos }),
     /* 0185: os nomes dos clientes do funil numa consulta, junto com o resto (antes: até 12 consultas
        de 150 ids, só depois que estas voltavam) */
-    nomes: supa.rpc('gestor_nomes_dos_clientes', { p_mes: mes, p_desde: GV2.somaDias(seg, -21), p_hoje: agora.iso }),
-    visSem: supa.rpc('visitas_com_prova', { p_de: seg, p_ate: agora.iso, p_pessoa: null })
+    nomes: supa.rpc('gestor_nomes_dos_clientes', { p_mes: mes, p_desde: GV2.somaDias(seg, -21), p_hoje: agora.iso })
   };
   const chaves = Object.keys(q);
   const res = await Promise.all(chaves.map(function (k) {
@@ -76482,6 +76484,11 @@ GV2.ler = async function (donos, agora) {
   }));
   const out = {};
   chaves.forEach(function (k, i) { out[k] = res[i]; });
+  /* as três janelas saem da mesma consulta (o erro, se houver, vale para as três) */
+  const recorte = function (de) { const j = out.visJanela; return j.erro ? { erro: j.erro } : { data: (j.data || []).filter(function (v) { return String(v.dia) >= de; }) }; };
+  out.visitasMes = recorte(mes);
+  out.visitas4 = recorte(GV2.somaDias(seg, -21));
+  out.visSem = recorte(seg);
   /* o NOME de cada lead por trás do funil (para o gestor bater um a um): visitas provadas,
      fichas de decisor e entradas em Negociação dizem o cliente; o clients diz nome, negócio e dono */
   if (out.nomes && !out.nomes.erro) {

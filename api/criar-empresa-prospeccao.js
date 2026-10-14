@@ -129,6 +129,7 @@ module.exports = async function handler(req, res) {
                   })
           });
           const buscaData = await buscaResp.json();
+          if (!buscaResp.ok) return res.status(502).json({ erro: 'O HubSpot não respondeu à conferência de empresa duplicada (HTTP ' + buscaResp.status + '). Tente de novo em instantes.' });
           if (buscaResp.ok && buscaData.results && buscaData.results.length > 0) {
                   // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26): quando já existia uma Company
                   // com o mesmo nome, a rota só devolvia 409 e parava — o lead ficava pra
@@ -153,7 +154,10 @@ module.exports = async function handler(req, res) {
                   }
                   return res.status(409).json({ erro: 'Existe uma empresa chamada "' + lead.nome + '" no HubSpot (id ' + achado.id + '), mas em cidade diferente — confira manualmente antes de criar ou vincular.' });
           }
-    } catch (e) { }
+    } catch (e) {
+          /* sem conferir se a empresa já existe, não cria: criar às cegas fazia duplicada (14/10/26) */
+          return res.status(502).json({ erro: 'Não consegui conferir no HubSpot se a empresa já existe. Tente de novo em instantes.' });
+    }
 
     const linhasDesc = [
           lead.telefone ? 'Telefone: ' + lead.telefone : null,

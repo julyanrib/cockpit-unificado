@@ -156,6 +156,24 @@ function mesclarRestaurante(base, novo) {
    comeco de tres verdades — alguem corrige um bairro num lado, esquece nos outros, e o
    lead cai para quem nao pediu aquele territorio. Uma fonte: lib/territorios.js. */
 const { rotearTerritorio, semAcento } = require('../lib/territorios.js');
+let CACHE_NOMES_CRM = null;
+async function nomesDoCrmPeloSnapshot(url, chave) {
+  if (CACHE_NOMES_CRM && Date.now() - CACHE_NOMES_CRM.em < 10 * 60 * 1000) return CACHE_NOMES_CRM.nomes;
+  const nomes = new Set();
+  const poe = (l) => { if (l && l.name) nomes.add(String(l.name).toLowerCase().trim()); };
+  try {
+    const r = await fetch(url + '/rest/v1/cockpit_snapshot?select=f:conteudo->funilLeads,t:conteudo->temperatura&chave=eq.hubspot',
+      { headers: { apikey: chave, Authorization: 'Bearer ' + chave } });
+    if (!r.ok) return nomes;
+    const linha = ((await r.json()) || [])[0] || {};
+    Object.values(linha.f || {}).forEach(lista => (lista || []).forEach(poe));
+    ((linha.t || {}).quentes || []).forEach(poe);
+    ((linha.t || {}).frios || []).forEach(poe);
+  } catch (e) { return nomes; }
+  if (nomes.size) CACHE_NOMES_CRM = { em: Date.now(), nomes };
+  return nomes;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -257,6 +275,11 @@ module.exports = async function handler(req, res) {
     (completo.temperatura.quentes || []).forEach(l => l.name && nomesNoHubspot.add(l.name.toLowerCase().trim()));
     (completo.temperatura.frios || []).forEach(l => l.name && nomesNoHubspot.add(l.name.toLowerCase().trim()));
   } catch (e) { /* dedup best-effort */ }
+  /* SEM O SNAPSHOT LOCAL (14/10/26): na Vercel e no APP os arquivos do CRM saíram do repositório
+     (02/09), então a montagem acima quebra e o conjunto ficava vazio — desde 26/09 nenhuma conta
+     importada saía marcada como já existente no HubSpot. Os nomes vêm agora do cockpit_snapshot
+     que o robô grava, só as duas partes que importam, com cache de 10 min por instância. */
+  if (!nomesNoHubspot.size) nomesNoHubspot = await nomesDoCrmPeloSnapshot(supaUrl, supaService);
 
   // Régua oficial: somente volume de avaliações. Nota é contexto, nunca corte nem
   // desempate. O mínimo pode ser ajustado por lote, sempre com relatório explícito.
@@ -438,3 +461,4 @@ module.exports = async function handler(req, res) {
   return res.status(200).json(resultado);
 };
 
+module.exports.nomesDoCrmPeloSnapshot = nomesDoCrmPeloSnapshot;

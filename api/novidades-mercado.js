@@ -218,7 +218,8 @@ module.exports = async function handler(req, res) {
     return res.status(401).json({ erro: 'Não foi possível validar a sessão.' });
   }
   if (!emailLogado) return res.status(401).json({ erro: 'Sessão sem e-mail associado.' });
-  if (USUARIOS.length && !USUARIOS.some(u => String(u.email).toLowerCase() === emailLogado)) {
+  /* lista vazia (o arquivo não carregou) não libera ninguém: fail-closed (14/10/26) */
+  if (!USUARIOS.some(u => String(u.email).toLowerCase() === emailLogado)) {
     return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time.' });
   }
 
