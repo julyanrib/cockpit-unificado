@@ -9771,7 +9771,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -61053,9 +61053,11 @@ GV2.render.v5Amanha = function () {
     const grande = d.y && p.ritmo != null && d.y > p.ritmo * 2.5;
     return { p: p, d: d, quentes: quentes, alvo: alvo, props: props, grande: grande };
   });
-  const montados = linhas.filter(function (l) { return l.d.y > 0; }), faltam = linhas.filter(function (l) { return !l.d.y; });
+
+  const rampa = function (l) { return !l.d.y && GV2.emRampa && GV2.emRampa(l.p); };
+  const montados = linhas.filter(function (l) { return l.d.y > 0; }), faltam = linhas.filter(function (l) { return !l.d.y && !rampa(l); }), emRampa = linhas.filter(rampa);
   const total = montados.reduce(function (a, l) { return a + l.d.y; }, 0);
-  const rows = montados.concat(faltam).map(function (l) {
+  const rows = montados.concat(faltam, emRampa).map(function (l) {
     const p = l.p, ok = l.d.y > 0;
     const meio = ok
       ? '<div class="gv2-v5-am-det"><b class="num">' + GV2.e(GV2.pl(l.d.y, 'parada', 'paradas')) + '</b>' + Object.keys(l.props).map(function (k) { return '<span class="gv2-v5-tag">' + GV2.e(k + ' ' + l.props[k]) + '</span>'; }).join('')
@@ -61063,19 +61065,20 @@ GV2.render.v5Amanha = function () {
         + (l.grande ? '<span class="gv2-v5-tag is-av">' + GV2.e('plano maior que o dia: faz ' + GV2.virg(p.ritmo) + ' por dia (4 sem.)') + '</span>' : '') + '</div>'
       : '<span class="t-dim">' + GV2.e('Hoje ' + (p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem rota') + ' · ontem ' + (p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : 'sem plano')) + '</span>';
     const cobrado = GV2.estado.cobrados && GV2.estado.cobrados['amanha:' + p.id];
-    const btn = ok ? '<button type="button" class="gv2-v5-btn is-rota" data-gv2="v5dia:' + p.id + ':' + iso + '">Ver o plano</button>'
+    const ramp = rampa(l);
+    const btn = ramp ? '' : ok ? '<button type="button" class="gv2-v5-btn is-rota" data-gv2="v5dia:' + p.id + ':' + iso + '">Ver o plano</button>'
       : '<button type="button" class="gv2-v5-btn" data-gv2="v5pedir:' + p.id + '"' + (cobrado ? ' disabled' : '') + '>' + GV2.e(cobrado ? 'Pedido ✓' : 'Pedir o plano') + '</button>';
-    return '<div class="gv2-v5-am-l"><span class="gv2-v5-am-p">' + GV2.html.av(p) + '<span><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><small class="' + (ok ? 't-ok' : 't-av') + '">' + (ok ? 'montou' : 'ainda não montou') + '</small></span></span>' + meio + btn + '</div>';
+    return '<div class="gv2-v5-am-l"><span class="gv2-v5-am-p">' + GV2.html.av(p) + '<span><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><small class="' + (ok ? 't-ok' : ramp ? 't-dim' : 't-av') + '">' + (ok ? 'montou' : ramp ? 'em rampagem · não é cobrado' : 'ainda não montou') + '</small></span></span>' + meio + btn + '</div>';
   }).join('');
-  return '<section class="card gv2-v5-am"><div class="gv2-v5-cab is-acao"><div><b>' + GV2.e(tit + ' · ' + montados.length + ' de ' + b.pessoas.length + ' com o plano montado') + '</b><span>' + GV2.e(GV2.pl(total, 'parada', 'paradas') + ' · é o "08h" visto na véspera · o pedido vai por WhatsApp e pelo sino') + '</span></div>'
-    + (faltam.length ? '<button type="button" class="gv2-v5-btn is-prim" data-gv2="v5pedir:todos">' + GV2.v5Ic('wa') + GV2.e('Pedir o plano a ' + faltam.length) + '</button>' : '') + '</div>' + rows + '</section>';
+  return '<section class="card gv2-v5-am"><div class="gv2-v5-cab is-acao"><div><b>' + GV2.e(tit + ' · ' + montados.length + ' de ' + b.pessoas.length + ' com o plano montado') + '</b><span>' + GV2.e(GV2.pl(total, 'parada', 'paradas') + ' · é o "08h" visto na véspera · o pedido abre na tela inicial do app de cada um') + '</span></div>'
+    + (faltam.length ? '<button type="button" class="gv2-v5-btn is-prim" data-gv2="v5pedir:todos">' + GV2.e('Pedir o plano a ' + faltam.length) + '</button>' : '') + '</div>' + rows + '</section>';
 };
 GV2.v5Pedir = async function (alvo) {
   const b = GV2.base;
   const iso = GV2.v5ProxUtil(b.agora.iso);
   const dia = GV2.DIAS[GV2.dow(iso)] + ' ' + GV2.ddmm(iso);
   const recado = 'Monte o plano de ' + dia + ' na Agenda até 9h.';
-  const quem = alvo === 'todos' ? b.pessoas.filter(function (p) { const d = GV2.v5Dia(p, iso); return d.estado === 'ok' && !d.y; }) : [b.porId[alvo]].filter(Boolean);
+  const quem = alvo === 'todos' ? b.pessoas.filter(function (p) { const d = GV2.v5Dia(p, iso); return d.estado === 'ok' && !d.y && !(GV2.emRampa && GV2.emRampa(p)); }) : [b.porId[alvo]].filter(Boolean);
   if (!quem.length) return;
   if (quem.length === 1) {
     const p = quem[0];
