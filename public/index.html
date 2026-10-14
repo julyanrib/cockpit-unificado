@@ -9771,7 +9771,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -61129,7 +61129,8 @@ GV2.v5Desvalidar = async function (vid) {
 };
 
 GV2.v5RuaComando = function (cmd, parte) {
-  if (cmd === 'v5rua') { GV2.estado.rua = parte[1]; GV2.pintar(); const c = document.querySelector('#gv2Raiz .gv2-corpo'); if (c) c.scrollTop = 0; return true; }
+
+  if (cmd === 'v5rua') { GV2.estado.rua = parte[1]; if (GV2.estado.aba !== 'rua') { GV2.estado.rxGav = null; GV2.estado.v5Gav = null; GV2.estado.v6Gav = null; GV2.estado.veu = null; GV2.ir('rua'); } else GV2.pintar(); const c = document.querySelector('#gv2Raiz .gv2-corpo'); if (c) c.scrollTop = 0; return true; }
   if (cmd === 'v5dia') { GV2.estado.aba = 'rua'; GV2.estado.rua = 'dia'; GV2.estado.ruaSel = parte[1]; GV2.estado.rotaDia = parte[2] || null; GV2.estado.rxGav = null; GV2.pintar(); return true; }
   if (cmd === 'v5praca') { const pr = GV2.base.pracas[Number(parte[1])]; if (pr) { GV2.estado.praca = pr; GV2.estado.destaque = null; GV2.pintar(); } return true; }
   if (cmd === 'v5pedir') { GV2.v5Pedir(parte[1]); return true; }
@@ -63702,10 +63703,17 @@ GV2.render.v9Abastecer = function (ab) {
     + (linhas || GV2.html.estado('vazio', 'Ninguém ativo no time.')) + '</section>';
 };
 
-GV2.v9Novas = function (id) {
-  const corte = Date.now() - 7 * 86400000;
-  return rt7FilaDoExec(id, true).filter(function (x) { return (Date.parse(x.l.created_at) || 0) >= corte; }).length;
+GV2.v9NovasMapa = function () {
+  const corte = Date.now() - 7 * 86400000, m = {};
+  (RT7_ESTADO.leads || []).forEach(function (l) {
+    if (!GV2.v9Movel(l) || (Date.parse(l.created_at) || 0) < corte) return;
+    if (typeof rt7Sujeira === 'function' && !rt7Sujeira(l).ok) return;
+    const d = String(l.responsavel_owner_id || '');
+    m[d] = (m[d] || 0) + 1;
+  });
+  return m;
 };
+GV2.v9Novas = function (id) { return GV2.v9NovasMapa()[String(id)] || 0; };
 GV2.render.v9Decidir = function (P) {
   const feito = GV2.estado.v9feito || {};
   const blocos = P.map(function (g) {
@@ -63715,7 +63723,8 @@ GV2.render.v9Decidir = function (P) {
       + '<b class="num t-erro">' + GV2.e(g.tipo === 'bairro' ? GV2.pl(g.leadsMapa, 'lead', 'leads') : g.n.toLocaleString('pt-BR')) + '</b>'
       + '<button type="button" class="gv2-v5-btn is-erro" data-gv2="v9g:dono:' + g.k + '">' + (f ? 'Ver' : 'Dar dono') + '</button></div>';
   }).join('');
-  const esperam = GV2.v9Ativos().map(function (a) { return { a: a, n: GV2.v9Novas(a.id) }; }).filter(function (x) { return x.n > 0; }).sort(function (x, y) { return y.n - x.n; });
+  const NM = GV2.v9NovasMapa();
+  const esperam = GV2.v9Ativos().map(function (a) { return { a: a, n: NM[a.id] || 0 }; }).filter(function (x) { return x.n > 0; }).sort(function (x, y) { return y.n - x.n; });
   const fila = esperam.slice(0, 3).map(function (x) {
     const pr = x.a.p ? x.a.p.praca : '';
     return '<div class="gv2-v9-dec-l"><div class="gv2-v9-dec-t"><em class="gv2-v9-selo t-av">esperando você</em><b class="gv2-ellip">' + GV2.e(GV2.prim(x.a.nome) + (pr ? ' · ' + pr : '')) + '</b><small>importadas nos últimos 7 dias, esperando aprovação</small></div>'
