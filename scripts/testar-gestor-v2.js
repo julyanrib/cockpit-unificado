@@ -598,8 +598,24 @@ tabelas.gv2_falta_etapa = [
        prova do dia contra a META do time; o plano vai para a comparação */
     const tt = GV2.base.time;
     checar('gestor v10: "Visitas com prova" = todas as visitas do dia ÷ meta do time; o plano fica na comparação',
-      /Visitas com prova<i class="gv2-v8-i" title="[^"]*TODAS as visitas com prova do dia[^"]*"[^>]*>i<\/i><\/small><div class="gv2-v9-num"><b class="num">[0-9]+ de [0-9]+<\/b><em>da meta<\/em><\/div><span class="gv2-v9-cmp"[^>]*>(do plano [0-9]+ de [0-9]+|[a-zçãé]{3} [0-9]{2}\/[0-9]{2} [0-9]+ de [0-9]+ · a rua começa)/.test(ht2)
+      /Visitas com prova<i class="gv2-v8-i" title="[^"]*TODOS os pontos de contato do dia[^"]*"[^>]*>i<\/i><\/small><div class="gv2-v9-num"><b class="num">[0-9]+ de [0-9]+<\/b><em>da meta<\/em><\/div><span class="gv2-v9-cmp"[^>]*>((?:[0-9]+ repetidas? · )?do plano [0-9]+ de [0-9]+|[a-zçãé]{3} [0-9]{2}\/[0-9]{2} [0-9]+ de [0-9]+ · a rua começa)/.test(ht2)
         && ht2.indexOf('<b class="num">' + (tt.visitasTodas || 0) + ' de ' + tt.meta + '</b>') > 0, (tt.visitasTodas || 0) + ' de ' + tt.meta);
+    /* repetida = restaurante que a pessoa já visitou com prova nesta semana (inclusive mais cedo hoje) */
+    {
+      const pint = GV2.pintar, base0 = GV2.base; GV2.pintar = function () {};
+      const b0 = await GV2.montar(); const id0 = b0.pessoas[0].id, hj = b0.agora.iso;
+      const antes = b0.porId[id0].hoje.repetidas;
+      const extra = [{ owner_id: id0, provada: true, client_id: 'cRep', dia: hj, visited_at: hj + 'T13:00:00Z' }, { owner_id: id0, provada: true, client_id: 'cRep', dia: hj, visited_at: hj + 'T15:00:00Z' }, { owner_id: id0, provada: false, client_id: 'cRep', dia: hj, visited_at: hj + 'T16:00:00Z' }];
+      extra.forEach(function (x) { tabelas.visitas_com_prova.push(x); });
+      const b1 = await GV2.montar();
+      const depois = b1.porId[id0].hoje.repetidas;
+      tabelas.visitas_com_prova.splice(tabelas.visitas_com_prova.length - extra.length, extra.length);
+      GV2.pintar = pint;
+      checar('repetidas: o segundo check-in com prova no mesmo restaurante conta 1 repetida (o sem prova não)',
+        typeof antes === 'number' && depois === antes + 1 && GV2.repHoje(b1.porId[id0]).indexOf('repetida') > 0, JSON.stringify([antes, depois]));
+      checar('repetidas: o time soma as repetidas de cada um', b1.time.repetidas === b1.pessoas.reduce(function (a, p) { return a + (p.hoje.repetidas || 0); }, 0));
+      GV2.base = base0;
+    }
     const pz = GV2.base.pessoas[0];
     checar('v10: o x de y da pessoa é o total de visitas ÷ meta do dia, não o plano',
       GV2.visHoje(pz) === (pz.hoje.visitas_todas || 0) + ' de ' + pz.meta_visitas_dia);
