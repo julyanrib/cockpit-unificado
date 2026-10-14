@@ -552,7 +552,7 @@ tabelas.gv2_falta_etapa = [
       /Não li o Planejamento agora/.test(hf) && /planejamento_do_time/.test(hf) && />— de [0-9]+</.test(hf) && !/>0 de [0-9]+</.test(hf.replace(/>0 de 0</g, "").replace(/<button type="button" class="gv2-v5-pp-c gv2-v8-ppmes[\s\S]*?<\/button>/g, "")) && !Gf.grupos.some(function (g) { return g.k === 'travou' || g.k === 'semrota' || g.k === 'naosaiu'; }));
     const ht = GV2.render.time();
     checar('v5 · Hoje: 5 cartões, cada um com destino; a coluna Jornada; o plano e a jornada abrem o dia na Rua, o nome abre a Pessoa',
-      (ht.match(/class="gv2-v5-kpi( is-duas)?" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2 && (ht.match(/class="gv2-v5-pp-p" data-gv2="pessoa:/g) || []).length === b5.pessoas.length);
+      (ht.match(/class="gv2-v5-kpi[^"]*" data-gv2="[^"]+"/g) || []).length === 5 && /Jornada/.test(ht) && (ht.match(/class="gv2-v5-pp-c[^"]*" data-gv2="v5dia:/g) || []).length === b5.pessoas.length * 2 && (ht.match(/class="gv2-v5-pp-p" data-gv2="pessoa:/g) || []).length === b5.pessoas.length);
   }
   /* AUDITORIA v5 (08/10/26): velocidade. O Hoje levava 935 ms para desenhar (a conta do dia refeita
      dezenas de vezes por pintura) e o plano da semana só era pedido depois da primeira pintura. */
@@ -593,8 +593,9 @@ tabelas.gv2_falta_etapa = [
   /* O cockpit do executivo é do design (pedido de 08/10/26): os números dele não se mexem por aqui */
   {
     const ht2 = GV2.render.time();
-    checar('gestor v6: "Visitas com prova" em duas linhas rotuladas, x de y do plano em cima e as visitas com prova contra a meta embaixo',
-      /Visitas com prova(<i [^>]*>i<\/i>)?<\/small><span class="gv2-v5-kpi-l"><b class="num">[0-9]+ de [0-9]+<\/b><em>do plano<\/em><\/span><span class="gv2-v5-kpi-l is-2">(<b class="num">[0-9]+ de [0-9]+<\/b><em>meta do time|<em>último dia útil)/.test(ht2));
+    /* v9 (13/10/26): o cartão do kit tem UMA linha de comparação; o "x de meta do time" foi para o "i" */
+    checar('gestor v6/v9: "Visitas com prova" com o x de y do plano no número, a meta na comparação e as visitas contra a meta do time no "i"',
+      /Visitas com prova<i class="gv2-v8-i" title="[^"]*[0-9]+ de [0-9]+ = meta do time[^"]*"[^>]*>i<\/i><\/small><div class="gv2-v9-num"><b class="num">[0-9]+ de [0-9]+<\/b><em>do plano<\/em><\/div><span class="gv2-v9-cmp"[^>]*>(meta [0-9]+ · |[a-zçãé]{3} [0-9]{2}\/[0-9]{2} [0-9]+ de [0-9]+ · a rua começa)/.test(ht2));
   }
   /* FUNIL e TERRITÓRIO v5 (08/10/26) */
   {
@@ -827,8 +828,9 @@ tabelas.gv2_falta_etapa = [
     const ab0 = GV2.estado.aba; GV2.estado.aba = 'time';
     let h = ''; try { h = GV2.render.time(); } catch (e) { falhas.push('hoje v8: ' + e.message); }
     const RT = GV2.v8Ritmo(null);
-    checar('v8 Hoje: os 5 KPIs têm o "i" com a definição', (h.match(/class="gv2-v8-i"/g) || []).length === 5);
-    checar('v8 Hoje: o Mês diz o esperado até hoje e o provável', h.indexOf('esperado ' + GV2.v8Num(RT.cli.esp) + ' até hoje · provável ') > 0);
+    const hKpis = h.slice(h.indexOf('<div class="gv2-v5-kpis">'), h.indexOf('gv2-v5-meio'));
+    checar('v8 Hoje: os 5 KPIs têm o "i" com a definição', (hKpis.match(/class="gv2-v8-i"/g) || []).length === 5);
+    checar('v8/v9 Hoje: o Mês diz o esperado e o provável, com selo e barra de ritmo', h.indexOf('esperado ' + GV2.v8Num(RT.cli.esp) + ' · provável ') > 0 && /Mês<em class="gv2-v9-selo is-(ok|av|mal)">/.test(hKpis) && /gv2-v9-trilha is-/.test(hKpis));
     checar('v8 Hoje: a rua vem antes de "Quem precisa de você"', h.indexOf('gv2-v5-ruaagora') > 0 && h.indexOf('gv2-v5-ruaagora') < h.indexOf('gv2-v5-quem'));
     const linhasPP = (h.match(/class="gv2-v5-pp-l( is-(melhor|pior))?"/g) || []).length;
     checar('v8 Hoje: Por pessoa tem a coluna Mês (abre o mês da pessoa), melhor e pior marcados, quentes e travados abrem a gaveta',
@@ -1003,6 +1005,33 @@ tabelas.gv2_falta_etapa = [
     checar('v9 Abastecer: quem está em rampagem não é cobrado por consumo (selo próprio, no fim)', abR[abR.length - 1].id === fab.id && abR[abR.length - 1].e.k === 'rampa');
     g.RT7_ESTADO = ant.R; g.rt7Ativos = ant.A; g.rt7FilaDoExec = ant.F; g.rt7Score = ant.S; g.rt7Marcado = ant.M; g.rt7ProximaSegunda = ant.P; g.rt7Estoque = ant.E; g.rt7Registrar = ant.G; g.rt7Carteira = ant.C; g.supa = ant.supa;
     GV2.pintar = ant.pintar; GV2.ir = ant.ir; GV2.estado.aba = ant.aba; GV2.estado.v9g = null; GV2.estado.v9feito = null; GV2.estado.v9conf = null;
+  }
+  /* v9 Acabamento fase 1 (13/10/26): o kit nas telas, sem mudar estrutura */
+  {
+    const b = GV2.base, ab0 = GV2.estado.aba, d0 = GV2.estado.daily;
+    GV2.estado.aba = 'time';
+    let h = ''; try { h = GV2.render.time(); } catch (e) { falhas.push('acab hoje: ' + e.message); }
+    const kp = h.slice(h.indexOf('<div class="gv2-v5-kpis">'), h.indexOf('gv2-v5-meio'));
+    checar('v9 Acabamento · Hoje: os 5 cartões do kit têm UMA linha de comparação cada (o resto vai para o "i")',
+      (kp.match(/class="gv2-v5-kpi gv2-v9-kpi"/g) || []).length === 5 && (kp.match(/class="gv2-v9-cmp/g) || []).length === 5 && kp.indexOf('gv2-v5-kpi-l') < 0);
+    const cab = h.slice(h.indexOf('gv2-v9-cabacoes'), h.indexOf('</header>'));
+    checar('v9 Acabamento · Hoje: "Conduzir a daily" é o único botão preenchido; Apresentar, Atualizar HubSpot e Comunicado ficam leves e visíveis',
+      (cab.match(/gv2-v5-btn is-prim/g) || []).length === 1 && (cab.match(/gv2-v5-btn is-leve/g) || []).length === 3 && /data-gv2="ap:abrir"/.test(cab) && /data-gv2="hsatu"/.test(cab) && /data-gv2="v6gav:com"/.test(cab));
+    const p = b.pessoas[0];
+    let gp = null; try { gp = GV2.v8GavPessoa(p.id); } catch (e) { falhas.push('acab gaveta: ' + e.message); }
+    let fp = ''; try { fp = GV2.render.v8PorPessoa(); } catch (e) { falhas.push('acab funil pp: ' + e.message); }
+    checar('v9 Acabamento · os passos do funil são degraus (gaveta da Pessoa e Funil › Por pessoa), não a frase "portas → n (x%)"',
+      gp && /class="gv2-v9-passos"/.test(gp.corpo) && /class="gv2-v9-passos is-compacto"/.test(fp) && !/portas → [0-9]+ \(/.test(gp.corpo + fp));
+    GV2.estado.daily = 0;
+    let dl = ''; try { dl = GV2.render.daily(); } catch (e) { falhas.push('acab daily: ' + e.message); }
+    checar('v9 Acabamento · Daily: o bloco 2 é o funil curto (visitas → demos → clientes, com as duas taxas) e a barra de Clientes não se repete',
+      !dl || ((dl.match(/class="gv2-v9-fc-c"|class="gv2-v9-fc-c" |gv2-v9-fc-c"/g) || []).length >= 3 && /vira demo/.test(dl) && /vira cliente/.test(dl) && (dl.match(/gv2-v8d-bar/g) || []).length === 2));
+    GV2.estado.daily = d0; GV2.estado.aba = ab0;
+    const css = tpl.slice(tpl.indexOf('<style id="gv2-css">'), tpl.indexOf('</style><!-- /gv2-css -->'));
+    checar('v9 Acabamento · barra usa o token de barra (no escuro o texto verde/vermelho é claro e não serve de preenchimento)',
+      css.indexOf('background:var(--gv2-ok);') < 0 && css.indexOf('background:var(--gv2-erro);') < 0 && /--gv2-ok-barra:#22C55E/.test(css) && /--gv2-erro-barra:#F05252/.test(css));
+    checar('v9 Acabamento · abaixo de 900 px os blocos da Daily não encolhem (no celular eles se sobrepunham)',
+      /@media \(max-width:900px\)\{\s*\.gv2-v8d > \*\{flex-shrink:0;\}\s*\.gv2-v8d-grade\{flex:none;\}/.test(css));
   }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
