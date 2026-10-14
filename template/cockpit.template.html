@@ -14274,7 +14274,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -76473,6 +76473,8 @@ GV2.ler = async function (donos, agora) {
     /* v5 (auditoria 08/10): o plano e as visitas da semana vêm JUNTO, não depois da primeira pintura;
        a jornada, a situação e a linha do tempo dependem deles (a tela completava em ~3,4 s) */
     rotaSem: supa.rpc('rotas_da_semana', { p_segunda: seg, p_donos: donos }),
+    /* 14/10/26: a semana que vem também, porque negócio planejado para segunda já tem próximo passo */
+    rotaProx: supa.rpc('rotas_da_semana', { p_segunda: GV2.somaDias(seg, 7), p_donos: donos }),
     /* 0185: os nomes dos clientes do funil numa consulta, junto com o resto (antes: até 12 consultas
        de 150 ids, só depois que estas voltavam) */
     nomes: supa.rpc('gestor_nomes_dos_clientes', { p_mes: mes, p_desde: GV2.somaDias(seg, -21), p_hoje: agora.iso })
@@ -76677,6 +76679,20 @@ GV2.montar = async function (so) {
   /* os negócios abertos do funil, de Prospecção a Ag. Pagamento */
   const slaCfg = (DATA.stageMeta && DATA.stageMeta.slaDays) || {};
   const negocios = [];
+  /* NO PLANO É PRÓXIMO PASSO (14/10/26). Julyan: "a partir do momento que eles planejam e agendam,
+     tem próximo passo". Negócio que está no Planejamento de hoje em diante (esta semana ou a
+     próxima; item c-<negócio> ou o cliente do negócio) não é "sem próximo passo": o texto diz
+     "no plano · qui 15/10". Tarefa ou reunião do HubSpot, quando existe, continua valendo antes. */
+  const noPlanoDe = {};
+  [L.rotaSem, L.rotaProx].forEach(function (r) {
+    ((r && !r.erro && r.data) || []).forEach(function (x) {
+      if (!x || String(x.dia) < agora.iso) return;
+      const k = String(x.item_id || '');
+      const deal = k.indexOf('c-') === 0 ? k.slice(2) : (x.client_id ? dealDoCliente(x.client_id) : null);
+      if (deal && (!noPlanoDe[deal] || String(x.dia) < noPlanoDe[deal])) noPlanoDe[deal] = String(x.dia);
+    });
+  });
+  GV2.noPlanoDe = noPlanoDe;
   GV2.ETAPA_IDS.forEach(function (sid, idx) {
     ((DATA.funilLeads || {})[sid] || []).forEach(function (l) {
       if (!l || donos.indexOf(String(l.ownerId)) < 0) return;
@@ -76689,6 +76705,8 @@ GV2.montar = async function (so) {
         const h = GV2.horaDe(pp.quando);
         ppTxt = (di === agora.iso ? 'hoje' : GV2.DIAS[GV2.dow(di)] + ' ' + GV2.ddmm(di)) + (h && h !== '09:00' ? ' ' + h : '');
       }
+      const dp = noPlanoDe[String(l.id)];
+      if (!ppTxt && dp) ppTxt = 'no plano · ' + (dp === agora.iso ? 'hoje' : GV2.DIAS[GV2.dow(dp)] + ' ' + GV2.ddmm(dp));
       const mrr = (typeof mrrDoNegocio === 'function' ? mrrDoNegocio(l) : Number(l.mrr || l.valor_de_mrr || 0)) || 0;
       /* REGRAS v4 (07/10/26), iguais no Time, no Raio X e nas Pessoas:
            quente = Negociação ou Ag. Pagamento (a lista "Quentes" do protótipo); Ag. Pagamento
@@ -82118,7 +82136,7 @@ GV2.render.time = function () {
       cmp: fonte ? 'plano sem resposta (' + fonte + ')' : cedo ? b.ontemRot + ' ' + oT.v + ' de ' + oT.y + ' · a rua começa ~' + GV2.hhmm(comeca) : 'meta ' + t.meta + ' · ' + b.ontemRot + ' ' + oT.v + ' de ' + oT.y })
     + K({ rot: 'Planos de hoje', def: 'quem montou o plano do dia no app (pelo menos uma parada) · sem rota = nenhuma parada hoje' + (comAgenda ? ' · ' + comAgenda + ' sem rota com agenda no HubSpot' : '') + (rampa ? ' · ' + rampa + ' em rampagem (fora da conta)' : ''), acao: 'rxg:plano',
       num: fonte ? '—' : t.planos + ' de ' + naRua.length, unid: fonte ? '' : 'com plano', cmp: fonte ? fonte + ' não respondeu' : GV2.pl(t.paradas, 'parada', 'paradas') + ' · ' + (semRota ? semRota + ' sem rota' : 'ninguém sem rota') })
-    + K({ rot: 'Quentes', def: 'negócio em Negociação ou Ag. Pagamento · sem próximo passo = sem tarefa ou reunião futura no HubSpot', acao: 'ir:raiox:quentes',
+    + K({ rot: 'Quentes', def: 'negócio em Negociação ou Ag. Pagamento · sem próximo passo = sem tarefa ou reunião futura no HubSpot e fora do Planejamento', acao: 'ir:raiox:quentes',
       num: String(t.quentes), unid: t.quentes === 1 ? 'negócio' : 'negócios', cmp: t.quentesSemPasso + ' sem próximo passo', cmpTom: t.quentesSemPasso ? 't-av' : '' })
     + K({ rot: 'Travados', def: 'negócio que passou do prazo da etapa (a régua do playbook)' + (mrrTravNeg ? ' · ' + GV2.rsCheio(mrrTravNeg) + ' parados em Negociação' : ''), acao: 'ir:raiox:travados',
       num: String(t.travados), tom: t.travados ? 't-av' : '', unid: t.travados === 1 ? 'negócio' : 'negócios', cmp: 'passaram do prazo da etapa' })
@@ -82373,7 +82391,7 @@ GV2.v5Rende = function () {
     usados[cobQ.id] = 1;
     const m = mrrSemPasso(cobQ);
     out.push({ k: 'cobrar', rot: 'Cobrar', tom: 'is-av', tit: 'Cobrar ' + GV2.prim(cobQ.nome),
-      t: GV2.pl(cobQ.quentesSemPasso, 'quente sem próximo passo', 'quentes sem próximo passo') + (m ? ' · ' + GV2.rs(m) + ' parados' : '') + ' · negócio em Negociação sem tarefa marcada',
+      t: GV2.pl(cobQ.quentesSemPasso, 'quente sem próximo passo', 'quentes sem próximo passo') + (m ? ' · ' + GV2.rs(m) + ' parados' : '') + ' · negócio em Negociação sem tarefa marcada nem item no Planejamento',
       bts: [['Ver os quentes', 'rxg:filtro:sempasso-quentes', true], ['Ver ' + GV2.prim(cobQ.nome), 'pessoa:' + cobQ.id]] });
   }
   if (cob) {
@@ -82689,7 +82707,7 @@ GV2.render.raiox = function () {
   /* negócios travados: mais dinheiro primeiro; a lista inteira com filtros abre na gaveta */
   const trav = b.negocios.filter(function (n) { return n.puxar && !n.agPag; }).sort(function (x, y) { return (y.mrr - x.mrr) || (y.dias - x.dias); });
   const cob = GV2.estado.cobrados;
-  const negs = '<section class="card gv2-v5-trav"><div class="gv2-v5-cab is-acao"><div><b>Negócios para puxar</b><span>' + GV2.e(GV2.pl(trav.filter(function (n) { return n.travado; }).length, 'travado', 'travados') + ' (passou do prazo da etapa) · ' + GV2.pl(trav.filter(function (n) { return !n.travado; }).length, 'sem próximo passo', 'sem próximo passo') + ' (no prazo, mas sem tarefa marcada) · mais dinheiro primeiro') + '</span></div>'
+  const negs = '<section class="card gv2-v5-trav"><div class="gv2-v5-cab is-acao"><div><b>Negócios para puxar</b><span>' + GV2.e(GV2.pl(trav.filter(function (n) { return n.travado; }).length, 'travado', 'travados') + ' (passou do prazo da etapa) · ' + GV2.pl(trav.filter(function (n) { return !n.travado; }).length, 'sem próximo passo', 'sem próximo passo') + ' (no prazo, mas sem tarefa marcada nem item no Planejamento) · mais dinheiro primeiro') + '</span></div>'
     + '<button type="button" class="gv2-v5-btn" data-gv2="rxg:filtro:todos">Ver todos os negócios</button>' + (trav.length ? '<button type="button" class="gv2-v5-btn is-prim" data-gv2="v5lote:travados">' + GV2.e(GV2.cobrarN(Math.min(40, trav.length))) + '</button>' : '') + '</div>'
     + (trav.length ? trav.slice(0, 12).map(function (n) {
       const cc = cob['neg:' + n.id];
@@ -83125,7 +83143,7 @@ EXH.linhas = function (p, b, m) {
   }
   const qs = p.quentes.filter(function (n) { return !n.agPag && !n.proximo_passo; });
   if (qs.length) {
-    L.quen = { tom: 'acao', tit: 'Quentes sem próximo passo', n: qs.length, regra: 'Negociação sem data marcada · Ag. Pagamento é do financeiro', nasce: 'da etapa do negócio',
+    L.quen = { tom: 'acao', tit: 'Quentes sem próximo passo', n: qs.length, regra: 'Negociação sem data marcada nem item no Planejamento · Ag. Pagamento é do financeiro', nasce: 'da etapa do negócio',
       chips: qs.slice(0, 4).map(function (n) { return EXH.chip(n.nome, (n.mrr ? GV2.rsCheio(n.mrr) + ' · ' : '') + etapa(n), '', 'ficha:' + n.id); }).join('') + EXH.mais(qs.length - 4, 'fila:quentes'),
       bt: ['Marcar data', 'fila:quentes'] };
   }
