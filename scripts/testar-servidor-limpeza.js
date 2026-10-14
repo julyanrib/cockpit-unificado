@@ -161,6 +161,37 @@ const gestor = USUARIOS.find(u => u.role === 'manager' && u.email);
     checar('território fora do APP: a marca desligado continua bastando', !(zV && zV.owner === '89842507'), JSON.stringify(zV));
   }
 
+  /* 8. gargalo escrito (14/10/26): o texto conta como o gargalo exigido em Conversa com decisor,
+        vira nota no negócio e nunca vai para o campo de lista do HubSpot */
+  {
+    const rota = require(path.join(raiz, 'lib', 'acoes-negocio', 'mudar-etapa-negocio.js'));
+    const gestor = USUARIOS.find(u => u.role === 'manager' && u.email);
+    let patch = null, nota = null, assoc = false;
+    global.fetch = async (url, o) => {
+      const u = String(url);
+      if (u.indexOf('/auth/v1/user') >= 0) return { ok: true, json: async () => ({ email: gestor.email }) };
+      if (/\/crm\/v3\/objects\/deals\/D1(\?|$)/.test(u) && (!o || !o.method || o.method === 'GET')) {
+        return { ok: true, json: async () => ({ id: 'D1', properties: { dealname: 'Teste', pipeline: '916011864', dealstage: '1396005401', hubspot_owner_id: '1', celular: '27999999999', nome_do_sistema: 'Saipos' } }) };
+      }
+      if (/\/crm\/v3\/objects\/deals\/D1$/.test(u) && o && o.method === 'PATCH') { patch = JSON.parse(o.body); return { ok: true, json: async () => ({ id: 'D1' }) }; }
+      if (/\/crm\/v3\/objects\/notes$/.test(u)) { nota = JSON.parse(o.body); return { ok: true, json: async () => ({ id: 'N1' }) }; }
+      if (u.indexOf('/associations/default/deals/D1') >= 0) { assoc = true; return { ok: true, json: async () => ({}) }; }
+      return { ok: true, json: async () => ({ results: [] }) };
+    };
+    const corpo = (extra) => Object.assign({ dealId: 'D1', novaEtapa: '1395880470', propriedades: {} }, extra);
+    const r1 = resFalso();
+    await rota({ method: 'POST', headers: { authorization: 'Bearer x' }, body: corpo({}) }, r1);
+    checar('gargalo escrito: sem gargalo nenhum, a Conversa com decisor continua recusada', r1.status_ === 400 && /gargalo_operacional/.test((r1.corpo || {}).erro || ''), JSON.stringify([r1.status_, r1.corpo]));
+    const r2 = resFalso();
+    await rota({ method: 'POST', headers: { authorization: 'Bearer x' }, body: corpo({ gargaloOutro: 'Cozinha não dá conta no almoço' }) }, r2);
+    checar('gargalo escrito: o texto vale para avançar e o campo de lista não recebe o texto',
+      r2.status_ === 200 && patch && patch.properties.dealstage === '1395880470' && !('gargalo_operacional' in patch.properties), JSON.stringify([r2.status_, r2.corpo && r2.corpo.erro, patch]));
+    checar('gargalo escrito: vira nota associada ao negócio', !!nota && /Cozinha não dá conta no almoço/.test(nota.properties.hs_note_body) && assoc && r2.corpo && r2.corpo.notaGargalo && r2.corpo.notaGargalo.ok, JSON.stringify([nota, assoc]));
+    const r3 = resFalso();
+    await rota({ method: 'POST', headers: { authorization: 'Bearer x' }, body: corpo({ propriedades: { gargalo_operacional: 'Cozinha lenta' } }) }, r3);
+    checar('gargalo escrito: texto livre DENTRO do campo de lista continua recusado', r3.status_ === 400 && /Valor inválido/.test((r3.corpo || {}).erro || ''), JSON.stringify([r3.status_, r3.corpo]));
+  }
+
   global.fetch = fetch0;
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
