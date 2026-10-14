@@ -1033,6 +1033,17 @@ tabelas.gv2_falta_etapa = [
     checar('v9 Acabamento · abaixo de 900 px os blocos da Daily não encolhem (no celular eles se sobrepunham)',
       /@media \(max-width:900px\)\{\s*\.gv2-v8d > \*\{flex-shrink:0;\}\s*\.gv2-v8d-grade\{flex:none;\}/.test(css));
   }
+  /* v9 (13/10/26): Amanhã não cobra quem está em rampagem e não fala mais em WhatsApp (o pedido abre no app) */
+  {
+    const b = GV2.base, p = b.pessoas[0], fase0 = p.fase, dia0 = GV2.v5Dia;
+    GV2.v5Dia = function (x, iso) { return { estado: 'ok', y: 0, itens: [], semLugar: 0 }; };
+    p.fase = 'Preparação';
+    let h = ''; try { h = GV2.render.v5Amanha(); } catch (e) { falhas.push('amanha: ' + e.message); }
+    p.fase = fase0; GV2.v5Dia = dia0;
+    const pedidos = (h.match(/data-gv2="v5pedir:[0-9]+"/g) || []).length;
+    checar('v9 Rua › Amanhã: quem está em rampagem não leva "Pedir o plano" nem entra no "Pedir o plano a N", e o texto não promete WhatsApp',
+      pedidos === b.pessoas.length - 1 && h.indexOf('Pedir o plano a ' + (b.pessoas.length - 1)) > 0 && /em rampagem · não é cobrado/.test(h) && !/WhatsApp/.test(h), pedidos + ' pedidos');
+  }
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
