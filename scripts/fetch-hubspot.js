@@ -1532,6 +1532,36 @@ async function historicoDeEtapas() {
     PASSOS.forEach(([k, r]) => { const em = chegou(r); if (em != null && em >= mesIniBR) o[k].push({ id: d.id, nome: d.nome, em: new Date(em).toISOString() }); });
   });
   const passosDoMes = { mes: new Date(mesIniBR + 12 * 3600000).toISOString().slice(0, 7), regra: 'entrada da etapa no HubSpot, 1 por negócio', porOwner: passosPorOwner };
+  /* PERDIDOS DO MÊS (15/10/26): o card "Perdas do mês" do Cockpit contava só as fichas de rua
+     com motivo (23), e o HubSpot tinha 108 negócios levados a Perdido em outubro, a maioria em
+     limpeza de carteira. Aqui vão os dois: o total do mês e quantos foram em lote (a mesma régua
+     de lotes-de-perda, pela hora em que entrou em Perdido), por dono. */
+  /* busca própria: a lista acima só tem negócio com movimento nos últimos 120 dias, e a faxina
+     costuma ser justamente de negócio antigo (há perdido de fevereiro em outubro) */
+  try {
+    const perdidosCru = await hsSearchAll({
+      filterGroups: [{ filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: propEntrada(STAGES.perdido), operator: 'GTE', value: String(mesIniBR) }
+      ] }],
+      properties: ['hubspot_owner_id', 'dealname', propEntrada(STAGES.perdido)]
+    });
+    const perdidosMes = perdidosCru.filter(d => !isExcludedDeal(d)).map(d => {
+      const p = d.properties || {};
+      const em = t(p[propEntrada(STAGES.perdido)]);
+      return { id: String(d.id || ''), ownerId: String(p.hubspot_owner_id || '') || 'sem-dono', perdidoEm: em != null ? new Date(em).toISOString() : null };
+    }).filter(d => d.perdidoEm);
+    const lotePerdidos = LOTES.lotesDePerda(perdidosMes);
+    const perdidosPorOwner = {};
+    perdidosMes.forEach(d => {
+      const o = perdidosPorOwner[d.ownerId] || (perdidosPorOwner[d.ownerId] = { total: 0, emLote: 0 });
+      o.total++;
+      if (lotePerdidos.ids[d.id]) o.emLote++;
+    });
+    passosDoMes.perdidos = { total: perdidosMes.length, emLote: lotePerdidos.emLote, regraLote: lotePerdidos.regra, porOwner: perdidosPorOwner };
+  } catch (e) {
+    console.error("AVISO: perdidos do mês não vieram (" + e.message + "). Os passos do mês seguem.");
+  }
 
   const mesDe = ms => new Date(ms).toISOString().slice(0, 7);
 

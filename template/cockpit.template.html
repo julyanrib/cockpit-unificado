@@ -14309,7 +14309,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -83055,8 +83055,18 @@ GV2.render.raiox = function () {
   const kpis = '<div class="gv2-v5-kpis is-4">'
     + kpi('Porta → fechado', pc(F[4], F[0]), GV2.pl(F[4], 'fechado', 'fechados') + ' de ' + F[0] + ' portas no mês', F[4] ? 'rxg:passo:4' : '')
     + kpi('Decisor → Demo', F[1] ? Math.round(F[2] / F[1] * 100) + '%' : '—', GV2.pl(F[2], 'demo', 'demos') + ' de ' + F[1] + ' conversas com decisor', F[2] ? 'rxg:passo:2' : '')
-    + kpi('Ciclo · mediana', c && c.n >= 3 ? GV2.virg(c.mediana).replace(/,0$/, '') + ' dias' : '—', c ? (c.n >= 3 ? '3 em cada 4 em até ' + GV2.virg(c.p75).replace(/,0$/, '') + ' dias · ' + c.n + ' fechados' : 'menos de 3 fechados que andaram o funil') : 'o robô não mandou o histórico', '')
-    + kpi('Perdas do mês', perT == null ? '—' : String(perT), perT == null ? 'fichas_de_rua não respondeu' : perTop || 'nenhuma com motivo', perT ? 'rxg:perda:0' : '')
+    + kpi('Ciclo · mediana', c && c.n >= 3 ? GV2.virg(c.mediana).replace(/,0$/, '') + ' dias' : '—', c ? (c.n >= 3 ? '3 em cada 4 em até ' + GV2.virg(c.p75).replace(/,0$/, '') + ' dias · ' + c.n + ' fechados em 120 dias' : 'menos de 3 fechados que andaram o funil') : 'o robô não mandou o histórico', '')
+    /* PERDAS DO MÊS (15/10/26, auditoria): o número era só das fichas de rua com motivo (23) e o
+       HubSpot tinha 108 levados a Perdido no mês, a maioria limpeza de carteira em lote. Agora o
+       número grande é a perda de verdade (Perdido no mês, fora o lote), e o detalhe diz o lote e
+       os motivos ditos na porta. Sem o dado do robô, fica a regra antiga. */
+    + (function () {
+      const PD = typeof DATA !== 'undefined' && DATA && DATA.historicoEtapas && DATA.historicoEtapas.passosDoMes && DATA.historicoEtapas.passosDoMes.perdidos;
+      if (!PD || !PD.porOwner) return kpi('Perdas na porta', perT == null ? '—' : String(perT), perT == null ? 'fichas_de_rua não respondeu' : perTop || 'nenhuma com motivo', perT ? 'rxg:perda:0' : '');
+      let tot = 0, lote = 0;
+      b.pessoas.forEach(function (p) { const o = PD.porOwner[p.id]; if (o) { tot += o.total || 0; lote += o.emLote || 0; } });
+      return kpi('Perdidos do mês', String(tot - lote), (lote ? lote + ' em limpeza de carteira fora · ' : '') + (perT ? perT + ' com motivo na porta' + (perTop ? ': ' + perTop : '') : 'nenhum motivo registrado na porta'), perT ? 'rxg:perda:0' : '');
+    })()
     + '</div>';
   /* negócios travados: mais dinheiro primeiro; a lista inteira com filtros abre na gaveta */
   const trav = b.negocios.filter(function (n) { return n.puxar && !n.agPag; }).sort(function (x, y) { return (y.mrr - x.mrr) || (y.dias - x.dias); });
