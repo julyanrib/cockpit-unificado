@@ -14292,7 +14292,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -76999,7 +76999,8 @@ GV2.montar = async function (so) {
     const comRua = function (d, iso) {
       if (!d || !iso || !GV2.ruaPlanejada(id, iso)) return d || {};
       const pl = Number(d.planejadas) || 0, fp = Number(d.feitasDoPlano) || 0, pv = Number(d.provadas) || 0;
-      const rua = GV2.ruaVagas(pl, meta);
+      /* toda visita com prova fora das paradas entra (15/10/26), mesmo com o dia cheio */
+      const rua = Math.max(GV2.ruaVagas(pl, meta), Math.max(0, pv - fp));
       return Object.assign({}, d, { planejadas: pl + rua, feitasDoPlano: fp + Math.min(Math.max(0, pv - fp), rua), rua: rua });
     };
     dHoje = comRua(dHoje, agora.iso);
@@ -81714,7 +81715,9 @@ GV2.v5DiaConta = function (p, iso, c) {
     jornada = { n: n, ini: ini, fim: fim, min: min, porta: porta, colados: n >= 4 && porta != null && porta < 10 };
   }
   /* bloco de Rua no plano (15/10/26): completa a meta do dia e a prospecção feita conta no x */
-  const rua = GV2.ruaPlanejada && GV2.ruaPlanejada(p.id, iso) ? GV2.ruaVagas(itens.length, p.meta_visitas_dia) : 0;
+  /* 15/10/26 (Julyan: "tem que entrar"): com bloco de Rua, TODA visita com prova fora das paradas
+     entra no plano, mesmo com o dia já cheio de paradas; sem visita, o bloco vale a meta que falta */
+  const rua = GV2.ruaPlanejada && GV2.ruaPlanejada(p.id, iso) ? Math.max(GV2.ruaVagas(itens.length, p.meta_visitas_dia), foraVis.length) : 0;
   const ruaFeitas = Math.min(foraVis.length, rua);
   const x = itens.filter(function (i) { return i.feita; }).length + ruaFeitas;
   /* 09/10/26: as fotos dos check-ins do dia (dentro e fora do plano), na ordem da hora */
