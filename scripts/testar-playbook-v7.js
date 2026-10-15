@@ -119,7 +119,7 @@ checar('a estante da busca deriva da trilha, em vez de repetir a lista',
    de proposito: e ela que impede a ordem de mudar sem alguem decidir que mudou. */
 const ordemPaginas = [
   'excelencia', 'onboarding', 'metas-cadencia', 'rotina-executivo',
-  'prospeccao-inteligente', 'prospeccao-porta-a-porta', 'acesso-decisor', 'achar-decisor', 'follow-up', 'rua-whatsapp',
+  'prospeccao-inteligente', 'prospeccao-porta-a-porta', 'acesso-decisor', 'achar-decisor', 'gatilhos-do-mapa', 'follow-up', 'rua-whatsapp',
   'mapa-dor-solucao', 'objecoes', 'objecao-ja-tenho-sistema', 'fechamento', 'clientes-mrr',
   'ecossistema-takeat', 'catalogo-solucoes', 'concorrencia', 'dark-kitchen', 'rota-inteligente',
   'conciliacao-ofx', 'multilojas', 'equipamentos', 'displays-comandas',
