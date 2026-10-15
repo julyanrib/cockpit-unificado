@@ -1457,6 +1457,21 @@ async function historicoDeEtapas() {
       { filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
         { propertyName: propEntrada(STAGES.visita), operator: 'GTE', value: String(corte) }
+      ] },
+      /* PASSOS DO MÊS (15/10/26): negócio antigo (prospectado há mais de 120 dias) que chega
+         ao Decisor, à Demo ou à Negociação AGORA também tem de entrar. Ele só alimenta os
+         passos do mês; a escada e as réguas continuam sobre a coorte de 120 dias. */
+      { filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: propEntrada(STAGES.diagnostico), operator: 'GTE', value: String(corte) }
+      ] },
+      { filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: propEntrada(STAGES.demoProposta), operator: 'GTE', value: String(corte) }
+      ] },
+      { filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: propEntrada(STAGES.negociacao), operator: 'GTE', value: String(corte) }
       ] }
     ],
     properties: props
@@ -1465,7 +1480,7 @@ async function historicoDeEtapas() {
   const t = v => { const n = v ? Date.parse(v) : NaN; return Number.isFinite(n) ? n : null; };
   const DIA = 24 * 60 * 60 * 1000;
 
-  const negocios = results.filter(d => !isExcludedDeal(d)).map(d => {
+  const todosNegocios = results.filter(d => !isExcludedDeal(d)).map(d => {
     const p = d.properties || {};
     const entrada = {};
     HIST_ORDEM.forEach((id, i) => { const ms = t(p[propEntrada(id)]); if (ms != null) entrada[i + 1] = ms; });
@@ -1478,6 +1493,7 @@ async function historicoDeEtapas() {
       /* id e closedate entram para a régua de lote (19/09/26) — a busca já os traz,
          eram só eles que ficavam de fora do objeto. */
       id: String(d.id || ''),
+      nome: String(p.dealname || '').trim(),
       owner: String(p.hubspot_owner_id || '') || 'sem-dono',
       closedate: p.closedate || null,
       etapaAtual: String(p.dealstage || ''),
@@ -1485,6 +1501,37 @@ async function historicoDeEtapas() {
       entrada, ganho, perda, porta, rankMax
     };
   }).filter(d => d.porta != null);
+  /* a coorte de sempre: quem entrou em Prospecção ou Visita nos últimos 120 dias */
+  const negocios = todosNegocios.filter(d => (d.entrada[1] != null && d.entrada[1] >= corte) || (d.entrada[2] != null && d.entrada[2] >= corte));
+
+  /* ══ PASSOS DO MÊS POR PESSOA (15/10/26) ══════════════════════════════════════════
+     Julyan: "17 em conversa com decisor, mas são 4 da Renata · preciso disso sempre
+     correto". Cada passo do funil do Cockpit vinha de uma fonte: decisor = fichas do app
+     (a mesma visita contada 2-3 vezes), demo e fechado = pontos do ranking, proposta =
+     mistura. Agora todos saem DAQUI, da data em que o HubSpot registrou a entrada do
+     negócio na etapa: um negócio conta uma vez por passo, no mês em que chegou nele.
+     Pular etapa no CRM conta a etapa pulada na data da etapa seguinte (chegou "pelo menos
+     até ali"), e voltar de etapa não conta outra vez. Fechado fica com vendasMes (a venda
+     oficial, por closedate e competência). */
+  const mesIniBR = (() => { const a = agoraBrasilia(); return Date.parse(a.toISOString().slice(0, 7) + '-01T03:00:00Z'); })();
+  const PASSOS = [['decisor', 3], ['demo', 4], ['proposta', 5]];
+  const passosPorOwner = {};
+  todosNegocios.forEach(d => {
+    /* a PRIMEIRA vez que o negócio chegou a esse degrau ou além: o que voltou de etapa
+       (TORNIAMO: Demo em setembro, de volta ao Decisor em 13/10) não conta de novo */
+    const chegou = r => {
+      /* degrau pulado só conta se o negócio veio de baixo no histórico: o Snack Paradise é de
+         junho, antes da propriedade existir, e ganharia um "decisor" que ninguém viu */
+      if (d.entrada[r] == null && !Object.keys(d.entrada).map(Number).some(x => x < r)) return null;
+      const datas = Object.keys(d.entrada).map(Number).filter(x => x >= r).map(x => d.entrada[x]);
+      if (d.ganho != null) datas.push(d.ganho);
+      return datas.length ? Math.min(...datas) : null;
+    };
+
+    const o = passosPorOwner[d.owner] || (passosPorOwner[d.owner] = { decisor: [], demo: [], proposta: [] });
+    PASSOS.forEach(([k, r]) => { const em = chegou(r); if (em != null && em >= mesIniBR) o[k].push({ id: d.id, nome: d.nome, em: new Date(em).toISOString() }); });
+  });
+  const passosDoMes = { mes: new Date(mesIniBR + 12 * 3600000).toISOString().slice(0, 7), regra: 'entrada da etapa no HubSpot, 1 por negócio', porOwner: passosPorOwner };
 
   const mesDe = ms => new Date(ms).toISOString().slice(0, 7);
 
@@ -1675,7 +1722,7 @@ async function historicoDeEtapas() {
     primeiroMes: meses[0] || null,
     ultimoMes: meses[meses.length - 1] || null,
     minimoDaTurma: 30,
-    escada, velocidade, ciclo, porOwner, agregado
+    escada, velocidade, ciclo, porOwner, agregado, passosDoMes
   };
 }
 

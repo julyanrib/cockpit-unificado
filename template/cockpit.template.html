@@ -14292,7 +14292,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -76806,7 +76806,8 @@ GV2.montar = async function (so) {
     }
   });
   const contaItens = function (lista) { const m = {}; lista.forEach(function (x) { m[x.dono] = (m[x.dono] || 0) + 1; }); return m; };
-  const portas = contaItens(itens[0]), decisor = contaItens(itens[1]), demos = contaItens(itens[2]), fechadosPor = contaItens(itens[4]);
+  const portas = contaItens(itens[0]);
+  let decisor = contaItens(itens[1]), demos = contaItens(itens[2]), fechadosPor = contaItens(itens[4]);
 
   /* os negócios abertos do funil, de Prospecção a Ag. Pagamento */
   const slaCfg = (DATA.stageMeta && DATA.stageMeta.slaDays) || {};
@@ -76912,7 +76913,50 @@ GV2.montar = async function (so) {
     const cl = Object.keys(clientePorIdN).map(function (i) { return clientePorIdN[i]; }).find(function (x) { return String(x.id_hubspot) === k; });
     itens[3].push({ dono: p.dono, nome: n ? n.nome : (cl ? (String(cl.empresa || '').trim() || cl.nome) : 'negócio ' + k), quando: p.dia + 'T12:00:00Z', soData: true, deal: k, detalhe: 'entrou em Negociação' });
   });
+  /* PASSOS DO MÊS PELO HUBSPOT (15/10/26). Julyan: "17 em conversa com decisor, mas são 4
+     da Renata · preciso disso sempre correto". Antes: decisor = fichas "falou com decisor"
+     (a mesma visita 2-3 vezes, 17 fichas para 11 negócios), demo e fechado = pontos do
+     ranking, proposta = mistura de app e CRM. Agora, quando o robô manda passosDoMes do mês
+     corrente, Decisor, Demo e Proposta são os NEGÓCIOS que entraram na etapa no mês
+     pela data do HubSpot, um por negócio, e a gaveta lista exatamente esses. Portas continua
+     sendo visita com prova do app. Sem o campo (robô antigo), fica a regra de antes. */
+  const PM = (typeof DATA !== 'undefined' && DATA.historicoEtapas && DATA.historicoEtapas.passosDoMes) || null;
+  const pmOk = !!(PM && PM.mes === agora.iso.slice(0, 7) && PM.porOwner);
+  GV2.passosFonte = pmOk ? 'hubspot' : 'antiga';
+  if (pmOk) {
+    const DET = { decisor: 'entrou em Conversa com decisor', demo: 'entrou em Demo/Proposta', proposta: 'entrou em Negociação', fechado: 'ganho no HubSpot' };
+    [['decisor', 1], ['demo', 2], ['proposta', 3]].forEach(function (par) {
+      const lista = [];
+      Object.keys(PM.porOwner).forEach(function (o) {
+        if (!doTime(o)) return;
+        const vistos = {};
+        ((PM.porOwner[o] || {})[par[0]] || []).forEach(function (x) {
+          const id = String(x.id), alvo = (GV2.aliasDeal || {})[id] || id;
+          if (vistos[alvo]) return; vistos[alvo] = 1;
+          const n = negocios.find(function (y) { return String(y.id) === alvo; });
+          lista.push({ dono: String(o), nome: x.nome || (n ? n.nome : 'negócio ' + alvo), quando: x.em, deal: alvo, detalhe: DET[par[0]] });
+        });
+      });
+      itens[par[1]] = lista;
+    });
+    decisor = contaItens(itens[1]); demos = contaItens(itens[2]);
+  }
+  /* FECHADO = a venda oficial do mês (vendasMes do robô: closedate em Ganho/Onboarding, com o
+     ajuste de competência), a mesma do Meu desempenho e da coluna Clientes. Antes eram os
+     contratos do ranking, que só batiam por coincidência. */
+  const VM = (typeof DATA !== 'undefined' && DATA.vendasMes && Array.isArray(DATA.vendasMes.porRep)) ? DATA.vendasMes : null;
+  if (VM) {
+    itens[4] = [];
+    VM.porRep.forEach(function (r) {
+      if (!doTime(r.ownerId)) return;
+      (r.clientes || []).forEach(function (c) { itens[4].push({ dono: String(r.ownerId), nome: c.nome || 'negócio ' + c.id, quando: c.closedate, deal: String(c.id), detalhe: 'venda do mês' + (c.mrr ? ' · R$ ' + c.mrr + '/mês' : '') }); });
+    });
+    fechadosPor = contaItens(itens[4]);
+  }
+  const propPM = pmOk ? contaItens(itens[3]) : null;
+  const semPM = pmOk ? contaItens(itens[3].filter(function (x) { return GV2.diaDe(x.quando) >= seg; })) : null;
   const propostasDe = function (dono) {
+    if (pmOk) return { semana: semPM[dono] || 0, mes: propPM[dono] || 0 };
     let mes = 0, sem = 0;
     Object.keys(propostaPorDeal).forEach(function (k) {
       const p = propostaPorDeal[k];
