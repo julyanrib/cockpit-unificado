@@ -14305,7 +14305,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -76737,6 +76737,42 @@ GV2.ruaVagas = function (paradas, meta) { return Math.max(0, (Number(meta) || 6)
 GV2.foraTxt = function (id, iso) { return GV2.ruaPlanejada(id, iso) ? 'prospecção planejada' : 'fora do plano'; };
 GV2.semRota = function (p) { const a = p && p.hoje && p.hoje.agenda; const pr = p && GV2.ruaPlanejada(p.id) ? 'prospecção planejada' : ''; return a && a.n ? (pr || 'sem rota') + ' · ' + GV2.resumoDosCompromissos(a) : pr || 'sem plano nem agenda'; };
 GV2.semRotaHoje = function (p) { const a = p && p.hoje && p.hoje.agenda; const pr = p && GV2.ruaPlanejada(p.id) ? 'prospecção planejada hoje' : ''; return a && a.n ? (pr || 'sem rota hoje') + ' · ' + GV2.resumoDosCompromissos(a) : pr || 'sem plano nem agenda hoje'; };
+/* RECÉM-ABERTOS VISITADOS NA SEMANA (15/10/26, meta de 5 por pessoa): visita com prova desta
+   semana em restaurante da Casa dos Dados com CNPJ de até 90 dias na data da visita, cada
+   restaurante uma vez. A mesma conta do app (useMapaNovo). Duas leituras pequenas, só dos
+   clientes visitados; falhou, a coluna diz "—" (null), nunca 0. */
+GV2.lerNovosDaSemana = async function (L) {
+  GV2.novosSemana = null;
+  try {
+    const visS = ((L.visSem && !L.visSem.erro && L.visSem.data) || []).filter(function (v) { return v && v.provada && v.client_id; });
+    const ids = Array.from(new Set(visS.map(function (v) { return v.client_id; })));
+    const leadDe = {};
+    for (let i = 0; i < ids.length; i += 150) {
+      const r = await supa.from('clients').select('id,lead_prospeccao_id').in('id', ids.slice(i, i + 150)).not('lead_prospeccao_id', 'is', null);
+      if (r.error) throw r.error;
+      (r.data || []).forEach(function (c) { leadDe[c.id] = c.lead_prospeccao_id; });
+    }
+    const leads = Array.from(new Set(Object.keys(leadDe).map(function (k) { return leadDe[k]; })));
+    const abre = {};
+    for (let i = 0; i < leads.length; i += 150) {
+      const r = await supa.from('leads_prospeccao').select('id,data_abertura').in('id', leads.slice(i, i + 150)).not('data_abertura', 'is', null);
+      if (r.error) throw r.error;
+      (r.data || []).forEach(function (l) { abre[l.id] = String(l.data_abertura).slice(0, 10); });
+    }
+    const porDono = {};
+    visS.forEach(function (v) {
+      const ab = abre[leadDe[v.client_id]];
+      if (!ab) return;
+      const dias = (Date.parse(v.dia + 'T12:00:00Z') - Date.parse(ab + 'T12:00:00Z')) / 86400000;
+      if (dias > 90) return;
+      const o = String(v.owner_id);
+      (porDono[o] = porDono[o] || {})[v.client_id] = 1;
+    });
+    GV2.novosSemana = {};
+    Object.keys(porDono).forEach(function (o) { GV2.novosSemana[o] = Object.keys(porDono[o]).length; });
+  } catch (e) { GV2.novosSemana = null; }
+};
+
 GV2.montar = async function (so) {
   const agora = GV2.agoraBR();
   const faltas = [];
@@ -76746,6 +76782,9 @@ GV2.montar = async function (so) {
   const pbCarga = typeof carregarPlaybookProtegido === 'function'
     ? carregarPlaybookProtegido().catch(function (e) { return { erro: (e && e.message) || 'erro' }; }) : Promise.resolve(null);
   const L = await GV2.ler(donos, agora);
+  /* recém-abertos da semana: DEPOIS da primeira pintura (é uma ida a mais ao banco, e a carga
+     não espera por ela); quando chega, repinta se a Rua estiver aberta */
+  setTimeout(function () { GV2.lerNovosDaSemana(L).then(function () { if (GV2.estado && GV2.estado.aba === 'rua' && GV2.pintar) GV2.pintar(); }); }, 0);
   if (L.rotaSem && !L.rotaSem.erro && GV2.rota) {
     const segL = GV2.segundaDe(agora.iso);
     GV2.rota.cache[segL] = { estado: 'ok', itens: L.rotaSem.data || [], visitas: (L.visSem && L.visSem.data) || [] };
@@ -81877,7 +81916,9 @@ GV2.render.v5Semana = function () {
     const meta = p.meta_visitas_dia * b.semana.filter(function (d) { return GV2.util(d.iso); }).length;
     const ok = feito + falta >= meta;
     return '<div class="gv2-v5-gr-l"><b class="gv2-ellip">' + GV2.e(p.nome) + '</b>' + cels
-      + '<span class="gv2-v5-gr-tot"><b class="num' + (ok ? ' t-ok' : '') + '">' + feito + ' + ' + falta + '</b><small>' + GV2.e('de ' + meta + ' · ' + (ok ? 'cobre a meta' : 'faltam ' + (meta - feito - falta))) + '</small></span></div>';
+      + '<span class="gv2-v5-gr-tot"><b class="num' + (ok ? ' t-ok' : '') + '">' + feito + ' + ' + falta + '</b><small>' + GV2.e('de ' + meta + ' · ' + (ok ? 'cobre a meta' : 'faltam ' + (meta - feito - falta))) + '</small>'
+      /* a meta dos recém-abertos (5 por semana), visitados com prova */
+      + '<small class="' + (GV2.novosSemana && (GV2.novosSemana[p.id] || 0) >= 5 ? 't-ok' : '') + '" title="restaurantes com CNPJ aberto há até 90 dias visitados com prova nesta semana">' + GV2.e('recém-abertos ' + (GV2.novosSemana ? (GV2.novosSemana[p.id] || 0) : '—') + ' de 5') + '</small></span></div>';
   }).join('');
   const leg = '<div class="gv2-v5-leg is-pe"><span><i class="lg-q is-ok"></i>bateu a meta de visitas do dia</span><span><i class="lg-q is-fur"></i>abaixo da meta do dia</span><span><i class="lg-q is-sem"></i>sem plano</span><span><i class="lg-q is-hoje"></i>hoje · em andamento</span><span><i class="lg-q is-plan"></i>planejado</span></div>';
   return '<section class="card gv2-v5-gr"><div class="gv2-v5-cab"><b>Planejamento do time · semana de ' + GV2.e(b.semanaRot) + '</b><span>' + GV2.e('toda célula abre aquele dia · ' + (metaIgual ? 'meta ' + metas[0] + ' por dia útil, ' + metas[0] * uteis + ' na semana' : 'a meta de cada um por dia × ' + uteis) + (uteis < b.semana.length ? ' · feriado não conta' : '')) + '</span></div>'
