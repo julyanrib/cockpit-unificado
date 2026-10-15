@@ -9788,7 +9788,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -55482,7 +55482,8 @@ GV2.excecoesLista = function () {
     b: GV2.html.btn({ texto: 'Cobrar', icone: 'wa', acao: 'cobrar:neg:' + topTr.id })
   });
   if (furaram.length) ex.push({
-    t: GV2.pl(b.time.ontemPlan - b.time.ontemProva, 'visita furada', 'visitas furadas') + ' ontem',
+
+    t: GV2.pl(furaram.reduce(function (x, p) { return x + p.furou; }, 0), 'visita abaixo do plano', 'visitas abaixo do plano') + ' ontem',
     s: furaram.map(function (p) { return GV2.prim(p.nome) + ' ' + p.furou; }).join(' · '),
     b: GV2.html.btn({ texto: 'Ver na daily', icone: 'um', acao: 'daily:abrir' })
   });
@@ -55550,7 +55551,7 @@ GV2.render.daily = function () {
     + '<div class="gv2-daily-cols">'
     + '<section class="card gv2-daily-col"><h3>Ontem' + (b.ontemRot ? ' · ' + GV2.e(b.ontemRot) : '') + '</h3>'
     + (ontemTem ? '<div class="gv2-daily-num ' + (p.furou > 0 ? 't-av' : 't-ok') + '">' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano + '</div>'
-      + '<div class="t-mute">' + (p.furou > 0 ? 'furou ' + GV2.pl(p.furou, 'visita', 'visitas') : 'cumpriu o plano') + '</div>'
+      + '<div class="t-mute">' + (p.furou > 0 ? 'faltaram ' + GV2.pl(p.furou, 'visita', 'visitas') + ' para o tamanho do plano' : 'visitas com prova · plano ' + (p.ontem.feitas_do_plano || 0) + ' de ' + p.ontem.paradas_plano) + '</div>'
       : '<div class="gv2-daily-num t-faint">—</div><div class="t-mute">sem plano nem visita</div>')
     + '<ul>' + (pd != null ? '<li><i class="gv2-ponto" style="background:var(--gv2-faint)"></i>Porta → decisor no mês: ' + pd + '%</li>' : '')
     + '<li><i class="gv2-ponto" style="background:var(--gv2-faint)"></i>' + GV2.pl(p.funil_mes.demo, 'demo', 'demos') + ' e ' + GV2.pl(p.funil_mes.fechado, 'fechado', 'fechados') + ' no mês</li></ul></section>'
@@ -56362,7 +56363,8 @@ GV2.montar = async function (so) {
       meta_clientes_mes: typeof metaClientesDoRep === 'function' ? metaClientesDoRep(r) : (r.metaMensal || 0),
       hoje: { paradas_plano: fds ? 0 : (Number(dHoje.planejadas) || 0), visitas_com_prova: Number(dHoje.feitasDoPlano) || 0, visitas_todas: Number(dHoje.provadas) || 0, repetidas: repMedido ? (repHoje[id] || 0) : null, fora: Math.max(0, (Number(dHoje.provadas) || 0) - (Number(dHoje.feitasDoPlano) || 0)), feitas: Number(dHoje.feitas) || 0, agenda: GV2.compromissosDoDia(id, agora.iso), sem_lugar: fds ? 0 : (Number(dHoje.semLugar) || 0),
         status: status, ultima_atividade: ultima, posicao: posicao, posicaoOntem: posOntem, paradas: paradas },
-      ontem: { paradas_plano: Number(dOntem.planejadas) || 0, visitas_com_prova: Number(dOntem.feitasDoPlano) || 0, visitas_todas: Number(dOntem.provadas) || 0 },
+
+      ontem: { paradas_plano: Number(dOntem.planejadas) || 0, visitas_com_prova: Number(dOntem.provadas) || 0, visitas_todas: Number(dOntem.provadas) || 0, feitas_do_plano: Number(dOntem.feitasDoPlano) || 0 },
       semana: semanaP, semanaTotal: semanaP.reduce(function (x, d) { return x + d.planejadas; }, 0),
       semanaAnt: [0, 1, 2, 3, 4].map(function (i) { const d = a.dias[i] || {}; return { iso: GV2.somaDias(diasSemana[0], i - 7), todas: Number(d.provadas) || 0, leadNovo: Number(d.provadasLeadNovo) || 0, leadSemFoto: Number(d.provadasLeadNovoSemFoto) || 0, contatos: Number(d.contatos) || 0 }; }),
       palavra_dada: !!(s.plano && s.plano.promessaDadaEm),
@@ -61307,7 +61309,7 @@ GV2.v5Grupos = function () {
     btn: 'Cobrar o plano', acao: sr.length === 1 ? 'cobrar:pessoa:' + sr[0].id : 'cobrar:semplano' });
   const fo = b.pessoas.filter(function (p) { return !(GV2.emRampa && GV2.emRampa(p)) && p.ontem.paradas_plano > 0 && p.ontem.visitas_com_prova * 2 < p.ontem.paradas_plano; });
   if (fo.length) g.push({ k: 'furou', l: 'Furou o último dia útil', sev: 1, curta: b.ontemRot + ' · < metade', regra: b.ontemRot + ' · menos da metade do plano',
-    chips: fo.map(function (p) { return chip(p, p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano, 'v5dia:' + p.id + ':' + b.ontemIso); }),
+    chips: fo.map(function (p) { return chip(p, GV2.pl(p.ontem.visitas_com_prova, 'visita', 'visitas') + ' · plano de ' + p.ontem.paradas_plano, 'v5dia:' + p.id + ':' + b.ontemIso); }),
     btn: 'Ver na daily', acao: 'daily:abrir' });
 
   const vistos = {}, din = [];
@@ -61443,7 +61445,9 @@ GV2.render.v5PorPessoa = function (sit) {
     else if (s.k === 'travou') { jT = 'travou · nenhum check-in'; jS = s.prim != null ? '1ª parada ' + GV2.hhmm(s.prim) : GV2.v5Janela(p); jC = 't-acao'; }
     else { jT = 'nenhum check-in com prova'; jS = p.hoje.ultima_atividade || ''; jC = 't-mute'; }
     const oj = dOnt.estado === 'ok' && dOnt.jornada ? (dOnt.jornada.n > 1 ? GV2.hhmm(dOnt.jornada.ini) + '–' + GV2.hhmm(dOnt.jornada.fim) : GV2.hhmm(dOnt.jornada.ini)) : 'sem check-in';
-    const ontemT = p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : 'sem plano';
+
+    const ontemT = p.ontem.paradas_plano ? GV2.pl(p.ontem.visitas_com_prova, 'visita', 'visitas') + ' · plano ' + (p.ontem.feitas_do_plano || 0) + ' de ' + p.ontem.paradas_plano
+      : (p.ontem.visitas_com_prova ? GV2.pl(p.ontem.visitas_com_prova, 'visita', 'visitas') + ' · sem plano' : 'sem plano');
     const furou = p.ontem.paradas_plano > 0 && p.ontem.visitas_com_prova * 2 < p.ontem.paradas_plano;
     let acao;
     if (s.k === 'travou') acao = '<button type="button" class="gv2-v5-btn is-linha is-acao" data-gv2="ligar:' + p.id + '">Chamar</button>';
@@ -62301,7 +62305,7 @@ EXH.gestorMotivos = function (p, b) {
   try { G = GV2.v5Grupos(); } catch (e) { return []; }
   return (G.grupos || []).filter(function (g) { return !g.info && (g.chips || []).length; }).map(function (g) {
     let det = '';
-    if (g.k === 'furou') det = 'Plano de ontem ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano;
+    if (g.k === 'furou') det = 'Ontem ' + GV2.pl(p.ontem.visitas_com_prova, 'visita', 'visitas') + ' com prova · plano ' + (p.ontem.feitas_do_plano || 0) + ' de ' + p.ontem.paradas_plano;
     else if (g.k === 'dinheiro') det = (p.travados.length ? GV2.pl(p.travados.length, 'travado', 'travados') : '') + (p.quentesSemPasso ? (p.travados.length ? ' · ' : '') + GV2.pl(p.quentesSemPasso, 'quente sem data', 'quentes sem data') : '');
     else if (g.k === 'semrota') det = 'sem parada no plano de hoje';
     else if (g.k === 'travou') det = 'plano com hora e nenhuma visita com prova ainda';
@@ -62393,7 +62397,7 @@ EXH.prontoHTML = function (p, b) {
       GV2.e(ontemFeito + ' de ' + sem.meta + ' até ontem' + (sem.faltam ? ' · faltam ' + sem.faltam + (restam.length ? ' em ' + restam.join(' e ') : '') : '')), 'aba:viewAgenda', 'Planejamento')
     + cardi('Rota de hoje', b.planoErro ? '—' : p.hoje.paradas_plano ? GV2.e(GV2.pl(p.hoje.paradas_plano, 'parada', 'paradas') + (prim ? ' · 1ª às ' + prim.hora + ', ' + prim.nome : '')) : 'sem plano hoje',
       GV2.e(b.planoErro ? 'o plano não respondeu' : p.hoje.sem_lugar ? GV2.pl(p.hoje.sem_lugar, 'sem lugar no mapa', 'sem lugar no mapa') : 'todas com lugar no mapa'), 'mapa', 'Mapa')
-    + cardi('Ontem · ' + GV2.diaCurto(ontem), GV2.e('Plano ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano + ' · ' + (p.ontem.visitas_todas || 0) + ' de ' + p.meta_visitas_dia + ' visitas com prova'),
+    + cardi('Ontem · ' + GV2.diaCurto(ontem), GV2.e((p.ontem.visitas_todas || 0) + ' de ' + p.meta_visitas_dia + ' visitas com prova · plano ' + (p.ontem.feitas_do_plano || 0) + ' de ' + p.ontem.paradas_plano),
       GV2.e(semFichaOntem ? GV2.pl(semFichaOntem, 'visita ficou sem ficha · está abaixo', 'visitas ficaram sem ficha · estão abaixo') : 'toda visita com ficha'), null)
     + '</div></div>';
 };
