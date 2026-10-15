@@ -102,6 +102,16 @@ const CIDADES = (() => {
        cidade cumpre a meta geral com contas de uma zona só e a zona do colega nasce
        vazia — foi o motivo pelo qual as sub-cotas existem desde 01/09. */
     const comBairro = c.donos.filter(d => !d.area.todoOMunicipio && (d.area.bairros || []).length);
+    /* SÓ OS BAIRROS DECLARADOS (15/10/26, Julyan: "o resto podemos apagar, vamos buscar só a
+       partir desses lugares"). Cidade sem ninguém com o município inteiro vira busca POR BAIRRO:
+       a lista vai para a Casa dos Dados (menos página, menos crédito) e, se a API não aceitar o
+       filtro, o lead de bairro sem dono é descartado aqui antes de importar. */
+    if (!c.donos.some(d => d.area.todoOMunicipio) && comBairro.length) {
+      cfg.soBairros = true;
+      cfg.bairrosFiltro = Array.from(new Set(comBairro.flatMap(d => (d.area.bairros || []).map(b => String(b).replace(/\s*\(.*\)\s*$/, '').trim())).filter(Boolean)));
+      const chaves = comBairro.flatMap(d => (d.area.bairros || []).map(semAcentoBairro)).filter(Boolean);
+      cfg.bairroTemDono = b => { const alvo = ' ' + semAcentoBairro(b) + ' '; return chaves.some(k => alvo.indexOf(' ' + k + ' ') >= 0); };
+    }
     if (n > 1 && comBairro.length > 1) {
       /* ══ UM BAIRRO, UM DONO ═══════════════════════════════════════════════════════
          O resolvedor é compartilhado pelas metas desta cidade, e é ele que decide de
@@ -301,6 +311,7 @@ async function autenticarECconsultar(corpoConsulta, casaToken) {
 // avisar se algum executivo específico não bateu os 30 mesmo esticando o teto.
 async function buscarCidade(cidadeCfg, casaToken) {
   const { municipio, uf, objetivoMinimo, tetoMaximo, metaBairros } = cidadeCfg;
+  let comFiltroBairro = !!(cidadeCfg.bairrosFiltro && cidadeCfg.bairrosFiltro.length);
   const leadsCidade = [];
   let pagina = 1;
 
@@ -326,10 +337,17 @@ async function buscarCidade(cidadeCfg, casaToken) {
       data_abertura: { inicio: isoDiasAtras(JANELA_DIAS), fim: isoDiasAtras(DIAS_MINIMO_ABERTURA) },
       mei: { excluir_optante: true },
       mais_filtros: { com_telefone: true, excluir_email_contab: true },
+      ...(comFiltroBairro ? { bairro: cidadeCfg.bairrosFiltro.map(b => b.toLowerCase()) } : {}),
       limite: TAMANHO_PAGINA_API,
       pagina
     });
     const resp = await autenticarECconsultar(corpoConsulta, casaToken);
+    if (!resp.ok && comFiltroBairro && pagina === 1) {
+      /* a API recusou o filtro de bairro: busca a cidade e o descarte por bairro fica aqui */
+      console.log(`[backfill-casa-dos-dados] ${municipio}/${uf}: filtro de bairro recusado pela Casa dos Dados — buscando a cidade e descartando o bairro sem dono.`);
+      comFiltroBairro = false;
+      continue;
+    }
     if (!resp.ok) {
       console.log(`[backfill-casa-dos-dados] ${municipio}/${uf}: falha de autenticação/rede na página ${pagina}.`);
       break;
@@ -343,6 +361,7 @@ async function buscarCidade(cidadeCfg, casaToken) {
       if (ehRedeGrande(item.nome) || ehRedeGrande(item.razaoSocial)) return;
       if (ehPessoaFisica(item)) return;
       if (ehForaDeFoodservice(item.nome)) return;
+      if (cidadeCfg.soBairros && !cidadeCfg.bairroTemDono(item.bairro)) return; // fora dos bairros declarados
       leadsCidade.push(item);
     });
 

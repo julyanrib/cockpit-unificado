@@ -55,6 +55,68 @@ const via = (cidade, bairro) => {
   return r.sobra ? 'sobra' : 'lista antiga';
 };
 
+/* ══ O ROTEADOR SOBRE UMA DECLARAÇÃO SINTÉTICA (15/10/26) ════════════════════════════
+   15/10/26: território refeito pelo Julyan. Com a rota enxuta, TRÊS mecanismos do
+   roteador ficaram sem nenhum caso no dado real: a sobra automática da cidade de um dono
+   só declarado por bairro (era Suzano/Mogi), a sobra escolhida a dedo com
+   `sobraDoMunicipio` (era o Luiz no Rio) e o divisor por meridiano (era Guarulhos). O
+   código continua lá e volta a valer na primeira linha que o Julyan escrever no JSON.
+
+   Apagar as checagens deixaria esses mecanismos sem guarda; mantê-las sobre o dado real
+   as deixaria verdes por vacuidade. Então elas rodam sobre uma CÓPIA da declaração real
+   com as linhas de antes de 15/10 recolocadas (o divisor de Guarulhos copiado do
+   JSON de antes de 15/10), carregando lib/territorios.js de novo com o JSON trocado SÓ no cache do
+   require — nada em disco muda, e o roteador real é restaurado logo em seguida. */
+const roteadorSobre = function (declSintetica) {
+  const pJson = require.resolve(path.join(raiz, 'data', 'territorios.json'));
+  const pLib = require.resolve(path.join(raiz, 'lib', 'territorios.js'));
+  const modJson = require.cache[pJson];
+  const libReal = require.cache[pLib];
+  const exportsReais = modJson.exports;
+  try {
+    modJson.exports = declSintetica;
+    delete require.cache[pLib];
+    return require(pLib);
+  } finally {
+    modJson.exports = exportsReais;
+    require.cache[pLib] = libReal;
+  }
+};
+const declAntiga = JSON.parse(JSON.stringify(decl));
+const pessoaAntiga = nome => declAntiga.territorios.find(x => x.rep === nome);
+pessoaAntiga('Sérgio Caetano').areas.push({ municipio: 'Guarulhos', uf: 'SP', bairros: ['Vila Augusta'] });
+pessoaAntiga('Renata Pessoa').areas.push({ municipio: 'Guarulhos', uf: 'SP', bairros: ['Macedo'] });
+pessoaAntiga('Renata Pessoa').areas.push({ municipio: 'Suzano', uf: 'SP', bairros: ['Centro'] });
+/* o Bruno leva a sobra do Rio aqui, como o Luiz levava até 11/09 */
+pessoaAntiga('Bruno Martins').areas[0].sobraDoMunicipio = true;
+/* e o André volta a ter Jacarepaguá, para a Freguesia (Jacarepaguá) ter um vizinho de
+   nome contido nela */
+pessoaAntiga('André Gomes').areas[0].bairros.push('Jacarepaguá');
+declAntiga._divisores_de_cidade = [{
+  municipio: 'Guarulhos', uf: 'SP', eixo: 'longitude', corte: -46.52224,
+  oeste: 'Sérgio Caetano', leste: 'Renata Pessoa',
+  caixa: { lat: [-23.56, -23.31], lng: [-46.63, -46.33] },
+  porque: 'cópia do divisor de 09/09/26 para a suíte; não está no JSON real desde 15/10/26'
+}];
+const sint = roteadorSobre(declAntiga);
+const quemSint = (cidade, bairro, la, lo) => primeiroNome(sint.rotearTerritorio(cidade, bairro,
+  la === undefined ? null : la, lo === undefined ? null : lo));
+const viaSint = (cidade, bairro) => {
+  const r = sint.regraDoTerritorio(cidade, bairro, null, null);
+  if (!r) return 'sem dono';
+  if (r.sobraDeclarada) return 'sobra declarada';
+  if (r.declarado) return 'declarado';
+  return r.sobra ? 'sobra' : 'lista antiga';
+};
+
+/* A CÓPIA TEM DE SER OUTRA COISA. Se o truque do cache falhar em silêncio, `sint` seria o
+   roteador real e as checagens abaixo comparariam o real com ele mesmo. */
+conferir('a declaração sintética carregou de fato, e o roteador real ficou intacto',
+  sint !== terr && (sint.DIVISORES || []).length === 1 && (terr.DIVISORES || []).length === 0
+  && quemSint('guarulhos', 'vila augusta') === 'Sérgio' && quem('guarulhos', 'vila augusta') === null
+  && require(path.join(raiz, 'lib', 'territorios.js')) === terr,
+  'sem isso as checagens da declaração sintética mediriam o dado real e passariam por vacuidade');
+
 /* ── 1 · NENHUM ID FALSO SAI DAQUI ───────────────────────────────────────────────────
    É o defeito mais silencioso dos três: o lead entra, tem dono no papel, e o dono não
    existe. Ele não aparece na Daily de ninguém nem como conta alvo no Expogo. */
@@ -87,9 +149,13 @@ conferir('todo executivo declarado e ativo tem id no roteador',
   'quem tem rota declarada e não aparece aqui recebe lead de ninguém');
 
 /* ── 2 · AS NOVE CIDADES NOVAS TÊM DONO ─────────────────────────────────────────────── */
-conferir('Guarulhos routeia, e para as duas metades certas',
-  quem('guarulhos', 'vila augusta') === 'Sérgio' && quem('guarulhos', 'macedo') === 'Renata',
-  'Guarulhos tem 14.172 CNPJs food e zero conta no CRM; sem dono o lead entra e desaparece');
+/* 15/10/26: território refeito pelo Julyan — "o resto podemos apagar, vamos buscar só a
+   partir desses lugares". Guarulhos saiu da rota dos dois (era Sérgio a oeste, Renata a
+   leste) e não foi para ninguém. Sem dono e VISÍVEL, nunca com o dono antigo. */
+conferir('Guarulhos ficou sem dono, nas duas metades',
+  quem('guarulhos', 'vila augusta') === null && quem('guarulhos', 'macedo') === null
+  && quem('guarulhos', 'jardim cumbica') === null,
+  'Guarulhos saiu da rota em 15/10; lead de lá com dono seria carga para quem não anda mais ali');
 
 /* 11/09/26, Julyan: "do Luiz Pimentel, coloca só nova iguaçu por enquanto". As outras
    quatro cidades da Baixada saíram do território dele e não foram para ninguém — saem
@@ -104,19 +170,26 @@ conferir('Nova Iguaçu fica sem dono com a saída do Luiz, e o resto da Baixada 
     .every(c => quem(c, 'centro') === null),
   'território de quem saiu não pode cair em ninguém sozinho: é o gestor que atribui');
 
-conferir('o Alto Tietê vai para a Renata',
+/* 15/10/26: território refeito pelo Julyan. A Renata ficou só com o Centro de São Paulo;
+   o Alto Tietê, que era dela inteiro, ficou sem dono. */
+conferir('o Alto Tietê ficou sem dono',
   ['mogi das cruzes', 'suzano', 'salesopolis', 'biritiba mirim']
-    .every(c => quem(c, 'centro') === 'Renata'),
-  'cinco municípios que nunca foram buscados por ninguém antes de 09/09');
+    .every(c => quem(c, 'centro') === null),
+  'a Renata saiu do Alto Tietê em 15/10; o lead de lá não pode continuar caindo na carteira dela');
 
 /* ── 3 · A DECLARAÇÃO GANHA DAS LISTAS ANTIGAS ──────────────────────────────────────
    As três trocas de hoje, uma a uma. Sem a precedência, o lead ia para quem saiu da zona. */
 /* 05/10/26: a rota do Sandro trocou de Zona Sul para Vila Valqueire, Cascadura, Méier, Engenho
    de Dentro, Piedade, Abolição e Madureira. Copacabana deixou de ter dono; Madureira prova a mesma
    coisa (estava na lista antiga do Luiz e a declaração a dá ao Sandro). */
-conferir('Madureira é do Sandro, pela rota de 05/10',
-  quem('rio de janeiro', 'madureira') === 'Sandro' && via('rio de janeiro', 'madureira') === 'declarado',
-  'a lista antiga a dava ao Luiz; sem a precedência da declaração, o lead ia para quem não cobre mais');
+/* 15/10/26: território refeito pelo Julyan. O Sandro ficou só com Vila Valqueire e
+   Méier; Madureira saiu da rota dele e ficou sem dono — e a lista antiga (que a dava ao
+   Luiz) não a reassume. Méier prova a precedência: está na declaração do Sandro. */
+conferir('Méier e Vila Valqueire são do Sandro, e Madureira saiu da rota dele',
+  quem('rio de janeiro', 'meier') === 'Sandro' && via('rio de janeiro', 'meier') === 'declarado'
+  && quem('rio de janeiro', 'vila valqueire') === 'Sandro'
+  && quem('rio de janeiro', 'madureira') === null,
+  'a rota do Sandro de 15/10 é Vila Valqueire e Méier; Madureira com dono seria a rota velha ou a lista antiga decidindo');
 
 /* Cachambi era do Luiz por declaração; com ele fora do Rio, ela não é de ninguém — e
    NÃO PODE voltar para o Sandro pela lista de 01/09, que é o mapa antigo. É isto que
@@ -125,25 +198,32 @@ conferir('Cachambi ficou sem dono, e a lista antiga não a reassume',
   quem('rio de janeiro', 'cachambi') === null,
   'a lista de 01/09 a dava ao Sandro; deixá-la reassumir poria o lead na carteira de quem não pediu');
 
-conferir('a Grande Tijuca é do Bruno',
-  quem('rio de janeiro', 'tijuca') === 'Bruno' && quem('rio de janeiro', 'vila isabel') === 'Bruno',
-  'era do Sandro até hoje; o Julyan passou para o Bruno junto com Taquara e região');
+/* 15/10/26: território refeito pelo Julyan. A Grande Tijuca saiu do Bruno e ficou sem
+   dono. */
+conferir('a Grande Tijuca ficou sem dono',
+  quem('rio de janeiro', 'tijuca') === null && quem('rio de janeiro', 'vila isabel') === null,
+  'o Bruno ficou só com Taquara e Freguesia (Jacarepaguá) em 15/10; Tijuca com dono seria a rota velha');
 
-conferir('Anil e Barra Olímpica são do André',
-  quem('rio de janeiro', 'anil') === 'André'
+/* 15/10/26: território refeito pelo Julyan. O André ficou SÓ com Anil e Barra Olímpica
+   (o eixo sudoeste inteiro saiu). Anil também prova a precedência: a lista antiga de
+   01/09 o dá ao Bruno. */
+conferir('Anil e Barra Olímpica são do André, e só eles',
+  quem('rio de janeiro', 'anil') === 'André' && via('rio de janeiro', 'anil') === 'declarado'
   && quem('rio de janeiro', 'barra olimpica') === 'André'
-  && quem('rio de janeiro', 'recreio dos bandeirantes') === 'André',
-  'ele leva o eixo Barra/Jacarepaguá — "ou seja toda a zona SUDOESTE do RJ"');
+  && quem('rio de janeiro', 'recreio dos bandeirantes') === null,
+  'a rota do André de 15/10 é Anil e Barra Olímpica; o Recreio com dono seria a rota velha');
 
 /* ── FREGUESIA E BARRA DA TIJUCA SÃO DO BRUNO ───────────────────────────────────────
    Julyan em 09/09, corrigindo: "FREGUESIA NO RIO DE JANEIRO É DO BRUNO, NAO DO ANDRE!!
    bruno: taquara, freguesia e barra da tijuca!!!". A lista que ele mesmo ditou para o
    André meia hora antes incluía "freguesia" — a correção é posterior e vence. */
-conferir('Taquara, Freguesia e Barra da Tijuca são do Bruno',
+/* 15/10/26: território refeito pelo Julyan. Taquara e Freguesia (Jacarepaguá) seguem
+   do Bruno; a Barra da Tijuca saiu e ficou sem dono. */
+conferir('Taquara e Freguesia (Jacarepaguá) são do Bruno, e a Barra da Tijuca ficou sem dono',
   quem('rio de janeiro', 'taquara') === 'Bruno'
   && quem('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno'
-  && quem('rio de janeiro', 'barra da tijuca') === 'Bruno',
-  'correção dele em 09/09, contra a lista que ele mesmo tinha dado ao André');
+  && quem('rio de janeiro', 'barra da tijuca') === null,
+  'a rota do Bruno de 15/10 é Taquara e Freguesia (Jacarepaguá); a Barra com dono seria a rota velha');
 
 /* ══ FREGUESIA É DOIS BAIRROS COM O MESMO NOME ═══════════════════════════════════════
    Uma em Jacarepaguá (do Bruno) e uma na Ilha do Governador (do Luiz), a 30 km. MEDIDO no
@@ -171,10 +251,24 @@ conferir('a Freguesia da Ilha continua sendo outro bairro que a de Jacarepaguá'
    e Penha Circular (do Luiz) provariam nada. Uso Jacarepaguá (André) contra
    Freguesia (Jacarepaguá) (Bruno) — se o casamento voltar a ser por trecho, a Freguesia
    cai no André pelo " jacarepagua " que está dentro do parêntese. */
+/* 15/10/26: território refeito pelo Julyan. Ninguém tem mais "Jacarepaguá" sozinho, então
+   o par Jacarepaguá (André) × Freguesia (Jacarepaguá) (Bruno) só existe na declaração
+   sintética — e lá a checagem vai direto na regra do André, que tem de RECUSAR a
+   Freguesia por si só (a ordem do JSON põe o Bruno antes e esconderia o defeito).
+   No dado real, o mesmo defeito tem dois pares vivos: o Jacarepaguá sozinho não pode
+   cair no Bruno pelo parêntese dele, e Brasilândia (Sérgio) começa com "Brás" (Fabio) —
+   e o Fabio vem ANTES do Sérgio no JSON, então casamento por trecho a entregaria a ele. */
+const regraAndreSint = (sint.DECLARADOS || []).find(r =>
+  r.nome === 'André Gomes' && r.cidade === 'rio de janeiro' && !r.sobraDeclarada);
 conferir('bairro não casa por pedaço do nome de outro',
-  quem('rio de janeiro', 'jacarepagua') === 'André'
-  && quem('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno',
-  'por trecho, a Freguesia (Jacarepaguá) cairia no André pelo "jacarepagua" do parêntese');
+  quem('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno'
+  && quem('rio de janeiro', 'jacarepagua') === null
+  && quem('sao paulo', 'brasilandia') === 'Sérgio' && quem('sao paulo', 'bras') === 'Fabio'
+  && quemSint('rio de janeiro', 'jacarepagua') === 'André'
+  && quemSint('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno'
+  && !!regraAndreSint && regraAndreSint.teste('rio de janeiro jacarepagua') === true
+  && regraAndreSint.teste('rio de janeiro freguesia (jacarepagua)') === false,
+  'por trecho, a Freguesia (Jacarepaguá) cairia em quem tem "jacarepagua", e a Brasilândia no Fabio pelo "bras"');
 
 /* ══ O BAIRRO DENTRO DO CAMPO SUJO ═══════════════════════════════════════════════════
    MEDIDO: a coluna `bairro` carrega endereço com o bairro no fim — "Lj B - Tijuca",
@@ -183,21 +277,24 @@ conferir('bairro não casa por pedaço do nome de outro',
 /* O terceiro exemplo era "Lj D - Rio Comprido" (do Luiz). Rio Comprido saiu com ele em
    11/09; troquei por Copacabana, que tem dono e prova a mesma coisa: o que vem depois do
    último " - " é o bairro. */
+/* 15/10/26: território refeito pelo Julyan. Tijuca, Barra da Tijuca e Madureira ficaram
+   sem dono; os três exemplos agora são bairros da rota nova, um de cada dono do Rio. */
 conferir('o bairro é extraído do endereço grudado',
-  quem('rio de janeiro', 'Lj B - Tijuca') === 'Bruno'
-  && quem('rio de janeiro', 'Loja A B C D - Barra da Tijuca') === 'Bruno'
-  && quem('rio de janeiro', 'Lj D - Madureira') === 'Sandro',
+  quem('rio de janeiro', 'Lj B - Taquara') === 'Bruno'
+  && quem('rio de janeiro', 'Loja A B C D - Barra Olimpica') === 'André'
+  && quem('rio de janeiro', 'Lj D - Meier') === 'Sandro',
   'o que vem depois do último " - " é o bairro; o resto é número de loja');
 
-/* ══ O EXTREMO OESTE VOLTOU, COM DONO ════════════════════════════════════════════════
-   Em 08/09 ele disse "zona oeste no momento nao precisa" e eu tirei 12 bairros da rota.
-   Em 09/09: "nao deixa sem dono". A zona volta para o André, que já é Jacarepaguá — dá
-   para fazer Taquara→Realengo→Bangu→Campo Grande num dia de rua. */
-conferir('o extremo oeste é do André',
-  quem('rio de janeiro', 'campo grande') === 'André'
-  && quem('rio de janeiro', 'bangu') === 'André'
-  && quem('rio de janeiro', 'santa cruz') === 'André',
-  'ele revogou o fora-de-rota em 09/09 com "nao deixa sem dono"');
+/* ══ O EXTREMO OESTE SAIU DE NOVO, AGORA SEM FORA-DE-ROTA ════════════════════════════
+   Em 08/09 ele disse "zona oeste no momento nao precisa"; em 09/09, "nao deixa sem dono",
+   e a zona foi para o André. 15/10/26: território refeito pelo Julyan — o André ficou só
+   com Anil e Barra Olímpica, e Campo Grande, Bangu e Santa Cruz ficaram SEM DONO (não
+   em _fora_de_rota: estão fora da rota de todo mundo, visíveis como órfãos). */
+conferir('o extremo oeste ficou sem dono',
+  quem('rio de janeiro', 'campo grande') === null
+  && quem('rio de janeiro', 'bangu') === null
+  && quem('rio de janeiro', 'santa cruz') === null,
+  'a rota do André de 15/10 não tem a Zona Oeste; lead de lá com dono seria a rota de 09/09 decidindo');
 
 conferir('e o mecanismo de fora-de-rota continua vivo, só vazio',
   Array.isArray(terr.FORA_DE_ROTA) && typeof terr.estaForaDeRota === 'function',
@@ -258,10 +355,16 @@ conferir('cidade sem herdeiro para o bairro não nomeado está declarada',
   'cidade que perdeu o dono da sobra sem ser declarada aqui esconde a consequência de uma '
   + 'troca de território; e declarar uma que TEM dono deixa a lista mentir ao contrário');
 
+/* 15/10/26: território refeito pelo Julyan. Nenhuma cidade real tem mais sobra escolhida
+   a dedo (`sobraDoMunicipio`), então a regra é medida na declaração sintética, onde o
+   Bruno leva a sobra do Rio como o Luiz levava: o bairro inventado cai nele, e os
+   bairros NOMEADOS do André e do Sandro continuam deles. */
 conferir('e a sobra NÃO atropela o bairro nomeado de ninguém',
-  quem('rio de janeiro', 'madureira') === 'Sandro'
-  && quem('rio de janeiro', 'taquara') === 'Bruno'
-  && quem('rio de janeiro', 'anil') === 'André',
+  (sint.SOBRAS_DE_MUNICIPIO || []).some(s => s.nome === 'Bruno Martins' && s.cidade === 'rio de janeiro')
+  && quemSint('rio de janeiro', 'um bairro inventado qualquer') === 'Bruno'
+  && quemSint('rio de janeiro', 'meier') === 'Sandro'
+  && quemSint('rio de janeiro', 'anil') === 'André'
+  && quemSint('rio de janeiro', 'taquara') === 'Bruno',
   'se a sobra entrasse antes do bairro nomeado, o dono dela levaria a cidade inteira');
 
 conferir('a sobra é declarada no JSON, não escolhida pelo código',
@@ -273,27 +376,40 @@ conferir('a sobra é declarada no JSON, não escolhida pelo código',
 /* A COBERTURA CONTINUA VALENDO ONDE ELE NÃO DETALHOU: Vila Velha, Vitória, Canoas e Porto
    Alegre são declaradas por MUNICÍPIO inteiro e ali nada mudou. Sem esta checagem, o
    conserto do Rio teria orfanado o ES e o RS de calado. */
+/* CANOAS (15/10/26): saiu da declaração da Kelly — o território refeito pelo Julyan não
+   a tem. Ela ainda responde "Kelly" pela LISTA ANTIGA de 01/09 em lib/territorios.js
+   (Canoas não é cidade com bairro declarado, então as listas largas ainda valem lá). A
+   busca semanal não traz mais Canoas; só lead entrado à mão cai neste fallback. A
+   checagem crava o comportamento ATUAL para que uma mudança nele seja vista — se o
+   Julyan quiser Canoas sem dono, o conserto é na lista antiga, não aqui. */
 conferir('a praça declarada por município inteiro não foi afetada',
   quem('vila velha', 'praia da costa') === 'Marco'
-  && quem('canoas', 'um bairro qualquer de canoas') === 'Kelly',
+  && quem('vitoria', 'jardim da penha') === 'Marco'
+  && quem('canoas', 'um bairro qualquer de canoas') === 'Kelly'
+  && via('canoas', 'um bairro qualquer de canoas') === 'lista antiga',
   'o corte é só onde ele nomeou BAIRRO; município inteiro continua respondendo por tudo');
 
-/* A GARANTIA CONTINUA ONDE ELA PODE EXISTIR: cidade com UM dono declarado por bairro
-   segue com sobra — é a regra que pôs 301 leads de Guarulhos e do Alto Tietê na carteira
-   certa em 09/09, e ela não mudou. O Rio saiu dessa lista por decisão de território, não
-   por defeito de código. */
+/* A GARANTIA CONTINUA ONDE ELA PODE EXISTIR. 15/10/26: território refeito pelo Julyan —
+   Mogi das Cruzes (Renata) saiu da rota. No dado real, a cidade de um dono só agora é
+   declarada por MUNICÍPIO INTEIRO (Porto Alegre da Kelly, Vila Velha e Vitória do
+   Marco), e o bairro inventado cai no dono pela regra de município inteiro. A sobra
+   automática da cidade de um dono só declarado por BAIRRO não tem caso real e é medida
+   na declaração sintética (Suzano, Renata, só "Centro" nomeado). */
 conferir('e a sobra do município continua existindo onde há um dono só',
-  /* era Nova Iguaçu (Luiz, saiu em 02/10/26); Mogi das Cruzes é da Renata inteira */
-  !!quem('mogi das cruzes', 'um bairro inventado qualquer')
-  && !!quem('vila velha', 'um bairro inventado qualquer'),
+  quem('porto alegre', 'um bairro inventado qualquer') === 'Kelly'
+  && quem('vila velha', 'um bairro inventado qualquer') === 'Marco'
+  && quem('vitoria', 'um bairro inventado qualquer') === 'Marco'
+  && quemSint('suzano', 'um bairro inventado qualquer') === 'Renata',
   'bairro novo sem regra tem que cair em alguém conhecido, senão fica invisível para sempre');
 
 /* ── 5 · O CASAMENTO É POR BORDA DE PALAVRA ─────────────────────────────────────────
    Mesmo defeito que a derivação das sub-cotas do backfill pegou hoje: 'vila mariana'
    caindo em quem tem 'Vila Maria'. As duas são declaradas e são de pessoas diferentes. */
-conferir('Vila Maria e Vila Mariana vão para pessoas diferentes',
-  quem('sao paulo', 'vila maria') === 'Sérgio' && quem('sao paulo', 'vila mariana') === 'Renata',
-  'substring manda as duas para o Sérgio e a Renata perde a rota dela em silêncio');
+/* 15/10/26: território refeito pelo Julyan. A Vila Mariana saiu da Renata e ficou sem
+   dono; a regra protegida continua: ela não pode cair no Sérgio, que tem a Vila Maria. */
+conferir('Vila Maria é do Sérgio e Vila Mariana não cai nele',
+  quem('sao paulo', 'vila maria') === 'Sérgio' && quem('sao paulo', 'vila mariana') === null,
+  'substring manda as duas para o Sérgio, e ele recebe lead de um bairro que ninguém lhe deu');
 
 /* E ISSO NÃO PODE DEPENDER DA ORDEM DA DECLARAÇÃO. Medido: com substring o par acima
    ACERTA por acidente, porque a Renata está declarada antes do Sérgio e a chave dela
@@ -338,27 +454,39 @@ conferir('o território de quem saiu não é mais roteado',
    ela reprovou. O código não está errado: a regra existe para que lead nenhum fique
    órfão. O que estava errado era eu achar que tirar alguém do time é uma operação sem
    efeito no território do vizinho. Fica a verdade medida, e o aviso vai para o Julyan. */
-conferir('com um dono só na cidade, a sobra entrega Porto Alegre inteira à Kelly',
+/* 15/10/26: território refeito pelo Julyan. O aviso acima foi respondido: Porto Alegre
+   INTEIRA passou a ser da Kelly por DECLARAÇÃO (todoOMunicipio), não mais pela sobra
+   automática. A checagem agora exige que venha da regra de município inteiro — se ela
+   voltar a sair da sobra, alguém tirou o todoOMunicipio e a decisão dele sumiu. */
+const regraKellyPOA = (terr.DECLARADOS || []).find(r =>
+  r.nome === 'Kelly Travieso Di Domenico' && r.cidade === 'porto alegre');
+conferir('Porto Alegre inteira é da Kelly, por declaração de município inteiro',
   quem('porto alegre', 'farroupilha') === 'Kelly'
     && quem('porto alegre', 'centro historico') === 'Kelly'
-    && via('porto alegre', 'farroupilha') === 'sobra declarada',
-  'é a regra da sobra do município, e ela dobrou a praça dela no dia em que o Ricardo '
-    + 'saiu — se isso não for o desejado, o caminho é declarar outro dono em '
-    + 'data/territorios.json, não mexer no roteador');
+    && via('porto alegre', 'farroupilha') === 'declarado'
+    && !!regraKellyPOA && regraKellyPOA.todoOMunicipioDeclarado === true,
+  'a decisão de 15/10 é "Porto Alegre inteira para a Kelly" escrita no JSON; vir pela sobra '
+    + 'automática quer dizer que a declaração voltou a ser por bairro');
 
-conferir('a Kelly continua com os três bairros dela, e só com eles',
+conferir('e os três bairros que já eram dela continuam dela',
   quem('porto alegre', 'cidade baixa') === 'Kelly'
     && quem('porto alegre', 'moinhos de vento') === 'Kelly'
     && quem('porto alegre', 'auxiliadora') === 'Kelly',
-  'a saída dele não pode encolher o que já era dela');
+  'a troca de bairro nomeado para município inteiro não pode encolher o que já era dela');
 
 /* ── 7 · UMA FONTE SÓ ───────────────────────────────────────────────────────────────── */
 conferir('o roteador lê data/territorios.json',
   (terr.DECLARADOS || []).length > 0,
   'era a quarta cópia da regra; sem ler a declaração ela volta a divergir na próxima rota nova');
 
+/* 15/10/26: território refeito pelo Julyan. Madureira ficou sem dono; os dois casos
+   agora são bairros em que a lista antiga de 01/09 diz OUTRA pessoa: Mooca (lista:
+   Renata; declaração: Fabio) e Anil (lista: Bruno; declaração: André). */
 conferir('e a declaração é consultada ANTES das listas antigas',
-  via('rio de janeiro', 'madureira') === 'declarado',
+  via('sao paulo', 'mooca') === 'declarado' && quem('sao paulo', 'mooca') === 'Fabio'
+  && via('rio de janeiro', 'anil') === 'declarado' && quem('rio de janeiro', 'anil') === 'André'
+  && terr.TERRITORIOS.some(x => x.nome === 'Renata Pessoa' && !x.sobra && x.teste('sao paulo mooca'))
+  && terr.TERRITORIOS.some(x => x.nome === 'Bruno Martins' && !x.sobra && x.teste('rio de janeiro anil')),
   'se a lista antiga vier primeiro, a decisão de hoje não chega ao lead');
 
 /* ── 8 · A SOBRA DA CIDADE DE UM DONO SÓ (09/09/26) ─────────────────────────────────
@@ -366,22 +494,31 @@ conferir('e a declaração é consultada ANTES das listas antigas',
    regiões". Medido: 301 leads sem dono nenhum, porque a rota é declarada por BAIRRO e a
    busca varre o MUNICÍPIO — Guarulhos 247 em 106 bairros que ninguém nomeou (a cidade
    tem ~140), Suzano 29, Mogi 19, Salesópolis 5. */
+/* 15/10/26: território refeito pelo Julyan. O Alto Tietê saiu da rota e NENHUMA cidade
+   real tem mais um dono só declarado por bairro — o dado real não gera nenhuma regra de
+   sobra automática (a checagem abaixo exige isso, para o dia em que gerar ser visto).
+   O mecanismo é medido na declaração sintética: Suzano com a Renata e só "Centro"
+   nomeado, como era antes de 15/10. */
 conferir("cidade com um dono só entrega a sobra a ele",
-  quem("suzano", "jardim cacique") === "Renata" &&
-  quem("mogi das cruzes", "jundiapeba") === "Renata" &&
-  quem("salesopolis", "fartura") === "Renata",
-  "a Renata é a única pessoa que anda nessas cidades; bairro que ela não nomeou é dela de qualquer jeito");
+  !(terr.DECLARADOS || []).some(r => r.sobraDeclarada) &&
+  quem("suzano", "jardim cacique") === null &&
+  quemSint("suzano", "jardim cacique") === "Renata" &&
+  viaSint("suzano", "jardim cacique") === "sobra declarada",
+  "a Renata é a única pessoa que anda em Suzano na declaração sintética; bairro que ela não nomeou é dela de qualquer jeito");
 
 /* O MECANISMO, E NÃO O RESULTADO. A primeira versão só comparava os dois roteamentos, e
    passava mesmo com o filtro removido — porque as regras de sobra entram no FIM do array
    e o .find() acha as nomeadas antes de qualquer jeito. O acerto vinha da ordem do push,
    não da regra. Então a checagem exige as DUAS garantias: o filtro no código e a sobra
    depois das nomeadas no array. */
+/* 15/10/26: território refeito pelo Julyan — mesma checagem, sobre a declaração
+   sintética (no dado real não há sobra para vir antes ou depois de nada). */
 conferir("e o bairro NOMEADO ainda vem antes da sobra",
-  via("suzano", "centro") === "declarado" && via("suzano", "jardim cacique") === "sobra declarada"
+  viaSint("suzano", "centro") === "declarado" && viaSint("suzano", "jardim cacique") === "sobra declarada"
   && fonteRoteador.indexOf('!x.sobraDeclarada && cid.includes(x.cidade)') > -1
+  && (sint.DECLARADOS || []).some(function (r) { return r.sobraDeclarada; })
   && (function () {
-       const rs = terr.DECLARADOS || [];
+       const rs = sint.DECLARADOS || [];
        const primeiraSobra = rs.findIndex(function (r) { return r.sobraDeclarada; });
        const ultimaNomeada = rs.reduce(function (a, r, i) { return r.sobraDeclarada ? a : i; }, -1);
        return primeiraSobra === -1 || primeiraSobra > ultimaNomeada;
@@ -392,12 +529,18 @@ conferir("e o bairro NOMEADO ainda vem antes da sobra",
    entre a Renata e o Sérgio é decisão de território, e ela é do Julyan. Até ele dizer,
    aqueles leads ficam SEM DONO e visíveis na fila da praça, onde ele distribui — sem
    dono e visível é melhor que com dono errado. */
+/* 15/10/26: território refeito pelo Julyan. Guarulhos saiu da rota; no dado real as
+   cidades de mais de um dono são o Rio e São Paulo (três cada) — bairro que ninguém
+   nomeou lá fica sem dono. Guarulhos de dois donos continua medida na sintética, sem
+   coordenada (com coordenada, quem decide é o meridiano do bloco 9). */
 conferir("cidade com dois donos NÃO ganha sobra automática",
-  !quem("guarulhos", "jardim cumbica"),
-  "escolher entre a Renata e o Sérgio para 106 bairros é decisão de território, não de código");
+  quem("sao paulo", "bairro que nao existe") === null &&
+  quem("rio de janeiro", "bairro que nao existe") === null &&
+  !quemSint("guarulhos", "jardim cumbica"),
+  "escolher entre dois ou três executivos para o bairro que ninguém nomeou é decisão de território, não de código");
 
 conferir("e os bairros nomeados de Guarulhos continuam certos",
-  quem("guarulhos", "vila augusta") === "Sérgio" && quem("guarulhos", "macedo") === "Renata",
+  quemSint("guarulhos", "vila augusta") === "Sérgio" && quemSint("guarulhos", "macedo") === "Renata",
   "a sobra não pode atropelar quem nomeou o bairro");
 
 /* ── 9 · A CIDADE DIVIDIDA POR MERIDIANO (09/09/26) ─────────────────────────────────
@@ -409,35 +552,62 @@ conferir("e os bairros nomeados de Guarulhos continuam certos",
    1,8 km um do outro e os órfãos a ~12 km de ambos. Proximidade a centróides colados é
    moeda ao ar com cara de critério. O eixo vem de onde cada um já trabalha (Sérgio a
    oeste, Renata a leste) e o corte é a mediana dos órfãos, que equilibra 154 x 145. */
+/* 15/10/26: território refeito pelo Julyan. Guarulhos saiu da rota e
+   `_divisores_de_cidade` ficou VAZIO: no dado real não há meridiano nenhum, e a primeira
+   checagem abaixo crava isso (com coordenada, Guarulhos e São Paulo não ganham dono por
+   corte). As regras do meridiano continuam medidas na declaração sintética, com o
+   divisor de Guarulhos de 09/09 recolocado — é o que volta a valer se ele reescrever um. */
 const q = function (c, b, la, lo) { return primeiroNome(terr.rotearTerritorio(c, b, la, lo)); };
+const qs = function (c, b, la, lo) { return primeiroNome(sint.rotearTerritorio(c, b, la, lo)); };
+
+conferir("no dado real não há divisor de cidade, e a coordenada não inventa dono",
+  Array.isArray(decl._divisores_de_cidade) && decl._divisores_de_cidade.length === 0 &&
+  (terr.DIVISORES || []).length === 0 &&
+  q("guarulhos", "jardim cumbica", -23.43, -46.45) === null &&
+  q("guarulhos", "vila rosalia", -23.46, -46.55) === null &&
+  q("sao paulo", "vila mariana", -23.59, -46.63) === null &&
+  terr.donoPorMeridiano("sao paulo", -23.55, -46.60) === null,
+  "Guarulhos saiu da rota em 15/10; um meridiano sobrando daria a cidade de volta a quem não anda mais lá");
 
 conferir("bairro NOMEADO ganha do meridiano",
-  q("guarulhos", "vila augusta", -23.45, -46.50) === "Sérgio" &&
-  q("guarulhos", "macedo", -23.47, -46.56) === "Renata",
+  qs("guarulhos", "vila augusta", -23.45, -46.50) === "Sérgio" &&
+  qs("guarulhos", "macedo", -23.47, -46.56) === "Renata",
   "quem nomeou a rua manda; o meridiano é para o bairro que ninguém nomeou");
 
 conferir("e bairro novo cai pelo lado do meridiano",
-  q("guarulhos", "jardim cumbica", -23.43, -46.45) === "Renata" &&
-  q("guarulhos", "vila rosalia", -23.46, -46.55) === "Sérgio",
-  "sem isso a próxima importação de Guarulhos volta a ser 83% de lead sem dono");
+  qs("guarulhos", "jardim cumbica", -23.43, -46.45) === "Renata" &&
+  qs("guarulhos", "vila rosalia", -23.46, -46.55) === "Sérgio",
+  "sem isso a próxima importação de uma cidade dividida volta a ser 83% de lead sem dono");
 
 /* A COORDENADA MENTIROSA NÃO DECIDE TERRITÓRIO. Medido: 38 dos 247 leads de Guarulhos
    tinham ponto entre -51,4 e -45,6 de longitude, para uma cidade de 30 km — o
    geocodificador falha e devolve outra cidade, às vezes outro estado. */
 conferir("ponto fora da caixa da cidade não decide nada",
-  !q("guarulhos", "bairro x", -24.2, -51.4) && !q("guarulhos", "bairro y", null, null),
+  !qs("guarulhos", "bairro x", -24.2, -51.4) && !qs("guarulhos", "bairro y", null, null),
   "coordenada de outro estado escolhendo dono é o pior caso: o lead entra com dono errado e ninguém percebe");
 
+/* 15/10/26: território refeito pelo Julyan. A Vila Mariana ficou sem dono em São Paulo,
+   então o vazamento agora apareceria como DONO onde não há nenhum: com ponto dos dois
+   lados do corte de Guarulhos (-46,50 leste, -46,63 oeste) ela tem de continuar sem
+   dono. Mooca segue do Fabio. */
 conferir("e o divisor não vaza para outras cidades",
-  q("sao paulo", "vila mariana", -23.59, -46.63) === "Renata" &&
-  /^Fabio/.test(q("sao paulo", "mooca", -23.55, -46.60) || "") && /* 13/10/26: Centro e Zona Leste passaram ao Fabio */
-  q("suzano", "jardim cacique", null, null) === "Renata" &&
-  q("guarulhos", "vila augusta", -23.55, -46.60) === "Sérgio",
+  qs("sao paulo", "vila mariana", -23.50, -46.50) === null &&
+  qs("sao paulo", "vila mariana", -23.59, -46.63) === null &&
+  /^Fabio/.test(qs("sao paulo", "mooca", -23.55, -46.60) || "") &&
+  qs("suzano", "jardim cacique", null, null) === "Renata" &&
+  qs("guarulhos", "vila augusta", -23.55, -46.60) === "Sérgio",
   "o meridiano de Guarulhos aplicado em São Paulo cortaria a cidade errada");
 
+/* 15/10/26: território refeito pelo Julyan. Sem divisor no dado real, "mora na
+   declaração" se mede de dois lados: o roteador real tem exatamente o que o JSON tem
+   (zero), o sintético tem o que a cópia tem (um, com o porquê) — e a fonte do roteador
+   não traz o corte de 09/09 cravado nem deixa de ler _divisores_de_cidade. */
 conferir("o divisor mora na declaração, não cravado no código",
-  (terr.DIVISORES || []).length > 0 &&
-  (terr.DIVISORES || []).every(function (d) { return d.municipio && d.corte && d.oeste && d.leste && d.caixa && d.porque; }),
+  (terr.DIVISORES || []).length === (decl._divisores_de_cidade || []).length &&
+  (sint.DIVISORES || []).length === 1 &&
+  (sint.DIVISORES || []).every(function (d) { return d.municipio && d.corte && d.oeste && d.leste && d.caixa && d.porque; }) &&
+  /_divisores_de_cidade/.test(fonteRoteador) && fonteRoteador.indexOf('46.52224') === -1 &&
+  fonteRoteador.indexOf('46,52224') === -1,
   "divisor sem o porque escrito é numero que ninguem sabe de onde veio");
 
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
@@ -446,5 +616,5 @@ if (falhas.length) {
   falhas.forEach(l => console.error(l));
   process.exit(1);
 }
-console.log('roteador do import: ' + ok + ' checagens ok — as nove cidades novas têm dono, a'
+console.log('roteador do import: ' + ok + ' checagens ok — a rota de 15/10 chega ao lead, a'
   + ' declaração ganha das listas antigas, e nenhum id de espera sai daqui.');
