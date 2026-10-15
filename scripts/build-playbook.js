@@ -19,6 +19,12 @@ const PAGINAS = [
      conversão: a Visita converte 24% e 116 visitas por mês morrem antes de chegar em quem
      assina — enquanto Demo/Proposta converte 91%. */
   { arquivo: 'playbook-achar-decisor.md', id: 'achar-decisor', categoria: 'Venda na rua', icone: '⌂', titulo: 'Achar o decisor antes de bater na porta', resumo: 'Descobrir o nome em 5 minutos, ler o salão em 30 segundos e nunca sair sem nome, horário e data.' },
+  /* NA PORTA: AS 9 FALAS DO MAPA (15/10/26, prancha "Mapa do Executivo" do Claude Design). O app
+     de campo mostra no pino o bloco "Para entrar" (o motivo daquela porta) e a fala pronta de uma
+     destas 9 páginas. O texto é o oficial aprovado pelo Julyan; o build extrai fala, "se ele
+     insistir" e o que marcar de cada gatilho para o campo `gatilhos` da página, que o app lê —
+     editar o texto aqui muda a fala no celular sem mudar código. */
+  { arquivo: 'playbook-gatilhos-do-mapa.md', id: 'gatilhos-do-mapa', categoria: 'Venda na rua', icone: '◆', titulo: 'Na porta: as 9 falas do mapa', resumo: 'O motivo de cada porta e a fala pronta: prazo estourado, dono agora, proposta, decisor, dor, casa nova, casa cheia, reconquista e queda.' },
   { marker: 'FOLLOW UP', id: 'follow-up', categoria: 'Venda na rua', icone: '↻', titulo: 'Follow-up: presença no prazo certo', resumo: 'SLA por etapa, escada de escalonamento e presença sem perseguir o cliente.' },
   { marker: 'RUA x WHATSAPP', id: 'rua-whatsapp', categoria: 'Venda na rua', icone: '↔', titulo: 'WhatsApp conecta, o asfalto converte', resumo: 'Como usar mensagem e ligação para levar o cliente ao presencial — não para substituí-lo.' },
   { arquivo: 'playbook-mapa-dor-solucao.md', id: 'mapa-dor-solucao', categoria: 'Converter e fechar', icone: '⊕', titulo: 'Mapa dor → solução', resumo: 'As 6 dores reais traduzidas em módulo, plano e a frase que você fala na mesa.' },
@@ -76,6 +82,26 @@ const MARCADORES = ['ECOSSISTEMA TAKEAT', 'GUIA DE EXCELÊNCIA', 'ONBOARDING DE 
    que a Takeat vende é obrigado a dizer o que ele faz e como ajuda, antes de o cockpit
    subir. O erro diz exatamente o que falta e onde escrever.
    ============================================================================ */
+/** As 9 falas do mapa, por gatilho (1–9): o app de campo lê daqui o texto do "Para entrar". */
+function gatilhosDoMarkdown(md) {
+  const out = {};
+  const partes = md.split(/^## (\d) · (.+)$/m);
+  for (let i = 1; i + 1 < partes.length; i += 3) {
+    const n = partes[i];
+    const titulo = partes[i + 1].trim();
+    const corpo = partes[i + 2] || '';
+    const linha = (re) => { const m = corpo.match(re); return m ? m[1].trim() : ''; };
+    const entreAspas = (s) => { const m = String(s).match(/"([^"]+)"/); return m ? m[1] : String(s).trim(); };
+    const fala = entreAspas(linha(/\*\*Fala pronta:\*\*\s*(.+)/));
+    const ins = corpo.match(/\*\*Se ele insistir \("([^"]+)"\):\*\*\s*(.+)/);
+    const marcar = linha(/\*\*Marcar:\*\*\s*(.+)/).replace(/\*/g, '');
+    if (!fala) throw new Error('playbook-gatilhos-do-mapa.md: o gatilho ' + n + ' está sem "Fala pronta"');
+    out[n] = { titulo, fala, ...(ins ? { insistir: { quando: ins[1], texto: entreAspas(ins[2]) } } : {}), ...(marcar ? { marcar } : {}) };
+  }
+  if (Object.keys(out).length !== 9) throw new Error('playbook-gatilhos-do-mapa.md: esperava 9 gatilhos, achei ' + Object.keys(out).length);
+  return out;
+}
+
 function montarCatalogo(root) {
   const preco = JSON.parse(fs.readFileSync(path.join(root, 'data', 'precificacao.json'), 'utf8'));
   const desc = JSON.parse(fs.readFileSync(path.join(root, 'data', 'playbook-catalogo.json'), 'utf8'));
@@ -414,6 +440,10 @@ function montarPlaybook(root) {
     if (meta.arquivo) {
       const markdown = fs.readFileSync(path.join(root, 'data', meta.arquivo), 'utf8').replace(/^\uFEFF/, '').trim();
       arquivosExtras[meta.arquivo] = markdown;
+      if (meta.id === 'gatilhos-do-mapa') {
+        const convertido = markdownToHtml(markdown, meta.id);
+        return { ...meta, html: convertido.html, headings: convertido.headings, busca: textoBusca(`${meta.titulo} ${meta.resumo} ${markdown}`), gatilhos: gatilhosDoMarkdown(markdown) };
+      }
       const convertido = markdownToHtml(markdown, meta.id);
       return { ...meta, html: convertido.html, headings: convertido.headings, busca: textoBusca(`${meta.titulo} ${meta.resumo} ${markdown}`) };
     }
