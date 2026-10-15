@@ -29,11 +29,16 @@ const MAX_PAGINAS_POR_CIDADE = 30; // trava de segurança — nunca deixa uma ci
 // Janela ampla o bastante pra cobrir o mercado ativo (não só "abriu esta semana",
 // que é o filtro do endpoint da Agenda) — 8 anos captura o estabelecimento maduro
 // que ainda pode não ter sistema de PDV, sem se limitar a CNPJ recém-nascido.
-const JANELA_DIAS = 365 * 8;
+/* RECÉM-ABERTOS (15/10/26, Julyan): "os leads que tiveram CNPJ aberto há no máximo 90 dias
+   têm que estar no mapa, porque eles não têm sistema". Inverte a regra de 16/08 (só CNPJ com
+   mais de 90 dias, até 8 anos): agora a busca é de 0 a 90 dias, e o backlog antigo sai do
+   mapa no app. A idade mínima é zero por decisão dele (o risco de cadastro incompleto foi
+   aceito). */
+const JANELA_DIAS = 90;
 // CORREÇÃO (16/08/26, Julyan, 2ª rodada): "não posso sujar o funil do gestor" — subiu
 // de 60 pra 90 dias mínimos de abertura, mais margem de segurança contra CNPJ que
 // ainda pode fechar ou estar com cadastro incompleto.
-const DIAS_MINIMO_ABERTURA = 90;
+const DIAS_MINIMO_ABERTURA = 0;
 
 // Uma linha por CIDADE que api/importar-leads.js sabe rotear (a função rotearTerritorio
 // de lá decide o dono certo por cidade+bairro). Rio de Janeiro cobre 2 executivos
@@ -308,8 +313,8 @@ async function buscarCidade(cidadeCfg, casaToken) {
     }));
   }
   function metasBatidas() {
-    if (!metaBairros) return leadsCidade.length >= objetivoMinimo;
-    return contagemPorMeta().every(m => m.encontrados >= m.minimo);
+    /* recém-abertos: traz TODOS os da janela (até o teto), sem parar na cota de 30 */
+    return false;
   }
 
   while (leadsCidade.length < tetoMaximo && pagina <= MAX_PAGINAS_POR_CIDADE && !metasBatidas()) {
@@ -468,6 +473,13 @@ async function main() {
         console.log(`[backfill-casa-dos-dados]   ${ok ? '✅' : '⚠️ ABAIXO DA META'} ${m.nome}: ${m.encontrados}/${m.minimo}`);
       });
     }
+    /* SO_CONTAR=1: só conta o que viria, sem importar nada (para medir antes de gravar) */
+    if (process.env.SO_CONTAR === '1') {
+      const porMes = {};
+      leadsCidade.forEach(l => { const m = String(l.data_abertura || '').slice(0, 7) || '?'; porMes[m] = (porMes[m] || 0) + 1; });
+      porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, porMesDeAbertura: porMes };
+      continue;
+    }
     if (modoManual) {
       todosOsLeads.push(...leadsCidade);
       porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, porMeta: porMeta || undefined };
@@ -482,6 +494,7 @@ async function main() {
   }
 
   console.log('[backfill-casa-dos-dados] Resumo final:', JSON.stringify(porCidade, null, 2));
+  if (process.env.SO_CONTAR === '1') { console.log('[backfill-casa-dos-dados] SO_CONTAR: nada importado.'); return; }
 
   if (modoManual) {
     const saida = { fonte: 'casa_dos_dados', leads: todosOsLeads };
