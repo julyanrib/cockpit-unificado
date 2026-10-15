@@ -14208,6 +14208,19 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
 .gv2-v9-pdi-form input[type=file]{font:500 13px var(--gv2-font);color:var(--gv2-ink);min-height:44px;}
 .gv2-v9-pdi-form small{font:500 12px var(--gv2-font);}
 .gv2-v9-pdi-comp{margin:10px 0 0;padding-left:20px;font:500 13px var(--gv2-font);color:var(--gv2-corpo);display:flex;flex-direction:column;gap:6px;}
+
+/* PASSADA VISUAL 15/10/26: texto que cortava com "…" a 1536 px (medido no Chrome, scrollWidth >
+   clientWidth com text-overflow:ellipsis) passa a quebrar em até 2 linhas. Nomes de restaurante,
+   de plano e de pessoa não podem sumir pela metade: "Básico (PDV + mesa + delivery)" virava
+   "Básico (PDV + m…" na lista de propostas. */
+#gv2Raiz .gv2-v9-kpi .gv2-v9-cmp,
+#gv2Raiz .gv2-tab-lin .gv2-ellip,
+#gv2Raiz .gv2-v5-trav-n .gv2-ellip,
+#gv2Raiz .gv2-v5-gr-l > b.gv2-ellip,
+#gv2Raiz .gv2-v9-rd-n .gv2-ellip,
+#gv2Raiz .gv2-v5-foto .gv2-ellip,
+#gv2Raiz .gv2-v5-kpi .gv2-ellip,
+#gv2Raiz .card-cab .card-sub{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-overflow:clip;}
 </style><!-- /gv2-css -->
 </head>
 <body>
@@ -14292,7 +14305,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -82411,7 +82424,7 @@ GV2.render.v5PorPessoa = function (sit) {
     /* 08/10/26: "Plano hoje" é o PLANO (x de y, só do plano) e "Visitas hoje" são as VISITAS com prova
        contra a meta */
     const planoT = fonte ? '—' : plan ? p.hoje.visitas_com_prova + ' de ' + plan : s.k === 'rampa' ? 'em rampagem' : 'sem rota';
-    const planoS = fonte ? 'sem resposta' : plan ? (p.hoje.sem_lugar ? GV2.pl(p.hoje.sem_lugar, 'sem lugar no mapa', 'sem lugar no mapa') : ok && d.semHora ? GV2.pl(d.semHora, 'parada sem hora', 'paradas sem hora') : GV2.pl(plan, 'parada', 'paradas') + ', todas com hora') : (p.hoje.agenda && p.hoje.agenda.n ? GV2.resumoDosCompromissos(p.hoje.agenda) : 'nada na agenda');
+    const planoS = fonte ? 'sem resposta' : plan ? (p.hoje.sem_lugar ? GV2.pl(p.hoje.sem_lugar, 'sem lugar no mapa', 'sem lugar no mapa') : ok && d.semHora ? GV2.pl(d.semHora, 'parada sem hora', 'paradas sem hora') : 'todas com hora') : (p.hoje.agenda && p.hoje.agenda.n ? GV2.resumoDosCompromissos(p.hoje.agenda) : 'nada na agenda');
     const j = ok ? d.jornada : null;
     let jT, jS, jC = '';
     if (j) { jT = j.n > 1 ? GV2.hhmm(j.ini) + '–' + GV2.hhmm(j.fim) + ' · ' + j.porta + ' min/porta' : GV2.hhmm(j.ini) + ' · 1º check-in'; jS = GV2.pl(j.n, 'check-in com prova', 'check-ins com prova'); }
@@ -82422,8 +82435,10 @@ GV2.render.v5PorPessoa = function (sit) {
     else { jT = 'nenhum check-in com prova'; jS = p.hoje.ultima_atividade || ''; jC = 't-mute'; }
     const oj = dOnt.estado === 'ok' && dOnt.jornada ? (dOnt.jornada.n > 1 ? GV2.hhmm(dOnt.jornada.ini) + '–' + GV2.hhmm(dOnt.jornada.fim) : GV2.hhmm(dOnt.jornada.ini)) : 'sem check-in';
     /* as visitas de ontem (todas com prova) e, ao lado, quanto do plano foi feito */
-    const ontemT = p.ontem.paradas_plano ? GV2.pl(p.ontem.visitas_com_prova, 'visita', 'visitas') + ' · plano ' + (p.ontem.feitas_do_plano || 0) + ' de ' + p.ontem.paradas_plano
-      : (p.ontem.visitas_com_prova ? GV2.pl(p.ontem.visitas_com_prova, 'visita', 'visitas') + ' · sem plano' : 'sem plano');
+    /* 15/10/26 (passada visual): "4 visitas · plano 4 de 6" cortava em 104 px; o número fica em
+       cima, o plano embaixo e a jornada no title */
+    const ontemT = p.ontem.visitas_com_prova ? GV2.pl(p.ontem.visitas_com_prova, 'visita', 'visitas') : (p.ontem.paradas_plano ? '0 visitas' : 'sem plano');
+    const ontemS = p.ontem.paradas_plano ? 'plano ' + (p.ontem.feitas_do_plano || 0) + ' de ' + p.ontem.paradas_plano : (p.ontem.visitas_com_prova ? 'sem plano' : '');
     const furou = p.ontem.paradas_plano > 0 && p.ontem.visitas_com_prova * 2 < p.ontem.paradas_plano;
     let acao;
     if (s.k === 'travou') acao = '<button type="button" class="gv2-v5-btn is-linha is-acao" data-gv2="ligar:' + p.id + '">Chamar</button>';
@@ -82435,12 +82450,14 @@ GV2.render.v5PorPessoa = function (sit) {
     const tag = p.id === melhor ? ' is-melhor' : p.id === pior ? ' is-pior' : '';
     const mes = R ? '<button type="button" class="gv2-v5-pp-c gv2-v8-ppmes is-' + R.cli.selo.k + '" data-gv2="v8neg:mes:' + p.id + '" title="' + GV2.e('clientes do mês · esperado ' + GV2.v8Num(R.cli.esp) + ' até hoje') + '"><b class="num">' + R.cli.feito + ' de ' + R.cli.meta + '</b><span class="gv2-v8-trilha"><em style="width:' + R.cli.pct.toFixed(1) + '%"></em><u style="left:' + R.cli.tick.toFixed(1) + '%"></u></span></button>' : '<span class="gv2-v5-pp-c">—</span>';
     const xS = fonte ? 'sem resposta' : (p.hoje.fora ? '+' + p.hoje.fora + ' ' + GV2.foraTxt(p.id) : 'com prova') + GV2.repHoje(p);
+    const r = p.hoje.repetidas || 0;
+    const xCurto = fonte ? 'sem resposta' : p.hoje.fora ? '+' + p.hoje.fora + (GV2.ruaPlanejada(p.id) ? ' na rua' : ' fora') : r ? GV2.pl(r, 'repetida', 'repetidas') : 'com prova';
     return '<div class="gv2-v5-pp-l' + tag + '">'
       + '<button type="button" class="gv2-v5-pp-p" data-gv2="pessoa:' + p.id + '" title="' + GV2.e('abrir ' + GV2.prim(p.nome) + ' na Pessoas (1:1, campo, funil)') + '">' + GV2.html.av(p) + '<span><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><small class="gv2-ellip">' + GV2.e((p.id === melhor ? 'melhor do mês · ' : p.id === pior ? 'mais longe do ritmo · ' : '') + p.praca) + '</small></span></button>' + mes
       + '<button type="button" class="gv2-v5-pp-c is-link" data-gv2="' + abre + '"><b class="num">' + GV2.e(planoT) + '</b><small class="' + (p.hoje.sem_lugar && !fonte ? 't-av' : '') + '">' + GV2.e(planoS) + '</small></button>'
-      + '<span class="gv2-v5-pp-c gv2-v5-pp-x"><b class="num' + (p.hoje.visitas_todas ? '' : ' t-dim') + '">' + GV2.e(x) + '</b><small>' + GV2.e(xS) + '</small></span>'
+      + '<span class="gv2-v5-pp-c gv2-v5-pp-x" title="' + GV2.e(x + ' visitas · ' + xS) + '"><b class="num' + (p.hoje.visitas_todas ? '' : ' t-dim') + '">' + GV2.e(x) + '</b><small>' + GV2.e(xCurto) + '</small></span>'
       + '<button type="button" class="gv2-v5-pp-c" data-gv2="' + abre + '"><b class="num ' + jC + '">' + GV2.e(jT) + '</b><small>' + GV2.e(jS) + '</small></button>'
-      + '<span class="gv2-v5-pp-c"><b class="num' + (furou ? ' t-av' : '') + '">' + GV2.e(ontemT) + '</b><small>' + GV2.e(oj) + '</small></span>'
+      + '<span class="gv2-v5-pp-c" title="' + GV2.e('ontem: ' + ontemT + (ontemS ? ' · ' + ontemS : '') + ' · ' + oj) + '"><b class="num' + (furou ? ' t-av' : '') + '">' + GV2.e(ontemT) + '</b><small>' + GV2.e(ontemS || oj) + '</small></span>'
       + '<button type="button" class="num gv2-v5-pp-n is-link" data-gv2="v8neg:quentes:' + p.id + '" title="os quentes de ' + GV2.e(GV2.prim(p.nome)) + '">' + p.quentes.length + '</button>'
       + '<button type="button" class="num gv2-v5-pp-n' + (p.travados.length >= 4 ? ' t-av' : '') + '" data-gv2="v8neg:travados:' + p.id + '" title="os travados de ' + GV2.e(GV2.prim(p.nome)) + '">' + p.travados.length + '</button>'
       + '<span class="gv2-v5-pp-a">' + acao + '</span></div>';
