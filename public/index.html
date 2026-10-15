@@ -9788,7 +9788,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -59094,7 +59094,7 @@ GV2.p3Ritmo = function (p) {
     const rot = GV2.DIAS[GV2.dow(d.iso)].toUpperCase() + ' ' + d.iso.slice(8, 10);
     let v, sub, cls = '';
     if (!d.planejadas && d.hoje) { v = 'sem rota'; sub = p.hoje.agenda && p.hoje.agenda.n ? GV2.resumoDosCompromissos(p.hoje.agenda) : 'hoje, nem agenda'; cls = 'is-av'; }
-    else if (d.passado) { const fur = Math.max(0, d.planejadas - d.provadas); v = GV2.deDe(d.provadas, d.planejadas); sub = d.planejadas ? (fur ? 'furou ' + fur : 'cumpriu') : (d.provadas ? 'visitas fora do plano' : 'nenhuma visita'); cls = d.planejadas && !fur ? 'is-ok' : fur || !d.planejadas ? 'is-av' : ''; }
+    else if (d.passado) { v = GV2.pl(d.todas || 0, 'visita', 'visitas'); sub = d.planejadas ? 'plano ' + d.provadas + ' de ' + d.planejadas : (d.todas ? 'sem plano' : 'nenhuma visita'); cls = (d.todas || 0) >= p.meta_visitas_dia ? 'is-ok' : 'is-av'; }
     else if (d.hoje) { v = d.provadas + ' de ' + d.planejadas; sub = (GV2.base.foraDaJornada ? 'dia encerrado' : 'até ' + GV2.hm()) + (GV2.v4Promessa(p) ? ' · ' + GV2.v4Promessa(p) : ''); cls = 'is-hoje'; }
     else if (!d.planejadas) { v = '—'; sub = 'ainda não montou'; cls = 'is-futuro'; }
     else { v = d.planejadas + ' planej.'; sub = 'futuro'; cls = 'is-futuro'; }
@@ -60912,12 +60912,13 @@ GV2.render.v5Semana = function () {
       if (!GV2.util(d.iso)) { feito += d.todas || 0; cls = 'is-sem'; v = '—'; s = d.todas ? 'feriado · fez ' + d.todas : 'feriado · não conta'; }
       else if (d.passado) {
         feito += d.todas || 0;
-        if (!d.planejadas) { cls = 'is-sem'; v = '—'; s = d.todas ? 'sem plano · ' + GV2.pl(d.todas, 'visita', 'visitas') : 'sem plano'; }
-        else if (d.provadas >= d.planejadas) { cls = 'is-ok'; v = d.provadas + ' de ' + d.planejadas; s = 'cumpriu'; }
-        else { cls = 'is-fur'; v = d.provadas + ' de ' + d.planejadas; s = 'furou ' + (d.planejadas - d.provadas); }
+
+        const pl = d.planejadas ? 'plano ' + d.provadas + ' de ' + d.planejadas : 'sem plano';
+        if (!d.planejadas && !d.todas) { cls = 'is-sem'; v = '—'; s = 'sem plano'; }
+        else { cls = (d.todas || 0) >= p.meta_visitas_dia ? 'is-ok' : 'is-fur'; v = GV2.pl(d.todas || 0, 'visita', 'visitas'); s = pl; }
       } else if (d.hoje) {
         feito += d.todas || 0; falta += Math.max(0, d.planejadas - d.provadas);
-        if (d.planejadas) { cls = 'is-hoje'; v = d.provadas + ' de ' + d.planejadas; s = b.foraDaJornada ? 'dia encerrado' : 'hoje'; }
+        if (d.planejadas || d.todas) { cls = 'is-hoje'; v = GV2.pl(d.todas || 0, 'visita', 'visitas'); s = (d.planejadas ? 'plano ' + d.provadas + ' de ' + d.planejadas : 'sem plano') + (b.foraDaJornada ? ' · encerrado' : ' · hoje'); }
         else { cls = 'is-sem'; v = '—'; s = p.hoje.agenda && p.hoje.agenda.n ? 'sem rota · ' + p.hoje.agenda.n + ' na agenda' : 'sem plano'; }
       } else {
         falta += d.planejadas;
@@ -60931,7 +60932,7 @@ GV2.render.v5Semana = function () {
     return '<div class="gv2-v5-gr-l"><b class="gv2-ellip">' + GV2.e(p.nome) + '</b>' + cels
       + '<span class="gv2-v5-gr-tot"><b class="num' + (ok ? ' t-ok' : '') + '">' + feito + ' + ' + falta + '</b><small>' + GV2.e('de ' + meta + ' · ' + (ok ? 'cobre a meta' : 'faltam ' + (meta - feito - falta))) + '</small></span></div>';
   }).join('');
-  const leg = '<div class="gv2-v5-leg is-pe"><span><i class="lg-q is-ok"></i>cumpriu o plano</span><span><i class="lg-q is-fur"></i>furou parte</span><span><i class="lg-q is-sem"></i>sem plano</span><span><i class="lg-q is-hoje"></i>hoje · em andamento</span><span><i class="lg-q is-plan"></i>planejado</span></div>';
+  const leg = '<div class="gv2-v5-leg is-pe"><span><i class="lg-q is-ok"></i>bateu a meta de visitas do dia</span><span><i class="lg-q is-fur"></i>abaixo da meta do dia</span><span><i class="lg-q is-sem"></i>sem plano</span><span><i class="lg-q is-hoje"></i>hoje · em andamento</span><span><i class="lg-q is-plan"></i>planejado</span></div>';
   return '<section class="card gv2-v5-gr"><div class="gv2-v5-cab"><b>Planejamento do time · semana de ' + GV2.e(b.semanaRot) + '</b><span>' + GV2.e('toda célula abre aquele dia · ' + (metaIgual ? 'meta ' + metas[0] + ' por dia útil, ' + metas[0] * uteis + ' na semana' : 'a meta de cada um por dia × ' + uteis) + (uteis < b.semana.length ? ' · feriado não conta' : '')) + '</span></div>'
     + '<div class="gv2-v5-gr-rola">' + cab + linhas + '</div>' + leg + '</section>';
 };
