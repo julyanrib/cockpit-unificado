@@ -331,13 +331,11 @@ tabelas.gv2_falta_etapa = [
   GV2.px.cache.vv = { estado: 'ok', em: '11:20', vis: { data: [] }, notas: { data: [] }, cli: { data: [] },
     leads: { data: [{ lat: -20.31, lng: -40.29, bairro: 'Praia do Canto' }, { lat: -20.32, lng: -40.3, bairro: 'PRAIA DO CANTO' }, { lat: -20.33, lng: -40.31, bairro: 'Centro' }] } };
   GV2.estado.rxm = 'praca'; GV2.estado.pr = 'vv'; GV2.estado.cz = 'Saipos';
+  /* Território v2 (15/10/26): a Praça (Onde atacar, calor, armas) saiu da aba; o "Saipos" da gaveta
+     de Negócios (pxsis) continua abrindo o painel do concorrente, agora por cima do Território v2 */
   let px = '';
-  /* v5: a Praça mora no Território (Onde atacar + o que ela já tinha, abaixo) */
-  try { px = GV2.render.terr(); } catch (e) { falhas.push('Território: ' + e.message); }
-  if (process.env.DEBUG_PX) require('fs').writeFileSync(process.env.DEBUG_PX, px);
-  checar('a Praça desenha: Onde atacar por bairro (grafias juntas), Contra quem, armas e o painel do concorrente',
-    /Praia do Canto/.test(px) && /<span class="num cel-forte">2<\/span>/.test(px) && /As armas que faltam/.test(px) && /Concorrente · Vitória/.test(px) && /Cobrar os 2/.test(px));
-  checar('Visitas, Clientes e Em queda sem ponto na praça viram "sem dado", nunca zero', (px.match(/sem dado<\/span>/g) || []).length === 3, String((px.match(/sem dado<\/span>/g) || []).length));
+  try { px = GV2.render.t10Concorrente(); } catch (e) { falhas.push('Território · concorrente: ' + e.message); }
+  checar('o clique no sistema abre o painel do concorrente por cima do Território v2', /Concorrente · Vitória/.test(px) && /<h2>Saipos<\/h2>/.test(px) && /data-gv2="pxcz:"/.test(px), px.slice(0, 200));
   /* Pessoas › Funil e o mapa grande (06/10/26) */
   GV2.estado.cz = null; GV2.estado.aba = 'pessoas'; GV2.estado.pmodo = 'funil'; GV2.estado.pessoa = '1';
   /* v5: o funil da pessoa (Para puxar, Cobrar) abre na gaveta, pelo cartão do funil ou pelo Mês */
@@ -693,7 +691,6 @@ tabelas.gv2_falta_etapa = [
   try { GV2.estado.destaque = '1'; mg = GV2.render.mapaGrande(); } catch (e) { falhas.push('mapa grande: ' + e.message); }
   checar('mapa grande: o time inteiro na lista e o mapa "grande"', (mg.match(/data-gv2="mg:pessoa:/g) || []).length === 3 && /data-gv2-mapa="grande"/.test(mg) && /Ana Lima/.test(mg));
   GV2.estado.destaque = null;
-  checar('só um bloco vermelho na Praça (as armas que faltam)', (px.match(/is-falta"/g) || []).length <= 1 && /gv2-px-l3 is-falta/.test(px));
 
   /* v7 (13/10/26): Rua › Semana passada — o placar fechado contra a meta do funil, o que ficou quente e se está no plano desta semana */
   {
@@ -975,17 +972,19 @@ tabelas.gv2_falta_etapa = [
     g.supa = { from: function (tab) { return { update: function (c) { return { in: function (col, lista) { return { select: async function () { pedidos.push({ tab: tab, c: c, ids: lista.slice() }); return { data: lista.map(function (i) { return { id: i }; }), error: null }; } }; } }; } }; } };
     GV2.pintar = function () {}; GV2.ir = function (a) { GV2.estado.aba = a; };
     GV2.estado.aba = 'terr'; GV2.estado.v9g = null;
-    let h = ''; try { h = GV2.render.terr(); } catch (e) { falhas.push('v9 terr: ' + e.message); }
-    checar('v9 Território: 4 números com "i", a frase com Decidir dono, Abastecer, Decidir, Radar e Ações desta sessão',
-      (h.match(/class="gv2-v5-kpi gv2-v9-kpi"/g) || []).length === 4 && /data-gv2="v9g:dono">Decidir dono</.test(h) && /2 · Abastecer/.test(h) && /3 · Decidir/.test(h) && /4 · Radar de leads/.test(h) && /Ações desta sessão/.test(h));
-    checar('v9 Território: o mapa de calor tem altura própria (o .gv2-px-mapa base é flex:1 e saiu com 0 px em 13/10)', /\n\.gv2-v9-terr \.gv2-px-mapa\{height:[1-9]\d{2}px;flex:none;\}/.test(tpl));
-    checar('v9 Território: nenhum botão abre a tela antiga (sem v5rt7, sem "Prospecção completa", sem "munição")',
-      !/data-gv2="v5rt7|Prospecção completa|munição|torneira/.test(h));
+    /* Território v2 (15/10/26): a tela é a do territ.zip (scripts/testar-territorio-v2.js mede as
+       regras); aqui, que ela desenha neste mundo e que nenhum botão leva à tela v9 nem à busca paga.
+       O motor de escrita da v9 (gravar, registrar, desfazer) continua e é medido logo abaixo. */
+    GV2.t10 = { lendo: false, erro: null, em: Date.now(), vis: [], cli: {} };
+    let h = ''; try { h = GV2.render.terr(); } catch (e) { falhas.push('território v2: ' + e.message); }
+    checar('Território v2: 5 números, Onde agir, Territórios, Por executivo e Contra quem',
+      (h.match(/class="gv2-t10-kpi[" ]/g) || []).length === 5 && /<b>Onde agir<\/b>/.test(h) && /<b>Territórios/.test(h) && /<b>Por executivo<\/b>/.test(h) && /<b>Contra quem<\/b>/.test(h), h.slice(0, 300));
+    checar('Território v2: nenhum botão abre a tela antiga nem a busca paga (v5rt7, v9g, Importar, munição)',
+      !/data-gv2="v5rt7|data-gv2="v9g|Importar|Prospecção completa|munição|torneira/.test(h));
     const P = GV2.v9Pendencias();
     const fora = P.filter(function (x) { return x.tipo === 'fora'; });
     checar('v9 Decidir: conta de quem saiu entra uma vez por grafia de cidade, e só a que ainda pode mudar (na_rota fica)',
       fora.length === 1 && fora[0].n === 2 && fora[0].titulo === 'Nova Iguaçu/RJ', JSON.stringify(fora.map(function (x) { return [x.n, x.titulo]; })));
-    checar('v9 Abastecer: abaixo de 1 semana = "importe hoje" com Importar em destaque', /importe hoje/.test(h) && h.indexOf('data-gv2="v9g:imp:' + ids[0] + '">Importar') > 0);
     GV2.v9Comando('v9g', ['v9g', 'contas', ids[0]]);
     let gav = GV2.render.v9Gav();
     checar('v9 Contas: abre na pessoa com o total e o rodapé; marcar conta muda o número do Aprovar',
