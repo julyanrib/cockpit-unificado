@@ -14292,7 +14292,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -61490,6 +61490,25 @@ async function v5CarregarAnotacoesDoApp(l) {
    quem vê: o executivo, as dele; o gestor, todas. Sem ficha, diz desde quando mede. */
 /* os rótulos da ficha de rua do app (src/utils/fichaDeRua.ts): o banco guarda o id */
 const V5_COMO_FOI = { falou_com_decisor: 'Falou com quem decide', decisor_ausente: 'Quem decide não estava', sem_interesse: 'Não quis conversar', estabelecimento_fechado: 'Estava fechado' };
+/* demo com decisor conta UMA por restaurante (como o SQL _demos_com_decisor): "Reunião hoje" de
+   manhã e "Apresentei agora" à tarde no mesmo cliente são uma demo, não duas (14/10/26) */
+function v5DemosDistintas(fichas) {
+  const vistos = {};
+  let n = 0;
+  (fichas || []).forEach(function (f) {
+    if (f.como_foi !== 'falou_com_decisor' || f.proximo !== 'reuniao') return;
+    const k = f.client_id ? String(f.client_id) : 'sem-' + (n + Object.keys(vistos).length);
+    if (vistos[k]) return;
+    vistos[k] = true; n++;
+  });
+  return n;
+}
+/* o "e agora" com o tipo: "Apresentei agora" (reuniao + follow-up) e retorno (proximo nulo) */
+function v5ProximoTexto(f) {
+  if (f.proximo === 'reuniao' && f.proximo_tipo === 'follow-up') return 'apresentou na hora · retorno';
+  if (!f.proximo && f.proximo_tipo === 'follow-up') return 'retorno';
+  return f.proximo ? (V5_PROXIMO[f.proximo] || f.proximo) : '';
+}
 const V5_PROXIMO = { reuniao: 'reunião', voltar7: 'voltar para nova visita', ligar_amanha: 'ligar amanhã', sem_interesse: 'sem interesse', voltar_horario: 'voltar no horário do dono', voltar_amanha: 'voltar amanhã' };
 async function v5CarregarRuaDoNegocio(l) {
   const alvo = document.getElementById('v5FichaRua');
@@ -61498,7 +61517,7 @@ async function v5CarregarRuaDoNegocio(l) {
   let fichas = [];
   try {
     const r = await supa.from('fichas_de_rua')
-      .select('ocorrido_em, como_foi, proximo, proximo_em, decisor_nome, decisor_papel, horario_dono, sistema, dor, com_foto, declarada, etapa_depois')
+      .select('ocorrido_em, como_foi, proximo, proximo_em, proximo_tipo, decisor_nome, decisor_papel, horario_dono, sistema, dor, com_foto, declarada, etapa_depois')
       .eq('deal_id', String(l.id)).order('ocorrido_em', { ascending: false }).limit(5);
     if (r.error) throw r.error;
     fichas = r.data || [];
@@ -61529,7 +61548,7 @@ async function v5CarregarRuaDoNegocio(l) {
       ].filter(Boolean);
       return '<div class="v5-rua-item"><i class="' + (f.declarada ? 'is-declarada' : '') + '"></i><div>'
         + '<b>' + v5Esc(V5_COMO_FOI[f.como_foi] || f.como_foi || 'visita registrada') + '</b>'
-        + '<span>' + v5Esc([quando(f.ocorrido_em), f.etapa_depois ? 'foi para ' + (STAGE_LABELS[f.etapa_depois] || f.etapa_depois) : '', f.proximo ? 'e agora: ' + (V5_PROXIMO[f.proximo] || f.proximo) + (f.proximo_em ? ' em ' + String(f.proximo_em).split('-').reverse().slice(0, 2).join('/') : '') : ''].filter(Boolean).join(' · ')) + '</span>'
+        + '<span>' + v5Esc([quando(f.ocorrido_em), f.etapa_depois ? 'foi para ' + (STAGE_LABELS[f.etapa_depois] || f.etapa_depois) : '', (f.proximo || f.proximo_tipo) ? 'e agora: ' + v5ProximoTexto(f) + (f.proximo_em ? ' em ' + String(f.proximo_em).split('-').reverse().slice(0, 2).join('/') : '') : ''].filter(Boolean).join(' · ')) + '</span>'
         + (f.dor ? '<span>Dor: ' + v5Esc(f.dor) + '</span>' : '')
         + '<div class="v5-linha-chips">' + chips.map(function (c) { return '<span class="v5-tag">' + v5Esc(c) + '</span>'; }).join('') + '</div>'
         + '</div></div>';
@@ -61674,7 +61693,7 @@ async function v5PreencherPlacarHoje(tentativa) {
       supa.from('planos_semanais').select('owner_id, fechado_em').eq('data_segunda', segunda),
       supa.from('fotos_visita').select('id', { count: 'exact', head: true }).gte('criado_em', ini),
       /* demo com decisor: a mesma regra dos Portões do executivo (fichas de rua de hoje) */
-      supa.from('fichas_de_rua').select('como_foi, proximo').gte('ocorrido_em', ini),
+      supa.from('fichas_de_rua').select('client_id, como_foi, proximo').gte('ocorrido_em', ini),
     ]);
     const itens = [];
     if (vis.error) itens.push({ rotulo: 'CHECK-INS HOJE', numero: null, legenda: 'não consegui ler as visitas' });
@@ -61710,7 +61729,7 @@ async function v5PreencherPlacarHoje(tentativa) {
     }
     itens.push(fichasHoje.error
       ? { rotulo: 'DEMOS COM DECISOR', numero: null, legenda: 'não consegui ler as fichas de rua' }
-      : { rotulo: 'DEMOS COM DECISOR', numero: (fichasHoje.data || []).filter(function (f) { return f.como_foi === 'falou_com_decisor' && f.proximo === 'reuniao'; }).length, cor: 'var(--dark-ink)', legenda: 'falou com quem decide e marcou reunião · ficha de rua' });
+      : { rotulo: 'DEMOS COM DECISOR', numero: v5DemosDistintas(fichasHoje.data), cor: 'var(--dark-ink)', legenda: 'falou com quem decide e marcou reunião ou apresentou · 1 por restaurante · ficha de rua' });
     itens.push(fotos.error
       ? { rotulo: 'FOTOS', numero: null, legenda: 'não consegui ler as fotos' }
       : { rotulo: 'FOTOS', numero: fotos.count || 0, cor: 'var(--dark-ink)', legenda: 'medindo desde 25/09' });
@@ -61763,7 +61782,7 @@ function v5VerHojeNoMapa() {
 /* dono: ownerId do HubSpot (uma pessoa) ou null (o time inteiro, só gestor) */
 async function v5LerRua(dono) {
   const desde = new Date(Date.now() - 30 * 86400000).toISOString();
-  let qf = supa.from('fichas_de_rua').select('como_foi, proximo, com_foto, declarada, owner_id').gte('ocorrido_em', desde);
+  let qf = supa.from('fichas_de_rua').select('client_id, como_foi, proximo, com_foto, declarada, owner_id').gte('ocorrido_em', desde);
   if (dono) qf = qf.eq('owner_id', String(dono));
   let perfis = null;
   const [f, v, p] = await Promise.all([
@@ -61781,7 +61800,7 @@ async function v5LerRua(dono) {
     decisor: fichas.filter(function (x) { return x.como_foi === 'falou_com_decisor'; }).length,
     /* demo DOS DECISORES: falou com quem decide E marcou reunião (a mesma regra dos Portões).
        Contar toda ficha com reunião passava de 100% dos decisores (auditoria 28/09). */
-    demo: fichas.filter(function (x) { return x.como_foi === 'falou_com_decisor' && x.proximo === 'reuniao'; }).length,
+    demo: v5DemosDistintas(fichas),
     visitas: visitas.length,
     comGps: visitas.filter(function (x) { return !x.declarada; }).length,
     comFoto: fichas.filter(function (x) { return x.com_foto; }).length,
@@ -61800,7 +61819,7 @@ function v5FunilDePortaHTML(r, titulo) {
     + caixa('Demo', r.demo, pct(r.demo, r.decisor) + ' dos decisores')
     + '</div>'
     + '<div class="v5-qualidade"><span class="v5-rotulo">Qualidade do registro</span>'
-    + '<span>' + r.visitas + ' visitas · <b>' + pct(r.comGps, r.visitas) + '</b> com GPS · <b>' + pct(r.comFoto, r.portas) + '</b> das fichas com foto · <b>'
+    + '<span>' + r.visitas + ' visitas · <b>' + pct(r.comGps, r.visitas) + '</b> com GPS · <b>' + pct(r.comFoto, r.portas) + '</b> das fichas com foto de prova · <b>'
     + pct(r.portas, r.visitas) + '</b> das visitas com ficha</span></div></section>';
 }
 let V5_RUA_CACHE = { chave: null, em: 0, dado: null };
@@ -62686,7 +62705,7 @@ async function v5PreencherPortoes(tentativa) {
     const [plano, vis, fichas, vdd, metaSrv, demosSrv] = await Promise.all([
       supa.from('planos_semanais').select('fechado_em').eq('owner_id', String(sessaoAtual.ownerId)).eq('data_segunda', segunda).maybeSingle(),
       meuId ? supa.from('client_visits').select('declarada').eq('visited_by', meuId).gte('visited_at', ini) : Promise.resolve({ data: [] }),
-      supa.from('fichas_de_rua').select('como_foi, proximo').eq('owner_id', String(sessaoAtual.ownerId)).gte('ocorrido_em', ini),
+      supa.from('fichas_de_rua').select('client_id, como_foi, proximo').eq('owner_id', String(sessaoAtual.ownerId)).gte('ocorrido_em', ini),
       meuId ? supa.rpc('visitas_do_dia', { p_pessoa: meuId, p_dia: hoje }) : nada,
       meuId ? supa.rpc('meta_visitas', { p_pessoa: meuId, p_dia: hoje }) : nada,
       meuId ? supa.rpc('demos_com_decisor', { p_pessoa: meuId, p_de: hoje, p_ate: hoje }) : nada,
@@ -62723,7 +62742,7 @@ async function v5PreencherPortoes(tentativa) {
     const nprov = vddOk ? Number(vdd.data.provadas) || 0 : null;
     const decl = (vis.data || []).filter(function (x) { return x.declarada; }).length;
     const nd = !demosSrv.error && demosSrv.data != null ? Number(demosSrv.data) || 0
-      : (fichas.data || []).filter(function (f) { return f.como_foi === 'falou_com_decisor' && f.proximo === 'reuniao'; }).length;
+      : v5DemosDistintas(fichas.data);
     /* D1: a meta conta a visita feita; a prova vem com o mesmo peso, igual à pílula do mapa */
     const legVis = nprov != null && nv ? (nprov + (nprov === 1 ? ' provada' : ' provadas') + (nv - nprov ? ' · ' + (nv - nprov) + ' sem prova' : ''))
       : (decl ? decl + ' sem GPS (declarada)' : 'check-ins do mapa');
@@ -78366,7 +78385,8 @@ GV2.armasDe = function (n, porDeal) {
   if (!a.sistema) a.faltam.push('sistema');
   if (!a.dor) a.faltam.push('dor');
   if (!a.decisor) a.faltam.push('decisor');
-  if (!a.horario) a.faltam.push('horario');
+  /* O HORÁRIO NÃO É COBRADO (14/10/26): a ficha da rua deixou de perguntar ("app menos tela");
+     ele continua aparecendo quando se sabe, mas não conta como arma que falta */
   n.arma = a;
   return a;
 };
@@ -78506,9 +78526,11 @@ GV2.pracaArmas = function (k) {
   const linhas = P.pessoas.map(function (p) {
     const ns = b.negocios.filter(function (n) { return n.dono === p.id && n.etapa_idx >= 3; });
     const c = { sistema: 0, dor: 0, decisor: 0, horario: 0 };
-    ns.forEach(function (n) { (n.arma ? n.arma.faltam : ['sistema', 'dor', 'decisor', 'horario']).forEach(function (f) { c[f]++; }); });
-    const pulou = (b.faltasEtapa || []).filter(function (x) { return String(x.exec_id) === p.id && x.etapa !== 'armas' && (x.faltou || []).length && GV2.mesDe(x.criado_em) === mes; }).length;
-    const tot = c.sistema + c.dor + c.decisor + c.horario + pulou;
+    ns.forEach(function (n) { (n.arma ? n.arma.faltam : ['sistema', 'dor', 'decisor']).forEach(function (f) { if (f in c) c[f]++; }); });
+    /* "avançou sem preencher" só quando faltou sistema, dor ou decisor: o app avança com um toque
+       e grava o que faltou, e o horário saiu da cobrança */
+    const pulou = (b.faltasEtapa || []).filter(function (x) { return String(x.exec_id) === p.id && x.etapa !== 'armas' && (x.faltou || []).some(function (k) { return k !== 'horario'; }) && GV2.mesDe(x.criado_em) === mes; }).length;
+    const tot = c.sistema + c.dor + c.decisor + pulou;
     return { p: p, ns: ns, c: c, pulou: pulou, tot: tot };
   }).sort(function (x, y) { return y.tot - x.tot || y.ns.length - x.ns.length || x.p.nome.localeCompare(y.p.nome); });
   /* as fichas desde 28/09 (a ficha nova da rua) dos executivos da praça */
@@ -78521,7 +78543,7 @@ GV2.pracaArmas = function (k) {
     fichas: { n: fs.length, sis: fs.filter(comS).length, dor: fs.filter(function (f) { return GV2.limpoArma(f.dor); }).length, dec: dec.length, decSis: dec.filter(comS).length } };
 };
 GV2.textoArmas = function (l) {
-  const R = { sistema: 'sem sistema', dor: 'sem dor', decisor: 'sem decisor', horario: 'sem horário' };
+  const R = { sistema: 'sem sistema', dor: 'sem dor', decisor: 'sem decisor' };
   const partes = Object.keys(R).filter(function (k) { return l.c[k]; }).map(function (k) { return l.c[k] + ' ' + R[k]; });
   return 'Oi ' + GV2.prim(l.p.nome) + '! Nos seus ' + GV2.pl(l.ns.length, 'negócio de Demo em diante', 'negócios de Demo em diante') + ' faltam armas: ' + GV2.lista(partes)
     + (l.pulou ? (partes.length ? ', e ' : '') + GV2.pl(l.pulou, 'avanço sem preencher', 'avanços sem preencher') + ' no mês' : '')
@@ -78990,6 +79012,8 @@ GV2.render.pxArmas = function (X) {
   const cob = A.linhas.filter(function (l) { return l.tot > 0; });
   const cel = function (l, k) {
     if (!l.ns.length) return '<span class="t-faint">—</span>';
+    /* horário: informativo desde 14/10/26 (a ficha não pergunta), sem pílula de cobrança */
+    if (k === 'horario') return '<span class="t-faint">—</span>';
     const n = l.c[k];
     return '<span class="gv2-px-pill ' + (n ? 'is-av' : 'is-ok') + '">' + (n ? n + ' de ' + l.ns.length : 'ok') + '</span>';
   };
@@ -79234,7 +79258,7 @@ GV2.pxCobrar = async function (id) {
   if (!X) return;
   const l = X.armas.linhas.find(function (y) { return y.p.id === id; });
   if (!l || !l.tot) return;
-  const ok = await GV2.recado(l.p, GV2.textoArmas(l) || 'Completar as armas dos negócios de Demo em diante: ' + ['sistema', 'dor', 'decisor', 'horario'].filter(function (k) { return l.c[k]; }).map(function (k) { return l.c[k] + ' sem ' + (k === 'horario' ? 'horário' : k); }).join(', ') + '.');
+  const ok = await GV2.recado(l.p, GV2.textoArmas(l) || 'Completar as armas dos negócios de Demo em diante: ' + ['sistema', 'dor', 'decisor'].filter(function (k) { return l.c[k]; }).map(function (k) { return l.c[k] + ' sem ' + (k === 'horario' ? 'horário' : k); }).join(', ') + '.');
   if (ok) GV2.marcarCobrado('armas:' + id);
   GV2.pintar();
 };
@@ -79245,7 +79269,7 @@ GV2.pxCobrarLote = async function () {
   let ok = 0, i = 0;
   for (const l of ls) {
     i++; GV2.estado.lote = 'Enviando ' + i + ' de ' + ls.length + '…'; GV2.pintar();
-    if (await GV2.recado(l.p, 'Completar as armas dos negócios de Demo em diante: ' + ['sistema', 'dor', 'decisor', 'horario'].filter(function (k) { return l.c[k]; }).map(function (k) { return l.c[k] + ' sem ' + (k === 'horario' ? 'horário' : k); }).join(', ') + '.')) { ok++; GV2.marcarCobrado('armas:' + l.p.id); }
+    if (await GV2.recado(l.p, 'Completar as armas dos negócios de Demo em diante: ' + ['sistema', 'dor', 'decisor'].filter(function (k) { return l.c[k]; }).map(function (k) { return l.c[k] + ' sem ' + (k === 'horario' ? 'horário' : k); }).join(', ') + '.')) { ok++; GV2.marcarCobrado('armas:' + l.p.id); }
   }
   GV2.estado.lote = null;
   GV2.pintar();
@@ -81502,6 +81526,14 @@ DV.instalar();
    (C6) e aparece em "Fora do plano". Fontes: rotas_da_semana + visitas_com_prova (GV2.rotaLer),
    fichas_de_rua (como foi, decisor), DATA.agenda (HubSpot). Sem crase (guarda 26). */
 GV2.V5_COMO = { falou_com_decisor: 'Falou com o decisor', decisor_ausente: 'Decisor ausente', estabelecimento_fechado: 'Estava fechado', sem_interesse: 'Sem interesse' };
+/* o "e agora" da ficha (14/10/26): o "Apresentei agora" do app grava proximo 'reuniao' (conta
+   como demo com decisor) com proximo_tipo 'follow-up'; a visita de retorno grava proximo nulo */
+GV2.proxTxt = function (f) {
+  if (!f) return null;
+  if (f.proximo === 'reuniao' && f.proximo_tipo === 'follow-up') return 'apresentou na hora';
+  if (!f.proximo && f.proximo_tipo === 'follow-up') return 'retorno marcado';
+  return f.proximo ? GV2.V5_PROX[f.proximo] || f.proximo : null;
+};
 GV2.V5_PROX = { voltar7: 'volta em 7 dias', ligar_amanha: 'liga amanhã', voltar_horario: 'volta no horário do dono', reuniao: 'reunião marcada', sem_interesse: 'sem interesse', voltar_amanha: 'volta amanhã' };
 GV2.V5_PROP = { funil: 'funil', follow: 'follow-up', nova: 'nova', rua: 'prospecção', relac: 'relacionamento' };
 GV2.V5_IC = {
@@ -81609,7 +81641,7 @@ GV2.v5DiaConta = function (p, iso, c) {
   plano.forEach(function (it) { if (it.client_id && it.lat != null) ondeDe[it.client_id] = { lat: Number(it.lat), lng: Number(it.lng) }; });
   const fichaTxt = function (f) {
     if (!f) return 'sem como foi';
-    const como = [GV2.V5_COMO[f.como_foi] || f.como_foi, f.proximo ? GV2.V5_PROX[f.proximo] || f.proximo : null].filter(Boolean).join(' · ');
+    const como = [GV2.V5_COMO[f.como_foi] || f.como_foi, GV2.proxTxt(f)].filter(Boolean).join(' · ');
     const dec = String(f.decisor_nome || '').trim() ? 'decisor: ' + String(f.decisor_nome).trim() + (f.decisor_papel ? ', ' + String(f.decisor_papel).toLowerCase() : '') : f.como_foi === 'falou_com_decisor' ? null : 'sem decisor';
     return [como || 'sem como foi', dec].filter(Boolean).join(' · ');
   };
@@ -81784,7 +81816,7 @@ GV2.render.v5Dia = function () {
     let s, sAv = false, h = '', hCls = '', nCls;
     if (x.grupo === 0) {
       const f = x.ficha;
-      const como = f ? [GV2.V5_COMO[f.como_foi] || f.como_foi, f.proximo ? GV2.V5_PROX[f.proximo] || f.proximo : null].filter(Boolean).join(' · ') : null;
+      const como = f ? [GV2.V5_COMO[f.como_foi] || f.como_foi, GV2.proxTxt(f)].filter(Boolean).join(' · ') : null;
       const dec = f ? (String(f.decisor_nome || '').trim() ? 'decisor: ' + String(f.decisor_nome).trim() + (f.decisor_papel ? ', ' + String(f.decisor_papel).toLowerCase() : '') : f.como_foi === 'falou_com_decisor' ? null : 'sem decisor') : null;
       s = [x.prova, como || 'sem como foi', dec].filter(Boolean).join(' · ');
       sAv = !f || x.declarada;
@@ -83683,7 +83715,7 @@ GV2.render.v6GavPontos = function () {
     + it(3, 'Visita na rua', 'com prova: check-in com GPS até 200 m (foto só quando o GPS não confirma) · cada restaurante uma vez na semana · sem teto por dia', 3)
     + '<div class="gv2-v6-texto"><small>Prêmio</small><span>O 1º da semana recebe <b>R$ 250</b>. Visita e demo contam até sexta às 23:59; venda, até domingo às 23:59. O ganhador fica gravado na segunda às 08:00, aqui e no app. O pagamento é com o financeiro.</span>'
     + '<small>Desempate</small><span>mais vendas → mais demos → mais visitas</span>'
-    + '<small>Não conta</small><span>visita declarada sem prova · voltar no mesmo restaurante na semana · a 7ª visita em diante no mesmo dia · a demo do negócio que fechou na mesma semana (conta só a venda) · reunião marcada no app ou no HubSpot sem o negócio entrar em Demo/Proposta · negócio que sai de Fechado antes do fechamento</span></div>'
+    + '<small>Não conta</small><span>visita declarada sem prova · voltar no mesmo restaurante na semana · a demo do negócio que fechou na mesma semana (conta só a venda) · reunião marcada no app ou no HubSpot sem o negócio entrar em Demo/Proposta · negócio que sai de Fechado antes do fechamento</span></div>'
     + conta + '<span class="gv2-v6-fonte">Fonte: HubSpot (Fechado) · client_meetings (desfecho) · visitas_com_prova · uma função só: pontos_da_semana</span>';
 };
 
