@@ -109,8 +109,12 @@ const CIDADES = (() => {
     if (!c.donos.some(d => d.area.todoOMunicipio) && comBairro.length) {
       cfg.soBairros = true;
       cfg.bairrosFiltro = Array.from(new Set(comBairro.flatMap(d => (d.area.bairros || []).map(b => String(b).replace(/\s*\(.*\)\s*$/, '').trim())).filter(Boolean)));
-      const chaves = comBairro.flatMap(d => (d.area.bairros || []).map(semAcentoBairro)).filter(Boolean);
-      cfg.bairroTemDono = b => { const alvo = ' ' + semAcentoBairro(b) + ' '; return chaves.some(k => alvo.indexOf(' ' + k + ' ') >= 0); };
+      /* A MESMA REGRA DO ROTEADOR (15/10/26). O filtro por pedaço do nome deixava passar "Chácara
+         Santana" (Zona Sul) por causa de "Santana" (Zona Norte), e o roteador, que casa o bairro
+         exato, deixava sem dono 47 recém-abertos pagos. Agora só passa o que o roteador entrega a
+         alguém: o que não tem dono nem é importado. */
+      const { regraDoTerritorio } = require('../lib/territorios.js');
+      cfg.bairroTemDono = b => { const r = regraDoTerritorio(c.municipio, b); return !!(r && r.owner); };
     }
     if (n > 1 && comBairro.length > 1) {
       /* ══ UM BAIRRO, UM DONO ═══════════════════════════════════════════════════════
