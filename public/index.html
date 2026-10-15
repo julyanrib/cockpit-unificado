@@ -9788,7 +9788,7 @@ button.gv2-v9-fc-c:hover{background:var(--gv2-hov);border-color:var(--gv2-line-b
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -56128,6 +56128,7 @@ GV2.temRua = function (p) { return p.hoje.paradas_plano > 0 || (p.hoje.visitas_t
 
 GV2.ruaDia = {};
 GV2.ruaPlanejada = function (id, iso) { return !!GV2.ruaDia[String(id) + '|' + (iso || GV2.hojeIso)]; };
+GV2.ruaVagas = function (paradas, meta) { return Math.max(0, (Number(meta) || 6) - (Number(paradas) || 0)); };
 GV2.foraTxt = function (id, iso) { return GV2.ruaPlanejada(id, iso) ? 'prospecção planejada' : 'fora do plano'; };
 GV2.semRota = function (p) { const a = p && p.hoje && p.hoje.agenda; const pr = p && GV2.ruaPlanejada(p.id) ? 'prospecção planejada' : ''; return a && a.n ? (pr || 'sem rota') + ' · ' + GV2.resumoDosCompromissos(a) : pr || 'sem plano nem agenda'; };
 GV2.semRotaHoje = function (p) { const a = p && p.hoje && p.hoje.agenda; const pr = p && GV2.ruaPlanejada(p.id) ? 'prospecção planejada hoje' : ''; return a && a.n ? (pr || 'sem rota hoje') + ' · ' + GV2.resumoDosCompromissos(a) : pr || 'sem plano nem agenda hoje'; };
@@ -56334,10 +56335,19 @@ GV2.montar = async function (so) {
     const id = String(r.ownerId);
     const s = semana.find(function (x) { return String(x.ownerId) === id; }) || { dias: [] };
     const a = anterior.find(function (x) { return String(x.ownerId) === id; }) || { dias: [] };
-    const dHoje = idxHoje >= 0 ? (s.dias[idxHoje] || {}) : {};
+    let dHoje = idxHoje >= 0 ? (s.dias[idxHoje] || {}) : {};
 
-    const dOntem = (ontemNaAnterior ? a.dias[GV2.dow(ontemIso) - 1] : s.dias[diasSemana.indexOf(ontemIso)]) || {};
+    let dOntem = (ontemNaAnterior ? a.dias[GV2.dow(ontemIso) - 1] : s.dias[diasSemana.indexOf(ontemIso)]) || {};
     const meta = Number(dHoje.meta) || Number((s.dias.find(function (d) { return d.meta; }) || {}).meta) || 6;
+
+    const comRua = function (d, iso) {
+      if (!d || !iso || !GV2.ruaPlanejada(id, iso)) return d || {};
+      const pl = Number(d.planejadas) || 0, fp = Number(d.feitasDoPlano) || 0, pv = Number(d.provadas) || 0;
+      const rua = GV2.ruaVagas(pl, meta);
+      return Object.assign({}, d, { planejadas: pl + rua, feitasDoPlano: fp + Math.min(Math.max(0, pv - fp), rua), rua: rua });
+    };
+    dHoje = comRua(dHoje, agora.iso);
+    dOntem = comRua(dOntem, ontemIso);
     const ramp = typeof rampDoOwner === 'function' ? rampDoOwner(id) : null;
     const checks = (mapa.checkins || []).filter(function (c) { return String(c.ownerId) === id; });
     const ult = checks[checks.length - 1];
@@ -56357,7 +56367,7 @@ GV2.montar = async function (so) {
 
       .sort(function (x, y) { return (x.feita ? 0 : x.hora ? 1 : 2) - (y.feita ? 0 : y.hora ? 1 : 2) || String(x.hora || '99').localeCompare(String(y.hora || '99')); });
     const semanaP = diasSemana.map(function (iso, i) {
-      const d = s.dias[i] || {};
+      const d = comRua(s.dias[i] || {}, iso);
 
       return { iso: iso, planejadas: Number(d.planejadas) || 0, provadas: Number(d.feitasDoPlano) || 0, todas: Number(d.provadas) || 0, fora: Math.max(0, (Number(d.provadas) || 0) - (Number(d.feitasDoPlano) || 0)), feitasDoPlano: Number(d.feitasDoPlano) || 0, semLugar: Number(d.semLugar) || 0, leadNovo: Number(d.provadasLeadNovo) || 0, leadSemFoto: Number(d.provadasLeadNovoSemFoto) || 0, contatos: Number(d.contatos) || 0, hoje: iso === agora.iso, passado: iso < agora.iso };
     });
@@ -60789,7 +60799,10 @@ GV2.v5DiaConta = function (p, iso, c) {
 
     jornada = { n: n, ini: ini, fim: fim, min: min, porta: porta, colados: n >= 4 && porta != null && porta < 10 };
   }
-  const x = itens.filter(function (i) { return i.feita; }).length;
+
+  const rua = GV2.ruaPlanejada && GV2.ruaPlanejada(p.id, iso) ? GV2.ruaVagas(itens.length, p.meta_visitas_dia) : 0;
+  const ruaFeitas = Math.min(foraVis.length, rua);
+  const x = itens.filter(function (i) { return i.feita; }).length + ruaFeitas;
 
   const nomeDe = {};
   plano.forEach(function (it) { if (it.client_id) nomeDe[it.client_id] = it.nome; });
@@ -60808,7 +60821,7 @@ GV2.v5DiaConta = function (p, iso, c) {
   return {
     fotos: fotos, checkins: vis.length,
     estado: 'ok', iso: iso, hoje: iso === hoje, passado: iso < hoje, futuro: iso > hoje, agoraMin: agoraMin,
-    itens: itens, x: x, y: itens.length, semLugar: itens.filter(function (i) { return i.grupo === 3; }).length,
+    itens: itens, x: x, y: itens.length + rua, rua: rua, ruaFeitas: ruaFeitas, semLugar: itens.filter(function (i) { return i.grupo === 3; }).length,
     semHora: itens.filter(function (i) { return i.grupo === 2; }).length,
     visitas: vis, provadas: provadas.length,
     fora: foraVis.map(function (v) { return { nome: b.nomeCliente ? b.nomeCliente(v.client_id) : 'cliente', hora: GV2.horaDe(v.visited_at) }; }),
