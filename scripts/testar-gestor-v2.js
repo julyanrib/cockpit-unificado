@@ -737,8 +737,9 @@ tabelas.gv2_falta_etapa = [
     let g3 = {}, g1 = {};
     try { g3 = GV2.rxGavConteudo(); GV2.estado.rxGav = { t: 'passo', i: 1 }; g1 = GV2.rxGavConteudo(); } catch (e) { falhas.push('gaveta do passo: ' + e.message); }
     GV2.estado.rxGav = era;
-    checar('passo Proposta abre os parados em Negociação (Na e Nb), não o decisor', /Parados em Negociação · 2/.test(g3.tit || '') && />Na</.test(g3.corpo || '') && />Nb</.test(g3.corpo || '') && !/>Nd</.test((g3.corpo || '').split('gv2-rxg-mes')[0]), g3.tit);
-    checar('passo Decisor abre só quem está em Conversa com decisor hoje (Nd)', /Parados em Conversa com decisor · 1/.test(g1.tit || '') && />Nd</.test(g1.corpo || '') && !/>Na</.test((g1.corpo || '').split('gv2-rxg-mes')[0]), g1.tit);
+    /* 15/10/26: o título diz os dois números (do mês e de hoje); a lista continua sendo a dos parados */
+    checar('passo Negociação abre os parados em Negociação (Na e Nb), não o decisor', /^Negociação · \d+ no mês · 2 parados hoje$/.test(g3.tit || '') && />Na</.test(g3.corpo || '') && />Nb</.test(g3.corpo || '') && !/>Nd</.test((g3.corpo || '').split('gv2-rxg-mes')[0]), g3.tit);
+    checar('passo Decisor abre só quem está em Conversa com decisor hoje (Nd)', /^Conversa com decisor · \d+ no mês · 1 parados? hoje$/.test(g1.tit || '') && />Nd</.test(g1.corpo || '') && !/>Na</.test((g1.corpo || '').split('gv2-rxg-mes')[0]), g1.tit);
     checar('a contagem do mês continua na gaveta, recolhida', /<details class="gv2-rxg-mes">/.test(g3.corpo || ''));
   }
   /* 13/10/26: as 8 correções da auditoria do gestor */
