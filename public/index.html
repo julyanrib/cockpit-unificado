@@ -10171,6 +10171,21 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pl7-m-desc{min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:transparent;font:600 12px 'Poppins',sans-serif;color:var(--muted);cursor:pointer;}
 .pl7-m-andando{font:600 12.5px 'Poppins',sans-serif;color:var(--ink);}
 
+.pl7-cap{display:flex;align-items:center;gap:7px;margin-top:6px;}
+.pl7-cap-seg{display:inline-flex;gap:2px;}
+.pl7-cap-s{display:block;width:12px;height:5px;border-radius:2px;background:var(--line);}
+.pl7-cap-s.is-av{background:#D97706;}
+.pl7-cap-s.is-ok{background:#1E9E7B;}
+.pl7-cap b{font:700 11px 'Poppins',sans-serif;color:#B45309;font-variant-numeric:tabular-nums;}
+.pl7-cap.is-ok b{color:#16775D;}
+.pl7-mix{display:block;margin-top:3px;font:500 10.5px/1.35 'Poppins',sans-serif;color:var(--muted2);overflow-wrap:break-word;}
+
+.pl7-enviar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;}
+.pl7-enviar-bt{min-height:36px;padding:0 16px;border:1.5px solid var(--ink);border-radius:10px;background:var(--panel);color:var(--ink);font:700 13px 'Poppins',sans-serif;cursor:pointer;}
+.pl7-enviar-bt.is-pronto{background:#E51A31;border-color:#E51A31;color:#FFFFFF;}
+.pl7-enviar-bt[disabled]{opacity:.6;cursor:progress;}
+.pl7-enviar span{font:500 12px/1.4 'Poppins',sans-serif;color:var(--muted);}
+
 .pl7-abas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px;}
 .pl7-aba{display:flex;align-items:center;gap:7px;min-height:38px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);
   color:var(--ink);font:600 11.5px/1.25 'Poppins',sans-serif;text-align:left;cursor:pointer;}
@@ -10187,7 +10202,7 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
   .pl7-marcas{margin-left:0;}
   .pl7-legs .pl7-leg,.pl7-aba{min-height:44px;}
   button.pl7-regra{min-height:44px;}
-  .pl7-montar-bt,.pl7-m-desc,.pl7-m-dia li button{min-height:44px;}
+  .pl7-montar-bt,.pl7-m-desc,.pl7-m-dia li button,.pl7-enviar-bt{min-height:44px;}
 }
 </style><!-- /gv2-css -->
 </head>
@@ -28985,6 +29000,21 @@ function pl6DadosFinal(rep) {
 
       const ordem = pl6OrdemDoDia(itens, rotaDaSemana ? rotaDaSemana[d.iso] : null);
       const itensNaOrdem = ordem.map(function (x) { return x.it; });
+
+      const pl7PorHora = {};
+      itensNaOrdem.forEach(function (it) {
+        if (!it || !it.lead || !it.hora || !/^[0-9]{2}:[0-9]{2}$/.test(String(it.hora))) return;
+        (pl7PorHora[it.hora] = pl7PorHora[it.hora] || []).push(it);
+      });
+
+      const pl7Mix = {};
+      itensNaOrdem.forEach(function (it) {
+        if (!it || it.tipo === 'bloqueado') return;
+        const pid = it.tipo === 'rua' ? 'rua' : (it.tipo === 'rel' ? 'relac' : (it.p || (it.lead && typeof pl6PropositoDoLead === 'function' ? pl6PropositoDoLead(it.lead) : null)));
+        const pr = pid && typeof pl6Proposito === 'function' ? pl6Proposito(pid) : null;
+        if (!pr) return;
+        pl7Mix[pr.nome] = (pl7Mix[pr.nome] || 0) + 1;
+      });
       const ordemDe = new Map(ordem.map(function (x) { return [x.it, x]; }));
       const conflito = ordem.find(function (x) { return x.fixo && (x.espera > 20 || x.atraso > 10); });
 
@@ -29005,6 +29035,10 @@ function pl6DadosFinal(rep) {
         di: String(di),
 
         cnt: n === 0 ? 'vazio' : (n === 1 ? '1 parada' : n + ' paradas'),
+
+        capN: n, capMeta: Number(metaDoDia) || 6,
+        mixTxt: esc(Object.keys(pl7Mix).sort(function (a, b) { return pl7Mix[b] - pl7Mix[a]; })
+          .map(function (k) { return pl7Mix[k] + ' ' + k.toLowerCase(); }).join(' · ')),
         cntCor: n === 0 ? 'var(--ter)' : 'var(--muted2)',
         faltamRot: '',
 
@@ -29102,7 +29136,10 @@ function pl6DadosFinal(rep) {
           const repetido = !!(kRep && pl6RepetidosDoDia && pl6RepetidosDoDia[kRep] > 1);
           const horaTarde = !passou && it.hora && /^[0-9]{2}:[0-9]{2}$/.test(String(it.hora)) && String(it.hora) >= '18:00';
           const esperaLonga = !passou && ox.fixo && (ox.espera > 20 || ox.atraso > 10);
-          const horaAcertar = horaTarde ? 'hora a acertar · depois das 18h'
+          const mesmoHora = !passou && it.lead && it.hora && pl7PorHora[it.hora] && pl7PorHora[it.hora].length > 1
+            ? pl7PorHora[it.hora].filter(function (x) { return x !== it; }).map(function (x) { return x.lead.nome; }).join(', ') : '';
+          const horaAcertar = mesmoHora ? 'mesmo horário de ' + mesmoHora
+            : horaTarde ? 'hora a acertar · depois das 18h'
             : esperaLonga ? 'hora a acertar · ' + ox.fixo + ' fixo, ' + (ox.atraso > 10 ? 'chega ' + pl6Duracao(ox.atraso) + ' atrasado' : 'esperaria ' + pl6Duracao(ox.espera)) : '';
           const linha2 = reg ? '' : app ? (it.hora || 'sem hora')
             : ox.fixo ? ox.fixo
@@ -29298,7 +29335,9 @@ function pl6DadosFinal(rep) {
           .sort(pl7.comparar(pl7Na, hojeISOPl6));
         const r = pl7.montar(fila, grade, dias, metaDoDia, pl6SlotId, typeof pl6DiaPassou === 'function' ? pl6DiaPassou : null, s.pl7Fora);
         s.pl7Proposta = r;
-        return pl7.rascunhoHTML(r, { aberto: !!s.pl7Aberto, enviando: s.pl7Enviando || null, feito: s.pl7Feito || null });
+        return pl7.rascunhoHTML(r, { aberto: !!s.pl7Aberto, enviando: s.pl7Enviando || null, feito: s.pl7Feito || null })
+          + pl7.enviarHTML(pl7.regras(pl7Cad, grade, dias, metaDoDia, pl6SlotId, typeof pl6DiaPassou === 'function' ? pl6DiaPassou : null).feitas,
+            pl6Plano && pl6Plano.fechado_em ? pl6Plano.fechado_em : null, !!s.pl7Enviar);
       }())) : '',
     cadAbasHTML: propAtivo === 'cad' && pl7Cad ? pl7.abasHTML(pl7Cad, faixaAtiva) : '',
     vazioTxt: esc(propAtivo === 'cad' ? 'Nada aqui. Esta parte da carteira está com cadência.'
@@ -29665,6 +29704,7 @@ function pl6TelaFinalHTML(d) {
           ${dia.resumoApp ? '' : `<b style="margin-left:auto;font:900 11px 'Poppins',sans-serif;color:${dia.cntCor};font-variant-numeric:tabular-nums;">${dia.cnt}</b>`}
         </div>
         ${dia.resumoApp ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;font:800 11.5px 'Poppins',sans-serif;font-variant-numeric:tabular-nums;"><b style="color:var(--ink);">${esc(dia.resumoApp.plano)}</b><span style="color:var(--muted2);">${esc(dia.resumoApp.visitas)}</span></div>` : ''}
+        ${typeof GV2 !== 'undefined' && GV2.PL7 ? GV2.PL7.capacidadeHTML(dia.capN, dia.capMeta, dia.mixTxt) : ''}
         <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
         <div style="position:relative;flex:1;min-width:0;" data-pl6-reg-caixa="${dia.di}">
           <input type="text" value="${dia.regiao}" data-pl6-reg-in="${dia.di}" placeholder="bairro do dia" style="width:100%;box-sizing:border-box;border:1px solid ${dia.regBorda};border-radius:999px;background:var(--panel);padding:7px 12px;font:800 10.5px 'Poppins',sans-serif;color:var(--plum-ink);outline:none;min-height:32px;">
@@ -30329,6 +30369,7 @@ function pl6Ligar(box, rep) {
 
     if (d.pl6Semana) {
       const nova = Number(d.pl6Semana) || 0;
+      pl6UI.semanaTocada = true;
       if (nova === (Number(PL6_SEMANA) || 0)) return;
       PL6_SEMANA = nova;
       pl6UI.sel = null; pl6UI.pickerDia = null; pl6UI.toast = null;
@@ -30562,6 +30603,35 @@ function pl6Ligar(box, rep) {
       const arg = i < 0 ? '' : bruto.slice(i + 1);
       const s = pl6UI;
 
+      if (verbo === 'pl7enviar') {
+        if (s.pl7Enviar) return;
+        const faltam = 5 - (Number(arg) || 0);
+        s.pl7Enviar = true;
+        await redesenhar();
+        const segunda = pl6SegundaEmFoco();
+        const agoraIso = new Date().toISOString();
+        const quem = (typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.email) || null;
+        let erro = null;
+        try {
+          const u = await supa.from('planos_semanais').update({ fechado_em: agoraIso, fechado_por: quem })
+            .eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).select('owner_id');
+          if (u.error) erro = u.error.message;
+          else if (!u.data || !u.data.length) {
+            const ins = await supa.from('planos_semanais').upsert({ owner_id: String(rep.ownerId), data_segunda: segunda, grade: pl6GradeDoPlano(), fechado_em: agoraIso, fechado_por: quem },
+              { onConflict: 'owner_id,data_segunda' }).select('owner_id');
+            if (ins.error) erro = ins.error.message;
+          }
+        } catch (e) { erro = (e && e.message) || 'erro'; }
+        s.pl7Enviar = false;
+        if (erro) {
+          if (typeof mostrarToast === 'function') mostrarToast('Não consegui enviar o plano: ' + erro + '. Tente de novo.', 'erro');
+          return redesenhar();
+        }
+        if (pl6Plano) pl6Plano.fechado_em = agoraIso; else await pl6Carregar(rep);
+        s.toast = faltam > 0 ? 'Plano enviado · faltam ' + faltam + (faltam === 1 ? ' regra' : ' regras') + ' da cadência · o gestor vê o plano como está'
+          : 'Plano enviado · o gestor vê na Daily';
+        return redesenhar();
+      }
       if (verbo === 'pl7montar') { s.pl7Aberto = true; s.pl7Feito = null; s.pl7Fora = new Set(); return redesenhar(); }
       if (verbo === 'pl7tirar') { if (!s.pl7Fora) s.pl7Fora = new Set(); s.pl7Fora.add(String(arg)); return redesenhar(); }
       if (verbo === 'pl7descartar') { s.pl7Aberto = false; s.pl7Fora = new Set(); return redesenhar(); }
@@ -30888,6 +30958,11 @@ function pl6Ligar(box, rep) {
 async function renderProspeccaoExecutivo() {
   const box = document.getElementById('agendaContent');
   if (!box) return;
+
+  if (!pl6UI.semanaTocada && (Number(PL6_SEMANA) || 0) === 0
+    && new Date().toLocaleDateString('en-US', { timeZone: 'America/Sao_Paulo', weekday: 'short' }) === 'Fri') {
+    PL6_SEMANA = 1; pl6UI.semanaTocada = true;
+  }
 
   if (!agendaProspeccaoPronta) {
     box.innerHTML = '<div class="empty-state">Carregando sua fila de contas-alvo…</div>';
@@ -66640,6 +66715,27 @@ PL7.abasHTML = function (cad, abaAtiva) {
     return '<button type="button" class="pl7-aba' + (a.id === ativa.id ? ' is-on' : '') + '" data-pl6-acao="faixa:' + a.id + '" aria-pressed="' + (a.id === ativa.id) + '">'
       + '<i style="background:' + (a.g ? PL7.COR[a.g] : PL7.COR.outro) + '"></i><span>' + e(a.rot) + '</span><b>' + n(a) + '</b></button>';
   }).join('') + '</div><p class="pl7-aba-desc">' + e(ativa.desc) + '</p>';
+};
+
+PL7.capacidadeHTML = function (n, meta, mixTxt) {
+  const m = Number(meta) || 6, k = Number(n) || 0;
+  const ok = k >= m;
+  let seg = '';
+  for (let i = 0; i < m; i++) seg += '<i class="pl7-cap-s' + (i < k ? (ok ? ' is-ok' : ' is-av') : '') + '"></i>';
+  return '<div class="pl7-cap' + (ok ? ' is-ok' : '') + '"><span class="pl7-cap-seg" title="' + k + ' no plano · meta ' + m + '">' + seg + '</span>'
+    + '<b>' + k + (k > m ? ' (+' + (k - m) + ')' : '') + ' · meta ' + m + '</b></div>'
+    + (mixTxt ? '<span class="pl7-mix">' + mixTxt + '</span>' : '');
+};
+
+PL7.enviarHTML = function (feitas, enviadoEm, enviando) {
+  const e = GV2.e;
+  const hora = enviadoEm ? new Date(enviadoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  const pronto = Number(feitas) === 5;
+  return '<div class="pl7-enviar">'
+    + '<button type="button" class="pl7-enviar-bt' + (pronto ? ' is-pronto' : '') + '" data-pl6-acao="pl7enviar:' + (Number(feitas) || 0) + '"' + (enviando ? ' disabled' : '') + '>'
+    + (enviando ? 'Enviando…' : enviadoEm ? 'Reenviar o plano ao gestor' : 'Enviar o plano ao gestor') + '</button>'
+    + '<span>' + e(enviadoEm ? 'plano enviado ✓ ' + hora + ' · o gestor vê como "semana validada" na Daily'
+      : pronto ? 'as 5 regras estão verdes' : 'pode enviar com regra faltando: o gestor vê o plano como está') + '</span></div>';
 };
 
 GV2.instalar();
