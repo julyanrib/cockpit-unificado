@@ -14511,6 +14511,10 @@ button.gv2-t10-cqi:hover > div span{text-decoration:underline;}
 .exh4-quente{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;background:var(--gv2-acao);color:#FFFFFF;font:700 10px var(--gv2-font);letter-spacing:.06em;}
 .exh4-val{font:600 12px var(--gv2-font);color:var(--gv2-mute);}
 .exh4-l-sub{font:500 12px/1.4 var(--gv2-font);color:var(--gv2-mute);}
+/* o passo que venceu sem ser feito (16/10/26): a linha diz a data e o assunto */
+.exh4-l-venc{display:block;margin-top:2px;font:600 12px/1.4 var(--gv2-font);color:var(--gv2-acao);}
+.exh4-sp-venc{margin:0 0 6px;font:500 13px/1.45 var(--gv2-font);color:var(--gv2-ink);}
+.exh4-sp-venc b{color:var(--gv2-acao);font-weight:700;}
 .exh4-l-sub b{font-weight:600;color:var(--gv2-ink);} .exh4-l-sub b.t-acao{color:var(--gv2-acao);}
 .exh4-l-dir{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto;}
 .exh4-seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--gv2-seg);height:34px;}
@@ -87158,6 +87162,22 @@ EXH4.ultimoToque = function (n) {
   const d = GV2.diaDe(l.ultimaInteracao);
   return d ? 'último toque ' + GV2.DIAS[GV2.dow(d)] + ' ' + GV2.ddmm(d) : 'nunca tocado';
 };
+/* O PASSO QUE VENCEU (16/10/26). Medido no retrato do Cockpit: 64 de 247 negócios abertos tinham
+   só tarefa vencida, mais que os que nunca tiveram passo. O executivo marcou, o dia passou e ele
+   não fez: a linha diz isso, com a data e o assunto, para ele remarcar sabendo o que deixou cair.
+   Lê as tarefas abertas que o robô traz em cada negócio (funilLeads[].tarefas); a mais recente
+   antes de hoje. Sem tarefa nenhuma, null. */
+EXH4.vencida = function (n, b) {
+  const l = n.lead || {};
+  const hoje = (EXH.agora() || b.agora || {}).iso;
+  let melhor = null;
+  (Array.isArray(l.tarefas) ? l.tarefas : []).forEach(function (t) {
+    const d = t && t.timestamp ? GV2.diaDe(t.timestamp) : null;
+    if (!d || !hoje || d >= hoje) return;
+    if (!melhor || d > melhor.dia) melhor = { dia: d, assunto: String(t.subject || '').replace(/^(Follow-up|Visita|Reunião|Ligação) *- */i, '').trim() };
+  });
+  return melhor;
+};
 /* dias sem toque (o mesmo do termômetro do robô); sem ele, os dias na etapa */
 EXH4.diasSem = function (n) {
   const l = n.lead || {};
@@ -87226,9 +87246,12 @@ EXH4.linhaHTML = function (n, b) {
   const mk = EXH4.estado.marcados[n.id];
   const cor = EXH4.COR_ETAPA[n.etapa_idx] || '#94A3B8';
   const ds = EXH4.diasSem(n);
+  const venc = EXH4.vencida(n, b);
   const esq = '<div class="exh4-l-esq"><i class="exh4-los" style="background:' + cor + '"></i><div><div class="exh4-l-tit"><b>' + GV2.e(n.nome) + '</b>'
     + (n.quente ? '<span class="exh4-quente">QUENTE</span>' : '') + (n.mrr ? '<span class="exh4-val">' + GV2.e(GV2.rsCheio(n.mrr)) + '/mês</span>' : '') + '</div>'
-    + '<span class="exh4-l-sub">' + GV2.e(EXH4.ROT_ETAPA[n.etapa_idx] || '') + ' · <b class="' + (ds.n >= 7 ? 't-acao' : '') + '">' + ds.n + ' d ' + ds.rot + '</b> · ' + GV2.e(EXH4.ultimoToque(n)) + '</span></div></div>';
+    + '<span class="exh4-l-sub">' + GV2.e(EXH4.ROT_ETAPA[n.etapa_idx] || '') + ' · <b class="' + (ds.n >= 7 ? 't-acao' : '') + '">' + ds.n + ' d ' + ds.rot + '</b> · ' + GV2.e(EXH4.ultimoToque(n)) + '</span>'
+    + (venc ? '<span class="exh4-l-venc">passo venceu ' + GV2.e(GV2.DIAS[GV2.dow(venc.dia)] + ' ' + GV2.ddmm(venc.dia)) + (venc.assunto ? ': ' + GV2.e(venc.assunto) : '') + ', sem ser feito</span>' : '')
+    + '</div></div>';
   if (mk) {
     return '<div class="exh4-linha is-feita">' + esq + '<div class="exh4-l-dir"><span class="exh4-feito">' + EXH.ic('ok') + GV2.e(EXH4.rotTipo(mk.tipo) + ' · ' + GV2.ddmm(mk.data)) + (mk.enviando ? ' · enviando…' : '') + '</span>'
       + (mk.enviando ? '<button type="button" class="exh4-desf" data-exh="exh4desf:' + GV2.e(n.id) + '">desfazer</button>' : '') + '</div></div>';
@@ -87247,9 +87270,11 @@ EXH4.semPassoHTML = function (p, b) {
   const pct = ativos.length ? Math.round(com / ativos.length * 100) : 100;
   const zero = sp === 0;
   const lista = EXH4.ordenados(p, b);
+  const nVenc = lista.filter(function (n) { return !EXH4.estado.marcados[n.id] && EXH4.vencida(n, b); }).length;
   const ver = EXH4.estado.mostrarTodos ? lista.length : 6;
   const cab = '<div class="exh4-sp-cab"><div class="exh4-sp-txt"><small>' + (zero ? 'TODO LEAD COM PLANO' : 'SEM PRÓXIMO PASSO · ANTES DE TUDO') + '</small>'
     + '<h2>' + (zero ? ativos.length + ' de ' + ativos.length + ' com próximo passo.' : sp === 1 ? '1 lead está sem plano.' : sp + ' leads estão sem plano.') + '</h2>'
+    + (nVenc ? '<p class="exh4-sp-venc"><b>' + (nVenc === 1 ? '1 deles tinha passo marcado' : nVenc + ' deles tinham passo marcado') + '</b> e o dia passou sem ser feito: remarque para não perder o fio.</p>' : '')
     + '<p>Lead sem próximo passo esfria. Escolha o tipo e a data: vira tarefa no HubSpot e entra na sua agenda. Quentes primeiro.</p></div>'
     + '<div class="exh4-sp-barra"><div><b>' + pct + '%</b><span>' + com + ' de ' + ativos.length + ' com plano</span></div><i class="exh4-trilho"><em style="width:' + pct + '%"></em></i>'
     + '<div class="exh4-sp-leg"><span>leads ativos com próximo passo datado</span><span>meta 100%</span></div></div></div>';
