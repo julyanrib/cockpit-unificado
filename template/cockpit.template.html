@@ -14672,6 +14672,29 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pl7-regra b{font:600 13px/1.3 'Poppins',sans-serif;color:var(--ink);}
 .pl7-regra small{font:600 12px/1.35 'Poppins',sans-serif;color:#B3121F;}
 .pl7-regra.is-ok small{color:#16775D;}
+/* montar a semana, em rascunho */
+.pl7-montar-bt{align-self:flex-start;min-height:36px;padding:0 16px;border:0;border-radius:10px;background:var(--dark);color:var(--dark-ink);
+  font:700 13px 'Poppins',sans-serif;cursor:pointer;transition:transform .15s;}
+.pl7-montar-bt:hover{transform:translateY(-1px);}
+.pl7-montar{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);}
+.pl7-montar.is-feito{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:8px;background:var(--green-soft);border-color:transparent;}
+.pl7-montar.is-feito b{font:700 13px 'Poppins',sans-serif;color:#16775D;}
+.pl7-montar span,.pl7-montar.is-vazio span{font:500 12px/1.45 'Poppins',sans-serif;color:var(--muted);}
+.pl7-m-cab{display:flex;flex-direction:column;gap:3px;}
+.pl7-m-cab b{font:700 13.5px 'Poppins',sans-serif;color:var(--ink);}
+.pl7-m-dias{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;}
+.pl7-m-dia{display:flex;flex-direction:column;gap:3px;padding:9px 10px;border-radius:10px;background:var(--sunk);}
+.pl7-m-dia > b{font:700 12.5px 'Poppins',sans-serif;color:var(--ink);}
+.pl7-m-dia > small{font:500 11px 'Poppins',sans-serif;color:var(--muted2);}
+.pl7-m-dia ul{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;}
+.pl7-m-dia li{display:flex;align-items:center;gap:6px;}
+.pl7-m-dia li span{flex:1;min-width:0;font:600 12px/1.3 'Poppins',sans-serif;color:var(--ink);overflow-wrap:break-word;}
+.pl7-m-dia li button{flex:none;min-height:26px;padding:0 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel);
+  font:600 11px 'Poppins',sans-serif;color:var(--muted);cursor:pointer;}
+.pl7-m-dia li button:hover{border-color:#E51A31;color:#B3121F;}
+.pl7-m-pe{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+.pl7-m-desc{min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:transparent;font:600 12px 'Poppins',sans-serif;color:var(--muted);cursor:pointer;}
+.pl7-m-andando{font:600 12.5px 'Poppins',sans-serif;color:var(--ink);}
 /* as 4 abas da munição (2×2) */
 .pl7-abas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px;}
 .pl7-aba{display:flex;align-items:center;gap:7px;min-height:38px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);
@@ -14689,6 +14712,7 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
   .pl7-marcas{margin-left:0;}
   .pl7-legs .pl7-leg,.pl7-aba{min-height:44px;}
   button.pl7-regra{min-height:44px;}
+  .pl7-montar-bt,.pl7-m-desc,.pl7-m-dia li button{min-height:44px;}
 }
 </style><!-- /gv2-css -->
 </head>
@@ -40893,7 +40917,15 @@ function pl6DadosFinal(rep) {
       };
     }),
     municaoVazia: municaoOrd.length === 0,
-    cadHTML: pl7Cad ? pl7.blocoHTML(pl7Cad, pl7.regras(pl7Cad, grade, dias, metaDoDia, pl6SlotId, typeof pl6DiaPassou === 'function' ? pl6DiaPassou : null)) : '',
+    cadHTML: pl7Cad ? pl7.blocoHTML(pl7Cad, pl7.regras(pl7Cad, grade, dias, metaDoDia, pl6SlotId, typeof pl6DiaPassou === 'function' ? pl6DiaPassou : null),
+      (function () {
+        if (!s.pl7Fora) s.pl7Fora = new Set();
+        const fila = comProposito.filter(function (l) { const g = pl7.grupo(l, pl7Na, hojeISOPl6); return g === 'quente' || g === 'venc' || g === 'outro'; })
+          .sort(pl7.comparar(pl7Na, hojeISOPl6));
+        const r = pl7.montar(fila, grade, dias, metaDoDia, pl6SlotId, typeof pl6DiaPassou === 'function' ? pl6DiaPassou : null, s.pl7Fora);
+        s.pl7Proposta = r;
+        return pl7.rascunhoHTML(r, { aberto: !!s.pl7Aberto, enviando: s.pl7Enviando || null, feito: s.pl7Feito || null });
+      }())) : '',
     cadAbasHTML: propAtivo === 'cad' && pl7Cad ? pl7.abasHTML(pl7Cad, faixaAtiva) : '',
     vazioTxt: esc(propAtivo === 'cad' ? 'Nada aqui. Esta parte da carteira está com cadência.'
       : propAtivo === 'funil' ? 'Toda a carteira já tem outro propósito.'
@@ -42533,6 +42565,34 @@ function pl6Ligar(box, rep) {
          com os botões ativos. Solta também a conta escolhida — ela não está mais na
          lista, e um "estou com isto na mão" invisível é como o clique no horário
          agendava a conta errada. */
+      /* ══ MONTAR A SEMANA, EM RASCUNHO (16/10/26) ═══════════════════════════════════════
+         Propor não grava nada; tirar e descartar só mexem no rascunho. CONFIRMAR é o único que
+         escreve, e escreve pelo agendarNoSlot de sempre, uma conta por vez: a tarefa no HubSpot e
+         a grade, com o mesmo toast de erro se uma falhar — as outras seguem. */
+      if (verbo === 'pl7montar') { s.pl7Aberto = true; s.pl7Feito = null; s.pl7Fora = new Set(); return redesenhar(); }
+      if (verbo === 'pl7tirar') { if (!s.pl7Fora) s.pl7Fora = new Set(); s.pl7Fora.add(String(arg)); return redesenhar(); }
+      if (verbo === 'pl7descartar') { s.pl7Aberto = false; s.pl7Fora = new Set(); return redesenhar(); }
+      if (verbo === 'pl7confirmar') {
+        const prop = s.pl7Proposta;
+        if (!prop || !prop.total || s.pl7Enviando) return;
+        const fila = [];
+        prop.forEach(function (d) { d.itens.forEach(function (l) { fila.push({ di: d.di, id: l.id }); }); });
+        let feitas = 0;
+        s.pl7Enviando = 'Marcando 0 de ' + fila.length + '…';
+        await redesenhar();
+        for (let k = 0; k < fila.length; k++) {
+          const it = fila[k];
+          const antes = pl6GradeDoPlano()[it.di].filter(function (v) { return pl6SlotId(v); }).length;
+          try { await agendarNoSlot(it.id, it.di, primeiraVaga(it.di), null); } catch (e) { console.error('Montar a semana:', e && e.message); }
+          if (pl6GradeDoPlano()[it.di].filter(function (v) { return pl6SlotId(v); }).length > antes) feitas++;
+          s.pl7Enviando = 'Marcando ' + (k + 1) + ' de ' + fila.length + '…';
+          await redesenhar();
+        }
+        s.pl7Enviando = null; s.pl7Aberto = false; s.pl7Fora = new Set();
+        s.pl7Feito = feitas + (feitas === 1 ? ' conta marcada' : ' contas marcadas') + ' nos dias propostos, com tarefa no HubSpot'
+          + (feitas < fila.length ? ' · ' + (fila.length - feitas) + ' não entraram (veja o aviso de cada uma)' : '') + ' · revise e envie ao gestor';
+        return redesenhar();
+      }
       if (verbo === 'cadaba') {
         s.proposito = 'cad'; s.faixa = String(arg || 'q'); s.lugar = null;
         s.pagina = 1; s.ondeAberto = false; s.sel = null; s.pickerDia = null; s.toast = null;
@@ -87808,8 +87868,51 @@ PL7.comparar = function (naGrade, hoje) {
   };
 };
 
+/* ── MONTAR A SEMANA, EM RASCUNHO (16/10/26, Julyan: "faça o que recomenda") ──
+   A prancha queria 1 clique = até 30 tarefas no HubSpot. Isso deixaria a cadência verde no número e
+   vazia na rua: todo negócio "com passo" sem o executivo ter decidido nada. Aqui o botão só PROPÕE:
+   percorre os dias que não passaram e completa cada um até a meta, com os negócios sem passo na
+   ordem da cadência (quentes → vencidos → o resto). Nada é gravado até ele confirmar; aí cada conta
+   entra pelo caminho de sempre (pl6AgendarNoSlot: tarefa no HubSpot + grade). Conta nova (CNPJ) fica
+   de fora: virar negócio pede os dados da etapa, uma a uma. */
+PL7.montar = function (fila, grade, dias, meta, slotId, diaPassou, fora) {
+  const m = Number(meta) || 6;
+  const livres = (fila || []).filter(function (l) { return l && l.tipo === 'c' && !(fora && fora.has(l.id)); });
+  let k = 0;
+  const out = [];
+  (dias || []).forEach(function (d, i) {
+    if (diaPassou && diaPassou(d.iso)) return;
+    const tem = ((grade && grade[i]) || []).filter(function (v) { return slotId ? slotId(v) : v; }).length;
+    const itens = [];
+    while (tem + itens.length < m && k < livres.length) itens.push(livres[k++]);
+    if (itens.length) out.push({ di: i, iso: d.iso, rot: d.rot, data: d.data, tem: tem, itens: itens });
+  });
+  out.total = out.reduce(function (s, x) { return s + x.itens.length; }, 0);
+  return out;
+};
+PL7.rascunhoHTML = function (r, st) {
+  const e = GV2.e;
+  st = st || {};
+  if (st.feito) return '<div class="pl7-montar is-feito"><b>Semana montada ✓</b><span>' + e(st.feito) + '</span></div>';
+  if (!r.total) return '<div class="pl7-montar is-vazio"><span>Os dias que ainda vêm já estão com a meta, ou não há negócio sem passo para encaixar.</span></div>';
+  if (!st.aberto) return '<button type="button" class="pl7-montar-bt" data-pl6-acao="pl7montar">Montar a semana · propor ' + r.total + (r.total === 1 ? ' conta' : ' contas') + '</button>';
+  const dias = r.map(function (d) {
+    return '<div class="pl7-m-dia"><b>' + e(d.rot + ' ' + d.data) + '</b><small>' + e(d.tem + ' já no plano · +' + d.itens.length) + '</small><ul>'
+      + d.itens.map(function (l) {
+        return '<li><span>' + e(l.nome) + '</span><button type="button" data-pl6-acao="pl7tirar:' + e(l.id) + '" aria-label="' + e('tirar ' + l.nome + ' do rascunho') + '">tirar</button></li>';
+      }).join('') + '</ul></div>';
+  }).join('');
+  return '<div class="pl7-montar is-aberto"><div class="pl7-m-cab"><b>Rascunho da semana · ' + r.total + (r.total === 1 ? ' conta' : ' contas') + '</b>'
+    + '<span>Nada foi gravado. Tire o que não faz sentido; ao confirmar, cada conta vira tarefa no HubSpot no dia proposto.</span></div>'
+    + '<div class="pl7-m-dias">' + dias + '</div>'
+    + '<div class="pl7-m-pe">' + (st.enviando
+      ? '<b class="pl7-m-andando">' + e(st.enviando) + '</b>'
+      : '<button type="button" class="pl7-montar-bt" data-pl6-acao="pl7confirmar">Confirmar e marcar ' + r.total + '</button>'
+        + '<button type="button" class="pl7-m-desc" data-pl6-acao="pl7descartar">descartar rascunho</button>') + '</div></div>';
+};
+
 /* ── o bloco: cabeçalho, barra, legenda e as 5 regras ── */
-PL7.blocoHTML = function (cad, regras) {
+PL7.blocoHTML = function (cad, regras, htmlMontar) {
   const e = GV2.e;
   const zero = cad.sem === 0;
   const seg = ['passo', 'quente', 'venc', 'outro'].filter(function (g) { return cad[g] > 0; }).map(function (g) {
@@ -87840,7 +87943,7 @@ PL7.blocoHTML = function (cad, regras) {
     + '<div class="pl7-barra">' + seg + '</div><div class="pl7-legs">' + leg + '</div></div></div>'
     + '<div class="pl7-sem"><div class="pl7-sem-cab"><b>A cadência da semana</b><span>· o plano só está pronto com as 5 verdes</span>'
     + '<span class="pl7-marcas">' + marcas + '<b class="' + (regras.feitas === 5 ? 'is-ok' : '') + '">' + regras.feitas + ' de 5</b></span></div>'
-    + '<div class="pl7-regras">' + regrasHTML + '</div></div>'
+    + (htmlMontar || '') + '<div class="pl7-regras">' + regrasHTML + '</div></div>'
     + '</section>';
 };
 /* as 4 abas da munição na Cadência (2×2) + a descrição da aberta */
