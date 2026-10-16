@@ -161,8 +161,9 @@ console.log('3 · SEIS PROPÓSITOS, E O FUNIL RECEBE O RESTO');
   const PROPS = vm.runInContext('PL6_PROPOSITOS', c);
   const doLead = vm.runInContext('pl6PropositoDoLead', c);
 
-  igual('a faixa tem os seis, nesta ordem', PROPS.map(function (p) { return p.id; }),
-    ['rua', 'cobrar', 'relac', 'follow', 'nova', 'funil']);
+  /* 16/10/26 (Planejamento v2): o sétimo, a Cadência, entra no FIM (pl6Proposito cai no índice 3) */
+  igual('a faixa tem os sete, nesta ordem', PROPS.map(function (p) { return p.id; }),
+    ['rua', 'cobrar', 'relac', 'follow', 'nova', 'funil', 'cad']);
   checar('e cada um tem etiqueta e cor',
     /* v5: a cor do propósito pode ser token (var(--ink) no de rua); só vai para style= */
     PROPS.every(function (p) { return !!p.etiqueta && /^(#[0-9A-F]{6}|var\(--[\w-]+\))$/i.test(p.cor); }));
