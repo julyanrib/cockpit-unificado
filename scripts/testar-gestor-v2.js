@@ -1316,6 +1316,24 @@ tabelas.gv2_falta_etapa = [
         /data-pl6-acao="pl7enviar:2"/.test(e2) && !/is-pronto/.test(e2) && /pode enviar com regra faltando/.test(e2)
           && /pl7-enviar-bt is-pronto/.test(e5) && /plano enviado ✓/.test(eE) && /18:10/.test(eE) && /Reenviar/.test(eE));
     }
+    if (P) {
+      const A = { lat: -23.5505, lng: -46.6333 }, B = { lat: -23.5605, lng: -46.6333 };
+      checar('pl7 · mapa: 0,01° de latitude ≈ 1,1 km em linha reta', Math.abs(P.km(A, B) - 1.112) < 0.01, String(P.km(A, B)));
+      const perto = P.perto([A], [{ id: 'a', lat: -23.551, lng: -46.6333 }, { id: 'longe', lat: -23.70, lng: -46.6333 }, { id: 'q', quente: true, lat: -23.56, lng: -46.6333 }], 4);
+      checar('pl7 · mapa: "por perto" só até 3 km, o quente primeiro', perto.map(function (x) { return x.id; }).join() === 'q,a', perto.map(function (x) { return x.id; }).join());
+      const dd = { dias: [{ rot: 'seg', data: '19/10' }, { rot: 'ter', data: '20/10', pl7Mapa: { di: 1, iso: '2026-10-20', rot: 'ter', data: '20/10', regiao: 'Pinheiros', href: '/?agenda=2026-10-20', semLugar: 1,
+        paradas: [{ nome: 'Duca', lat: A.lat, lng: A.lng, hora: '09:00' }, { nome: 'Lobo', lat: B.lat, lng: B.lng, hora: '≈ 09:40' }] } }],
+        pl7Perto: [{ id: 'c-9', nome: 'Luigi', etapa: 'Negociação', quente: true, lat: -23.552, lng: -46.6333 }] };
+      const md = P.mapaDiaHTML(dd);
+      checar('pl7 · mapa: o painel do dia aberto tem a rota, a distância, o "+ encaixar" e o "abrir no app"',
+        /Rota de ter 20\/10 · Pinheiros/.test(md) && /2 paradas · ≈ 1,1 km em linha reta/.test(md) && /1 sem lugar no mapa/.test(md)
+          && /<b>09:00<\/b><span>Duca<\/span><small>início/.test(md) && /data-pl6-acao="pl7encaixar:c-9\|1"/.test(md)
+          && /href="\/\?agenda=2026-10-20"/.test(md) && /data-pl7-mapa="/.test(md) && /pl7-md-dia is-on" data-pl6-acao="pl7mapa:1"/.test(md));
+      checar('pl7 · mapa: sem dia aberto, nada', P.mapaDiaHTML({ dias: [{ rot: 'seg', data: '19/10' }] }) === '');
+    }
+    checar('pl7 · no template: o mini mapa abre pelo botão "rota" do dia, desenha depois de cada pintura e encaixa pelo agendarNoSlot',
+      /data-pl6-acao="\$\{dia\.pl7MapaOn\}"/.test(tpl) && (tpl.match(/GV2\.PL7\.mapaAposPintar\(/g) || []).length === 2
+        && /if \(verbo === 'pl7encaixar'\)[\s\S]{0,250}return agendarNoSlot\(par\[0\], diE, primeiraVaga\(diE\), null\);/.test(tpl));
     checar('pl7 · no template: enviar grava fechado_em/fechado_por da semana em foco (o que a Daily lê como semana validada)',
       /if \(verbo === 'pl7enviar'\)[\s\S]{0,700}\.update\(\{ fechado_em: agoraIso, fechado_por: quem \}\)[\s\S]{0,200}\.eq\('data_segunda', segunda\)/.test(tpl));
     checar('pl7 · no template: na sexta a tela abre na próxima semana, uma vez, e o chip manda depois',
