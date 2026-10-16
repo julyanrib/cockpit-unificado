@@ -36194,8 +36194,9 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
   /* Varria PL6_HORAS.length (7) e declarava "dia cheio" com oito vagas livres — a
      capacidade virou 15 hoje e este laço ficou para trás. */
   if (si < 0) {
-    const cap = (typeof PL6_SLOTS !== 'undefined') ? PL6_SLOTS : PL6_HORAS.length;
+    const cap = Math.max((typeof PL6_SLOTS !== 'undefined') ? PL6_SLOTS : PL6_HORAS.length, grade[di].length);
     for (let k = 0; k < cap; k++) { if (livre(k)) { si = k; break; } }
+    if (si < 0) si = grade[di].length; // sem limite: entra no fim do dia
   }
   if (si < 0) {
     /* dia cheio: devolve o lead para onde estava, senão eu o tiro do plano sem pôr em
@@ -37469,6 +37470,11 @@ const PL6_HORAS = ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'
    visitas do dia podem carregar um chip; da oitava em diante ela fica sem hora, ou recebe
    uma hora digitada no painel de "+ escolher conta". Deixar a mesma janela repetir é
    decisão dele — a regra do "ocupado" é o que impede dois clientes às 10:30. */
+/* SEM LIMITE DE VISITAS (16/10/26, Julyan: "não podemos limitar as visitas dele, pode ser ilimitadas,
+   tanto no slot do planejamento também"). PL6_SLOTS passou a ser o MÍNIMO de casas que a coluna
+   desenha, e não o teto: com as 15 ocupadas, a próxima entra no fim (pl6PrimeiraVaga devolve o
+   tamanho da coluna), e a leitura e a gravação não cortam mais o dia em 15 — cortar apagava o que
+   o app pôs além disso (o banco também deixou de recusar a 16ª, migration 0213). */
 const PL6_SLOTS = 15;
 const PL6_DIAS_UTEIS = 5;
 const PL6_BLOQUEADO = '__b';
@@ -39027,7 +39033,7 @@ function pl6PrimeiraVaga(grade, di) {
     const v = col[si];
     if (!pl6SlotId(v) && v !== PL6_BLOQUEADO && !pl6SlotRua(v) && !pl6SlotRel(v)) return si;
   }
-  return -1;
+  return col.length; // sem limite: a próxima casa do dia
 }
 /* ══ O QUE CADA BLOCO É, NUM LUGAR SÓ (10/09/26) ═══════════════════════════════════
    Julyan: "o executivo pode escolher fazer prospecções novas, visitas de relacionamento e
@@ -39194,7 +39200,7 @@ function pl6GradeDoPlano() {
   const g = pl6Plano && Array.isArray(pl6Plano.grade) ? pl6Plano.grade : null;
   if (!g || g.length !== PL6_DIAS_UTEIS) return pl6GradeVazia();
   return g.map(col => {
-    const arr = Array.isArray(col) ? col.slice(0, PL6_SLOTS) : [];
+    const arr = Array.isArray(col) ? col.slice() : [];
     while (arr.length < PL6_SLOTS) arr.push(null);
     return arr;
   });
@@ -39466,14 +39472,17 @@ function pl6MesclarGrade(base, nova, fresca) {
     const n = Array.isArray(nova[d]) ? nova[d] : [];
     const f = fresca && Array.isArray(fresca[d]) ? fresca[d] : [];
     const col = [];
-    for (let i = 0; i < PL6_SLOTS; i++) col.push(J(n[i]) !== J(b[i]) ? (n[i] == null ? null : n[i]) : (f[i] == null ? null : f[i]));
+    const tam = Math.max(PL6_SLOTS, b.length, n.length, f.length);
+    for (let i = 0; i < tam; i++) col.push(J(n[i]) !== J(b[i]) ? (n[i] == null ? null : n[i]) : (f[i] == null ? null : f[i]));
     const naBase = new Set(b.map(pl6SlotId).filter(Boolean));
     const naCol = new Set(col.map(pl6SlotId).filter(Boolean));
     f.forEach(function (v) {
       const id = pl6SlotId(v);
       if (!id || naBase.has(id) || naCol.has(id)) return;
       const livre = col.findIndex(function (x) { return x == null; });
-      if (livre >= 0) { col[livre] = v; naCol.add(id); }
+      // sem casa vazia o que outra tela gravou entra no fim (sem limite, 16/10/26); antes sumia
+      if (livre >= 0) col[livre] = v; else col.push(v);
+      naCol.add(id);
     });
     out.push(col);
   }
@@ -40519,7 +40528,7 @@ function pl6DadosFinal(rep) {
       const n = itens.filter(x => x.tipo === 'visita' || x.tipo === 'rua').length;
       const regTxt = pl6TextoDaRegiao(rotas[di], regioes);
       const passouDoDia = (typeof pl6DiaPassou === 'function') ? pl6DiaPassou(d.iso) : false;
-      const cheio = col.filter(v => pl6SlotId(v) || v === PL6_BLOQUEADO).length >= PL6_SLOTS;
+      const cheio = false; // sem limite de visitas (16/10/26): o dia sempre aceita mais uma
       return {
         /* HOJE VEM DE d7ColunaDeHoje, que é a MESMA conta que a Minha Daily faz — eu
            quase escrevi um `hojeISOBrasilia()` que não existe neste arquivo, e um segundo
