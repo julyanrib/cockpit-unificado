@@ -1303,6 +1303,25 @@ tabelas.gv2_falta_etapa = [
       checar('pl7 · as 4 abas com o número e a descrição da aberta', (ab.match(/<button type="button" class="pl7-aba/g) || []).length === 4 && /pl7-aba is-on" data-pl6-acao="faixa:v"/.test(ab) && /o dia passou sem ser feito/.test(ab));
       global.pl6AtrasoDoPasso = at0; global.pl6PassoFuturo = fu0;
     }
+    if (P) {
+      const c4 = P.capacidadeHTML(4, 6, '3 follow-up · 1 avançar o funil');
+      const c8 = P.capacidadeHTML(8, 6, '');
+      checar('pl7 · capacidade do dia: 6 segmentos, 4 âmbar abaixo da meta; com 8, verde e "+2", sem teto',
+        (c4.match(/<i class="pl7-cap-s/g) || []).length === 6 && (c4.match(/is-av/g) || []).length === 4 && /4 · meta 6/.test(c4) && /3 follow-up/.test(c4)
+          && /pl7-cap is-ok/.test(c8) && /8 \(\+2\) · meta 6/.test(c8) && !/pl7-mix/.test(c8));
+    }
+    if (P) {
+      const e2 = P.enviarHTML(2, null, false), e5 = P.enviarHTML(5, null, false), eE = P.enviarHTML(3, '2026-10-16T21:10:00Z', false);
+      checar('pl7 · enviar ao gestor: com 2 de 5 é contornado e diz que pode enviar; com 5 fica vermelho; enviado mostra a hora',
+        /data-pl6-acao="pl7enviar:2"/.test(e2) && !/is-pronto/.test(e2) && /pode enviar com regra faltando/.test(e2)
+          && /pl7-enviar-bt is-pronto/.test(e5) && /plano enviado ✓/.test(eE) && /18:10/.test(eE) && /Reenviar/.test(eE));
+    }
+    checar('pl7 · no template: enviar grava fechado_em/fechado_por da semana em foco (o que a Daily lê como semana validada)',
+      /if \(verbo === 'pl7enviar'\)[\s\S]{0,700}\.update\(\{ fechado_em: agoraIso, fechado_por: quem \}\)[\s\S]{0,200}\.eq\('data_segunda', segunda\)/.test(tpl));
+    checar('pl7 · no template: na sexta a tela abre na próxima semana, uma vez, e o chip manda depois',
+      /weekday: 'short' \}\) === 'Fri'\) \{\n    PL6_SEMANA = 1; pl6UI\.semanaTocada = true;/.test(tpl) && /pl6UI\.semanaTocada = true;\n      if \(nova === \(Number\(PL6_SEMANA\) \|\| 0\)\) return;/.test(tpl));
+    checar('pl7 · no template: dois cartões na mesma hora levam "mesmo horário de X" (avisa, não trava)',
+      /const horaAcertar = mesmoHora \? 'mesmo horário de ' \+ mesmoHora/.test(tpl) && /GV2\.PL7\.capacidadeHTML\(dia\.capN, dia\.capMeta, dia\.mixTxt\)/.test(tpl));
     checar('pl7 · no template: confirmar o rascunho grava pelo agendarNoSlot de sempre, uma conta por vez, e propor não grava',
       /if \(verbo === 'pl7confirmar'\)[\s\S]{0,900}await agendarNoSlot\(it\.id, it\.di, primeiraVaga\(it\.di\), null\)/.test(tpl)
         && /if \(verbo === 'pl7montar'\) \{ s\.pl7Aberto = true; s\.pl7Feito = null; s\.pl7Fora = new Set\(\); return redesenhar\(\); \}/.test(tpl));
