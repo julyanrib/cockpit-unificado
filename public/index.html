@@ -65896,7 +65896,9 @@ EXH4.meus = function (p, b) { return (b.negocios || []).filter(function (n) { re
 EXH4.ativos = function (p, b) { return EXH4.meus(p, b).filter(function (n) { return !n.agPag; }); };
 EXH4.temPasso = function (n) { return !!n.proximo_passo || !!EXH4.estado.marcados[n.id]; };
 EXH4.semPasso = function (p, b) { return EXH4.ativos(p, b).filter(function (n) { return !EXH4.temPasso(n); }); };
-EXH4.quentes = function (p, b) { return EXH4.meus(p, b).filter(function (n) { return n.quente; }); };
+
+GV2.quenteCadencia = function (n) { return !!n && Number(n.etapa_idx) >= 2; };
+EXH4.quentes = function (p, b) { return EXH4.meus(p, b).filter(GV2.quenteCadencia); };
 EXH4.quentesSemData = function (p, b) { return EXH4.quentes(p, b).filter(function (n) { return !n.agPag && !EXH4.temPasso(n); }); };
 
 EXH4.datas = function (b) {
@@ -65983,7 +65985,8 @@ EXH4.ordenados = function (p, b) {
   return lista.sort(function (x, y) {
     const mx = EXH4.estado.marcados[x.id] ? 1 : 0, my = EXH4.estado.marcados[y.id] ? 1 : 0;
     if (mx !== my) return mx - my;
-    if (x.quente !== y.quente) return x.quente ? -1 : 1;
+    const qx = GV2.quenteCadencia(x), qy = GV2.quenteCadencia(y);
+    if (qx !== qy) return qx ? -1 : 1;
     return EXH4.diasSem(y).n - EXH4.diasSem(x).n;
   });
 };
@@ -65993,7 +65996,7 @@ EXH4.linhaHTML = function (n, b) {
   const ds = EXH4.diasSem(n);
   const venc = EXH4.vencida(n, b);
   const esq = '<div class="exh4-l-esq"><i class="exh4-los" style="background:' + cor + '"></i><div><div class="exh4-l-tit"><b>' + GV2.e(n.nome) + '</b>'
-    + (n.quente ? '<span class="exh4-quente">QUENTE</span>' : '') + (n.mrr ? '<span class="exh4-val">' + GV2.e(GV2.rsCheio(n.mrr)) + '/mês</span>' : '') + '</div>'
+    + (GV2.quenteCadencia(n) ? '<span class="exh4-quente">QUENTE</span>' : '') + (n.mrr ? '<span class="exh4-val">' + GV2.e(GV2.rsCheio(n.mrr)) + '/mês</span>' : '') + '</div>'
     + '<span class="exh4-l-sub">' + GV2.e(EXH4.ROT_ETAPA[n.etapa_idx] || '') + ' · <b class="' + (ds.n >= 7 ? 't-acao' : '') + '">' + ds.n + ' d ' + ds.rot + '</b> · ' + GV2.e(EXH4.ultimoToque(n)) + '</span>'
     + (venc ? '<span class="exh4-l-venc">passo venceu ' + GV2.e(GV2.DIAS[GV2.dow(venc.dia)] + ' ' + GV2.ddmm(venc.dia)) + (venc.assunto ? ': ' + GV2.e(venc.assunto) : '') + ', sem ser feito</span>' : '')
     + '</div></div>';

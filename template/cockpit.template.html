@@ -87121,8 +87121,8 @@ GV2.t10Comando = function (cmd, parte) {
    Desenvolvimento (GV2.DV → GV2.montar(so)): "sem próximo passo" é um número só em 4 lugares.
 
    O QUE O COCKPIT MANDA SOBRE A PRANCHA (A prancha é a ideia, o Cockpit manda):
-     · quente = Negociação ou Ag. Pagamento (a regra do gestor, Raio X, Pessoas); a prancha punha
-       Conversa com Decisor e Demo/Proposta — mudaria o número que o gestor vê;
+     · quente = Conversa com Decisor em diante (GV2.quenteCadencia, escolhido pelo Julyan em 16/10;
+       o n.quente do gestor segue idx >= 4);
      · pontos = o placar do bônus de hoje (venda 100, demo 25 quando o negócio entra em Demo/Proposta
        e conta junto com a venda desde 16/10, visita com prova 3 sem teto por dia, cada restaurante
        uma vez na semana) — a prancha trazia a regra antiga (desfecho, teto 6);
@@ -87143,7 +87143,12 @@ EXH4.meus = function (p, b) { return (b.negocios || []).filter(function (n) { re
 EXH4.ativos = function (p, b) { return EXH4.meus(p, b).filter(function (n) { return !n.agPag; }); };
 EXH4.temPasso = function (n) { return !!n.proximo_passo || !!EXH4.estado.marcados[n.id]; };
 EXH4.semPasso = function (p, b) { return EXH4.ativos(p, b).filter(function (n) { return !EXH4.temPasso(n); }); };
-EXH4.quentes = function (p, b) { return EXH4.meus(p, b).filter(function (n) { return n.quente; }); };
+/* QUENTE DA CADÊNCIA (16/10/26, Julyan escolheu): Conversa com Decisor em diante (Decisor, Demo/Proposta,
+   Negociação, Ag. Pagamento). Uma regra só para a Hoje, o Planejamento e a mensagem das 18h
+   (PWA api/avisos-sem-passo.js). O n.quente da base (idx >= 4) segue sendo o do gestor: provável,
+   Raio X e Pessoas não mudam. */
+GV2.quenteCadencia = function (n) { return !!n && Number(n.etapa_idx) >= 2; };
+EXH4.quentes = function (p, b) { return EXH4.meus(p, b).filter(GV2.quenteCadencia); };
 EXH4.quentesSemData = function (p, b) { return EXH4.quentes(p, b).filter(function (n) { return !n.agPag && !EXH4.temPasso(n); }); };
 
 /* hoje + os próximos 3 dias úteis */
@@ -87238,7 +87243,8 @@ EXH4.ordenados = function (p, b) {
   return lista.sort(function (x, y) {
     const mx = EXH4.estado.marcados[x.id] ? 1 : 0, my = EXH4.estado.marcados[y.id] ? 1 : 0;
     if (mx !== my) return mx - my;
-    if (x.quente !== y.quente) return x.quente ? -1 : 1;
+    const qx = GV2.quenteCadencia(x), qy = GV2.quenteCadencia(y);
+    if (qx !== qy) return qx ? -1 : 1;
     return EXH4.diasSem(y).n - EXH4.diasSem(x).n;
   });
 };
@@ -87248,7 +87254,7 @@ EXH4.linhaHTML = function (n, b) {
   const ds = EXH4.diasSem(n);
   const venc = EXH4.vencida(n, b);
   const esq = '<div class="exh4-l-esq"><i class="exh4-los" style="background:' + cor + '"></i><div><div class="exh4-l-tit"><b>' + GV2.e(n.nome) + '</b>'
-    + (n.quente ? '<span class="exh4-quente">QUENTE</span>' : '') + (n.mrr ? '<span class="exh4-val">' + GV2.e(GV2.rsCheio(n.mrr)) + '/mês</span>' : '') + '</div>'
+    + (GV2.quenteCadencia(n) ? '<span class="exh4-quente">QUENTE</span>' : '') + (n.mrr ? '<span class="exh4-val">' + GV2.e(GV2.rsCheio(n.mrr)) + '/mês</span>' : '') + '</div>'
     + '<span class="exh4-l-sub">' + GV2.e(EXH4.ROT_ETAPA[n.etapa_idx] || '') + ' · <b class="' + (ds.n >= 7 ? 't-acao' : '') + '">' + ds.n + ' d ' + ds.rot + '</b> · ' + GV2.e(EXH4.ultimoToque(n)) + '</span>'
     + (venc ? '<span class="exh4-l-venc">passo venceu ' + GV2.e(GV2.DIAS[GV2.dow(venc.dia)] + ' ' + GV2.ddmm(venc.dia)) + (venc.assunto ? ': ' + GV2.e(venc.assunto) : '') + ', sem ser feito</span>' : '')
     + '</div></div>';
