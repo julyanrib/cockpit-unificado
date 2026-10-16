@@ -14742,6 +14742,19 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pl7-md-perto button{flex:none;min-height:30px;padding:0 10px;border:1px solid #2563EB;border-radius:8px;background:var(--panel);color:#2563EB;font:700 11.5px 'Poppins',sans-serif;cursor:pointer;}
 .pl7-md-app{margin:auto 14px 14px;display:inline-flex;align-items:center;justify-content:center;min-height:36px;border-radius:10px;background:var(--dark);color:var(--dark-ink);
   font:700 12.5px 'Poppins',sans-serif;text-decoration:none;}
+/* toques das 6 semanas e o decidir da Reciclagem */
+.pl7-toques{display:flex;align-items:center;gap:3px;margin-top:6px;}
+.pl7-toques small{margin-right:4px;font:600 9.5px 'Poppins',sans-serif;color:var(--muted2);}
+.pl7-toques i{display:block;width:10px;height:10px;border-radius:2px;background:var(--line);}
+.pl7-toques i.is-ok{background:#1E9E7B;}
+.pl7-toques.is-grande{padding:9px 13px;background:var(--creme);margin:0;}
+.pl7-toques.is-grande i{width:14px;height:14px;}
+.pl7-decidir-bt{display:block;margin-top:6px;margin-left:auto;min-height:30px;padding:0 12px;border:1px solid var(--ink);border-radius:999px;background:transparent;
+  color:var(--ink);font:800 10px 'Poppins',sans-serif;cursor:pointer;}
+.pl7-decidir{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+.pl7-decidir button{min-height:32px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);font:700 10px 'Poppins',sans-serif;cursor:pointer;}
+.pl7-decidir button:hover{border-color:var(--ink);}
+.pl7-reciclado{display:block;margin-top:6px;font:700 10px 'Poppins',sans-serif;color:#16775D;}
 /* as 4 abas da munição (2×2) */
 .pl7-abas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px;}
 .pl7-aba{display:flex;align-items:center;gap:7px;min-height:38px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);
@@ -14759,7 +14772,7 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
   .pl7-marcas{margin-left:0;}
   .pl7-legs .pl7-leg,.pl7-aba{min-height:44px;}
   button.pl7-regra{min-height:44px;}
-  .pl7-montar-bt,.pl7-m-desc,.pl7-m-dia li button,.pl7-enviar-bt,.pl7-rota-bt,.pl7-md-dia,.pl7-md-fechar,.pl7-md-perto button{min-height:44px;}
+  .pl7-montar-bt,.pl7-m-desc,.pl7-m-dia li button,.pl7-enviar-bt,.pl7-rota-bt,.pl7-md-dia,.pl7-md-fechar,.pl7-md-perto button,.pl7-decidir-bt,.pl7-decidir button{min-height:44px;}
   .pl7-md{margin:12px 12px 0;}
   .pl7-md-mapa{min-height:260px;}
 }
@@ -40443,6 +40456,14 @@ function pl6DadosFinal(rep) {
   const totalPaginas = Math.max(1, Math.ceil(municaoOrd.length / POR_PAGINA));
   const pagina = Math.min(Math.max(1, Number(s.pagina) || 1), totalPaginas);
   const municaoPag = municaoOrd.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  /* OS TOQUES DAS 6 SEMANAS (Planejamento v2, 0214): pede em lote só os negócios da página e da
+     ficha que ainda não vieram; quando chegam, redesenha com as mãos livres */
+  if (pl7 && pl7.toquesPedir) {
+    const fichaAberta = (typeof pl6Ficha !== 'undefined' && pl6Ficha) ? porId.get(pl6Ficha) : null;
+    pl7.toquesPedir(municaoPag.concat(fichaAberta ? [fichaAberta] : []).map(function (l) { return l && l.dealId; }), function () {
+      if (!pl6UI.sel && pl6UI.dragHover == null && typeof renderAgenda === 'function') renderAgenda();
+    });
+  }
 
   const horaRot = s.hSel ? s.hSel + ':' + s.mSel : '--:--';
   const selLead = s.sel ? s.sel.lead : null;
@@ -41000,7 +41021,15 @@ function pl6DadosFinal(rep) {
           return { rot: esc(dd.rot + ' ' + dd.data), n: String(nDia), on: 'porem:' + l.id + '|' + di, passou: passou };
         }).filter(function (x) { return !x.passou; }) : [],
         abrirFicha: 'ficha:' + l.id,
-        arraste: 'm:' + l.id
+        arraste: 'm:' + l.id,
+        toquesHTML: pl7 && l.dealId ? pl7.toquesHTML(pl7.toquesDe(l.dealId)) : '',
+        /* RECICLAGEM SE DECIDE (Planejamento v2): reciclar (retorno em 60 d), perdido ou pôr na semana */
+        decidir: l.etapa === 'Reciclagem' && pl7 ? 'pl7decidir:' + l.id : '',
+        decidirAberto: l.etapa === 'Reciclagem' && s.pl7DecidirDe === l.id,
+        reciclar: 'pl7reciclar:' + l.id,
+        perder: 'pl7perder:' + l.id,
+        avancar: 'poremmenu:' + l.id,
+        reciclado: !!(s.pl7Reciclados && s.pl7Reciclados[l.id]) ? esc(s.pl7Reciclados[l.id]) : ''
       };
     }),
     municaoVazia: municaoOrd.length === 0,
@@ -41029,6 +41058,7 @@ function pl6DadosFinal(rep) {
       : (propAtivo === 'follow' ? 'Nenhuma promessa vencida ou para hoje.'
       : 'Nada nesta faixa.')))),
     temFicha: !!ficha,
+    fichaToquesHTML: pl7 && ficha && ficha.dealId ? pl7.toquesHTML(pl7.toquesDe(ficha.dealId), true) : '',
     fichaNome: esc(ficha ? ficha.nome : ''),
     fichaSub: esc(ficha ? pl6SubDoCard(ficha) : ''),
     fichaTag: esc(ficha ? pfTag(ficha).tag : ''),
@@ -41591,10 +41621,14 @@ function pl6TelaFinalHTML(d) {
         </span>` : ''}
         <button type="button" class="pl6-porem" data-pl6-acao="${m.on}" style="margin-left:auto;border:1px solid ${m.acaoBorda};border-radius:999px;background:${m.acaoBg};min-height:30px;padding:0 12px;font:800 10px 'Poppins',sans-serif;color:${m.acaoCor};cursor:pointer;white-space:nowrap;">${m.acao}</button>
       </span>
+      ${m.toquesHTML || ''}
+      ${m.reciclado ? `<span class="pl7-reciclado">${m.reciclado}</span>` : ''}
+      ${m.decidir && !m.reciclado ? `<button type="button" class="pl7-decidir-bt" data-pl6-acao="${m.decidir}" aria-expanded="${m.decidirAberto}">decidir ▾</button>` : ''}
+      ${m.decidirAberto ? `<span class="pl7-decidir"><button type="button" data-pl6-acao="${m.reciclar}">reciclar · volta em 60 d</button><button type="button" data-pl6-acao="${m.perder}">perdido</button><button type="button" data-pl6-acao="${m.avancar}">avançar: pôr na semana</button></span>` : ''}
       ${m.poremAberto ? `<span style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;">${m.poremDias.map(pd => `<button type="button" data-pl6-acao="${pd.on}" style="display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font:800 10px 'Poppins',sans-serif;color:var(--ink);cursor:pointer;">${pd.rot}<span style="color:var(--muted2);font-weight:700;">${pd.n}</span></button>`).join('')}</span>` : ''}
     </div>`).join('');
 
-  const fichaCamposHTML = (d.fichaCampos || []).map(fc => `
+  const fichaCamposHTML = (d.fichaToquesHTML || '') + (d.fichaCampos || []).map(fc => `
     <span style="display:flex;gap:12px;background:var(--creme);padding:9px 13px;min-width:0;"><span style="flex:none;width:76px;font:900 8.5px 'Poppins',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);padding-top:2px;">${fc.rot}</span><span style="min-width:0;font:700 11px/1.5 'Poppins',sans-serif;color:${fc.cor};overflow-wrap:anywhere;">${fc.v}</span></span>`).join('');
 
   const fichaEtapasHTML = (d.fichaEtapas || []).map(fe => `
@@ -42675,6 +42709,35 @@ function pl6Ligar(box, rep) {
          com regra faltando, envia e diz quais faltam. */
       /* o MINI MAPA: abrir/trocar/fechar o dia, e encaixar a conta "por perto" na 1ª vaga do dia —
          o mesmo gesto de pôr no dia (agendarNoSlot: tarefa no HubSpot + grade) */
+      /* PERDIDO pela mudança de etapa da ficha (pede o motivo, como o kanban). É um verbo e não
+         data-pl6-fi-etapa porque o cartão inteiro tem data-pl6-acao (abrir a ficha), e o closest
+         acharia o cartão antes do botão. */
+      if (verbo === 'pl7perder') {
+        s.pl7DecidirDe = null;
+        return pl6MoverPelaFicha(rep, String(arg), '1396006164', async function () { pl6Ficha = null; await redesenhar(); });
+      }
+      if (verbo === 'pl7decidir') { s.pl7DecidirDe = s.pl7DecidirDe === arg ? null : arg; return redesenhar(); }
+      /* RECICLAR: a conta fica na Reciclagem e ganha a tarefa de retorno daqui a 60 dias, no negócio,
+         com o executivo como dono — e o retorno espelha na agenda, como todo passo */
+      if (verbo === 'pl7reciclar') {
+        const lr = pl6LeadDaRef(rep, 'm:' + arg);
+        if (!lr || !lr.dealId) { s.toast = 'essa conta saiu da sua base — recarreguei a lista'; return redesenhar(); }
+        const volta = new Date(Date.now() + 60 * 86400000);
+        const iso = volta.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        s.pl7DecidirDe = null;
+        const r = await supa.functions.invoke('hubspot-sync', { body: { type: 'create_task', id_hubspot: String(lr.dealId),
+          titulo: 'Retomar contato · ' + String(lr.nome || '').trim(), descricao: 'Reciclagem decidida no Planejamento: volta em 60 dias.',
+          due_at: iso + 'T12:00:00.000Z', owner_id: String(rep.ownerId), concluida: false } }).then(function (x) { return x; }, function (e) { return { error: e }; });
+        if (r.error || (r.data && r.data.error)) {
+          if (typeof mostrarToast === 'function') mostrarToast('O HubSpot recusou o retorno: ' + ((r.error && r.error.message) || r.data.error), 'erro');
+          return redesenhar();
+        }
+        if (typeof espelharPassoNasTelas === 'function') espelharPassoNasTelas(lr._bruto || lr, iso, 'Follow-up', String(rep.ownerId), '09:00', { silencioso: true });
+        if (!s.pl7Reciclados) s.pl7Reciclados = {};
+        s.pl7Reciclados[lr.id] = 'reciclada · volta em ' + iso.slice(8, 10) + '/' + iso.slice(5, 7) + ' · tarefa no HubSpot';
+        s.toast = lr.nome + ' reciclada · retorno em ' + iso.slice(8, 10) + '/' + iso.slice(5, 7) + ' no HubSpot';
+        return redesenhar();
+      }
       if (verbo === 'pl7mapa') {
         const alvo = Number(arg);
         s.pl7MapaDia = s.pl7MapaDia === alvo ? null : alvo;
@@ -88003,7 +88066,7 @@ PL7.selo = function (l, naGrade, hoje) {
   if (g === 'quente') return { tag: 'QUENTE', cor: '#FFFFFF', bg: PL7.COR.quente };
   if (g === 'venc') { const a = PL7.atraso(l); return { tag: a === 1 ? 'VENCEU ONTEM' : 'VENCEU HÁ ' + a + ' D', cor: '#92400E', bg: '#FEF3C7' }; }
   if (g === 'cnpj') return { tag: 'CNPJ NOVO · ' + PL7.diasCnpj(l, hoje) + ' D', cor: '#FFFFFF', bg: PL7.COR.cnpj };
-  if (l && (l.tipo === 'r' || l.etapa === 'Reciclagem')) return { tag: 'RECICLAGEM', cor: '#FFFFFF', bg: '#4B5563' };
+  if (l && l.etapa === 'Reciclagem') return { tag: 'RECICLAGEM', cor: '#FFFFFF', bg: '#4B5563' };
   return { tag: 'SEM PASSO', cor: '#B3121F', bg: '#FDECEC' };
 };
 /* a 3ª linha do cartão na aba Cadência: a data que explica o selo */
@@ -88208,6 +88271,33 @@ PL7.mapaAposPintar = function (raiz) {
     GV2.rotaMapa.google(el, pts, dias);
     if (el._gv2rt && el._gv2rt.google) PL7.mapaGuardado = el._gv2rt;
   }, function () {});
+};
+
+/* ── OS TOQUES DAS 6 SEMANAS (Planejamento v2, fase 5; migration 0214, toques_por_semana) ──
+   Um quadradinho por semana, do mais antigo ao atual: verde teve toque registrado (visita com
+   check-in, ficha, ligação/WhatsApp no app, registro da aba Tarefas). Um buraco no meio quer dizer
+   que a conta esfriou. Sem a leitura ainda, nada aparece — nunca 6 quadrados vazios (o zero que
+   tranquiliza); negócio que a função não devolve (sem pino) também fica sem a linha. */
+PL7.toques = { cache: {}, pedidos: {} };
+PL7.toquesDe = function (dealId) { const v = PL7.toques.cache[String(dealId)]; return Array.isArray(v) ? v : null; };
+PL7.toquesPedir = function (ids, aoChegar) {
+  if (typeof supa === 'undefined' || !supa || !supa.rpc) return;
+  const falta = (ids || []).filter(Boolean).map(String).filter(function (id, i, a) {
+    return a.indexOf(id) === i && !(id in PL7.toques.cache) && !PL7.toques.pedidos[id];
+  });
+  if (!falta.length) return;
+  falta.forEach(function (id) { PL7.toques.pedidos[id] = true; });
+  Promise.resolve(supa.rpc('toques_por_semana', { p_deals: falta })).then(function (r) {
+    const d = r && !r.error && r.data && typeof r.data === 'object' ? r.data : {};
+    falta.forEach(function (id) { PL7.toques.cache[id] = Array.isArray(d[id]) ? d[id] : 'sem'; delete PL7.toques.pedidos[id]; });
+    if (aoChegar) aoChegar();
+  }, function () { falta.forEach(function (id) { delete PL7.toques.pedidos[id]; }); });
+};
+PL7.toquesHTML = function (arr, grande) {
+  if (!Array.isArray(arr) || arr.length !== 6) return '';
+  const n = arr.filter(Boolean).length;
+  return '<span class="pl7-toques' + (grande ? ' is-grande' : '') + '" title="' + n + ' de 6 semanas com toque registrado"><small>toques · 6 sem</small>'
+    + arr.map(function (v) { return '<i' + (v ? ' class="is-ok"' : '') + '></i>'; }).join('') + '</span>';
 };
 
 GV2.instalar();

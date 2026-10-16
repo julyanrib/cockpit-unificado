@@ -1331,6 +1331,29 @@ tabelas.gv2_falta_etapa = [
           && /href="\/\?agenda=2026-10-20"/.test(md) && /data-pl7-mapa="/.test(md) && /pl7-md-dia is-on" data-pl6-acao="pl7mapa:1"/.test(md));
       checar('pl7 · mapa: sem dia aberto, nada', P.mapaDiaHTML({ dias: [{ rot: 'seg', data: '19/10' }] }) === '');
     }
+    if (P) {
+      const tq = P.toquesHTML([true, false, false, true, true, false]);
+      checar('pl7 · toques: 6 quadrados do mais antigo ao atual, verde onde teve toque; sem leitura, nada (nunca 6 vazios)',
+        (tq.match(/<i/g) || []).length === 6 && (tq.match(/is-ok/g) || []).length === 3 && /3 de 6 semanas/.test(tq) && P.toquesHTML(null) === '' && P.toquesHTML([true]) === '');
+      const rpc0 = global.supa.rpc;
+      const pedidos = [];
+      global.supa.rpc = function (nome, args) { pedidos.push({ nome: nome, args: args }); return Promise.resolve({ data: { '111': [true, true, false, false, false, true] }, error: null }); };
+      let chegou = 0;
+      P.toques.cache = {}; P.toques.pedidos = {};
+      P.toquesPedir(['111', '222', '111', null], function () { chegou++; });
+      await new Promise(function (r) { setTimeout(r, 10); });
+      P.toquesPedir(['111', '222'], function () { chegou++; });
+      await new Promise(function (r) { setTimeout(r, 10); });
+      checar('pl7 · toques: pede em lote, sem repetir id, uma vez só; o que não veio fica sem linha',
+        pedidos.length === 1 && pedidos[0].nome === 'toques_por_semana' && pedidos[0].args.p_deals.join() === '111,222' && chegou === 1
+          && Array.isArray(P.toquesDe('111')) && P.toquesDe('222') === null, JSON.stringify(pedidos));
+      global.supa.rpc = rpc0;
+    }
+    checar('pl7 · no template: Reciclagem decide — reciclar cria o retorno em 60 d no HubSpot e espelha na agenda; perdido passa pela ficha (com motivo)',
+      /decidir: l\.etapa === 'Reciclagem' && pl7/.test(tpl)
+        && /if \(verbo === 'pl7reciclar'\)[\s\S]{0,1200}type: 'create_task'[\s\S]{0,1400}espelharPassoNasTelas\(/.test(tpl)
+        && /if \(verbo === 'pl7perder'\)[\s\S]{0,200}pl6MoverPelaFicha\(rep, String\(arg\), '1396006164'/.test(tpl)
+        && /data-pl6-acao="\$\{m\.perder\}">perdido</.test(tpl));
     checar('pl7 · no template: o mini mapa abre pelo botão "rota" do dia, desenha depois de cada pintura e encaixa pelo agendarNoSlot',
       /data-pl6-acao="\$\{dia\.pl7MapaOn\}"/.test(tpl) && (tpl.match(/GV2\.PL7\.mapaAposPintar\(/g) || []).length === 2
         && /if \(verbo === 'pl7encaixar'\)[\s\S]{0,250}return agendarNoSlot\(par\[0\], diE, primeiraVaga\(diE\), null\);/.test(tpl));
