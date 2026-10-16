@@ -1283,10 +1283,29 @@ tabelas.gv2_falta_etapa = [
         /3 de 6 negócios seus sem próximo passo\./.test(bl) && /fora dele, 1 conta nova \(CNPJ até 90 d\) sem visita/.test(bl)
           && /3 de 6 negócios com próximo passo datado/.test(bl) && (bl.match(/class="pl7-seg"/g) || []).length === 4
           && /data-pl6-acao="cadaba:q"/.test(bl) && /data-pl6-acao="cadaba:cn"/.test(bl) && /0 de 5/.test(bl));
+      /* MONTAR A SEMANA, EM RASCUNHO: propõe nos dias que não passaram, até a meta, na ordem da
+         cadência, sem conta nova; o que foi tirado não volta */
+      const filaM = todos.filter(function (l) { const g = P.grupo(l, naGrade, H); return g === 'quente' || g === 'venc' || g === 'outro'; }).sort(P.comparar(naGrade, H));
+      const gradeM = [cheio(5), cheio(6), [], cheio(4), cheio(6)];
+      const prop = P.montar([n('n-x', 3)].concat(filaM), gradeM, dias, 6, function (v) { return v; }, function (iso) { return iso === '2026-10-21'; }, new Set());
+      checar('pl7 · montar: completa só os dias abaixo de 6 que não passaram, na ordem da cadência, sem conta nova',
+        prop.total === 3 && prop[0].di === 0 && prop[0].itens.map(function (l) { return l.id; }).join() === 'c-neg'
+          && prop[1].di === 3 && prop[1].itens.map(function (l) { return l.id; }).join() === 'c-vis,c-pro', JSON.stringify(prop.map(function (d) { return [d.di, d.itens.map(function (l) { return l.id; })]; })));
+      const prop2 = P.montar(filaM, gradeM, dias, 6, function (v) { return v; }, function () { return false; }, new Set(['c-neg']));
+      checar('pl7 · montar: o que ele tirou do rascunho não é proposto de novo', prop2.every(function (d) { return d.itens.every(function (l) { return l.id !== 'c-neg'; }); }));
+      const rf = P.rascunhoHTML(prop, {});
+      const ra = P.rascunhoHTML(prop, { aberto: true });
+      checar('pl7 · montar: fechado é um botão que só propõe; aberto mostra os dias, "tirar" em cada um e o confirmar',
+        /data-pl6-acao="pl7montar"/.test(rf) && /propor 3 contas/.test(rf) && !/pl7confirmar/.test(rf)
+          && (ra.match(/data-pl6-acao="pl7tirar:/g) || []).length === 3 && /data-pl6-acao="pl7confirmar"/.test(ra) && /Nada foi gravado/.test(ra));
+      checar('pl7 · montar: sem o que propor, diz por quê (sem botão morto)', /já estão com a meta/.test(P.rascunhoHTML(P.montar([], gradeM, dias, 6, function (v) { return v; }, null, new Set()), {})));
       const ab = P.abasHTML(cad, 'v');
       checar('pl7 · as 4 abas com o número e a descrição da aberta', (ab.match(/<button type="button" class="pl7-aba/g) || []).length === 4 && /pl7-aba is-on" data-pl6-acao="faixa:v"/.test(ab) && /o dia passou sem ser feito/.test(ab));
       global.pl6AtrasoDoPasso = at0; global.pl6PassoFuturo = fu0;
     }
+    checar('pl7 · no template: confirmar o rascunho grava pelo agendarNoSlot de sempre, uma conta por vez, e propor não grava',
+      /if \(verbo === 'pl7confirmar'\)[\s\S]{0,900}await agendarNoSlot\(it\.id, it\.di, primeiraVaga\(it\.di\), null\)/.test(tpl)
+        && /if \(verbo === 'pl7montar'\) \{ s\.pl7Aberto = true; s\.pl7Feito = null; s\.pl7Fora = new Set\(\); return redesenhar\(\); \}/.test(tpl));
     checar('pl7 · no template: a Cadência é o 7º propósito, abre por padrão, e a legenda tem o clique "cadaba"',
       /\{ id: 'cad', nome: 'Cadência'/.test(tpl) && /const propAtivo = s\.proposito \|\| \(typeof GV2 !== 'undefined' && GV2\.PL7 \? 'cad'/.test(tpl)
         && /if \(verbo === 'cadaba'\)/.test(tpl) && /\$\{d\.cadHTML \|\| ''\}/.test(tpl) && /\$\{d\.cadAbasHTML \|\| ''\}/.test(tpl));
