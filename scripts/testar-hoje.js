@@ -167,7 +167,7 @@ checar('sem registro o script não afirma que o dia foi vazio',
    herói (a prancha manda). O que a guarda protege continua: a tela diz de onde vem o número
    e explica a ordem da fila. */
 checar('cada número diz de que ação da rua nasce (o cockpit é o cérebro das ações do app)',
-  template.indexOf("'das suas visitas com prova no app'") > -1 && template.indexOf("'das suas fichas no app'") > -1 && template.indexOf("'das reuniões que passaram'") > -1);
+  template.indexOf("'das suas visitas com prova no app'") > -1 && template.indexOf("'portas do app · passos e vendas do HubSpot'") > -1 /* 15/10/26: decisor, demo e proposta vêm do HubSpot; "das suas fichas" virou mentira */ && template.indexOf("'das reuniões que passaram'") > -1);
 checar('e a fila diz a regra dela em uma linha',
   template.indexOf('a fila de sempre · ★ é a melhor ação') > -1);
 

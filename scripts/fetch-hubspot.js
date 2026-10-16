@@ -1175,13 +1175,18 @@ async function hsSearchAll(body) {
   let todos = [];
   let after = undefined;
   let seguraLoop = 0;
-  while (seguraLoop < 20) { // trava de segurança — nenhuma consulta daqui deveria ter 2000+ resultados
+  /* AUDITORIA 15/10/26: a trava era de 20 páginas (2.000) e cortava calada. O total de Perdido já
+     passava de 1.800 e o histórico de 120 dias do pipeline inteiro chega perto: o funil geral e os
+     passos do mês perderiam negócios ao acaso. Agora vai até o teto da própria busca do HubSpot
+     (10.000) e AVISA se ainda sobrar página. */
+  while (seguraLoop < 100) {
     seguraLoop++;
     const data = await hsSearch({ ...body, limit: 100, after });
     todos = todos.concat(data.results || []);
     after = data.paging && data.paging.next ? data.paging.next.after : null;
     if (!after) break;
   }
+  if (after) console.warn('[hsSearchAll] parou em ' + todos.length + ' resultados com página sobrando: o número pode estar cortado');
   return todos;
 }
 
