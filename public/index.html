@@ -29161,7 +29161,8 @@ function pl6DadosFinal(rep) {
       ? 'na mão — clique num horário da semana' : 'pegar outro bloco ▸',
 
     propositos: PL6_PROPOSITOS.map(function (p) {
-      const n = comProposito.filter(function (l) { return l.proposito === p.id; }).length;
+      const n = p.id === 'cad' ? (pl7Cad ? pl7Cad.sem + pl7Cad.cnpj : 0)
+        : comProposito.filter(function (l) { return l.proposito === p.id; }).length;
       const on = propAtivo === p.id;
       const ruaNaMao = p.id === 'rua' && !!(s.sel && s.sel.bloco === PL6_RUA);
       const nRua = pl6BlocosDeRuaNaSemana(grade);
@@ -66397,6 +66398,7 @@ EXH4.clique = function (cmd, a) {
 const PL7 = GV2.PL7 = {};
 PL7.QUENTES = ['1395880470', '1395880471', '1395880472'];
 PL7.AG_PGTO = '1395880473';
+PL7.RECICLAGEM = '1398311191';
 PL7.ORDEM = { quente: 0, venc: 1, cnpj: 2, outro: 3 };
 PL7.COR = { passo: '#1E9E7B', quente: '#E51A31', venc: '#D97706', cnpj: '#2563EB', outro: '#F2A7A7' };
 PL7.ROT = { passo: 'com próximo passo', quente: 'quentes sem data', venc: 'follow-up vencido', cnpj: 'CNPJ novo · 90 d', outro: 'outros sem passo' };
@@ -66429,7 +66431,8 @@ PL7.grupo = function (l, naGrade, hoje) {
     if (d == null || d > 90) return null;
     return noPlano ? 'passo' : 'cnpj';
   }
-  if (l.tipo !== 'c' && l.tipo !== 'r') return null;
+  if (l.tipo !== 'c') return null;
+  if (String(l.stageId) === PL7.RECICLAGEM || l.etapa === 'Reciclagem') return null;
   if (String(l.stageId) === PL7.AG_PGTO) return null;
   const at = PL7.atraso(l);
   if (noPlano || PL7.passoFuturo(l) || at === 0) return 'passo';
@@ -66439,12 +66442,12 @@ PL7.grupo = function (l, naGrade, hoje) {
 };
 
 PL7.cadencia = function (todos, naGrade, hoje) {
-  const c = { passo: 0, quente: 0, venc: 0, cnpj: 0, outro: 0, total: 0, negocios: 0, negociosSem: 0 };
+  const c = { passo: 0, quente: 0, venc: 0, cnpj: 0, outro: 0, total: 0, cnpjNoPlano: 0 };
   (todos || []).forEach(function (l) {
     const g = PL7.grupo(l, naGrade, hoje);
     if (!g) return;
+    if (l.tipo === 'n') { if (g === 'cnpj') c.cnpj += 1; else c.cnpjNoPlano += 1; return; }
     c[g] += 1; c.total += 1;
-    if (l.tipo !== 'n') { c.negocios += 1; if (g !== 'passo') c.negociosSem += 1; }
   });
   c.sem = c.total - c.passo;
   c.pct = c.total ? Math.round(c.passo / c.total * 100) : 100;
@@ -66461,9 +66464,9 @@ PL7.regras = function (cad, grade, dias, meta, slotId, diaPassou) {
   const r = [
     { n: 1, t: 'Todo quente com data na semana', ok: cad.quente === 0, st: cad.quente + (cad.quente === 1 ? ' quente sem data' : ' quentes sem data'), aba: 'q' },
     { n: 2, t: 'Todo passo marcado cumprido', ok: cad.venc === 0, st: cad.venc + (cad.venc === 1 ? ' follow-up vencido' : ' follow-ups vencidos'), aba: 'v' },
-    { n: 3, t: 'Todo CNPJ novo com visita marcada', ok: cad.cnpj === 0, st: cad.cnpj + ' sem visita', aba: 'cn' },
+    { n: 3, t: 'Todo CNPJ novo com visita marcada', ok: cad.cnpj === 0, st: cad.cnpj + (cad.cnpj === 1 ? ' conta nova sem visita' : ' contas novas sem visita'), aba: 'cn' },
     { n: 4, t: 'Todo dia com ' + m + '+ no plano', ok: abertos.length > 0 && abaixo === 0, st: abertos.length ? (abaixo === 1 ? '1 dia abaixo de ' + m : abaixo + ' dias abaixo de ' + m) : 'a semana já passou', aba: null },
-    { n: 5, t: 'Toda conta com próximo passo', ok: cad.sem === 0, st: cad.sem + ' sem próximo passo', aba: 'todos' }
+    { n: 5, t: 'Todo negócio com próximo passo', ok: cad.sem === 0, st: cad.sem + (cad.sem === 1 ? ' negócio sem próximo passo' : ' negócios sem próximo passo'), aba: 'todos' }
   ];
   r.feitas = r.filter(function (x) { return x.ok; }).length;
   return r;
@@ -66501,17 +66504,19 @@ PL7.comparar = function (naGrade, hoje) {
 PL7.blocoHTML = function (cad, regras) {
   const e = GV2.e;
   const zero = cad.sem === 0;
-  const seg = ['passo', 'quente', 'venc', 'cnpj', 'outro'].filter(function (g) { return cad[g] > 0; }).map(function (g) {
+  const seg = ['passo', 'quente', 'venc', 'outro'].filter(function (g) { return cad[g] > 0; }).map(function (g) {
     return '<i class="pl7-seg" style="flex-grow:' + cad[g] + ';background:' + PL7.COR[g] + '" title="' + e(PL7.ROT[g] + ': ' + cad[g]) + '"></i>';
   }).join('');
   const aba = { quente: 'q', venc: 'v', cnpj: 'cn', outro: 'todos' };
-  const leg = ['passo', 'quente', 'venc', 'cnpj', 'outro'].map(function (g) {
+  const leg = ['passo', 'quente', 'venc', 'outro', 'cnpj'].map(function (g) {
     const tag = g === 'passo' ? 'span' : 'button';
     return '<' + tag + (g === 'passo' ? '' : ' type="button" data-pl6-acao="cadaba:' + aba[g] + '"') + ' class="pl7-leg"><i style="background:' + PL7.COR[g] + '"></i>' + e(PL7.ROT[g]) + ' <b>' + cad[g] + '</b></' + tag + '>';
   }).join('');
-  const titulo = zero ? 'Toda a carteira com próximo passo.' : cad.sem + ' de ' + cad.total + (cad.total === 1 ? ' conta' : ' contas') + ' sem próximo passo.';
-  const pedaco = cad.total > cad.negocios
-    ? '<span class="pl7-pedaco">' + e(cad.negociosSem + ' negócios do funil + ' + (cad.sem - cad.negociosSem) + ' CNPJ novos sem visita') + '</span>' : '';
+  const titulo = !cad.total ? 'Nenhum negócio aberto no seu funil.'
+    : zero ? 'Seus ' + cad.total + ' negócios têm próximo passo.'
+    : cad.sem + ' de ' + cad.total + (cad.total === 1 ? ' negócio seu' : ' negócios seus') + ' sem próximo passo.';
+  const pedaco = '<span class="pl7-pedaco">' + e('o seu funil aberto, de Prospecção a Negociação'
+    + (cad.cnpj ? ' · fora dele, ' + cad.cnpj + (cad.cnpj === 1 ? ' conta nova (CNPJ até 90 d) sem visita' : ' contas novas (CNPJ até 90 d) sem visita') : '')) + '</span>';
   const marcas = regras.map(function (r) { return '<i class="pl7-marca' + (r.ok ? ' is-ok' : '') + '"></i>'; }).join('');
   const regrasHTML = regras.map(function (r) {
     const corpo = '<i class="pl7-r-n">' + (r.ok ? '✓' : r.n) + '</i><span><b>' + e(r.t) + '</b><small>' + e(r.ok ? 'em dia' : r.st) + '</small></span>';
@@ -66523,7 +66528,7 @@ PL7.blocoHTML = function (cad, regras) {
     + '<div class="pl7-cab"><div class="pl7-cab-txt"><small>CADÊNCIA DA CARTEIRA · QUEM SE PLANEJA VENDE</small>'
     + '<h2>' + e(titulo) + '</h2>' + pedaco
     + '<p>Toda conta sai daqui com um dia na agenda ou com uma decisão. Lead sem próximo passo não volta sozinho.</p></div>'
-    + '<div class="pl7-cab-num"><div class="pl7-pct"><b>' + cad.pct + '%</b><span>' + cad.passo + ' de ' + cad.total + ' com próximo passo datado</span><em>meta 100%</em></div>'
+    + '<div class="pl7-cab-num"><div class="pl7-pct"><b>' + cad.pct + '%</b><span>' + cad.passo + ' de ' + cad.total + (cad.total === 1 ? ' negócio' : ' negócios') + ' com próximo passo datado</span><em>meta 100%</em></div>'
     + '<div class="pl7-barra">' + seg + '</div><div class="pl7-legs">' + leg + '</div></div></div>'
     + '<div class="pl7-sem"><div class="pl7-sem-cab"><b>A cadência da semana</b><span>· o plano só está pronto com as 5 verdes</span>'
     + '<span class="pl7-marcas">' + marcas + '<b class="' + (regras.feitas === 5 ? 'is-ok' : '') + '">' + regras.feitas + ' de 5</b></span></div>'
@@ -66533,7 +66538,7 @@ PL7.blocoHTML = function (cad, regras) {
 
 PL7.abasHTML = function (cad, abaAtiva) {
   const e = GV2.e;
-  const n = function (a) { return a.g ? cad[a.g] : cad.sem; };
+  const n = function (a) { return a.g ? cad[a.g] : cad.sem + cad.cnpj; };
   const ativa = PL7.abas.filter(function (a) { return a.id === abaAtiva; })[0] || PL7.abas[0];
   return '<div class="pl7-abas">' + PL7.abas.map(function (a) {
     return '<button type="button" class="pl7-aba' + (a.id === ativa.id ? ' is-on' : '') + '" data-pl6-acao="faixa:' + a.id + '" aria-pressed="' + (a.id === ativa.id) + '">'
