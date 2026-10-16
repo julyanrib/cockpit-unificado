@@ -55684,7 +55684,7 @@ GV2.excecoesLista = function () {
   const parados = b.pessoas.filter(function (p) { return p.hoje.paradas_plano > 0 && p.hoje.visitas_com_prova === 0 && !b.antesDaJornada; });
   const furaram = b.pessoas.filter(function (p) { return p.furou > 0; });
   const qsp = b.negocios.filter(function (n) { return n.quente && !n.agPag && !n.proximo_passo; });
-  const topTr = b.negocios.filter(function (n) { return n.puxar && n.mrr; }).sort(function (x, y) { return y.mrr - x.mrr; })[0];
+  const topTr = b.negocios.filter(function (n) { return n.travado && n.mrr; }).sort(function (x, y) { return y.mrr - x.mrr; })[0];
   if (semPlano.length) ex.push({
     t: GV2.lista(semPlano.map(function (p) { return GV2.prim(p.nome); })) + ' sem rota hoje',
     s: semPlano.map(function (p) { return GV2.prim(p.nome) + ': ' + (p.hoje.agenda && p.hoje.agenda.n ? GV2.resumoDosCompromissos(p.hoje.agenda) : 'nada na agenda'); }).join(' · ') + ' · Ontem: ' + semPlano.map(function (p) { return GV2.prim(p.nome) + (p.ontem.paradas_plano ? ' provou ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : p.ontem.visitas_com_prova ? ' provou ' + p.ontem.visitas_com_prova + ' sem plano' : ' sem plano'); }).join(' · '),
@@ -56558,7 +56558,7 @@ GV2.montar = async function (so) {
         dias: dias, regua: regua, mrr: mrr, proximo_passo: ppTxt, plano: l.plano_apresentado || null,
         quente: idx >= 4, negociacao: idx === 4, morno: idx === 2 || idx === 3, agPag: agPag,
         travado: travado, semPasso: !agPag && idx >= 1 && !ppTxt,
-        puxar: !agPag && travado && !ppTxt,
+        puxar: !agPag && (travado || (idx === 4 && !ppTxt)),
         rep: 1, outros: [],
         lead: l
       });
@@ -56851,7 +56851,7 @@ GV2.montar = async function (so) {
     hubspotEm: hsEm,
     nomeCliente: nomeCliente,
     faltas: faltas, cru: { fichas: (L.fichasArmas && L.fichasArmas.data) || null, umAUm: (L.umAUm && L.umAUm.data) || [], visitas4: (L.visitas4 && L.visitas4.data) || null, visitas4Erro: L.visitas4 && L.visitas4.erro, idas: (L.idas && L.idas.data) || [], idasErro: L.idas && L.idas.erro },
-    regras: 'Visita = check-in com prova no app (GPS a até 200 m do pino, ou foto da fachada). Meta do dia = 6 visitas com prova por dia útil (meta, não teto: toda visita conta). Ritmo às ' + GV2.hm() + ' = ' + Math.round(fracao * 100) + '% da meta do dia (jornada de 8h30 a 17h30). Quente = Negociação ou Ag. Pagamento; Ag. Pagamento é do financeiro: fica fora de travado, de sem passo e de Cobrar. Travado = estourou a régua da etapa (5 · 5 · 4 · 3 · 7 · 2 dias úteis), a mesma do Meu funil. Cobrar = travado e sem próximo passo (sem tarefa ou reunião futura no HubSpot e fora do Planejamento): lead dentro do prazo da etapa não é cobrado. Provável = fechados + Ag. Pagamento + 60% dos negócios em Negociação, por pessoa; o do time é a soma. Negócio repetido (mesmo restaurante, mesmo dono) conta uma vez, na etapa mais avançada. Proposta = entrou em Negociação no mês. Fechado = vendas do mês no HubSpot (data de fechamento, com o ajuste de competência). Decisor, Demo e Proposta = negócios que entraram na etapa no mês, um por negócio.'
+    regras: 'Visita = check-in com prova no app (GPS a até 200 m do pino, ou foto da fachada). Meta do dia = 6 visitas com prova por dia útil (meta, não teto: toda visita conta). Ritmo às ' + GV2.hm() + ' = ' + Math.round(fracao * 100) + '% da meta do dia (jornada de 8h30 a 17h30). Quente = Negociação ou Ag. Pagamento; Ag. Pagamento é do financeiro: fica fora de travado, de sem passo e de Cobrar. Travado = estourou a régua da etapa (5 · 5 · 4 · 3 · 7 · 2 dias úteis), a mesma do Meu funil. Provável = fechados + Ag. Pagamento + 60% dos negócios em Negociação, por pessoa; o do time é a soma. Negócio repetido (mesmo restaurante, mesmo dono) conta uma vez, na etapa mais avançada. Proposta = entrou em Negociação no mês. Fechado = vendas do mês no HubSpot (data de fechamento, com o ajuste de competência). Decisor, Demo e Proposta = negócios que entraram na etapa no mês, um por negócio.'
   };
 };
 GV2.nomeDeLista = function (pessoas, id) { const p = pessoas.find(function (x) { return x.id === String(id); }); return p ? p.nome : 'fora do time'; };
@@ -57182,10 +57182,9 @@ GV2.cobrarNoApp = async function (p, texto, chave) {
   GV2.pintar();
   return ok;
 };
-GV2.cobrarNegocio = async function (id, porProposta) {
+GV2.cobrarNegocio = async function (id) {
   const n = GV2.base.negocios.find(function (x) { return x.id === id; });
-
-  if (!n || n.agPag || (!porProposta && !n.puxar)) { if (n && !n.agPag) GV2.toast('Este negócio está no prazo da etapa ou já tem próximo passo: não entra na cobrança.', 'atencao'); return; }
+  if (!n || n.agPag) return;
   const p = GV2.base.porId[n.dono];
   GV2.estado.cobrados['neg:' + id] = '…'; GV2.pintar();
   try {
@@ -57367,7 +57366,7 @@ GV2.clique = function (ev) {
     if (parte[1] === 'pessoa') return GV2.cobrarPessoa(parte[2]);
     if (parte[1] === 'semplano') return GV2.loteAbrir('semplano');
     if (parte[1] === 'lote') return GV2.loteAbrir('negocios');
-    if (parte[1] === 'prop') { const r = GV2.base.propostas.lista[Number(parte[2])]; if (r) return GV2.cobrarNegocio(r.deal, true); }
+    if (parte[1] === 'prop') { const r = GV2.base.propostas.lista[Number(parte[2])]; if (r) return GV2.cobrarNegocio(r.deal); }
     return;
   }
   if (cmd === 'ligar') return GV2.chamarPessoa(parte[1]);
@@ -59500,7 +59499,7 @@ GV2.p3Funil = function (p) {
       + '<span>' + GV2.html.btn({ texto: cob ? 'cobrado ' + cob : 'Cobrar', acao: 'cobrar:neg:' + n.id, feito: !!cob }) + '</span></div>';
   }).join('');
   return GV2.render.funilPessoa(p)
-    + '<div class="gv2-p3-puxar"><div class="gv2-p3-puxar-cab"><div><b>' + GV2.e('Para puxar · travados sem próximo passo · ' + puxar.length) + '</b><span>armas = sistema, dor, decisor e horário, de Demo em diante</span></div>'
+    + '<div class="gv2-p3-puxar"><div class="gv2-p3-puxar-cab"><div><b>' + GV2.e('Para puxar · travados e quentes sem passo · ' + puxar.length) + '</b><span>armas = sistema, dor, decisor e horário, de Demo em diante</span></div>'
     + (puxar.length ? GV2.html.btn({ texto: GV2.cobrarN(puxar.length), tipo: 'prim', acao: 'p3:cobrartodos:' + p.id }) : '') + '</div>'
     + (puxar.length ? '<div class="gv2-p3-neg is-cab"><span>Negócio</span><span>Etapa</span><span>Dias · régua</span><span>MRR</span><span>Armas</span><span>Próximo passo</span><span></span></div>' + linhas
       : '<div class="gv2-p3-vazio is-ok"><b>Nada travado e nenhum quente sem passo.</b><span>Nada a cobrar no funil.</span></div>') + '</div>'
@@ -59956,7 +59955,7 @@ GV2.p3Resumo = function (p) {
     + cartao('ritmo', 'Ritmo', z == null ? '—' : GV2.virg(z) + '/dia', 'meta ' + p.meta_visitas_dia + (w.length ? ' · ' + GV2.virg(w[0]) + ' → ' + GV2.virg(z) + ' em 4 sem.' : ''), z != null && z < p.meta_visitas_dia * 0.9)
     + cartao('disc', 'Disciplina', reun == null ? '— reuniões' : GV2.pl(reun, 'reunião', 'reuniões'),
       reun == null ? 'não li as reuniões do app' : 'sem desfecho' + (d.nSemFicha != null ? ' · ' + GV2.pl(d.nSemFicha, 'porta', 'portas') + ' sem como foi' : ''), reun > 0)
-    + cartao('funil', 'Carteira', p.puxar.length + ' a puxar', (p.puxar.length ? GV2.rsCheio(p.mrrPuxar) + ' de MRR nesses' : 'nenhum travado sem próximo passo') + (p.semValor ? ' · ' + GV2.pl(p.semValor, 'negócio sem valor', 'negócios sem valor') : ''), p.puxar.length > 0)
+    + cartao('funil', 'Carteira', p.puxar.length + ' a puxar', (p.puxar.length ? GV2.rsCheio(p.mrrPuxar) + ' de MRR nesses' : 'nada travado nem quente sem passo') + (p.semValor ? ' · ' + GV2.pl(p.semValor, 'negócio sem valor', 'negócios sem valor') : ''), p.puxar.length > 0)
     + '</div>';
 };
 
@@ -60074,7 +60073,7 @@ GV2.p3Funil = function (p) {
       + '<span class="gv2-ellip ' + (n.proximo_passo || n.agPag ? 't-mute' : 't-av') + '">' + GV2.e(n.agPag ? 'cobrança do financeiro' : (n.proximo_passo || 'sem próximo passo')) + '</span>'
       + '<span>' + acao + '</span></div>';
   }).join('');
-  const titulo = sel != null ? GV2.ETAPAS[sel] + ' · ' + lista.length : 'Para puxar · travados sem próximo passo · ' + p.puxar.length;
+  const titulo = sel != null ? GV2.ETAPAS[sel] + ' · ' + lista.length : 'Para puxar · travados e quentes sem passo · ' + p.puxar.length;
   const rep = p.repetidos;
   const carteira = rep.length ? '<div class="gv2-v4-carteira"><div><b>' + GV2.e('Carteira limpa · ' + GV2.pl(rep.length, 'negócio repetido', 'negócios repetidos')) + '</b><span>' + GV2.e(rep.map(function (n) { return n.nome + ' ×' + n.rep; }).join(' · ')) + '</span><small>conta uma vez, na etapa mais avançada · nada é juntado no HubSpot</small></div>'
     + GV2.html.btn({ texto: 'Pedir para fechar o repetido', tipo: 'whats', icone: 'wa', acao: 'v4:repetidos:' + p.id }) + '</div>' : '';
@@ -61777,14 +61776,14 @@ GV2.v5Grupos = function () {
     btn: 'Ver na daily', acao: 'daily:abrir' });
 
   const vistos = {}, din = [];
-  b.negocios.filter(function (n) { return n.puxar && n.quente; }).concat(
-    b.pessoas.map(function (p) { return (p.puxar || []).slice().sort(function (x, y) { return y.mrr - x.mrr; })[0]; }).filter(Boolean)
+  b.negocios.filter(function (n) { return !n.agPag && n.quente && !n.proximo_passo; }).concat(
+    b.pessoas.map(function (p) { return (p.travados || []).slice().sort(function (x, y) { return y.mrr - x.mrr; })[0]; }).filter(Boolean)
   ).forEach(function (n) { if (!vistos[n.id] && !n.agPag) { vistos[n.id] = 1; din.push(n); } });
   din.sort(function (x, y) { return (y.mrr - x.mrr) || (y.dias - x.dias); });
   const top = din.slice(0, 3);
   if (top.length) {
     GV2.estado.v5Dinheiro = top.map(function (n) { return n.id; });
-    g.push({ k: 'dinheiro', l: 'Dinheiro parado', sev: 2, curta: 'travado sem passo', regra: 'travado sem próximo passo: o quente e o maior de cada um',
+    g.push({ k: 'dinheiro', l: 'Dinheiro parado', sev: 2, curta: 'quente sem passo', regra: 'quente sem próximo passo e o maior travado de cada um',
       chips: top.map(function (n) { const p = b.porId[n.dono]; return { ini: p ? p.iniciais : '—', n: n.nome, s: (n.mrr ? GV2.rsCheio(n.mrr) + ' · ' : '') + n.dias + ' d', tip: (p ? p.nome + ' · ' : '') + GV2.ETAPAS[n.etapa_idx] + ' há ' + n.dias + ' dias', a: 'ficha:' + n.id }; }),
       btn: top.length > 1 ? 'Cobrar os ' + top.length : 'Cobrar', acao: 'v5lote:dinheiro' });
   }
@@ -61954,7 +61953,7 @@ GV2.v5Lote = function (tipo) {
     const ids = GV2.estado.v5Dinheiro || [];
     const ns = tipo === 'travados'
       ? b.negocios.filter(function (n) { return n.puxar && !n.agPag; }).sort(function (x, y) { return (y.mrr - x.mrr) || (y.dias - x.dias); }).slice(0, 40)
-      : b.negocios.filter(function (n) { return ids.indexOf(n.id) >= 0 && n.puxar && !n.agPag; });
+      : b.negocios.filter(function (n) { return ids.indexOf(n.id) >= 0 && !n.agPag; });
     const por = {};
     ns.forEach(function (n) { (por[n.dono] = por[n.dono] || []).push(n); });
     GV2.estado.loteDados = { tipo: 'negocios', grupos: Object.keys(por).map(function (d) { const p = b.porId[d]; return { p: p, ns: por[d], texto: GV2.textoNegocios(p, por[d]) }; }) };
@@ -62404,7 +62403,7 @@ GV2.render.raiox = function () {
 
   const trav = b.negocios.filter(function (n) { return n.puxar && !n.agPag; }).sort(function (x, y) { return (y.mrr - x.mrr) || (y.dias - x.dias); });
   const cob = GV2.estado.cobrados;
-  const negs = '<section class="card gv2-v5-trav"><div class="gv2-v5-cab is-acao"><div><b>Negócios para puxar</b><span>' + GV2.e(GV2.pl(trav.length, 'travado', 'travados') + ' sem próximo passo (passou do prazo da etapa e não tem tarefa, reunião nem item no Planejamento) · lead no prazo não é cobrado · mais dinheiro primeiro') + '</span></div>'
+  const negs = '<section class="card gv2-v5-trav"><div class="gv2-v5-cab is-acao"><div><b>Negócios para puxar</b><span>' + GV2.e(GV2.pl(trav.filter(function (n) { return n.travado; }).length, 'travado', 'travados') + ' (passou do prazo da etapa) · ' + GV2.pl(trav.filter(function (n) { return !n.travado; }).length, 'sem próximo passo', 'sem próximo passo') + ' (no prazo, mas sem tarefa marcada nem item no Planejamento) · mais dinheiro primeiro') + '</span></div>'
     + '<button type="button" class="gv2-v5-btn" data-gv2="rxg:filtro:todos">Ver todos os negócios</button>' + (trav.length ? '<button type="button" class="gv2-v5-btn is-prim" data-gv2="v5lote:travados">' + GV2.e(GV2.cobrarN(Math.min(40, trav.length))) + '</button>' : '') + '</div>'
     + (trav.length ? trav.slice(0, 12).map(function (n) {
       const cc = cob['neg:' + n.id];

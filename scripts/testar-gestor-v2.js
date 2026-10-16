@@ -132,38 +132,6 @@ tabelas.gv2_falta_etapa = [
     b.negocios.map(n => n.nome + ':' + n.etapa_idx).join());
   const agp = b.negocios.find(n => n.id === 'c');
   checar('v4 · 4: Ag. Pagamento nunca é travado, sem passo nem "a puxar", mesmo estourando a régua', agp && agp.agPag && !agp.travado && !agp.semPasso && !agp.puxar);
-  /* COBRAR = TRAVADO E SEM PRÓXIMO PASSO (16/10/26, Julyan: "só cobrar tbm os travados sem proximo
-     passo na automação, nao os leads recentes"). Base: a = Negociação no prazo sem passo, b = Negociação
-     travada COM tarefa, d = Decisor travado sem passo. Antes a e b entravam no Cobrar. */
-  const nA = b.negocios.find(n => n.id === 'a'), nB = b.negocios.find(n => n.id === 'b'), nD = b.negocios.find(n => n.id === 'd');
-  checar('cobrar: lead no prazo da etapa e sem passo NÃO entra (a, Negociação 2 de 7 dias)', nA && !nA.travado && nA.semPasso && !nA.puxar, JSON.stringify(nA && [nA.travado, nA.semPasso, nA.puxar]));
-  checar('cobrar: travado COM próximo passo NÃO entra (b, tarefa futura no HubSpot)', nB && nB.travado && nB.proximo_passo && !nB.puxar, JSON.stringify(nB && [nB.travado, nB.proximo_passo, nB.puxar]));
-  checar('cobrar: travado sem próximo passo entra (d)', nD && nD.travado && !nD.proximo_passo && nD.puxar);
-  checar('cobrar: puxar é exatamente travado e sem passo, fora Ag. Pagamento, em todos os negócios',
-    b.negocios.every(n => n.puxar === (!n.agPag && n.travado && !n.proximo_passo)), b.negocios.map(n => n.id + ':' + n.puxar).join());
-  {
-    const fil0 = GV2.estado.filtro, veu0 = GV2.estado.veu, ld0 = GV2.estado.loteDados;
-    GV2.estado.filtro = 'todos';
-    GV2.loteAbrir('neg');
-    const noLote = [].concat.apply([], (GV2.estado.loteDados.grupos || []).map(g => g.ns.map(n => n.id))).sort().join();
-    checar('cobrar: o lote "Cobrar os N" do Raio X leva só o travado sem passo', noLote === 'd', noLote);
-    GV2.v5Grupos();
-    const chips = (GV2.estado.v5Dinheiro || []).slice().sort().join();
-    checar('cobrar: os chips do "Dinheiro parado" da Hoje são só travado sem passo', chips === 'd', chips);
-    GV2.v5Lote('dinheiro');
-    const din = [].concat.apply([], (GV2.estado.loteDados.grupos || []).map(g => g.ns.map(n => n.id))).sort().join();
-    checar('cobrar: o "Dinheiro parado" da Hoje leva só travado sem passo (nem a, quente no prazo, nem b, travado com tarefa)', din === 'd' || din === '', din);
-    GV2.v5Lote('travados');
-    const trv = [].concat.apply([], (GV2.estado.loteDados.grupos || []).map(g => g.ns.map(n => n.id))).sort().join();
-    checar('cobrar: o "Cobrar os N" do Funil leva só travado sem passo', trv === 'd', trv);
-    const tn0 = GV2.tarefaNoNegocio, rc0 = GV2.recado, ts0 = GV2.toast; let tarefas = [];
-    GV2.tarefaNoNegocio = async n => { tarefas.push(n.id); }; GV2.recado = async () => true; GV2.toast = () => {};
-    await GV2.cobrarNegocio('a'); await GV2.cobrarNegocio('b'); await GV2.cobrarNegocio('d');
-    checar('cobrar: o clique avulso não cria tarefa em lead no prazo nem em travado com passo', tarefas.join() === 'd', tarefas.join());
-    GV2.tarefaNoNegocio = tn0; GV2.recado = rc0; GV2.toast = ts0;
-    delete GV2.estado.cobrados['neg:d'];
-    GV2.estado.filtro = fil0; GV2.estado.veu = veu0; GV2.estado.loteDados = ld0;
-  }
   GV2.estado.filtro = 'quentes';
   const negQ = GV2.render.negocios();
   checar('v4 · 4: na lista do Raio X o Ag. Pagamento aparece "com o financeiro" e sem Cobrar', /com o financeiro/.test(negQ) && negQ.indexOf('cobrar:neg:c"') < 0);
@@ -379,7 +347,7 @@ tabelas.gv2_falta_etapa = [
   const ana1 = GV2.base.porId['1'];
   const fp1 = GV2.render.funilPessoa(ana1);
   checar('Pessoas › Funil em barras: o funil do mês e as etapas clicáveis, sem negócio aberto até escolher', /Funil do mês/.test(pf) && /data-gv2="fpetapa:4"/.test(pf) && !/data-gv2="ficha:/.test(fp1));
-  checar('Pessoas › Funil: "Para puxar" só com o travado sem passo (d) e o Cobrar dele; a Negociação no prazo (a) não se cobra (16/10/26)', /Para puxar · travados sem próximo passo · 1/.test(pf) && /data-gv2="cobrar:neg:d"/.test(pf) && !/data-gv2="cobrar:neg:a"/.test(pf) && /data-gv2="p3:cobrartodos:1"/.test(pf));
+  checar('Pessoas v3 › Funil: "Para puxar" com Cobrar em cada linha e Cobrar os N (travado d, quente a sem passo)', /Para puxar · travados e quentes sem passo · 2/.test(pf) && /data-gv2="cobrar:neg:d"/.test(pf) && /data-gv2="cobrar:neg:a"/.test(pf) && /data-gv2="p3:cobrartodos:1"/.test(pf));
   GV2.estado.fpEtapa = 4;
   const pf2 = GV2.render.funilPessoa(ana1);
   checar('Pessoas › Funil: clicar numa etapa lista só os negócios dela, da pessoa', /data-gv2="ficha:a"/.test(pf2) && !/data-gv2="ficha:d"/.test(pf2) && !/data-gv2="ficha:b"/.test(pf2));
@@ -390,8 +358,8 @@ tabelas.gv2_falta_etapa = [
   checar('1:1: + Combinado, Tirar, prazo que troca e Automático | Você confere em cada cartão', /data-gv2="comb:add:1"/.test(um) && /data-gv2="comb:tirar:1:0"/.test(um) && /data-gv2="p3:prazo:1:0"/.test(um) && /data-gv2="p3:conf:1:0:manual"/.test(um));
   /* a barra do pé segue a seção em foco (§8) */
   const pe = function (s) { return GV2.p3Pe(ana1, s); };
-  checar('barra do pé: 1:1 → Registrar 1:1 · 3 combinados; Disciplina → Cobrar a disciplina; Funil → Cobrar (só o travado sem passo); Campo → Marcar ida; sempre Pauta e nunca Chamar (v4)',
-    /Registrar 1:1 · 3 combinados/.test(pe('um')) && /Cobrar a disciplina/.test(pe('disc')) && />Cobrar</.test(pe('funil')) && !/Cobrar os/.test(pe('funil')) && /Marcar ida/.test(pe('campo')) && ['agora', 'ritmo', 'disc', 'funil', 'um', 'campo'].every(function (s) { return !/p3:chamar/.test(pe(s)) && /data-gv2="pauta:wa:1"/.test(pe(s)); }));
+  checar('barra do pé: 1:1 → Registrar 1:1 · 3 combinados; Disciplina → Cobrar a disciplina; Funil → Cobrar os 2; Campo → Marcar ida; sempre Pauta e nunca Chamar (v4)',
+    /Registrar 1:1 · 3 combinados/.test(pe('um')) && /Cobrar a disciplina/.test(pe('disc')) && /Cobrar os 2/.test(pe('funil')) && /Marcar ida/.test(pe('campo')) && ['agora', 'ritmo', 'disc', 'funil', 'um', 'campo'].every(function (s) { return !/p3:chamar/.test(pe(s)) && /data-gv2="pauta:wa:1"/.test(pe(s)); }));
   checar('barra do pé: sem plano pede o plano até 15h; plano com 0 provadas → Cobrar a primeira visita (v4)', /Pedir o plano até 15h|Pedir o plano de amanhã/.test(pe('agora')) && /v4:cobrarvisita:2/.test(GV2.p3Pe(GV2.base.porId['2'], 'agora')));
   /* nada some: o texto do combinado fica ao trocar de pessoa e voltar */
   GV2.estado.comb1a1['1'][0].texto = 'Texto que não pode sumir';
@@ -1135,8 +1103,8 @@ tabelas.gv2_falta_etapa = [
     const b1 = await GV2.montar();
     const achar = (b, id) => [].concat.apply([], b.pessoas.map(p => p.negocios || [])).find(n => n.id === id);
     const f1 = futuro && achar(b1, futuro.id), p1 = passado && achar(b1, passado.id);
-    checar('no plano = próximo passo: o planejado para depois de amanhã sai de "sem próximo passo" e do Cobrar, mesmo travado',
-      semPasso.length >= 2 && f1 && !f1.semPasso && /^no plano · /.test(f1.proximo_passo || '') && !f1.puxar,
+    checar('no plano = próximo passo: o quente planejado para depois de amanhã sai de "sem próximo passo"',
+      semPasso.length >= 2 && f1 && !f1.semPasso && /^no plano · /.test(f1.proximo_passo || '') && !f1.puxar === !f1.travado,
       JSON.stringify([semPasso.length, f1 && f1.semPasso, f1 && f1.proximo_passo]));
     checar('no plano = próximo passo: plano que já passou não conta', p1 && p1.semPasso && !p1.proximo_passo, JSON.stringify([p1 && p1.semPasso, p1 && p1.proximo_passo]));
     checar('no plano = próximo passo: a carga lê também a semana que vem',
