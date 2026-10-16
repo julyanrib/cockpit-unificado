@@ -994,14 +994,27 @@ tabelas.gv2_falta_etapa = [
     GV2.v9Comando('v9marcar', ['v9marcar', 'a1']);
     GV2.v9Comando('v9conf', ['v9conf', 'aprovar']);
     gav = GV2.render.v9Gav();
-    checar('v9 Contas: Aprovar pede confirmação na gaveta (sem confirm do navegador) dizendo a segunda', /Pôr 1 conta na rota de [^<]* na segunda 19\/10\?/.test(gav) && /data-gv2="v9aprovar"/.test(gav));
+    checar('v9 Contas: Aprovar pede confirmação na gaveta (sem confirm do navegador) dizendo o dia (padrão: a segunda)', /Pôr 1 conta no plano de [^<]* em seg 19\/10\?/.test(gav) && /data-gv2="v9dia:sem"|data-gv2="v9dia:municao"/.test(gav) && /data-gv2="v9aprovar"/.test(gav));
     await GV2.v9Aprovar();
     const a1 = g.RT7_ESTADO.leads.find(function (l) { return l.id === 'a1'; });
     checar('v9 Contas: aprovar grava status na rota + data_rota da segunda + dono, e só a marcada',
       pedidos.length === 1 && pedidos[0].c.status === 'na_rota' && pedidos[0].c.data_rota === '2026-10-19' && pedidos[0].c.responsavel_owner_id === ids[0] && pedidos[0].ids.join() === 'a1' && a1.status === 'na_rota', JSON.stringify(pedidos));
     gav = GV2.render.v9Gav();
-    checar('v9 Contas: depois de aprovar, a faixa verde com a segunda e o Desfazer', /1 aprovada · rota da próxima segunda \(19\/10\)/.test(gav) && /data-gv2="v9desfazer:0"/.test(gav));
+    checar('v9 Contas: depois de aprovar, a faixa verde com o dia e o Desfazer', /1 aprovada · no plano de [^<]* em seg 19\/10/.test(gav) && /data-gv2="v9desfazer:0"/.test(gav));
     await GV2.v9Desfazer(0);
+    {
+      const dias = GV2.v9Dias();
+      checar('Para quando: 10 dias úteis a partir de hoje, sem fim de semana nem feriado', dias.length === 10 && dias.every(function (d) { return GV2.util(d); }), JSON.stringify(dias));
+      const quarta = dias.find(function (d) { return GV2.dow(d) === 3 && d > dias[0]; });
+      GV2.v9Comando('v9dia', ['v9dia', quarta]);
+      checar('Para quando: escolher a quarta grava na_rota naquela data', JSON.stringify(GV2.v9Campos({ responsavel_owner_id: 'x' })) === JSON.stringify({ status: 'na_rota', data_rota: quarta, responsavel_owner_id: 'x' }), JSON.stringify(GV2.v9Campos()));
+      checar('Para quando: o chip do dia escolhido fica marcado', new RegExp('is-on" data-gv2="v9dia:' + quarta).test(GV2.v9DiaHTML()));
+      GV2.v9Comando('v9dia', ['v9dia', 'municao']);
+      checar('Para quando: sem dia grava atribuído, sem data_rota (ele escolhe no Planejamento)', JSON.stringify(GV2.v9Campos()) === JSON.stringify({ status: 'atribuido', data_rota: null }) && /sem dia/.test(GV2.v9DiaRot()), JSON.stringify(GV2.v9Campos()));
+      GV2.v9Comando('v9dia', ['v9dia', '2020-01-01']);
+      checar('Para quando: dia fora da lista volta para a próxima segunda', GV2.v9Dia() === GV2.v9Seg(), GV2.v9Dia());
+      GV2.estado.terrDia = null;
+    }
     checar('v9 Desfazer: a conta volta ao status e ao dia de antes', a1.status === 'atribuido' && a1.data_rota == null && pedidos[1] && pedidos[1].c.status === 'atribuido', JSON.stringify(pedidos[1]));
     GV2.v9Comando('v9g', ['v9g', 'dono']);
     const kFora = fora[0].k;
