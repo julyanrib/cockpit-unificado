@@ -1164,6 +1164,21 @@ tabelas.gv2_falta_etapa = [
     const datas = X.datas(GV2.base);
     checar('v4 Hoje · as datas são hoje + os 3 próximos dias úteis', datas.length === 4 && datas[0] === GV2.base.agora.iso && datas.every(function (d) { return GV2.util(d); }), datas.join());
     const lista = DV.com(function () { return X.ordenados(p, GV2.base); });
+    /* 16/10/26: 64 de 247 negócios tinham só tarefa vencida; a linha diz que o passo venceu */
+    const nv = lista[0];
+    if (nv) {
+      if (!nv.lead) nv.lead = {};
+      const t0 = nv.lead.tarefas;
+      nv.lead.tarefas = [{ subject: 'Follow-up - Ligar', timestamp: '2026-10-05T12:00:00Z' }, { subject: 'Visita - velha', timestamp: '2026-10-01T12:00:00Z' }];
+      const lv = DV.com(function () { return X.linhaHTML(nv, GV2.base); });
+      const sv = DV.com(function () { return X.semPassoHTML(p, GV2.base); });
+      checar('v4 Hoje · tarefa vencida: a linha diz "passo venceu", com a data e o assunto da mais recente',
+        /passo venceu seg 05\/10: Ligar, sem ser feito/.test(so(lv)) && !/velha/.test(lv), so(lv).slice(0, 240));
+      checar('v4 Hoje · o cabeçalho conta quantos tinham passo marcado e o dia passou', /1 deles tinha passo marcado/.test(so(sv)));
+      nv.lead.tarefas = [{ subject: 'Follow-up - Ligar', timestamp: '2026-10-08T12:00:00Z' }];
+      checar('v4 Hoje · tarefa de hoje em diante não é "venceu"', !/passo venceu/.test(DV.com(function () { return X.linhaHTML(nv, GV2.base); })));
+      nv.lead.tarefas = t0;
+    }
     checar('v4 Hoje · a lista põe os quentes primeiro', lista.findIndex(function (n) { return !n.quente; }) === -1 || lista.slice(lista.findIndex(function (n) { return !n.quente; })).every(function (n) { return !n.quente; }));
     checar('v4 Hoje · a sugestão de tipo segue a etapa (Negociação liga, Demo/Decisor visita, Visita WhatsApp, Prospecção liga)',
       X.sugestao({ etapa_idx: 4 }) === 'ligar' && X.sugestao({ etapa_idx: 3 }) === 'visita' && X.sugestao({ etapa_idx: 2 }) === 'visita' && X.sugestao({ etapa_idx: 1 }) === 'whats' && X.sugestao({ etapa_idx: 0 }) === 'ligar');
