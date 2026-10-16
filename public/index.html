@@ -10006,7 +10006,7 @@ button.gv2-t10-cqi:hover > div span{text-decoration:underline;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -56168,7 +56168,7 @@ GV2.DIAS_LONGOS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 
 GV2.MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 GV2.ddmm = function (iso) { return iso.slice(8, 10) + '/' + iso.slice(5, 7); };
 GV2.lista = function (xs) { return xs.length <= 1 ? (xs[0] || '') : xs.slice(0, -1).join(', ') + ' e ' + xs[xs.length - 1]; };
-GV2.nomeDe = function (ownerId) { const p = GV2.base && GV2.base.porId[String(ownerId)]; return p ? p.nome : (String(ownerId) === String(GV2.base && GV2.base.gestorId) ? 'você' : 'fora do time'); };
+GV2.nomeDe = function (ownerId) { if (String(ownerId) === 'casa') return 'venda da casa'; const p = GV2.base && GV2.base.porId[String(ownerId)]; return p ? p.nome : (String(ownerId) === String(GV2.base && GV2.base.gestorId) ? 'você' : 'fora do time'); };
 
 GV2.quandoHs = function (ts) {
   const d = new Date(ts);
@@ -56297,7 +56297,9 @@ GV2.ler = async function (donos, agora) {
 GV2.agregar = function (pessoas, negocios, itensTodos, recorte) {
   const ids = {};
   pessoas.forEach(function (p) { ids[p.id] = true; });
-  const itens = (itensTodos || [[], [], [], [], []]).map(function (l) { return l.filter(function (x) { return ids[x.dono]; }); });
+
+  const itens = (itensTodos || [[], [], [], [], []]).map(function (l) { return l.filter(function (x) { return ids[x.dono] || (!recorte && x.dono === 'casa'); }); });
+  const casa = itens[4].filter(function (x) { return x.dono === 'casa'; }).length;
   const somar = function (f) { return pessoas.reduce(function (x, p) { return x + f(p); }, 0); };
 
   const naMeta = function (p) { return GV2.naMeta(p); };
@@ -56312,10 +56314,10 @@ GV2.agregar = function (pessoas, negocios, itensTodos, recorte) {
     quentes: somar(function (p) { return p.quentes.length; }), mrrQuentes: somar(function (p) { return p.mrrQuentes; }),
     quentesSemPasso: somar(function (p) { return p.quentesSemPasso; }),
     travados: somar(function (p) { return p.travados.length; }), mrrTravados: somar(function (p) { return p.mrrTravados; }),
-    fechados: somar(function (p) { return p.funil_mes.fechado; }), metaMes: (!recorte && typeof DATA !== 'undefined' && DATA && DATA.kpisHub && Number(DATA.kpisHub.metaMensalFechados)) || somar(function (p) { return p.meta_clientes_mes; }),
-    provavel: somar(function (p) { return p.provavel; }),
+    fechados: somar(function (p) { return p.funil_mes.fechado; }) + casa, casa: casa, metaMes: (!recorte && typeof DATA !== 'undefined' && DATA && DATA.kpisHub && Number(DATA.kpisHub.metaMensalFechados)) || somar(function (p) { return p.meta_clientes_mes; }),
+    provavel: somar(function (p) { return p.provavel; }) + casa,
     agPag: somar(function (p) { return p.agPag.length; }), puxar: somar(function (p) { return p.puxar.length; }),
-    funil: ['portas', 'decisor', 'demo', 'proposta', 'fechado'].map(function (k) { return somar(function (p) { return p.funil_mes[k]; }); })
+    funil: ['portas', 'decisor', 'demo', 'proposta', 'fechado'].map(function (k) { return somar(function (p) { return p.funil_mes[k]; }) + (k === 'fechado' ? casa : 0); })
   };
 
   const K = ['portas', 'decisor', 'demo', 'proposta', 'fechado'];
@@ -56629,6 +56631,8 @@ GV2.montar = async function (so) {
       (r.clientes || []).forEach(function (c) { itens[4].push({ dono: String(r.ownerId), nome: c.nome || 'negócio ' + c.id, quando: c.closedate, deal: String(c.id), detalhe: 'venda do mês' + (c.mrr ? ' · R$ ' + c.mrr + '/mês' : '') }); });
     });
     fechadosPor = contaItens(itens[4]);
+
+    ((VM.gestor && VM.gestor.clientes) || []).forEach(function (c) { itens[4].push({ dono: 'casa', nome: c.nome || 'negócio ' + c.id, quando: c.closedate, deal: String(c.id), detalhe: 'venda da casa (' + (VM.gestor.name || 'gestor') + ')' }); });
   }
   const propPM = pmOk ? contaItens(itens[3]) : null;
   const semPM = pmOk ? contaItens(itens[3].filter(function (x) { return GV2.diaDe(x.quando) >= seg; })) : null;
@@ -56857,7 +56861,7 @@ GV2.testes = {
     conf('quentes', t.quentes, b.negocios.filter(function (n) { return n.quente; }).length);
     conf('travados', t.travados, b.negocios.filter(function (n) { return n.travado; }).length);
     conf('quentes sem passo', t.quentesSemPasso, b.negocios.filter(function (n) { return n.quente && !n.agPag && !n.proximo_passo; }).length);
-    conf('provável', t.provavel, b.pessoas.reduce(function (x, p) { return x + p.funil_mes.fechado + p.agPag.length + Math.round(0.6 * p.negociacao.length); }, 0));
+    conf('provável', t.provavel, b.pessoas.reduce(function (x, p) { return x + p.funil_mes.fechado + p.agPag.length + Math.round(0.6 * p.negociacao.length); }, 0) + (t.casa || 0));
     conf('fechados', t.fechados, t.funil[4]);
 
     ['portas', 'decisor', 'demo', 'proposta', 'fechado'].forEach(function (k, i) { conf('lista do passo ' + k, t.funil[i], ((b.funilItens || [])[i] || []).length); });

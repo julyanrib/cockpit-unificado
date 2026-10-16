@@ -77,6 +77,13 @@ GV2.pintar = function () {};
   const R = GV2.agregar([P('1', 'Pleno'), rampa], [], null, true);
   checar('meta do mês de uma praça = soma das pessoas dela (8 + 4), não a do time', R.time.metaMes === 12, String(R.time.metaMes));
   checar('"ontem" do KPI de visitas soma TODAS as visitas com prova (contra a meta)', A.time.ontemProva === 12 && A.time.ontemPlan === 18);
+  /* venda da casa (gestor): entra no time inteiro, não na praça, e o funil bate com a lista */
+  const itensCasa = [[], [], [], [], [{ dono: '1', deal: 'a' }, { dono: 'casa', deal: 'g' }]];
+  const T1 = GV2.agregar([P('1', 'Pleno', { funil_mes: { portas: 10, decisor: 2, demo: 1, proposta: 1, fechado: 1 } })], [], itensCasa);
+  checar('a venda do gestor conta no placar do time (fechados, provável e o passo "fechado")', T1.time.fechados === 2 && T1.time.casa === 1 && T1.time.funil[4] === 2 && T1.time.provavel === 2 && T1.funilItens[4].length === 2, JSON.stringify({ f: T1.time.fechados, c: T1.time.casa, fu: T1.time.funil[4], p: T1.time.provavel }));
+  const T2 = GV2.agregar([P('1', 'Pleno', { funil_mes: { portas: 10, decisor: 2, demo: 1, proposta: 1, fechado: 1 } })], [], itensCasa, true);
+  checar('numa praça a venda da casa não entra (não é de ninguém dali)', T2.time.fechados === 1 && T2.time.casa === 0);
+  checar('o nome do dono "casa" nas listas é "venda da casa", não "fora do time"', GV2.nomeDe('casa') === 'venda da casa');
   checar('a meta do último dia útil usa a MESMA regra do hoje: rampagem sem rua fora, com rua dentro',
     GV2.naMeta(Object.assign({}, rampa, { ontem: { paradas_plano: 0, visitas_todas: 0 } }), true) === false
     && GV2.naMeta(Object.assign({}, rampa, { ontem: { paradas_plano: 0, visitas_todas: 2 } }), true) === true
