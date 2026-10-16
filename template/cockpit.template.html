@@ -14524,7 +14524,7 @@ button.gv2-t10-cqi:hover > div span{text-decoration:underline;}
   
 
   <div id="appRoot" style="display:none;">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <div id="gv2Raiz" hidden></div><!-- /gv2Raiz -->
   <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
 
   <header class="app-header">
@@ -76731,6 +76731,12 @@ GV2.vendasMesAtual = function () {
   const mes = GV2.agoraBR ? GV2.agoraBR().iso.slice(0, 7) : null;
   return !v.mes || !mes || v.mes === mes ? v : null;
 };
+/* QUEM TEM META DE VISITA NO DIA, uma regra só (hoje e o último dia útil): rampagem fica fora,
+   a não ser que tenha ido à rua naquele dia (auditoria 15/10/26: o hoje tirava, o ontem contava) */
+GV2.naMeta = function (p, ontem) {
+  if (!(GV2.emRampa && GV2.emRampa(p))) return true;
+  return ontem ? ((p.ontem && (p.ontem.visitas_todas || p.ontem.paradas_plano)) || 0) > 0 : GV2.temRua(p);
+};
 GV2.somaDias = function (iso, n) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 GV2.dow = function (iso) { return new Date(iso + 'T12:00:00Z').getUTCDay(); };
 GV2.segundaDe = function (iso) { const w = GV2.dow(iso); return GV2.somaDias(iso, w === 0 ? -6 : 1 - w); };
@@ -76893,7 +76899,7 @@ GV2.agregar = function (pessoas, negocios, itensTodos, recorte) {
   const somar = function (f) { return pessoas.reduce(function (x, p) { return x + f(p); }, 0); };
   /* quem está em preparação (rampagem) e não foi à rua não tem meta de visita hoje: o "Planos de
      hoje" já o tirava (7 de 7) e a meta o contava (48 = 8 × 6). Auditoria 15/10/26: a mesma regra. */
-  const naMeta = function (p) { return !(GV2.emRampa && GV2.emRampa(p) && !GV2.temRua(p)); };
+  const naMeta = function (p) { return GV2.naMeta(p); };
   const time = {
     planos: somar(function (p) { return p.hoje.paradas_plano > 0 ? 1 : 0; }), paradas: somar(function (p) { return p.hoje.paradas_plano; }),
     visitas: somar(function (p) { return p.hoje.visitas_com_prova; }), meta: somar(function (p) { return naMeta(p) ? p.meta_visitas_dia : 0; }),
@@ -82772,7 +82778,7 @@ GV2.render.time = function () {
   const kpi = function (rot, val, s, acao, tom, def, sTom) { return '<button type="button" class="gv2-v5-kpi" data-gv2="' + acao + '"><small>' + GV2.e(rot) + info(def) + '</small><b class="num' + (tom ? ' ' + tom : '') + '">' + GV2.e(val) + '</b><span' + (sTom ? ' class="' + sTom + '"' : '') + '>' + GV2.e(s) + '</span></button>'; };
   const RT = GV2.v8Ritmo ? GV2.v8Ritmo(null) : null;
   /* 14/10/26: ontem também pelo total de visitas com prova contra a meta, não pelo plano */
-  const oT = b.pessoas.reduce(function (a, p) { a.v += p.ontem.visitas_todas || 0; a.y += p.meta_visitas_dia || 0; return a; }, { v: 0, y: 0 });
+  const oT = b.pessoas.reduce(function (a, p) { a.v += p.ontem.visitas_todas || 0; a.y += GV2.naMeta(p, true) ? (p.meta_visitas_dia || 0) : 0; return a; }, { v: 0, y: 0 });
   /* antes de a rua começar (nenhuma visita e antes da janela mais cedo do time), o número útil é o do último dia útil */
   const janelas = b.pessoas.map(function (p) { return p.janela && p.janela.min != null ? p.janela.min : null; }).filter(function (x) { return x != null; }).sort(function (x, y) { return x - y; });
   const comeca = janelas.length ? janelas[Math.floor(janelas.length / 2)] : null;

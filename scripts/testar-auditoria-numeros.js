@@ -77,6 +77,10 @@ GV2.pintar = function () {};
   const R = GV2.agregar([P('1', 'Pleno'), rampa], [], null, true);
   checar('meta do mês de uma praça = soma das pessoas dela (8 + 4), não a do time', R.time.metaMes === 12, String(R.time.metaMes));
   checar('"ontem" do KPI de visitas soma TODAS as visitas com prova (contra a meta)', A.time.ontemProva === 12 && A.time.ontemPlan === 18);
+  checar('a meta do último dia útil usa a MESMA regra do hoje: rampagem sem rua fora, com rua dentro',
+    GV2.naMeta(Object.assign({}, rampa, { ontem: { paradas_plano: 0, visitas_todas: 0 } }), true) === false
+    && GV2.naMeta(Object.assign({}, rampa, { ontem: { paradas_plano: 0, visitas_todas: 2 } }), true) === true
+    && GV2.naMeta(P('1', 'Pleno'), true) === true);
 
   /* 6 · o último dia útil mede o plano pelas paradas feitas (o caso da Kelly) */
   GV2.base = { agora: { iso: '2026-10-15', min: 600 }, pessoas: [], planoErro: null };
