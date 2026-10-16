@@ -1179,7 +1179,8 @@ tabelas.gv2_falta_etapa = [
       checar('v4 Hoje · tarefa de hoje em diante não é "venceu"', !/passo venceu/.test(DV.com(function () { return X.linhaHTML(nv, GV2.base); })));
       nv.lead.tarefas = t0;
     }
-    checar('v4 Hoje · a lista põe os quentes primeiro', lista.findIndex(function (n) { return !n.quente; }) === -1 || lista.slice(lista.findIndex(function (n) { return !n.quente; })).every(function (n) { return !n.quente; }));
+    checar('v4 Hoje · a lista põe os quentes primeiro (quente = Decisor em diante, GV2.quenteCadencia)', lista.findIndex(function (n) { return !GV2.quenteCadencia(n); }) === -1 || lista.slice(lista.findIndex(function (n) { return !GV2.quenteCadencia(n); })).every(function (n) { return !GV2.quenteCadencia(n); }));
+    checar('v4 Hoje · quente da cadência: Decisor, Demo, Negociação e Ag. Pagamento sim; Prospecção e Visita não', [0, 1, 2, 3, 4, 5].map(function (i) { return GV2.quenteCadencia({ etapa_idx: i }); }).join() === 'false,false,true,true,true,true');
     checar('v4 Hoje · a sugestão de tipo segue a etapa (Negociação liga, Demo/Decisor visita, Visita WhatsApp, Prospecção liga)',
       X.sugestao({ etapa_idx: 4 }) === 'ligar' && X.sugestao({ etapa_idx: 3 }) === 'visita' && X.sugestao({ etapa_idx: 2 }) === 'visita' && X.sugestao({ etapa_idx: 1 }) === 'whats' && X.sugestao({ etapa_idx: 0 }) === 'ligar');
     /* a gravação: ligar vai pelo hubspot-sync (create_task, tarefa aberta, dono = executivo) e o passo espelha na agenda */
