@@ -1249,36 +1249,39 @@ tabelas.gv2_falta_etapa = [
         c('c-pag', '1395880473'),                      // Ag. Pagamento: fora da carteira
         c('c-gra', '1395880472'),                      // quente, mas está na grade: com passo
         c('c-rel', '1396006162', { base: true }),      // base de clientes: fora
+        c('c-rec', '1398311191', { etapa: 'Reciclagem' }), // Reciclagem: fora (só leads ativos, 16/10)
         n('n-novo', 10), n('n-velho', 120), n('n-plan', 5)
       ];
       const naGrade = new Set(['c-gra', 'n-plan']);
       const cad = P.cadencia(todos, naGrade, H);
-      checar('pl7 · os grupos somam a carteira (7) e não se sobrepõem',
-        cad.total === 8 && cad.passo === 4 && cad.quente === 1 && cad.venc === 1 && cad.cnpj === 1 && cad.outro === 1 && cad.sem === 4
-          && cad.passo + cad.quente + cad.venc + cad.cnpj + cad.outro === cad.total, JSON.stringify(cad));
+      checar('pl7 · a carteira é SÓ o funil aberto dele (6), e os 4 grupos somam ela sem se sobrepor',
+        cad.total === 6 && cad.passo === 3 && cad.quente === 1 && cad.venc === 1 && cad.outro === 1 && cad.sem === 3
+          && cad.passo + cad.quente + cad.venc + cad.outro === cad.total, JSON.stringify(cad));
+      checar('pl7 · CNPJ novo conta à parte: 1 sem visita e 1 no plano, fora do "sem próximo passo"', cad.cnpj === 1 && cad.cnpjNoPlano === 1);
+      checar('pl7 · Reciclagem não é carteira (só os leads ativos)', P.grupo(todos[8], naGrade, H) === null);
       checar('pl7 · Ag. Pagamento, cliente da base e CNPJ com mais de 90 d não são carteira',
-        P.grupo(todos[5], naGrade, H) === null && P.grupo(todos[7], naGrade, H) === null && P.grupo(todos[9], naGrade, H) === null);
+        P.grupo(todos[5], naGrade, H) === null && P.grupo(todos[7], naGrade, H) === null && P.grupo(todos[10], naGrade, H) === null);
       checar('pl7 · passo que vence hoje conta como passo (a mesma regra da Hoje)', P.grupo(todos[1], naGrade, H) === 'passo');
       checar('pl7 · o quente que está no plano da semana conta como com passo', P.grupo(todos[6], naGrade, H) === 'passo');
-      checar('pl7 · a parte do funil e a dos CNPJ novos aparecem separadas', cad.negocios === 6 && cad.negociosSem === 3);
       const dias = [0, 1, 2, 3, 4].map(function (i) { return { iso: GV2.somaDias('2026-10-19', i) }; });
       const cheio = function (k) { const a = []; for (let i = 0; i < k; i++) a.push('c-' + i); return a; };
       const reg = P.regras(cad, [cheio(6), cheio(6), cheio(2), cheio(7), cheio(6)], dias, 6, function (v) { return v; }, function () { return false; });
       checar('pl7 · as 5 regras: 1 a 3 e 5 pendentes, a 4 conta 1 dia abaixo de 6',
         reg.length === 5 && reg.feitas === 0 && reg[0].st === '1 quente sem data' && reg[1].st === '1 follow-up vencido'
-          && reg[2].st === '1 sem visita' && reg[3].st === '1 dia abaixo de 6' && reg[4].st === '4 sem próximo passo', JSON.stringify(reg.map(function (r) { return r.st; })));
+          && reg[2].st === '1 conta nova sem visita' && reg[3].st === '1 dia abaixo de 6' && reg[4].st === '3 negócios sem próximo passo', JSON.stringify(reg.map(function (r) { return r.st; })));
       const passou = P.regras(cad, [[], [], cheio(6), cheio(6), cheio(6)], dias, 6, function (v) { return v; }, function (iso) { return iso < '2026-10-21'; });
       checar('pl7 · dia que passou não reprova a regra 4 (é resultado, não plano)', passou[3].ok === true);
       const zero = P.cadencia([c('c-x', '1395880472', { _fut: true })], new Set(), H);
       checar('pl7 · carteira toda com passo: 5 verde e 100%', zero.sem === 0 && zero.pct === 100 && P.regras(zero, [cheio(6), cheio(6), cheio(6), cheio(6), cheio(6)], dias, 6, function (v) { return v; }, function () { return false; }).feitas === 5);
       checar('pl7 · os selos: QUENTE, VENCEU HÁ 3 D, CNPJ NOVO · 10 D, SEM PASSO',
         P.selo(todos[0], naGrade, H).tag === 'QUENTE' && P.selo(todos[2], naGrade, H).tag === 'VENCEU HÁ 3 D'
-          && P.selo(todos[8], naGrade, H).tag === 'CNPJ NOVO · 10 D' && P.selo(todos[4], naGrade, H).tag === 'SEM PASSO');
+          && P.selo(todos[9], naGrade, H).tag === 'CNPJ NOVO · 10 D' && P.selo(todos[4], naGrade, H).tag === 'SEM PASSO');
       const ord = todos.filter(function (l) { const g = P.grupo(l, naGrade, H); return g && g !== 'passo'; }).sort(P.comparar(naGrade, H)).map(function (l) { return l.id; });
       checar('pl7 · a ordem de "Todos sem passo": quente, vencido, CNPJ novo, o resto', ord.join() === 'c-neg,c-vis,n-novo,c-pro', ord.join());
       const bl = P.blocoHTML(cad, reg);
-      checar('pl7 · o bloco diz "4 de 8 contas sem próximo passo", separa funil e CNPJ, e a legenda abre a aba',
-        /4 de 8 contas sem próximo passo\./.test(bl) && /3 negócios do funil \+ 1 CNPJ novos sem visita/.test(bl)
+      checar('pl7 · o bloco diz "3 de 6 negócios seus sem próximo passo", põe o CNPJ novo fora do funil, e a legenda abre a aba',
+        /3 de 6 negócios seus sem próximo passo\./.test(bl) && /fora dele, 1 conta nova \(CNPJ até 90 d\) sem visita/.test(bl)
+          && /3 de 6 negócios com próximo passo datado/.test(bl) && (bl.match(/class="pl7-seg"/g) || []).length === 4
           && /data-pl6-acao="cadaba:q"/.test(bl) && /data-pl6-acao="cadaba:cn"/.test(bl) && /0 de 5/.test(bl));
       const ab = P.abasHTML(cad, 'v');
       checar('pl7 · as 4 abas com o número e a descrição da aberta', (ab.match(/<button type="button" class="pl7-aba/g) || []).length === 4 && /pl7-aba is-on" data-pl6-acao="faixa:v"/.test(ab) && /o dia passou sem ser feito/.test(ab));
