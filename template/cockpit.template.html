@@ -14444,6 +14444,10 @@ button.gv2-t10-bl:hover{filter:brightness(1.06);outline:2px solid var(--t10-c);o
 button.gv2-t10-cqi{border:0;background:transparent;padding:0;color:var(--gv2-ink);text-align:left;cursor:pointer;font-family:var(--gv2-font);}
 button.gv2-t10-cqi:hover > div span{text-decoration:underline;}
 @media (max-width:640px){button.gv2-t10-cqi{min-height:44px;justify-content:center;}}
+/* Para quando (16/10/26): munição ou qualquer dia útil das duas próximas semanas */
+.gv2-v9-quando{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 16px;}
+.gv2-v9-quando>span{font:600 11px var(--gv2-font);color:var(--gv2-mute);text-transform:uppercase;letter-spacing:.05em;margin-right:4px;}
+@media (max-width:640px){.gv2-v9-quando .gv2-v5-chip{min-height:44px;}}
 
 /* ══ HOJE DO EXECUTIVO v4 (16/10/26, hj.zip) — tokens --gv2-*, os dois temas ══ */
 .exh4{gap:20px;}
@@ -85940,6 +85944,42 @@ GV2.v9Ativos = function () {
 GV2.v9Nome = function (id) { const a = GV2.v9Ativos().find(function (x) { return x.id === String(id); }); return a ? a.nome : (typeof rt7Nome === 'function' ? rt7Nome(id) : String(id)); };
 GV2.v9Movel = function (l) { return ['pendente', 'atribuido'].indexOf(String(l.status)) >= 0; };
 GV2.v9Seg = function () { return typeof rt7ProximaSegunda === 'function' ? rt7ProximaSegunda() : ''; };
+/* PARA QUANDO (16/10/26, Julyan: "eu quero escolher qualquer dia"). Aprovar mandava sempre para a
+   próxima segunda. Agora um seletor só vale para os três caminhos (a gaveta de contas, o "pôr na rota"
+   do radar e o "Pro plano" do Território): qualquer dia útil das próximas duas semanas, ou a munição
+   (sem dia: a conta vai para o executivo e ELE escolhe o dia no Planejamento). Com dia, a conta fica
+   na_rota naquela data e a 0215 a põe no plano dele e na rota do app. O padrão continua a próxima
+   segunda, que era o que o gestor já fazia. */
+GV2.v9Dias = function () {
+  const hoje = GV2.agoraBR ? GV2.agoraBR().iso : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const out = [];
+  let d = hoje;
+  for (let k = 0; k < 30 && out.length < 10; k++) {
+    if (GV2.util ? GV2.util(d) : (GV2.dow(d) > 0 && GV2.dow(d) < 6)) out.push(d);
+    d = GV2.somaDias(d, 1);
+  }
+  return out;
+};
+GV2.v9Dia = function () {
+  const v = GV2.estado.terrDia;
+  if (v === 'municao') return null;
+  if (v && GV2.v9Dias().indexOf(v) >= 0) return v;
+  return GV2.v9Seg() || null;
+};
+GV2.v9DiaRot = function () { const d = GV2.v9Dia(); return d ? GV2.DIAS[GV2.dow(d)] + ' ' + GV2.ddmm(d) : 'sem dia (ele escolhe)'; };
+/* o que gravar: com dia, na rota naquela data; sem dia, atribuída a ele, na munição */
+GV2.v9Campos = function (extra) {
+  const d = GV2.v9Dia();
+  return Object.assign(d ? { status: 'na_rota', data_rota: d } : { status: 'atribuido', data_rota: null }, extra || {});
+};
+GV2.v9DiaHTML = function () {
+  const atual = GV2.v9Dia();
+  return '<div class="gv2-v9-quando"><span>Para quando</span>'
+    + '<button type="button" class="gv2-v5-chip' + (atual === null ? ' is-on' : '') + '" data-gv2="v9dia:municao" title="vai para ele sem dia: ele escolhe o dia no Planejamento">sem dia · ele escolhe</button>'
+    + GV2.v9Dias().map(function (d) {
+      return '<button type="button" class="gv2-v5-chip' + (d === atual ? ' is-on' : '') + '" data-gv2="v9dia:' + d + '">' + GV2.e(GV2.DIAS[GV2.dow(d)] + ' ' + GV2.ddmm(d)) + '</button>';
+    }).join('') + '</div>';
+};
 GV2.v9PracaDaCidade = function (cidade) {
   const prs = GV2.pracasDoTime();
   for (let i = 0; i < prs.length; i++) if (GV2.naCidade(prs[i].k, cidade)) return prs[i].k;
@@ -86137,8 +86177,8 @@ GV2.render.v9Radar = function () {
     const tel = String(l.telefone || '').replace(/\D/g, '');
     let g = '';
     if (x.gesto === 'dono') g = '<button type="button" class="gv2-v9-lk t-erro" data-gv2="v9g:dono">decidir dono →</button>';
-    else if (x.gesto === 'por') g = conf === 'rota:' + id ? '<span class="gv2-v9-conf"><button type="button" class="gv2-v9-lk" data-gv2="v9rota:' + id + '">confirmar: rota de ' + GV2.ddmm(GV2.v9Seg()) + '</button><button type="button" class="gv2-v9-lk t-dim" data-gv2="v9conf:">cancelar</button></span>'
-      : '<button type="button" class="gv2-v9-lk" data-gv2="v9conf:rota:' + id + '" title="grava data_rota na próxima segunda: aparece no Planejamento de ' + GV2.e(GV2.prim(GV2.v9Nome(x.d))) + '">pôr na rota →</button>';
+    else if (x.gesto === 'por') g = conf === 'rota:' + id ? '<span class="gv2-v9-conf"><button type="button" class="gv2-v9-lk" data-gv2="v9rota:' + id + '">confirmar: ' + GV2.e(GV2.v9DiaRot()) + '</button><button type="button" class="gv2-v9-lk t-dim" data-gv2="v9conf:">cancelar</button></span>'
+      : '<button type="button" class="gv2-v9-lk" data-gv2="v9conf:rota:' + id + '" title="põe em ' + GV2.e(GV2.v9DiaRot()) + ' (escolha o dia em Para quando): aparece no Planejamento de ' + GV2.e(GV2.prim(GV2.v9Nome(x.d))) + '">pôr na rota →</button>';
     else if (x.gesto === 'rota') g = '<span class="t-ok gv2-v9-lk is-txt">1ª visita na rota</span>';
     else if (x.gesto === 'funil') g = '<span class="t-mute gv2-v9-lk is-txt">seguir no funil</span>';
     return '<div class="gv2-v9-rd' + (x.gesto === 'dono' ? ' is-erro' : '') + '"><span class="gv2-v9-sc"><b class="num">' + x.sc + '</b><small>score</small></span>'
@@ -86231,9 +86271,9 @@ GV2.render.v9GavContas = function (g) {
   const sel = g.sel || {};
   const marc = function (l) { return typeof rt7Marcado === 'function' ? rt7Marcado(sel, l) : !!sel[l.id]; };
   const nSel = (g.todas ? todas : vis).filter(function (x) { return marc(x.l); }).length;
-  const seg = GV2.v9Seg();
-  const regra = '<p class="gv2-v9-regra">Fora quem já está no CRM, quem foi perdido e quem chegou sem nome; a praça dele primeiro, depois o score. '
-    + GV2.v9Info('sem telefone não bloqueia: a visita é presencial · aprovar marca o DIA: status na rota e data_rota na próxima segunda, que é o que o Planejamento e a rota dele leem · nada é criado no HubSpot') + '</p>';
+  const seg = GV2.v9Dia();
+  const regra = GV2.v9DiaHTML() + '<p class="gv2-v9-regra">Fora quem já está no CRM, quem foi perdido e quem chegou sem nome; a praça dele primeiro, depois o score. '
+    + GV2.v9Info('sem telefone não bloqueia: a visita é presencial · aprovar com dia põe a conta no Planejamento dele e na rota do app naquele dia; "sem dia" deixa ele escolher · nada é criado no HubSpot') + '</p>';
   let corpo = '';
   if (g.ok) corpo += '<div class="gv2-v9-ok"><b>' + GV2.e(g.ok) + '</b>' + (g.okIdx != null ? '<button type="button" class="gv2-v5-btn" data-gv2="v9desfazer:' + g.okIdx + '">Desfazer</button>' : '') + '</div>';
   if (g.erro) corpo += '<div class="gv2-v9-erro">' + GV2.e(g.erro) + '</div>';
@@ -86261,14 +86301,14 @@ GV2.render.v9GavContas = function (g) {
     const muda = {};
     esc.forEach(function (l) { const d = String(l.responsavel_owner_id || ''); if (d && d !== g.id) muda[d] = (muda[d] || 0) + 1; });
     const fm = Object.keys(muda).map(function (d) { return muda[d] + ' de ' + GV2.prim(GV2.v9Nome(d)); });
-    pe = '<span class="gv2-v9-gpe-t">' + GV2.e('Pôr ' + GV2.pl(esc.length, 'conta', 'contas') + ' na rota de ' + pn + ' na segunda ' + GV2.ddmm(seg) + '?' + (fm.length ? ' Mudam de mão: ' + fm.join(', ') + '.' : '')) + '</span>'
+    pe = '<span class="gv2-v9-gpe-t">' + GV2.e((seg ? 'Pôr ' + GV2.pl(esc.length, 'conta', 'contas') + ' no plano de ' + pn + ' em ' + GV2.v9DiaRot() + '?' : 'Mandar ' + GV2.pl(esc.length, 'conta', 'contas') + ' para ' + pn + ' sem dia (ele escolhe)?') + (fm.length ? ' Mudam de mão: ' + fm.join(', ') + '.' : '')) + '</span>'
       + '<button type="button" class="gv2-v5-btn" data-gv2="v9conf:">Cancelar</button><button type="button" class="gv2-v5-btn is-prim" data-gv2="v9aprovar"' + (g.rodando ? ' disabled' : '') + '>' + (g.rodando ? 'Gravando…' : 'Confirmar') + '</button>';
   } else {
     pe = (g.todas ? '<span class="gv2-v9-gpe-t">' + GV2.e('todas as ' + todas.length.toLocaleString('pt-BR') + ' na lista') + '</span>' : '<button type="button" class="gv2-v9-lk" data-gv2="v9todas">ver todas as ' + todas.length.toLocaleString('pt-BR') + '</button>')
       + '<button type="button" class="gv2-v5-btn" data-gv2="v9g:imp:' + g.id + '">Importar</button>'
       + '<button type="button" class="gv2-v5-btn is-prim" data-gv2="v9conf:aprovar"' + (nSel ? '' : ' disabled') + '>Aprovar selecionadas (' + nSel + ')</button>';
   }
-  return { titulo: 'Contas de ' + pn + ' · ' + todas.length.toLocaleString('pt-BR'), sub: 'estoque − anti-sujeira − já aprovadas · aprovar põe na rota de ' + GV2.e(GV2.ddmm(seg)), chips: GV2.v9Chips(g, 'contas'), corpo: corpo, pe: pe };
+  return { titulo: 'Contas de ' + pn + ' · ' + todas.length.toLocaleString('pt-BR'), sub: 'estoque − anti-sujeira − já aprovadas · aprovar põe em ' + GV2.e(GV2.v9DiaRot()), chips: GV2.v9Chips(g, 'contas'), corpo: corpo, pe: pe };
 };
 /* Importar para [pessoa]: as cidades do território dele; cada uma é uma busca paga */
 GV2.v9Cidades = function (id) {
@@ -86369,15 +86409,17 @@ GV2.v9Aprovar = async function () {
   if (!esc.length) { g.erro = 'Marque ao menos uma conta.'; g.conf = false; GV2.pintar(); return; }
   const ids = esc.map(function (l) { return String(l.id); });
   const voltar = esc.map(function (l) { return { id: String(l.id), dono: String(l.responsavel_owner_id || ''), status: String(l.status), data_rota: l.data_rota || null }; });
-  const seg = GV2.v9Seg();
+  const seg = GV2.v9Dia();
+  const campos = GV2.v9Campos({ responsavel_owner_id: g.id });
   g.rodando = true; g.erro = null; GV2.pintar();
   try {
-    const n = await GV2.v9Gravar(ids, { status: 'na_rota', data_rota: seg, responsavel_owner_id: g.id });
+    const n = await GV2.v9Gravar(ids, campos);
     if (!n) { g.erro = 'Nada foi gravado: o banco aceitou o pedido e não mudou nenhuma linha (a sessão não foi reconhecida como gestor). Nenhuma conta mudou.'; }
     else {
-      GV2.v9Local(ids, { status: 'na_rota', data_rota: seg, responsavel_owner_id: g.id });
-      const idx = GV2.v9Registrar('Carteira', n + ' contas aprovadas · rota de ' + pn + ' na segunda ' + GV2.ddmm(seg), voltar);
-      g.ok = GV2.pl(n, 'aprovada', 'aprovadas') + ' · rota da próxima segunda (' + GV2.ddmm(seg) + ')' + (n < ids.length ? ' · pedi ' + ids.length + ', o banco mudou ' + n : '');
+      GV2.v9Local(ids, campos);
+      const onde = seg ? 'no plano de ' + pn + ' em ' + GV2.v9DiaRot() : 'com ' + pn + ', sem dia (ele escolhe)';
+      const idx = GV2.v9Registrar('Carteira', n + ' contas aprovadas · ' + onde, voltar);
+      g.ok = GV2.pl(n, 'aprovada', 'aprovadas') + ' · ' + onde + (n < ids.length ? ' · pedi ' + ids.length + ', o banco mudou ' + n : '');
       g.okIdx = idx; g.sel = {};
     }
   } catch (e) { g.erro = 'Não gravou: ' + ((e && e.message) || 'erro'); }
@@ -86387,15 +86429,17 @@ GV2.v9PorNaRota = async function (id) {
   const l = (RT7_ESTADO.leads || []).find(function (x) { return String(x.id) === String(id); });
   GV2.estado.v9conf = null;
   if (!l) return GV2.pintar();
-  const seg = GV2.v9Seg();
+  const seg = GV2.v9Dia();
+  const campos = GV2.v9Campos();
   const voltar = [{ id: String(l.id), dono: String(l.responsavel_owner_id || ''), status: String(l.status), data_rota: l.data_rota || null }];
   try {
-    const n = await GV2.v9Gravar([String(l.id)], { status: 'na_rota', data_rota: seg });
+    const n = await GV2.v9Gravar([String(l.id)], campos);
     if (!n) GV2.toast('Nada foi gravado: o banco não reconheceu esta sessão como gestor.', 'erro');
     else {
-      GV2.v9Local([String(l.id)], { status: 'na_rota', data_rota: seg });
-      GV2.v9Registrar('Carteira', (l.nome || 'conta') + ' na rota de ' + GV2.prim(GV2.v9Nome(l.responsavel_owner_id)) + ' em ' + GV2.ddmm(seg), voltar);
-      GV2.toast((l.nome || 'Conta') + ' na rota de ' + GV2.ddmm(seg) + ' ✓');
+      GV2.v9Local([String(l.id)], campos);
+      const quemR = GV2.prim(GV2.v9Nome(l.responsavel_owner_id));
+      GV2.v9Registrar('Carteira', (l.nome || 'conta') + (seg ? ' no plano de ' + quemR + ' em ' + GV2.v9DiaRot() : ' com ' + quemR + ', sem dia'), voltar);
+      GV2.toast((l.nome || 'Conta') + (seg ? ' no plano de ' + quemR + ' em ' + GV2.v9DiaRot() : ' com ' + quemR + ', sem dia') + ' ✓');
     }
   } catch (e) { GV2.toast('Não gravou: ' + ((e && e.message) || 'erro'), 'erro'); }
   GV2.pintar();
@@ -86480,6 +86524,7 @@ GV2.v9Comando = function (cmd, parte, el) {
     GV2.pintar(); return true;
   }
   if (cmd === 'v9todas' && e.v9g) { e.v9g.todas = !e.v9g.todas; GV2.pintar(); return true; }
+  if (cmd === 'v9dia') { e.terrDia = parte[1] || null; GV2.pintar(); return true; }
   if (cmd === 'v9aprovar') { GV2.v9Aprovar(); return true; }
   if (cmd === 'v9rota') { GV2.v9PorNaRota(parte[1]); return true; }
   if (cmd === 'v9dar') { GV2.v9Dar(parte[1], parte[2]); return true; }
@@ -87179,7 +87224,7 @@ GV2.t10BotaoPlano = function (chave, ids, prim) {
   const feito = (GV2.estado.t10feito || {})[chave];
   if (feito) return '<span class="gv2-t10-feito">' + GV2.e(feito.txt) + '</span>' + (feito.idx != null && (RT7_ESTADO.cargas || [])[feito.idx] ? '<button type="button" class="gv2-v5-btn" data-gv2="t10desfazer:' + GV2.e(chave) + '">Desfazer</button>' : '');
   if (!ids || !ids.length) return '';
-  return '<button type="button" class="gv2-v5-btn' + (prim ? ' is-prim' : '') + '" data-gv2="t10plano:' + GV2.e(chave) + ':' + ids.join(',') + '" title="' + GV2.e('põe ' + GV2.pl(ids.length, 'recém-aberto', 'recém-abertos') + ' na rota de ' + GV2.ddmm(GV2.v9Seg())) + '">Pro plano</button>';
+  return '<button type="button" class="gv2-v5-btn' + (prim ? ' is-prim' : '') + '" data-gv2="t10plano:' + GV2.e(chave) + ':' + ids.join(',') + '" title="' + GV2.e('põe ' + GV2.pl(ids.length, 'recém-aberto', 'recém-abertos') + ' em ' + GV2.v9DiaRot() + ' (escolha em Para quando)') + '">Pro plano · ' + GV2.e(GV2.v9Dia() ? GV2.ddmm(GV2.v9Dia()) : 'sem dia') + '</button>';
 };
 GV2.t10ListaAttr = function (o) { return 't10g:' + o.id + ':' + (o.bairro ? 'b=' + o.bairro : o.cidade ? 'c=' + o.cidade : o.chip ? 'f=' + o.chip : ''); };
 
@@ -87196,7 +87241,7 @@ GV2.render.t10Agir = function (M) {
     return (i === 3 ? '<div class="gv2-t10-tvo">Também vale olhar</div>' : '')
       + '<div class="gv2-t10-ag' + (i < 3 ? ' is-top' : '') + '"><span class="gv2-t10-agn">' + (i + 1) + '</span><div class="gv2-t10-agt"><b>' + GV2.e(a.t) + '</b><span>' + GV2.e(a.s) + '</span></div><div class="gv2-t10-agb">' + bts.join('') + '</div></div>';
   }).join('');
-  return '<section class="card gv2-t10-card gv2-t10-agir"><div class="gv2-t10-cab"><div class="gv2-t10-tit"><b>Onde agir</b>' + (destaque ? '<span class="gv2-t10-selo">' + destaque + '</span>' : '') + '</div></div>'
+  return '<section class="card gv2-t10-card gv2-t10-agir"><div class="gv2-t10-cab"><div class="gv2-t10-tit"><b>Onde agir</b>' + (destaque ? '<span class="gv2-t10-selo">' + destaque + '</span>' : '') + '</div></div>' + GV2.v9DiaHTML()
     + (linhas || '<div class="gv2-t10-vazio"><b>Nada pedindo você agora</b><span>' + GV2.e('todo executivo bateu 5 na semana passada, nenhum bairro tem 3 novos sem visita e nada vence em 14 dias') + '</span></div>') + '</section>';
 };
 
@@ -87371,7 +87416,7 @@ GV2.render.t10Gav = function (M) {
     const vis = v ? GV2.ddmm(v.dia) + ' · com prova' : 'nunca';
     let acao;
     if (y.deal) acao = '<a class="gv2-v5-btn" href="https://app.hubspot.com/contacts/24373118/record/0-3/' + encodeURIComponent(y.deal) + '" target="_blank" rel="noopener">Abrir</a>';
-    else if (y.naRota) acao = '<span class="gv2-t10-feito">' + GV2.e('na rota ' + GV2.ddmm(String(y.l.data_rota))) + '</span>';
+    else if (y.naRota) acao = '<span class="gv2-t10-feito">' + GV2.e(y.l.data_rota ? 'no plano ' + GV2.ddmm(String(y.l.data_rota)) : 'sem dia') + '</span>';
     else if (!y.ativo) acao = '<span class="t-faint">' + GV2.e(y.etapa || 'fora') + '</span>';
     else acao = GV2.t10BotaoPlano('lead:' + y.id, [y.id], false);
     const end = [y.l.endereco].filter(Boolean).join('');
@@ -87389,10 +87434,10 @@ GV2.render.t10Gav = function (M) {
   return '<div class="gv2-rxg-veu gv2-t10-veu" data-gv2="t10g:fechar"></div><aside class="gv2-rxg gv2-t10-gav" role="dialog" aria-label="' + GV2.e(x.nome + ' · recém-abertos') + '">'
     + '<header class="gv2-rxg-cab gv2-t10-gcab">' + GV2.t10Av(x, true) + '<div><b>' + GV2.e(x.nome + ' · recém-abertos') + '</b><span>' + GV2.e(GV2.t10Rotulo(x) + ' · ' + GV2.pl(r.mes, 'no mês', 'no mês') + ' · ' + r.vis + ' de 5 visitados ' + (M.fechada ? 'na semana passada' : 'esta semana')) + '</span></div>'
     + '<div class="gv2-t10-gbts">' + cobrar + '<button type="button" class="gv2-rxg-x" data-gv2="t10g:fechar" aria-label="Fechar">×</button></div></header>'
-    + chips + '<div class="gv2-rxg-corpo gv2-t10-gcorpo">'
+    + chips + GV2.v9DiaHTML() + '<div class="gv2-rxg-corpo gv2-t10-gcorpo">'
     + (lista.length ? '<div class="gv2-t10-gr is-cab"><span>Nome</span><span>Bairro</span><span>Aberto há</span><span>Visitado</span><span>Negócio</span><span>Ação</span></div>' + linhas
       : '<div class="gv2-t10-vazio"><b>' + GV2.e(vazio) + '</b></div>')
-    + '</div><footer class="gv2-t10-gpe">' + GV2.e('Ordem: vence primeiro, depois os mais novos, depois parados. "Pro plano" põe na próxima rota de ' + pn + ' (segunda ' + GV2.ddmm(GV2.v9Seg()) + ', o mesmo de hoje). Sem telefone: a Casa dos Dados não entrega.') + '</footer></aside>';
+    + '</div><footer class="gv2-t10-gpe">' + GV2.e('Ordem: vence primeiro, depois os mais novos, depois parados. "Pro plano" põe no Planejamento e na rota de ' + pn + ' no dia escolhido em Para quando; "sem dia" deixa ' + pn + ' escolher. Sem telefone: a Casa dos Dados não entrega.') + '</footer></aside>';
 };
 
 /* ══ AS AÇÕES ══ todas já existiam: cobrar no app (sugestoes_planos) e pôr na rota (na_rota + data_rota) */
@@ -87419,20 +87464,22 @@ GV2.t10Plano = async function (chave, ids) {
   if (!ids.length || (GV2.estado.t10feito || {})[chave]) return;
   const ls = (RT7_ESTADO.leads || []).filter(function (l) { return ids.indexOf(String(l.id)) >= 0; });
   if (!ls.length) return;
-  const seg = GV2.v9Seg();
+  const seg = GV2.v9Dia();
+  const campos = GV2.v9Campos();
   const voltar = ls.map(function (l) { return { id: String(l.id), dono: String(l.responsavel_owner_id || ''), status: String(l.status), data_rota: l.data_rota || null }; });
   const quem = GV2.prim(GV2.v9Nome(ls[0].responsavel_owner_id));
   GV2.estado.t10feito = GV2.estado.t10feito || {};
   GV2.estado.t10feito[chave] = { txt: 'Gravando…' };
   GV2.pintar();
   try {
-    const n = await GV2.v9Gravar(ls.map(function (l) { return String(l.id); }), { status: 'na_rota', data_rota: seg });
+    const n = await GV2.v9Gravar(ls.map(function (l) { return String(l.id); }), campos);
     if (!n) { delete GV2.estado.t10feito[chave]; GV2.toast('Nada foi gravado: o banco não reconheceu esta sessão como gestor.', 'erro'); }
     else {
-      GV2.v9Local(ls.map(function (l) { return String(l.id); }), { status: 'na_rota', data_rota: seg });
-      const idx = GV2.v9Registrar('Território', GV2.pl(n, 'recém-aberto', 'recém-abertos') + ' na rota de ' + quem + ' em ' + GV2.ddmm(seg), voltar);
-      GV2.estado.t10feito[chave] = { txt: n + ' na rota de ' + GV2.ddmm(seg), idx: idx };
-      GV2.toast(GV2.pl(n, 'recém-aberto', 'recém-abertos') + ' na rota de ' + quem + ' (' + GV2.ddmm(seg) + ') ✓' + (n < ls.length ? ' · ' + (ls.length - n) + ' não gravaram' : ''));
+      GV2.v9Local(ls.map(function (l) { return String(l.id); }), campos);
+      const onde = seg ? 'no plano de ' + quem + ' em ' + GV2.v9DiaRot() : 'com ' + quem + ', sem dia';
+      const idx = GV2.v9Registrar('Território', GV2.pl(n, 'recém-aberto', 'recém-abertos') + ' ' + onde, voltar);
+      GV2.estado.t10feito[chave] = { txt: n + ' ' + (seg ? 'no plano em ' + GV2.v9DiaRot() : 'sem dia'), idx: idx };
+      GV2.toast(GV2.pl(n, 'recém-aberto', 'recém-abertos') + ' ' + onde + ' ✓' + (n < ls.length ? ' · ' + (ls.length - n) + ' não gravaram' : ''));
     }
   } catch (e) { delete GV2.estado.t10feito[chave]; GV2.toast('Não gravou: ' + ((e && e.message) || 'erro'), 'erro'); }
   GV2.pintar();
