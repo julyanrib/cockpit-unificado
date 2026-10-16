@@ -27,10 +27,18 @@ const checar = (nome, cond, detalhe) => { if (cond) { ok++; return; } falhas.pus
    descerem retas da fila até o pé da tela. */
 /* HOJE v3 (09/10/26, ws.zip): o quadro único h9 deu lugar a quatro blocos em ordem — os 5
    números do gestor, "o que precisa de você", e a grade de baixo (fila | o meu dia). */
-const v3Topo = template.indexOf('<div id="exhTopo"'), v3Prec = template.indexOf('<section id="exhPrecisa"'), v3Grade = template.indexOf('<div class="exh-grade">');
-checar('a Hoje v3 abre com os 5 números, depois "o que precisa de você", depois a grade', v3Topo > -1 && v3Prec > v3Topo && v3Grade > v3Prec);
-checar('a grade de baixo tem a fila à esquerda e o meu dia à direita',
-  template.indexOf('<div class="exh-esq">', v3Grade) > -1 && template.indexOf('<section id="exhDia"', v3Grade) > template.indexOf('<div class="exh-esq">', v3Grade));
+/* HOJE v4 (16/10/26, hj.zip): os 5 números, a organização do dia (5 regras), Sem próximo passo
+   (o destaque), a Disputa da semana e a grade de baixo (quentes + fila | meu mês + o meu dia). */
+const v3Topo = template.indexOf('<div id="exhTopo"'), v4Reg = template.indexOf('<section id="exh4Regras"'), v4Sem = template.indexOf('<div id="exh4SemPasso"'),
+  v4Disp = template.indexOf('<div id="exh4Disputa0"'), v3Grade = template.indexOf('<div class="exh4-grade">');
+checar('a Hoje v4 abre com os 5 números, depois as regras, Sem próximo passo, a Disputa e a grade',
+  v3Topo > -1 && v4Reg > v3Topo && v4Sem > v4Reg && v4Disp > v4Sem && v3Grade > v4Disp);
+checar('a grade de baixo tem quentes e a fila à esquerda, o mês e o meu dia à direita',
+  (function () {
+    const q = template.indexOf('<section id="exh4Quentes"', v3Grade), fi = template.indexOf('<div id="exhFilaCheia"', v3Grade);
+    const me = template.indexOf('<section id="exh4Mes"', v3Grade), di = template.indexOf('<section id="exhDia"', v3Grade);
+    return q > -1 && fi > q && me > fi && di > me;
+  }()));
 checar('e a fila é a de sempre (h8FilaCardHTML), não uma segunda', template.indexOf('<div id="exhFilaCheia"', v3Grade) > -1 && /exhFilaCheia[^>]*>\$\{h8FilaCardHTML\(r, diagDia\)\}/.test(template));
 checar('a grade é a do handoff v3: fila 1.35fr | o meu dia 1fr',
   template.indexOf('.exh-grade{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);') > -1);
@@ -38,8 +46,9 @@ checar('a grade é a do handoff v3: fila 1.35fr | o meu dia 1fr',
    irmãs do quadro, cada uma com a sua largura. */
 checar('o recado do gestor saiu da Hoje (foi para "O que combinamos", no Desenvolvimento)',
   template.indexOf('<div id="meuPainelSugestoes"></div>') < 0 && template.indexOf('DV.recados') > -1);
-checar('os fechamentos da semana continuam, na coluna da direita',
-  template.indexOf('<div class="exh-vit">${buildVitoriasHTML(r)}</div>') > -1);
+/* v4: as vitórias saíram; os ganhos do mês ficam no "Meu mês" (os quadrados e os nomes) */
+checar('os ganhos do mês aparecem no Meu mês, com os nomes',
+  template.indexOf('<section id="exh4Mes"') > -1 && /EXH4\.mesHTML = function/.test(template) && template.indexOf('ganho · ') > -1);
 
 /* ── 2. O HERO ESCURO ────────────────────────────────────────────────────────────
    A classe nova entra AO LADO da antiga e cuida só da tinta: o layout, os stats e o
@@ -53,7 +62,7 @@ checar('os 5 cartões são os da Pessoas do gestor (Plano hoje, Semana, Mês, Po
   ['card(\'Plano hoje\'', 'card(\'Semana\'', 'card(\'Mês\'', 'card(\'Porta → decisor\'', 'card(\'Sem desfecho\''].every(function (k) { return template.indexOf(k) > -1; }));
 checar('a Hoje v3 usa os tokens do gestor (--gv2-*), nos dois temas',
   /* v3 (09/10/26): o herói saiu; a tela inteira mora em .gv2-tokens, que tem o claro e o escuro */
-  template.indexOf('<div class="gv2-tokens exh">') > -1 && template.indexOf('.exh-num{') > -1 && /\.exh-num\{[^}]*background:var\(--gv2-card\)/.test(template),
+  template.indexOf('<div class="gv2-tokens exh exh4">') > -1 && template.indexOf('.exh-num{') > -1 && /\.exh-num\{[^}]*background:var\(--gv2-card\)/.test(template),
   'cor solta no lugar do token quebra o escuro');
 /* AS CORES DE ESTADO SOBREVIVEM AO ESCURO: vermelho sobre tinta some, e "visita
    pendente" precisa ser legível justamente no dia em que ela importa. */
@@ -484,15 +493,15 @@ checar('o Seu dia sai da rota do app, pela mesma conta do Planejamento, não de 
     && /pl6OrdemDoDia\(itens, mapa\)/.test(template),
   'um segundo levantamento do mesmo dia é uma quarta tela para discordar das outras três');
 
-checar('o "Pronto pra rua?" fica ACIMA da fila, não ao lado nem embaixo',
+/* v4 (16/10/26): o "Pronto pra rua?" saiu com "o que precisa de você"; o que vem antes da fila
+   agora é o Sem próximo passo — lead sem plano esfria antes de qualquer item da fila */
+checar('o Sem próximo passo fica ACIMA da fila (v4: antes de tudo)',
   (function () {
-    /* v3: ele mora no topo de "o que precisa de você" (EXH.prontoHTML), que vem antes da grade da fila */
-    const f = template.indexOf('<section id="exhPrecisa"');
-    const g = template.indexOf('<div class="exh-grade">', f);
-    return f > -1 && g > -1 && f < g && /const pronto = m === 'manha' \? EXH\.prontoHTML\(p, b\) : ''/.test(template);
+    const s = template.indexOf('<div id="exh4SemPasso"');
+    const g = template.indexOf('<div id="exhFilaCheia"', s);
+    return s > -1 && g > -1 && s < g;
   }()),
-  'ver "por onde começar" antes de "o que eu já combinei" faz a tela recomendar contra '
-    + 'o próprio compromisso dele');
+  'lead sem plano é o que esfria primeiro; a fila de hoje vem depois de marcar o próximo passo');
 
 checar('sem rota o Seu dia diz o que fazer, nunca um zero',
   template.indexOf('Nada no plano de hoje. Monte a rota na Agenda do app.') > -1
