@@ -59,7 +59,7 @@ const tabelas = {
     combinados: [{ texto: 'Plano todo dia', regra: 'plano_diario' }, { texto: 'Travados com data', regra: 'travados_com_data' }, { texto: 'Duas demos', regra: 'livre' }] },
     { owner_id: '2', data: '2026-10-01', canal: 'campo', created_at: '2026-10-01T20:00:00Z', compromissos: ['voltar no Bar'], devolutiva: { foco: 'Disciplina de plano' } }], clients: [{ id: 'c1', nome: 'José', empresa: 'Bar do Zé', id_hubspot: 'a' }, { id: 'c2', nome: 'Sidnei', empresa: 'Cantina Sol', id_hubspot: null }]
 };
-const q = (dados) => { const o = { then: (a, b) => Promise.resolve({ data: dados, error: null }).then(a, b) }; ['select', 'eq', 'gte', 'lt', 'in', 'order', 'limit'].forEach(k => { o[k] = () => o; }); return o; };
+const q = (dados) => { const o = { then: (a, b) => Promise.resolve({ data: dados, error: null }).then(a, b) }; ['select', 'eq', 'gte', 'lt', 'in', 'order', 'limit', 'range', 'not'].forEach(k => { o[k] = () => o; }); return o; };
 global.supa = {
   rpc: (nome, a) => (global.__rpcLog = (global.__rpcLog || []).concat([nome]), nome === 'gestor_nomes_dos_clientes' && global.__nomesFalha ? Promise.resolve({ data: null, error: { message: 'função fora' } }) : q(nome === 'planejamento_do_time' ? { pessoas: a.p_segunda === SEG ? pessoasRpc : [], mapa: { checkins: [], plano: [] } } : nome === 'gestor_nomes_dos_clientes' ? tabelas.clients : tabelas[nome] || [])),
   from: (t) => (global.__fromLog = (global.__fromLog || []).concat([t]), q(tabelas[t] || []))
@@ -110,7 +110,8 @@ tabelas.gv2_falta_etapa = [
   const b = await GV2.montar();
   GV2.base = b;
   const ana = b.porId['1'], bia = b.porId['2'], caio = b.porId['3'];
-  checar('ritmo às 11:20 = 31% da meta: 6 → 2 esperadas, 4 → 1', ana.esperado === 2 && caio.esperado === 1, 'ana ' + ana.esperado + ' caio ' + caio.esperado);
+  /* 15/10/26: a meta é 6 por dia útil para TODOS (Julyan, 13/10); a meta do app de cada um não entra mais */
+  checar('ritmo às 11:20 = 31% da meta de 6: 2 esperadas para todos', ana.esperado === 2 && caio.esperado === 2, 'ana ' + ana.esperado + ' caio ' + caio.esperado);
   checar('sem plano hoje vale 3 de exceção (+1 se furou ontem)', ana.hoje.paradas_plano === 0 && ana.excecao === 4, 'ana ' + ana.excecao);
   checar('plano sem visita abaixo do ritmo vale 2', bia.excecao === 2, 'bia ' + bia.excecao);
   checar('quem está no ritmo e cumpriu ontem tem 0', caio.excecao === 0, 'caio ' + caio.excecao);
@@ -1083,7 +1084,7 @@ tabelas.gv2_falta_etapa = [
   }
   /* auditoria 14/10/26: a carga pede as visitas com prova UMA vez (mês, 4 semanas e semana saem por recorte) */
   checar('auditoria · a carga do gestor pede visitas_com_prova uma vez só e recorta as três janelas',
-    codigo.indexOf("visJanela: supa.rpc('visitas_com_prova'") > 0 && codigo.indexOf("visitas4: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf("visSem: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf("visitasMes: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf('out.visitas4 = recorte(GV2.somaDias(seg, -21));') > 0);
+    codigo.indexOf("visJanela: GV2.rpcTudo('visitas_com_prova'") > 0 && codigo.indexOf("visitas4: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf("visSem: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf("visitasMes: supa.rpc('visitas_com_prova'") < 0 && codigo.indexOf('out.visitas4 = recorte(GV2.somaDias(seg, -21));') > 0);
   /* 14/10/26: negócio no Planejamento de hoje em diante TEM próximo passo (Julyan: "a partir do
      momento que eles planejam e agendam, tem próximo passo"); plano que já passou não conta */
   {
