@@ -277,11 +277,13 @@ const UTC = (h, m) => '2026-09-01T' + String(h + 3).padStart(2, '0') + ':' + Str
      arquivos, dívida anterior). Enquanto forem duas cópias, elas têm que ser idênticas —
      e é isto que garante, em vez de um comentário pedindo cuidado. */
   {
+    /* 16/10/26: o robô deixou de ter a própria cópia — fetch-hubspot.js importa STAGES de
+       lib/lead-do-funil.js. A guarda compara com a fonte que o robô usa de fato (antes procurava
+       o texto no robô e falhava em tudo, sem proteger nada). */
     const robo = fs.readFileSync(path.join(__dirname, 'fetch-hubspot.js'), 'utf8');
-    const idDoRobo = nome => {
-      const m = robo.match(new RegExp('\\b' + nome + ":\\s*'(\\d+)'"));
-      return m ? m[1] : null;
-    };
+    if (!(/require\(['"]\.\.\/lib\/lead-do-funil(\.js)?['"]\)/.test(robo) && /const \{\s*STAGES,/.test(robo))) falhas.push('fetch-hubspot.js não importa mais STAGES de lib/lead-do-funil.js: conferir de onde vêm os ids do robô');
+    const FONTE = require('../lib/lead-do-funil.js').STAGES;
+    const idDoRobo = nome => (FONTE && FONTE[nome]) || null;
     Object.keys(R.STAGES_REALIZADO).forEach(nome => {
       const doRobo = idDoRobo(nome);
       if (!doRobo) { falhas.push('id de etapa "' + nome + '" não encontrado em fetch-hubspot.js — as cópias divergiram'); return; }

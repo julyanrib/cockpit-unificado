@@ -47,7 +47,8 @@ const pessoasRpc = [
 const tabelas = {
   visitas_com_prova: [{ owner_id: '1', provada: true, client_id: 'c1', visited_at: '2026-10-05T13:00:00Z' }, { owner_id: '1', provada: true, client_id: 'c2', visited_at: '2026-10-05T15:00:00Z' }, { owner_id: '2', provada: true }, { owner_id: '2', provada: false }],
   fichas_de_rua: [{ owner_id: '1' }],
-  pontos_eventos: [{ owner_id: '2', tipo: 'contrato' }, { owner_id: '2', tipo: 'demo_realizada' }, { owner_id: '3', tipo: 'contrato' }, { owner_id: '3', tipo: 'estorno' }],
+  /* estorno de contrato aponta o negócio; o de visita (−20 pts) não tem negócio e não desfaz venda (16/10/26) */
+  pontos_eventos: [{ owner_id: '2', tipo: 'contrato', negocio_id: 'n2' }, { owner_id: '2', tipo: 'estorno', origem_id: 'visita_provada:x' }, { owner_id: '2', tipo: 'demo_realizada' }, { owner_id: '3', tipo: 'contrato', negocio_id: 'n3' }, { owner_id: '3', tipo: 'estorno', negocio_id: 'n3' }],
   client_stage_changes: [], playbook_progresso: [], gestor_idas_campo: [],
   /* v4 (07/10/26): a disciplina e as leituras do gestor */
   profiles: [{ id: 'u1', id_hubspot: '1' }, { id: 'u2', id_hubspot: '2' }, { id: 'u3', id_hubspot: '3' }],
@@ -119,7 +120,7 @@ tabelas.gv2_falta_etapa = [
   checar('ontem numa terça é a segunda da mesma semana', ana.ontem.paradas_plano === 6 && ana.ontem.visitas_com_prova === 3 && ana.furou === 3);
   checar('quente = Negociação e Ag. Pagamento; travado = estouro da régua do Cockpit',
     b.time.quentes === 3 && b.time.travados === 2, 'q ' + b.time.quentes + ' t ' + b.time.travados);
-  checar('fechado = contratos − estornos (o mesmo do ranking)', bia.funil_mes.fechado === 1 && caio.funil_mes.fechado === 0);
+  checar('fechado = contratos − estornos do negócio; estorno de visita não desfaz venda', bia.funil_mes.fechado === 1 && caio.funil_mes.fechado === 0);
   checar('portas = só visitas provadas', ana.funil_mes.portas === 2 && bia.funil_mes.portas === 1);
   checar('a meta do mês é a soma das pessoas', b.time.metaMes === 15);
   checar('provável = fechados + Ag. Pagamento + 60% de Negociação (v4)', bia.provavel === 2 && ana.provavel === 1 && caio.provavel === 1, 'bia ' + bia.provavel + ' ana ' + ana.provavel + ' caio ' + caio.provavel);

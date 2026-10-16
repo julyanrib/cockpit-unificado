@@ -12,7 +12,9 @@
      · leitura de visitas paginada (o PostgREST corta em 1000 e o corte caía nas mais novas);
      · vendas do mês só valem se forem deste mês; a hora do HubSpot diz o dia quando não é hoje;
      · Funil por praça usa a meta da praça (a meta com folga é só do time inteiro);
-     · taxa de passo nunca passa de 100%; proposta com retorno combinado não é "esquecida".
+     · taxa de passo nunca passa de 100%; proposta com retorno combinado não é "esquecida";
+     · (16/10) Amanhã de sexta lê a Rua da segunda; MRR sem venda lida é "não medido"; estorno de
+       visita não desconta venda; ranking de segunda cedo não diz "sem ganhador"; ausente do placar é —.
    Rode com: node scripts/testar-auditoria-numeros.js
    ============================================================================ */
 const fs = require('fs');
@@ -109,6 +111,26 @@ GV2.pintar = function () {};
   /* 8 · propostas (regra no código: aguardando = combinado; venceu ontem = 1 dia útil) */
   checar('proposta com retorno combinado não cai em Esquecidas', /else if \(n\.lead && n\.lead\.aguardando\) status = 'combinado';/.test(codigo));
   checar('"venceu ontem" = venceu no último dia útil (resta === −1)', /status = resta === -1 \? 'venceu ontem'/.test(codigo) && !/resta >= -GV2\.diasCorridos/.test(codigo));
+
+  /* 9 · auditoria 16/10/26 */
+  checar('Rua › Amanhã na sexta: o bloco de Rua da PRÓXIMA semana é lido (seg − 7, seg, seg + 7)',
+    /\.in\('data_segunda', \[GV2\.somaDias\(seg, -7\), seg, GV2\.somaDias\(seg, 7\)\]\)/.test(codigo));
+  DATA.vendasMes = { mes: '2000-01', porRep: [{ ownerId: '1', mrrTotal: 900 }] };
+  checar('Daily: sem as vendas deste mês o MRR é "não medido" (null), não R$ 0', GV2.v8dMrr(P('1', 'Pleno')).feito === null);
+  DATA.vendasMes = { mes: mes, porRep: [{ ownerId: '1', mrrTotal: 900 }] };
+  checar('Daily: com as vendas deste mês o MRR vale (e quem não vendeu tem 0)', GV2.v8dMrr(P('1', 'Pleno')).feito === 900 && GV2.v8dMrr(P('2', 'Pleno')).feito === 0);
+  GV2.base = { agora: { iso: '2026-10-19', min: 7 * 60 }, pessoas: [] };
+  checar('ranking: segunda antes das 08h a semana fechada "vai ser gravada", não "sem ganhador"', /gravado na segunda 19\/10 às 08:00/.test(GV2.v6RkSemGanhador('2026-10-12')), GV2.v6RkSemGanhador('2026-10-12'));
+  GV2.base = { agora: { iso: '2026-10-20', min: 600 }, pessoas: [] };
+  checar('ranking: depois da gravação, semana sem ganhador aparece como falha', /não foi gravado/.test(GV2.v6RkSemGanhador('2026-10-12')));
+  checar('ranking: semana antes do bônus (05/10) diz que não havia bônus', /bônus começou/.test(GV2.v6RkSemGanhador('2026-09-28')));
+  checar('ganhos por semana: só estorno ligado a contrato desfaz ganho (o de visita valia −1 venda)',
+    /const contratoDe = \{\};/.test(codigo) && !/e\.tipo === 'estorno' \? -1 : 1/.test(codigo));
+  checar('lista do funil: estorno sem negócio (o de visita) não cancela contrato', /if \(x\.tipo === 'estorno' && x\.negocio_id\)/.test(codigo));
+  checar('Semana passada: quem não veio no placar aparece com — e fica fora da soma (não "0 visitas")',
+    /const ausente = !porDono\[p\.id\];/.test(codigo) && /if \(ausente\) \{ tot\.ausentes/.test(codigo));
+  checar('cabeçalho: o texto tem piso de largura e as ações descem de linha', /\.gv2-cab-txt\{flex:1 1 260px;min-width:min\(100%,260px\);\}/.test(tpl));
+  checar('KPIs da Hoje acima do celular: cada cartão com ao menos 190px (5 fixas davam 117px a 767px)', /\.gv2-v5-kpis:not\(\.is-4\)\{grid-template-columns:repeat\(auto-fit,minmax\(190px,1fr\)\);\}/.test(tpl));
 
   console.log(falhas.length ? 'auditoria de números: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length) + '\n  ✗ ' + falhas.join('\n  ✗ ') : 'auditoria de números: ' + ok + ' verificações · tudo certo.');
   process.exit(falhas.length ? 1 : 0);
