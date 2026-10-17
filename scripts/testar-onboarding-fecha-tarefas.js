@@ -83,7 +83,9 @@ async function mover(novaEtapa, opcoes) {
     }
     if (u.indexOf('/objects/deals/') > -1 && metodo === 'GET') {
       return { ok: true, status: 200, json: async () => ({
-        id: '777', properties: { pipeline: PIPELINE, dealstage: PAGAMENTO,
+        /* desde o #626: do Ag. Pagamento só se vai a Reciclagem ou Perdido; o Onboarding vem
+           depois do Ganho (que o ASAAS marca quando o pagamento cai) */
+        id: '777', properties: { pipeline: PIPELINE, dealstage: GANHO,
           hubspot_owner_id: String(GESTOR.ownerId || '1'), amount: '500', valor_de_mrr: '500' } }) };
     }
     if (u.indexOf('/objects/deals/') > -1 && metodo === 'PATCH') {

@@ -286,8 +286,14 @@ checar('e o veto continua ganhando delas',
     'lista paralela envelhece: a de 03/09 buscava Salvador, onde não há executivo, e '
       + 'ignorava cinco cidades que têm');
 
-  checar('a derivação produz praças de verdade',
-    Array.isArray(cidadesDoColetor) && cidadesDoColetor.length >= 8,
+  /* era ">= 8", número cravado: em 15/10/26 o Território ficou com 5 cidades e a guarda reprovou o
+     certo. Agora a conta é a do próprio territorios.json: uma praça por cidade de território ativo. */
+  const cidadesAtivas = new Set();
+  (require(path.join(raiz, 'data', 'territorios.json')).territorios || []).forEach(function (t) {
+    if (t && t.ativo !== false) (t.areas || []).forEach(function (a) { if (a && a.municipio && a.uf) cidadesAtivas.add(a.municipio + '/' + a.uf); });
+  });
+  checar('a derivação produz praças de verdade (uma por cidade de território ativo, hoje ' + cidadesAtivas.size + ')',
+    Array.isArray(cidadesDoColetor) && cidadesDoColetor.length > 0 && cidadesDoColetor.length === cidadesAtivas.size,
     'sem isto as checagens abaixo mediriam uma lista vazia e passariam verdes');
 
   if (Array.isArray(cidadesDoColetor) && cidadesDoColetor.length) {

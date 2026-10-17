@@ -170,7 +170,8 @@ global.supa = {
   const p0 = pedidos[0];
   checar('Pro plano: leads_prospeccao na rota + data_rota da próxima segunda, só os 2 pedidos', p0 && p0.t === 'leads_prospeccao' && p0.c.status === 'na_rota' && p0.c.data_rota === '2026-11-02' && p0.ids.join() === 't1,t2'
     && Object.keys(p0.c).sort().join() === 'data_rota,status,updated_at' /* nada além disso: dono, nome e fonte ficam */, JSON.stringify(p0));
-  checar('Pro plano: a linha vira "2 na rota de 02/11" com Desfazer', GV2.estado.t10feito.teste && /2 na rota de 02\/11/.test(GV2.estado.t10feito.teste.txt) && GV2.estado.t10feito.teste.idx === 0);
+  /* desde 16/10/26 (#874) o texto diz o dia escolhido em Para quando (padrão: a próxima segunda) */
+  checar('Pro plano: a linha vira "2 no plano em seg 02/11" com Desfazer', GV2.estado.t10feito.teste && /2 no plano em seg 02\/11/.test(GV2.estado.t10feito.teste.txt) && GV2.estado.t10feito.teste.idx === 0);
   await GV2.v9Desfazer(0);
   const t1 = RT7_ESTADO.leads.find(l => l.id === 't1');
   checar('Desfazer: as contas voltam ao status e ao dia de antes', t1.status === 'atribuido' && t1.data_rota == null && pedidos.length >= 2, JSON.stringify({ s: t1.status, d: t1.data_rota, n: pedidos.length }));

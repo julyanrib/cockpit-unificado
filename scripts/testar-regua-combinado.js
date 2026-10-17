@@ -28,7 +28,9 @@ const path = require('path');
 const vm = require('vm');
 
 const raiz = path.join(__dirname, '..');
-const robo = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8');
+const robo = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8')
+  /* #628 (13/10/26): STAGES, OPEN_STAGES e SLA_DAYS foram do robô para lib/lead-do-funil.js */
+  + '\n' + fs.readFileSync(path.join(raiz, 'lib', 'lead-do-funil.js'), 'utf8');
 const tpl = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
 
 let ok = 0;
@@ -148,7 +150,8 @@ checar('nenhum lugar do robô calcula a régua por fora',
    mesmo padrão da chamada, e a primeira versão desta checagem exigia 2 quando havia 3 —
    reprovou o conserto por contar a própria função. */
 checar('e os dois caminhos chamam estadoDaRegua',
-  (robo.match(/estadoDaRegua\(dias, stageId, d\.properties\.notes_next_activity_date\)/g) || []).length === 2,
+  /* #628: o card do funil foi para lib/lead-do-funil.js, onde as propriedades se chamam p */
+  (robo.match(/estadoDaRegua\(dias, stageId, (d\.properties|p)\.notes_next_activity_date\)/g) || []).length === 2,
   'o mapa de funilLeads e o laço por executivo alimentam telas diferentes');
 
 /* ══ 7. A TELA MOSTRA O TERCEIRO ESTADO ═════════════════════════════════════════════

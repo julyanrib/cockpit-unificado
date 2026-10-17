@@ -12,7 +12,8 @@ const path = require('path');
 const P = path.join(__dirname, 'fetch-hubspot.js');
 const s = fs.readFileSync(P, 'utf8');
 
-const i = s.indexOf('  const leadsReciclagem60 = reciclagemDealsRaw');
+// desde 15/10/26 o mapeamento se chama leadsReciclagem e o corte de 60 dias vem depois
+const i = s.indexOf('  const leadsReciclagem = reciclagemDealsRaw');
 if (i < 0) { console.error('nao achei o mapeamento'); process.exit(1); }
 const fim = s.indexOf('.sort((a, b) => b.dias - a.dias);', i);
 if (fim < 0) { console.error('nao achei o fim'); process.exit(1); }
@@ -20,9 +21,9 @@ const trecho = s.slice(i, fim) + ';';
 
 /* as dependencias que o trecho usa. coordenadaValida vem DO PROPRIO ARQUIVO, extraida
    como o mapeamento: assim o teste prova o codigo do disco, e nao uma copia minha dele. */
-const iC = s.indexOf('function coordenadaValida(valor) {');
-if (iC < 0) { console.error('nao achei coordenadaValida'); process.exit(1); }
-eval(s.slice(iC, s.indexOf('\n}', iC) + 2));
+/* #628 (13/10/26): coordenadaValida foi para lib/lead-do-funil.js, que o robô importa */
+const { coordenadaValida } = require(path.join(__dirname, '..', 'lib', 'lead-do-funil.js'));
+if (typeof coordenadaValida !== 'function') { console.error('nao achei coordenadaValida'); process.exit(1); }
 const ownerNameById = { '86100506': 'Bruno Martins' };
 const daysInCurrentStage = () => 140;
 const reciclagemDealsRaw = [
@@ -43,7 +44,7 @@ const reciclagemDealsRaw = [
 ];
 
 let leadsReciclagem60;
-eval(trecho.replace('  const leadsReciclagem60 =', 'leadsReciclagem60 ='));
+eval(trecho.replace('  const leadsReciclagem =', 'leadsReciclagem60 ='));
 
 const porNome = {};
 leadsReciclagem60.forEach(l => { porNome[l.name] = l; });
