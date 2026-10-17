@@ -26,8 +26,9 @@ checar('a versão nova é o padrão do gestor, sempre: só ?gv2=0 na URL desliga
   /return q !== '0';/.test(codigo) && !/localStorage\.getItem\('gv2'\)/.test(codigo));
 /* UM COCKPIT SÓ (Julyan, 07/10: "não quero nada indo pro cockpit antigo"): Prospecção e Playbook
    abrem dentro do novo (GV2.visitar); nenhum botão desliga a tela nova para visitar uma aba antiga. */
-checar('Prospecção é aba do cockpit novo e "Tomada de contas e Radar" vai para ela',
-  /\['prospeccao', 'Prospecção'/.test(codigo) && /texto: 'Tomada de contas e Radar', acao: 'aba:prospeccao'/.test(codigo));
+// o botão "Tomada de contas e Radar" vivia na Rua antiga, sobrescrita pela v5 (limpeza de 16/10/26)
+checar('Prospecção é aba do cockpit novo',
+  /\['prospeccao', 'Prospecção'/.test(codigo));
 checar('nenhum botão sai para Rotas/Playbook do antigo (menu:rotas some; Playbook e Praça usam GV2.visitar)',
   !/acao: 'menu:rotas'/.test(codigo) && /if \(o === 'rotas' \|\| o === 'playbook'\) return GV2\.visitar\(o\);/.test(codigo)
   && /GV2\.pxPlaybook = function[\s\S]{0,200}GV2\.visitar\('playbook'\)/.test(codigo));
