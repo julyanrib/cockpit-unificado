@@ -15468,7 +15468,10 @@ async function hidratarSessao(email) {
       const token = data && data.session ? data.session.access_token : null;
       if (!token) { mostrarLogin('Sessão não encontrada. Tente entrar de novo.'); return; }
       /* as leituras do gestor saem junto com a carga, com o time guardado da última visita (17/10/26) */
-      try { if (typeof GV2 !== 'undefined' && GV2.preler && data.session.user) GV2.preler(data.session.user.email); } catch (e) {}
+      try {
+        if (data.session.user) window.__gv2PreEmail = data.session.user.email;
+        if (typeof GV2 !== 'undefined' && GV2.preler && data.session.user && !GV2.preLeitura) GV2.preler(data.session.user.email);
+      } catch (e) {}
       const resp = await prazoDoLogin(
         fetch(v5EnderecoDosDados(), { headers: { Authorization: 'Bearer ' + token } }),
         PRAZO_DA_CARGA, 'a carga dos seus dados');
@@ -86837,6 +86840,10 @@ PL7.toquesHTML = function (arr, grande) {
   return '<span class="pl7-toques' + (grande ? ' is-grande' : '') + '" title="' + n + ' de 6 semanas com toque registrado"><small>toques · 6 sem</small>'
     + arr.map(function (v) { return '<i' + (v ? ' class="is-ok"' : '') + '></i>'; }).join('') + '</span>';
 };
+
+/* FIM DO BLOCO GV2 (17/10/26): o login pode ter chegado antes deste script carregar; ele deixa
+   o e-mail anotado e as leituras do gestor saem agora, com tudo do GV2 já definido. */
+if (typeof window !== 'undefined' && window.__gv2PreEmail && GV2.preler && !GV2.preLeitura) { try { GV2.preler(window.__gv2PreEmail); } catch (e) {} }
 
 GV2.instalar();
 </script><!-- /gv2-js -->
