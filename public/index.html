@@ -55891,7 +55891,7 @@ GV2.lerNovosDaSemana = async function (L) {
   } catch (e) { GV2.novosSemana = null; }
 };
 
-GV2.montar = async function (so) {
+GV2.montar = async function (so, leituraPronta) {
   const agora = GV2.agoraBR();
   const faltas = [];
 
@@ -55902,14 +55902,21 @@ GV2.montar = async function (so) {
 
   const pbCarga = typeof carregarPlaybookProtegido === 'function'
     ? carregarPlaybookProtegido().catch(function (e) { return { erro: (e && e.message) || 'erro' }; }) : Promise.resolve(null);
-  const L = await GV2.ler(donos, agora);
+
+  const L = leituraPronta || await GV2.ler(donos, agora);
+  GV2.ultimaLeitura = { so: so || null, L: L };
 
   setTimeout(function () { GV2.lerNovosDaSemana(L).then(function () { if (GV2.estado && GV2.estado.aba === 'rua' && GV2.pintar) GV2.pintar(); }); }, 0);
   if (L.rotaSem && !L.rotaSem.erro && L.visSem && !L.visSem.erro && GV2.rota) {
     const segL = GV2.segundaDe(agora.iso);
     GV2.rota.cache[segL] = { estado: 'ok', itens: L.rotaSem.data || [], visitas: (L.visSem && L.visSem.data) || [] };
   }
-  await pbCarga;
+
+  if (so) await pbCarga;
+  else {
+    const pbPronto = await Promise.race([Promise.resolve(pbCarga).then(function () { return true; }), new Promise(function (r) { setTimeout(function () { r(false); }, 150); })]);
+    GV2.playbookAtrasado = pbPronto ? null : pbCarga;
+  }
 
   const repHoje = {};
   let repMedido = !!(L.visSem && !L.visSem.erro);
@@ -56394,6 +56401,18 @@ GV2.carregar = async function (manual) {
       GV2.base = nova; GV2.pendente = null;
       GV2.testes.prova();
       GV2.pintar();
+      if (GV2.playbookAtrasado) {
+        const pb = GV2.playbookAtrasado; GV2.playbookAtrasado = null;
+        Promise.resolve(pb).then(async function () {
+          const ul = GV2.ultimaLeitura;
+          if (!ul || ul.so || GV2.carregando) return;
+          const b2 = await GV2.montar(undefined, ul.L);
+          if (GV2.pessoasMontar) GV2.pessoasMontar(b2);
+          GV2.base = b2;
+
+          if (!(GV2.estado.daily != null || GV2.estado.menu || GV2.estado.veu)) GV2.pintar();
+        }).catch(function (e) { console.error('[gv2] playbook atrasado', e); });
+      }
     } catch (e) {
       console.error('[gv2] montar', e);
       if (!GV2.base) {

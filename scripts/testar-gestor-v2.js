@@ -111,6 +111,27 @@ tabelas.gv2_falta_etapa = [
   GV2.pintar = function () {};
   const b = await GV2.montar();
   GV2.base = b;
+  /* 17/10/26: o playbook atrasado não segura a montagem do gestor; a conta é refeita com a mesma leitura */
+  {
+    const antPb = global.carregarPlaybookProtegido, antDados = global.playbookDados;
+    let soltar; const atrasado = new Promise(function (r) { soltar = r; });
+    global.carregarPlaybookProtegido = function () { return atrasado; };
+    global.playbookDados = function () { return null; };
+    const t0 = Date.now ? process.hrtime.bigint() : 0n;
+    /* com prazo: uma promessa que nunca resolve não segura o Node, e a suíte sumiria com código 0 */
+    const bSem = await Promise.race([GV2.montar(), new Promise(function (r) { setTimeout(function () { r(null); }, 2000); })]);
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    checar('playbook atrasado: a montagem do gestor não espera por ele (< 1 s) e marca o atraso',
+      !!bSem && ms < 1000 && !!GV2.playbookAtrasado && !!GV2.ultimaLeitura && !!GV2.ultimaLeitura.L, Math.round(ms) + ' ms');
+    let leu = 0; const lerOrig = GV2.ler; GV2.ler = function () { leu++; return lerOrig.apply(GV2, arguments); };
+    soltar({});
+    const bCom = await GV2.montar(undefined, GV2.ultimaLeitura.L);
+    GV2.ler = lerOrig;
+    checar('playbook atrasado: refazer a conta usa a leitura que já tinha (nenhuma ida ao banco)', !!bCom && leu === 0 && !GV2.playbookAtrasado, 'leituras ' + leu);
+    if (antPb === undefined) delete global.carregarPlaybookProtegido; else global.carregarPlaybookProtegido = antPb;
+    if (antDados === undefined) delete global.playbookDados; else global.playbookDados = antDados;
+    GV2.playbookAtrasado = null;
+  }
   const ana = b.porId['1'], bia = b.porId['2'], caio = b.porId['3'];
   /* 15/10/26: a meta é 6 por dia útil para TODOS (Julyan, 13/10); a meta do app de cada um não entra mais */
   checar('ritmo às 11:20 = 31% da meta de 6: 2 esperadas para todos', ana.esperado === 2 && caio.esperado === 2, 'ana ' + ana.esperado + ' caio ' + caio.esperado);
