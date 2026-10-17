@@ -173,9 +173,13 @@ checar('lista vazia não sobrescreve o compromisso',
     /const atualFim = new Date\(atualInicio\.getTime\(\) \+ 5 \* DAY - 1\);/.test(cmp),
     'encurtar a janela junto com o corte perderia as quatro horas finais de sexta para '
       + 'sempre; do jeito que está, elas entram na rodada seguinte do daily-refresh');
-  checar('o passo leva as chaves do Supabase',
-    /run: node scripts\/generate-weekly-summary\.js/.test(y)
-    && y.indexOf('SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}') > -1,
+  /* 17/10/26: o passo da Claude saiu do robô de sexta (ninguém lia o texto no cockpit novo).
+     Se ele voltar, volta com as chaves: sem elas desiste em silêncio e o coaching não é gravado. */
+  const temPassoIA = /run: node scripts\/generate-weekly-summary\.js/.test(y);
+  checar('o robô de sexta não chama a IA (o texto não tinha leitor)', !temPassoIA,
+    'religar só com uma tela que leia resumoIndividual/comoAgir');
+  checar('se o passo da IA voltar, leva as chaves do Supabase',
+    !temPassoIA || y.indexOf('SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}') > -1,
     'chave faltando não dá erro: o passo desiste em silêncio e o coaching não é gravado');
 }());
 
