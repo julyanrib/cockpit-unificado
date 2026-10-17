@@ -76169,7 +76169,10 @@ GV2.ler = async function (donos, agora, emailsProntos) {
     reunioes: supa.from('client_meetings').select('id,client_id,created_by,scheduled_at,type,acao').eq('status', 'agendada')
       .lt('scheduled_at', new Date(Date.now() - 2 * 3600000).toISOString()).order('scheduled_at', { ascending: false }).limit(3000),
     perfis: supa.from('profiles').select('id,id_hubspot').in('id_hubspot', donos),
-    filaFeitas: supa.from('fila_feitas').select('user_id,dia,estado').gte('dia', GV2.somaDias(agora.iso, -6)),
+    filaFeitas: supa.from('fila_feitas').select('user_id,dia,estado,origem').gte('dia', GV2.somaDias(agora.iso, -6)),
+    /* TAREFAS DO APP (17/10/26): o % de follow-ups de hoje é a MESMA conta que o executivo vê no
+       placar da aba Tarefas e no push das 17:30 (percentual_followups, 0217) */
+    pctFollow: supa.rpc('percentual_followups', { p_dia: agora.iso }),
     promessas: supa.from('dailies').select('seller_id,prometido_visitas').eq('data', agora.iso),
     v4: supa.rpc('gestor_v4_leituras', { p_donos: donos }),
     /* v5 (auditoria 08/10): o plano e as visitas da semana vêm JUNTO, não depois da primeira pintura;
@@ -79797,8 +79800,14 @@ GV2.disciplinaMontar = function (L, pessoas, agora, clientePorId, faltas) {
     const d = donoDoUid[r.created_by]; if (!d) return;
     (reunPor[d] = reunPor[d] || []).push({ id: r.id, cliente: nomeCli(r.client_id), quando: r.scheduled_at, tipo: r.type === 'follow_up' ? 'retorno' : 'reunião' });
   });
-  const filaPor = {};
-  ((L.filaFeitas && L.filaFeitas.data) || []).forEach(function (x) { if (x.estado === 'desfeita') return; const d = donoDoUid[x.user_id]; if (d) filaPor[d] = (filaPor[d] || 0) + 1; });
+  const filaPor = {}, sozinhaPor = {};
+  ((L.filaFeitas && L.filaFeitas.data) || []).forEach(function (x) { if (x.estado === 'desfeita') return; const d = donoDoUid[x.user_id]; if (!d) return; filaPor[d] = (filaPor[d] || 0) + 1; if (x.origem && x.origem !== 'fila') sozinhaPor[d] = (sozinhaPor[d] || 0) + 1; });
+  /* o % que o executivo vê no app; null = a conta não respondeu (não é 0) */
+  const pctPor = {};
+  const pctErro = erro('pctFollow') || erro('perfis');
+  ((L.pctFollow && L.pctFollow.data) || []).forEach(function (x) { const d = donoDoUid[x.user_id]; if (d) pctPor[d] = { pct: x.pct, feitos: x.feitos, abertos: x.abertos }; });
+  const pctsTime = Object.keys(pctPor).map(function (k) { return pctPor[k].pct; }).filter(function (v) { return v != null; });
+  GV2.v4PctMedia = pctErro || !pctsTime.length ? null : Math.round(pctsTime.reduce(function (s, v) { return s + Number(v); }, 0) / pctsTime.length);
   const promPor = {};
   ((L.promessas && L.promessas.data) || []).forEach(function (x) { const d = donoDoUid[x.seller_id]; if (d && x.prometido_visitas != null) promPor[d] = Number(x.prometido_visitas); });
 
@@ -79836,7 +79845,9 @@ GV2.disciplinaMontar = function (L, pessoas, agora, clientePorId, faltas) {
       nSemFicha: erros.visitas || erros.fichas ? null : semFicha.length,
       fichasSemCheckin: erros.visitas || erros.fichas ? null : semCheckin,
       decisor: erros.fichas ? null : comDec, fichasMes: erros.fichas ? null : mes.length,
-      fila7: erros.fila ? null : (filaPor[p.id] || 0)
+      fila7: erros.fila ? null : (filaPor[p.id] || 0),
+      sozinha7: erros.fila ? null : (sozinhaPor[p.id] || 0),
+      followHoje: pctErro ? undefined : (pctPor[p.id] || null)
     };
     p.promessa = erros.promessa ? undefined : (promPor[p.id] != null ? promPor[p.id] : null);
     const vm = GV2.vendasDoMes(p.id), fech = vm != null ? vm : p.funil_mes.fechado, meta = p.meta_clientes_mes || 0;
@@ -80035,8 +80046,13 @@ GV2.p3Disciplina = function (p) {
     + '<span class="gv2-v4-barra"><i style="width:' + pct + '%"></i></span><span>' + GV2.e('fichas com o nome do decisor · ' + (!vt ? 'não li as fichas do time agora' : vt.fichasMes ? 'time ' + vt.decisor + ' de ' + vt.fichasMes : 'o time ainda não tem ficha no mês')) + '</span></div>';
   const filaT = b.pessoas.reduce(function (s, x) { return s + ((x.disc && x.disc.fila7) || 0); }, 0);
   const fila = '<div class="gv2-v4-disc"><div class="gv2-v4-disc-cab"><small>Fila do app · 7 dias</small><b class="t-dim">' + (d.fila7 == null ? '—' : d.fila7 + ' Feito') + '</b></div>'
-    + '<span>' + GV2.e(d.fila7 == null ? 'não li a fila do app agora' : (d.fila7 ? GV2.pl(d.fila7, 'Feito', 'Feito') + ' na aba Tarefas' : 'nenhum Feito na aba Tarefas') + ' · time ' + filaT + ' em 7 dias') + '</span></div>';
-  return '<div class="gv2-v4-disc-grid">' + reun + '<div class="gv2-p3-col">' + portas + decisor + fila + '</div></div>';
+    + '<span>' + GV2.e(d.fila7 == null ? 'não li a fila do app agora' : (d.fila7 ? GV2.pl(d.fila7, 'Feito', 'Feito') + ' na aba Tarefas' + (d.sozinha7 ? ' · ' + d.sozinha7 + ' sozinhos (Cheguei, ligação pelo app ou desfecho no mapa)' : '') : 'nenhum Feito na aba Tarefas') + ' · time ' + filaT + ' em 7 dias') + '</span></div>';
+  /* o mesmo % do placar do app (P3 do handoff Tarefas do App): follow-ups de hoje feitos, sem o Sem próximo passo */
+  const fh = d.followHoje, med = GV2.v4PctMedia;
+  const corPct = !fh || fh.pct == null ? 't-dim' : med != null && fh.pct >= med ? 't-ok' : fh.pct >= 30 ? 't-av' : 't-erro';
+  const follow = '<div class="gv2-v4-disc"><div class="gv2-v4-disc-cab"><small>Follow-ups de hoje · o que ele vê no app</small><b class="' + corPct + '">' + (fh === undefined ? '—' : !fh || fh.pct == null ? 'sem follow-up hoje' : fh.pct + '%') + '</b></div>'
+    + '<span>' + GV2.e(fh === undefined ? 'não li a conta dos follow-ups agora' : !fh || fh.pct == null ? 'nada na fila dele para hoje' : fh.feitos + ' de ' + (Number(fh.feitos) + Number(fh.abertos)) + ' feitos' + (med != null ? ' · média do time ' + med + '%' : '')) + '</span></div>';
+  return '<div class="gv2-v4-disc-grid">' + reun + '<div class="gv2-p3-col">' + portas + decisor + follow + fila + '</div></div>';
 };
 /* o padrão do Remarcar: o próximo dia útil, mesma hora */
 GV2.v4Proxima = function (iso) {
