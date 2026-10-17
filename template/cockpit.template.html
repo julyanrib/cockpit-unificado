@@ -15850,7 +15850,10 @@ function aplicarVisaoPorPapel() {
   // (ver os handlers de tab, logo abaixo de activateTab) — e o que só existe pra
   // alimentar badge/contador roda em tempo ocioso, depois da primeira pintura.
   const prefetchOcioso = () => {
-    if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova(); // badge "103" da aba
+    /* 17/10/26 (Julyan: "não gastar crédito à toa"): com o cockpit novo o gestor não vê a
+       Prospecção antiga nem o badge dela; desenhá-la escondida disparava as novidades das 6
+       praças (Casa dos Dados e MapTiler pagos quando o cache de 7 dias vence) a cada login. */
+    if (typeof renderProspeccaoNova === 'function' && !(typeof gv2CobreGestor === 'function' && gv2CobreGestor())) renderProspeccaoNova(); // badge "103" da aba
     if (!souRep && !gv2Cobre) {
       if (typeof renderDecisoes === 'function') renderDecisoes();
     }
@@ -64625,6 +64628,9 @@ async function importarNovidade(dados, botao) {
 async function montarNovidadesPracas() {
   const slot = document.getElementById('novidadesPracasSlot');
   if (!slot) return;
+  /* consulta paga (Casa dos Dados + MapTiler) só para quem está VENDO esta tela: com o cockpit
+     novo ligado ela fica escondida para o gestor (17/10/26) */
+  if (typeof gv2CobreGestor === 'function' && gv2CobreGestor()) return;
   const pracas = pracasDoTime();
   slot.innerHTML = '<div class="chart-card" style="margin-top:14px;border-left:3px solid #0E9F9F;"><div style="font-size:12px;color:var(--muted);">Consultando a Casa dos Dados nas ' + pracas.length + ' praças…</div></div>';
 
