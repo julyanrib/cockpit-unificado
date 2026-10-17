@@ -251,7 +251,9 @@ checar('as quatro abas do gestor recusam desenhar para outro papel',
 checar('o corte por papel no servidor continua intacto',
   montar.indexOf('function filtrarParaPapel(') > 0 &&
   montar.indexOf('function resumoDeColega(') > 0 &&
-  montar.indexOf("if (!usuario || usuario.role === 'manager') return dados;") > 0);
+  /* desde a gaveta de fora do time, o ramo do gestor tira o funilForaDoTime antes de devolver */
+  montar.indexOf("if (!usuario || usuario.role === 'manager') {") > 0 &&
+  montar.indexOf('const meuId = String(usuario.ownerId);') > 0);
 
 /* ── 10. A FILA É TRIAGEM, NÃO RELATÓRIO ───────────────────────────────────────────
    Medido: uma linha por negócio dava 368 linhas e as 12 primeiras eram DUAS categorias,
@@ -277,7 +279,8 @@ checar('o servidor deriva mrr e amount de valor_de_mrr',
   servidorCodigo.indexOf('function derivarDinheiro(') > 0 &&
   servidorCodigo.indexOf('MESES_DO_PERIODO') > 0);
 checar('a derivacao acontece antes da escrita e sobrescreve o que o cliente mandou',
-  servidorCodigo.indexOf('const propriedadesFinais = derivarDinheiro(') > 0 &&
+  /* #626: saindo de Ag. Pagamento não deriva (amount e mrr são o que o RPA/ASAAS lê) */
+  servidorCodigo.indexOf('const propriedadesFinais = saindoDeAgPagamento ? limpeza.propriedades : derivarDinheiro(') > 0 &&
   servidorCodigo.indexOf('...propriedadesFinais, dealstage:') > 0 &&
   servidorCodigo.indexOf('...limpeza.propriedades, dealstage:') < 0);
 /* ══ QUATRO ASSERÇOES APOSENTADAS EM 03/09/26 ═══════════════════════════════════════
@@ -1003,7 +1006,8 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
     /const pct = r\.meta \? Math\.round\(fechDele \/ r\.meta \* 100\) : null;/.test(tela)
       && /r\.meta \? r\.fech \+ ./g.test(tela.replace(/'/g, '.')));
   checar('e meta zero aparece como — em vez de 0% vermelho',
-    /cor: pct == null \? .#B4AC9C./.test(tela.replace(/'/g, '.'))
+    /* a cor de "sem meta" virou o token do tema (var(--ter)); o hex antigo continua aceito */
+    /cor: pct == null \? .(#B4AC9C|var\(--ter\))./.test(tela.replace(/'/g, '.'))
       && /if \(\(a\.pct == null\) !== \(b\.pct == null\)\) return a\.pct == null \? 1 : -1;/.test(tela));
   checar('o MRR e a receita de cada um aparecem contra a meta dele',
     tela.indexOf('r.mrrMeta ? esc(tm10Rs(r.mrrFeito))') > -1
@@ -1097,7 +1101,8 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
        por acidente. */
     soCodigo(robo).indexOf('abertosDeQuemSaiu') === -1
       && !/operator: .NOT_IN., values: donos/.test(soCodigo(robo).replace(/'/g, '.'))
-      && templateCodigo.indexOf('foraDoTime') === -1
+      /* 'foraDoTime' voltou ao template em 09/10/26 (#783) como a marca da SESSÃO do Julyan (a
+         visão de executivo dele é a do time) — não puxa negócio de ninguém; a guarda mede a busca */
       && templateCodigo.indexOf('negócios fora do time') === -1);
 
   /* ── 15 · UMA FONTE PARA CLIENTES FECHADOS NO MES (10/09/26) ───────────────────────

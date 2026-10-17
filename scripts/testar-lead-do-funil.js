@@ -17,7 +17,8 @@ const LEAD = require('../lib/lead-do-funil.js');
 const { temperaturaDoNegocio } = require('../lib/temperatura.js');
 const CONFIG_TEMPERATURA = require('../data/temperatura.json');
 
-const rev = process.argv[2] || 'origin/main';
+// o padrão é o commit anterior à extração (#628, 569cd0a5): origin/main já a tem desde 13/10/26
+const rev = process.argv[2] || '569cd0a5~1';
 let antigo;
 try {
   antigo = execSync(`git show ${rev}:scripts/fetch-hubspot.js`, { cwd: path.join(__dirname, '..'), encoding: 'utf8', maxBuffer: 1 << 26 });
@@ -86,6 +87,13 @@ const nomes = { '10': 'Ana', '11': 'Bruno' };
 const tarefas = { '1': [{ subject: 'Visita - Bar A', timestamp: futuro(1) }], '3': [] };
 
 let falhas = 0;
+/* O CARD CRESCEU DEPOIS DA EXTRAÇÃO (entrouNaEtapaEm, entrouNegociacaoEm...): a prova agora é que
+   todo campo que o card antigo tinha continua igual, na mesma ordem; campo novo é permitido. */
+const soOAntigo = (velhos, novos) => novos.map((n, i) => {
+  const v = velhos[i] || {}; const o = {};
+  Object.keys(v).forEach(k => { o[k] = n[k]; });
+  return o;
+});
 const porEtapa = {};
 exemplos.forEach(x => { (porEtapa[x.stage] = porEtapa[x.stage] || []).push({ id: x.id, properties: { ...x.p, dealstage: x.stage } }); });
 Object.entries(porEtapa).forEach(([stageId, deals]) => {
@@ -93,7 +101,7 @@ Object.entries(porEtapa).forEach(([stageId, deals]) => {
   const novo = JSON.parse(JSON.stringify(deals))
     .map(d => LEAD.montarLeadDoFunil(d, stageId, { ownerNameById: nomes, tarefas: tarefas[d.id] || [], configTemperatura: CONFIG_TEMPERATURA }))
     .sort((a, b) => b.dias - a.dias);
-  const a = JSON.stringify(velho), b = JSON.stringify(novo);
+  const a = JSON.stringify(velho), b = JSON.stringify(soOAntigo(velho, novo));
   if (a !== b) {
     falhas++;
     console.log('FALHA etapa ' + stageId + '\n  antigo: ' + a + '\n  novo:   ' + b);
@@ -110,8 +118,9 @@ Object.entries(porEtapa).forEach(([stageId, deals]) => {
     { id: 'p3', properties: { dealname: 'Perdeu C', closedate: dia(0), notes_next_activity_date: futuro(4), celular: '27' } },
   ];
   const tp = { p1: [{ subject: 'x', timestamp: null }] };
-  const a = JSON.stringify(caixa.mapearPerdidoAntigo(JSON.parse(JSON.stringify(perdidos)), nomes, tp));
-  const b = JSON.stringify(JSON.parse(JSON.stringify(perdidos)).map(d => LEAD.montarCardPerdido(d, { ownerNameById: nomes, tarefas: tp[d.id] || [] })).sort((x, y) => x.dias - y.dias));
+  const velhoP = caixa.mapearPerdidoAntigo(JSON.parse(JSON.stringify(perdidos)), nomes, tp);
+  const a = JSON.stringify(velhoP);
+  const b = JSON.stringify(soOAntigo(velhoP, JSON.parse(JSON.stringify(perdidos)).map(d => LEAD.montarCardPerdido(d, { ownerNameById: nomes, tarefas: tp[d.id] || [] })).sort((x, y) => x.dias - y.dias)));
   if (a !== b) { falhas++; console.log('FALHA perdido\n  antigo: ' + a + '\n  novo:   ' + b); }
   else console.log('OK    perdido — ' + perdidos.length + ' card(s) idênticos');
 }
@@ -124,8 +133,9 @@ Object.entries(porEtapa).forEach(([stageId, deals]) => {
     { id: 'g3', properties: { dealname: 'Ganhou C', closedate: dia(0), notes_next_activity_date: futuro(1), notes_last_updated: dia(1) } },
   ];
   const tg = { g1: [{ subject: 'Onboarding', timestamp: futuro(2) }] };
-  const a = JSON.stringify(caixa.mapearGanhoAntigo(JSON.parse(JSON.stringify(ganhos)), nomes, tg));
-  const b = JSON.stringify(JSON.parse(JSON.stringify(ganhos)).map(d => LEAD.montarCardGanho(d, { ownerNameById: nomes, tarefas: tg[d.id] || [] })).sort((x, y) => x.dias - y.dias));
+  const velhoG = caixa.mapearGanhoAntigo(JSON.parse(JSON.stringify(ganhos)), nomes, tg);
+  const a = JSON.stringify(velhoG);
+  const b = JSON.stringify(soOAntigo(velhoG, JSON.parse(JSON.stringify(ganhos)).map(d => LEAD.montarCardGanho(d, { ownerNameById: nomes, tarefas: tg[d.id] || [] })).sort((x, y) => x.dias - y.dias)));
   if (a !== b) { falhas++; console.log('FALHA ganho\n  antigo: ' + a + '\n  novo:   ' + b); }
   else console.log('OK    ganho — ' + ganhos.length + ' card(s) idênticos');
 

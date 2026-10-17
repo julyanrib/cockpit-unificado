@@ -30,7 +30,9 @@ const path = require('path');
 const raiz = path.join(__dirname, '..');
 const servidor = fs.readFileSync(path.join(raiz, 'lib', 'acoes-negocio', 'mudar-etapa-negocio.js'), 'utf8');
 const template = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
-const robo = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8');
+const robo = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8')
+  /* #628 (13/10/26): o card do funil e as etapas foram do robô para lib/lead-do-funil.js */
+  + '\n' + fs.readFileSync(path.join(raiz, 'lib', 'lead-do-funil.js'), 'utf8');
 const montar = fs.readFileSync(path.join(raiz, 'scripts', 'montar-dados.js'), 'utf8');
 const semanal = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-weekly-comparison.js'), 'utf8');
 /* As checagens de AUSÊNCIA precisam olhar código, não comentário: o comentário que
@@ -392,14 +394,14 @@ const listaCols = iCols > 0 ? template.slice(iCols, template.indexOf('];', iCols
    literal, então contar por "{ id: '" achava sete onde há oito — e o guarda ficaria verde
    pelo mesmo motivo que o antigo ficou. */
 const nColunas = (listaCols.match(/\{ id: /g) || []).length;
-checar('a grade declara uma trilha por coluna de FN3_COLUNAS (hoje ' + nColunas + ')',
+/* A GRADE .fn3-grade MORREU COM A ESTEIRA (fn3EsteiraHTML, sem chamador, saiu em 16/10/26 #875).
+   O kanban que o executivo vê é o kb7-quadro: uma fileira com rolagem lateral de propósito,
+   que desenha UMA coluna por item de FN3_COLUNAS. As duas checagens da grade antiga (trilhas
+   do grid e "não rola de lado") mediam uma tela que não existia mais; esta mede a que existe. */
+checar('o kanban desenha uma coluna por item de FN3_COLUNAS (hoje ' + nColunas + ')',
   nColunas >= 7
-  && new RegExp('\\.fn3-grade\\{display:grid;grid-template-columns:repeat\\('
-    + nColunas + ',minmax\\(0,1fr\\)\\)').test(template),
-  'grade e lista de colunas divergiram — a coluna sobrando cai numa segunda linha do grid');
-checar('e o kanban NÃO rola na horizontal',
-  !/\.fn3-grade\{[^}]*overflow-x:auto/.test(template),
-  'a grade voltou a rolar de lado — Pagamento e Onboarding saem da tela');
+  && template.indexOf("'<div class=\"kb7-quadro\" role=\"list\">' + FN3_COLUNAS.map(c => kb7Coluna(c, vistos, acesos)).join('') + '</div>'") > 0,
+  'o quadro deixou de sair de FN3_COLUNAS — coluna nova na lista não apareceria no kanban');
 checar('a coluna rola VERTICALMENTE, com altura em vh',
   /\.fn3-col\{[\s\S]{0,400}?max-height:min\(68vh,780px\);overflow-y:auto/.test(template));
 checar('e o cabeçalho da coluna fica fixo enquanto ela rola',
@@ -562,9 +564,10 @@ checar('robô: a etapa Perdido NÃO entrou em OPEN_STAGES',
 checar('robô: closedate e motivo_do_perdido são pedidos ao HubSpot',
   /'closedate', 'motivo_do_perdido',/.test(robo));
 checar('robô: a coluna entra em funilLeads (para o corte por dono valer de graça)',
-  /funilLeads\[STAGES\.perdido\] = perdidosRecentes\.map/.test(robo));
+  /funilLeads\[STAGES\.perdido\] = perdidosRecentes\s*\.map/.test(robo));
 checar('robô: os perdidos são ordenados do mais recente para o mais antigo',
-  /\}\)\.sort\(\(a, b\) => a\.dias - b\.dias\);/.test(robo));
+  /* desde o #628 o card vem de montarCardPerdido: a ordem é medida no mapeamento dos perdidos */
+  /funilLeads\[STAGES\.perdido\] = perdidosRecentes\s*\.map\([\s\S]{0,200}?\.sort\(\(a, b\) => a\.dias - b\.dias\);/.test(robo));
 checar('robô: o corte desce no payload, para a tela poder declarar a data',
   /perdidoVisivel: \{[\s\S]{0,200}?corte: CORTE_PERDIDO_ISO/.test(robo));
 checar('montar-dados: o gestor recebe perdidoVisivel',
@@ -1291,7 +1294,7 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
 
   /* ── 1 · O ROBÔ TRAZ A ETAPA, COM JANELA E PELO closedate ────────────────────────── */
   checar('o robô busca a etapa Ganho e a põe em funilLeads',
-    robo.indexOf('funilLeads[STAGES.ganho1] = ganhosDaSemana.map(') > -1
+    /funilLeads\[STAGES\.ganho1\] = ganhosDaSemana\s*\.map\(/.test(robo)
       && robo.indexOf("{ propertyName: 'dealstage', operator: 'EQ', value: STAGES.ganho1 }") > -1,
     'sem isso a venda desaparece do Cockpit no momento em que fecha — foi o caso do Lumière');
 

@@ -42398,9 +42398,10 @@ function pl6Ligar(box, rep) {
             .eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).select('owner_id');
           if (u.error) erro = u.error.message;
           else if (!u.data || !u.data.length) {
-            const ins = await supa.from('planos_semanais').upsert({ owner_id: String(rep.ownerId), data_segunda: segunda, grade: pl6GradeDoPlano(), fechado_em: agoraIso, fechado_por: quem },
-              { onConflict: 'owner_id,data_segunda' }).select('owner_id');
-            if (ins.error) erro = ins.error.message;
+            /* semana ainda sem linha: grava pelo escritor da grade (pl6Gravar relê, mescla e respeita o
+               espaço de id c- / n- / __rua), já com a marca de enviada (17/10/26) */
+            const ins = await pl6Gravar(rep, { fechado_em: agoraIso, fechado_por: quem }, segunda);
+            if (ins.error) erro = ins.error.message || 'erro';
           }
         } catch (e) { erro = (e && e.message) || 'erro'; }
         s.pl7Enviar = false;

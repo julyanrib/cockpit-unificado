@@ -29,7 +29,9 @@ const path = require('path');
 const vm = require('vm');
 
 const raiz = path.join(__dirname, '..');
-const src = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8');
+const src = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8')
+  /* #628 (13/10/26): STAGES, OPEN_STAGES e SLA_DAYS foram do robô para lib/lead-do-funil.js */
+  + '\n' + fs.readFileSync(path.join(raiz, 'lib', 'lead-do-funil.js'), 'utf8');
 
 let ok = 0;
 const falhas = [];
