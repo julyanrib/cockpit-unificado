@@ -10920,6 +10920,8 @@ async function hidratarSessao(email) {
       const { data } = await prazoDoLogin(supa.auth.getSession(), PRAZO_DA_CARGA, 'a sessão');
       const token = data && data.session ? data.session.access_token : null;
       if (!token) { mostrarLogin('Sessão não encontrada. Tente entrar de novo.'); return; }
+
+      try { if (typeof GV2 !== 'undefined' && GV2.preler && data.session.user) GV2.preler(data.session.user.email); } catch (e) {}
       const resp = await prazoDoLogin(
         fetch(v5EnderecoDosDados(), { headers: { Authorization: 'Bearer ' + token } }),
         PRAZO_DA_CARGA, 'a carga dos seus dados');
@@ -55688,13 +55690,30 @@ GV2.dedupNegocios = function (lista) {
   return lista;
 };
 
-GV2.ler = async function (donos, agora) {
+GV2.chaveDoTime = function (email) { return 'gv2_time_v1:' + String(email || '').toLowerCase(); };
+GV2.guardarTime = function (donos, emails) {
+  try {
+    const email = typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.email;
+    if (!email || !donos || !donos.length) return;
+    localStorage.setItem(GV2.chaveDoTime(email), JSON.stringify({ donos: donos, emails: emails || {} }));
+  } catch (e) {   }
+};
+GV2.preler = function (email) {
+  try {
+    if (typeof supa === 'undefined' || !supa || !email) return;
+    const t = JSON.parse(localStorage.getItem(GV2.chaveDoTime(email)) || 'null');
+    if (!t || !Array.isArray(t.donos) || !t.donos.length) return;
+    const agora = GV2.agoraBR();
+    GV2.preLeitura = { chave: t.donos.join(','), dia: agora.iso, p: GV2.ler(t.donos, agora, t.emails).catch(function () { return null; }) };
+  } catch (e) { GV2.preLeitura = null; }
+};
+GV2.ler = async function (donos, agora, emailsProntos) {
   const seg = GV2.segundaDe(agora.iso);
   const segAnt = GV2.somaDias(seg, -7);
   const mes = agora.iso.slice(0, 8) + '01';
   const tsMes = new Date(mes + 'T03:00:00Z').toISOString();
-  const emails = {};
-  (DATA.usuarios || []).forEach(function (u) { if (u && u.ownerId && u.email) emails[String(u.ownerId)] = u.email; });
+  const emails = emailsProntos ? Object.assign({}, emailsProntos) : {};
+  if (!emailsProntos) (DATA.usuarios || []).forEach(function (u) { if (u && u.ownerId && u.email) emails[String(u.ownerId)] = u.email; });
   const listaEmails = donos.map(function (o) { return emails[o]; }).filter(Boolean);
   const q = {
     semana: supa.rpc('planejamento_do_time', { p_segunda: seg, p_donos: donos, p_dia: agora.iso }),
@@ -55903,7 +55922,13 @@ GV2.montar = async function (so, leituraPronta) {
   const pbCarga = typeof carregarPlaybookProtegido === 'function'
     ? carregarPlaybookProtegido().catch(function (e) { return { erro: (e && e.message) || 'erro' }; }) : Promise.resolve(null);
 
-  const L = leituraPronta || await GV2.ler(donos, agora);
+  let pre = null;
+  if (!leituraPronta && !so && GV2.preLeitura && GV2.preLeitura.chave === donos.join(',') && GV2.preLeitura.dia === agora.iso) {
+    pre = await GV2.preLeitura.p;
+  }
+  GV2.preLeitura = null;
+  const L = leituraPronta || pre || await GV2.ler(donos, agora);
+  if (!so && !leituraPronta) GV2.guardarTime(donos, L.emails);
   GV2.ultimaLeitura = { so: so || null, L: L };
 
   setTimeout(function () { GV2.lerNovosDaSemana(L).then(function () { if (GV2.estado && GV2.estado.aba === 'rua' && GV2.pintar) GV2.pintar(); }); }, 0);

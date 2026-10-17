@@ -132,6 +132,27 @@ tabelas.gv2_falta_etapa = [
     if (antDados === undefined) delete global.playbookDados; else global.playbookDados = antDados;
     GV2.playbookAtrasado = null;
   }
+  /* 17/10/26: as leituras do gestor saem no login com o time guardado; só valem se o time for o mesmo */
+  {
+    const antLs = global.localStorage, antSess = global.sessaoAtual;
+    const mem = {}; global.localStorage = { getItem: function (k) { return k in mem ? mem[k] : null; }, setItem: function (k, v) { mem[k] = String(v); }, removeItem: function (k) { delete mem[k]; } };
+    global.sessaoAtual = { email: 'gestor@x', role: 'manager' };
+    await GV2.montar();
+    const guardado = JSON.parse(mem[GV2.chaveDoTime('gestor@x')] || 'null');
+    checar('a montagem do gestor guarda o time neste aparelho', !!guardado && guardado.donos.length > 0, JSON.stringify(guardado && guardado.donos));
+    let leu = 0; const lerOrig = GV2.ler; GV2.ler = function () { leu++; return lerOrig.apply(GV2, arguments); };
+    GV2.preler('gestor@x');
+    await GV2.montar();
+    checar('com o mesmo time, a montagem aproveita a leitura do login (uma leitura só)', leu === 1 && !GV2.preLeitura, 'leituras ' + leu);
+    leu = 0;
+    mem[GV2.chaveDoTime('gestor@x')] = JSON.stringify({ donos: ['999'], emails: {} });
+    GV2.preler('gestor@x');
+    await GV2.montar();
+    checar('com outro time guardado, lê de novo (a leitura adiantada não vale)', leu === 2 && !GV2.preLeitura, 'leituras ' + leu);
+    GV2.ler = lerOrig;
+    if (antLs === undefined) delete global.localStorage; else global.localStorage = antLs;
+    if (antSess === undefined) delete global.sessaoAtual; else global.sessaoAtual = antSess;
+  }
   const ana = b.porId['1'], bia = b.porId['2'], caio = b.porId['3'];
   /* 15/10/26: a meta é 6 por dia útil para TODOS (Julyan, 13/10); a meta do app de cada um não entra mais */
   checar('ritmo às 11:20 = 31% da meta de 6: 2 esperadas para todos', ana.esperado === 2 && caio.esperado === 2, 'ana ' + ana.esperado + ' caio ' + caio.esperado);

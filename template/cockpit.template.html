@@ -15467,6 +15467,8 @@ async function hidratarSessao(email) {
       const { data } = await prazoDoLogin(supa.auth.getSession(), PRAZO_DA_CARGA, 'a sessão');
       const token = data && data.session ? data.session.access_token : null;
       if (!token) { mostrarLogin('Sessão não encontrada. Tente entrar de novo.'); return; }
+      /* as leituras do gestor saem junto com a carga, com o time guardado da última visita (17/10/26) */
+      try { if (typeof GV2 !== 'undefined' && GV2.preler && data.session.user) GV2.preler(data.session.user.email); } catch (e) {}
       const resp = await prazoDoLogin(
         fetch(v5EnderecoDosDados(), { headers: { Authorization: 'Bearer ' + token } }),
         PRAZO_DA_CARGA, 'a carga dos seus dados');
@@ -76108,13 +76110,35 @@ GV2.dedupNegocios = function (lista) {
 };
 
 /* as leituras do banco, em paralelo; cada uma falha sozinha e vira uma linha no rodapé */
-GV2.ler = async function (donos, agora) {
+/* AS LEITURAS DO GESTOR SAEM JUNTO COM A CARGA (17/10/26). Medido em produção: a carga
+   principal levava 2,8 s e só depois as ~16 leituras do cockpit novo começavam (mais 3,4 s),
+   porque precisam da lista do time. A lista da última visita fica guardada neste aparelho, por
+   e-mail; no login as leituras já saem com ela, e o GV2.montar só as aproveita se o time de
+   agora for o mesmo e o dia também. Senão, lê de novo, como antes. Nada novo é lido. */
+GV2.chaveDoTime = function (email) { return 'gv2_time_v1:' + String(email || '').toLowerCase(); };
+GV2.guardarTime = function (donos, emails) {
+  try {
+    const email = typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.email;
+    if (!email || !donos || !donos.length) return;
+    localStorage.setItem(GV2.chaveDoTime(email), JSON.stringify({ donos: donos, emails: emails || {} }));
+  } catch (e) { /* aba anônima ou cheia: só não adianta a próxima carga */ }
+};
+GV2.preler = function (email) {
+  try {
+    if (typeof supa === 'undefined' || !supa || !email) return;
+    const t = JSON.parse(localStorage.getItem(GV2.chaveDoTime(email)) || 'null');
+    if (!t || !Array.isArray(t.donos) || !t.donos.length) return;
+    const agora = GV2.agoraBR();
+    GV2.preLeitura = { chave: t.donos.join(','), dia: agora.iso, p: GV2.ler(t.donos, agora, t.emails).catch(function () { return null; }) };
+  } catch (e) { GV2.preLeitura = null; }
+};
+GV2.ler = async function (donos, agora, emailsProntos) {
   const seg = GV2.segundaDe(agora.iso);
   const segAnt = GV2.somaDias(seg, -7);
   const mes = agora.iso.slice(0, 8) + '01';
   const tsMes = new Date(mes + 'T03:00:00Z').toISOString();
-  const emails = {};
-  (DATA.usuarios || []).forEach(function (u) { if (u && u.ownerId && u.email) emails[String(u.ownerId)] = u.email; });
+  const emails = emailsProntos ? Object.assign({}, emailsProntos) : {};
+  if (!emailsProntos) (DATA.usuarios || []).forEach(function (u) { if (u && u.ownerId && u.email) emails[String(u.ownerId)] = u.email; });
   const listaEmails = donos.map(function (o) { return emails[o]; }).filter(Boolean);
   const q = {
     semana: supa.rpc('planejamento_do_time', { p_segunda: seg, p_donos: donos, p_dia: agora.iso }),
@@ -76358,7 +76382,14 @@ GV2.montar = async function (so, leituraPronta) {
   const pbCarga = typeof carregarPlaybookProtegido === 'function'
     ? carregarPlaybookProtegido().catch(function (e) { return { erro: (e && e.message) || 'erro' }; }) : Promise.resolve(null);
   /* leituraPronta: a mesma leitura do banco, só para refazer a conta quando o playbook chega depois */
-  const L = leituraPronta || await GV2.ler(donos, agora);
+  /* a leitura que já saiu no login (GV2.preler), se for do mesmo time e do mesmo dia */
+  let pre = null;
+  if (!leituraPronta && !so && GV2.preLeitura && GV2.preLeitura.chave === donos.join(',') && GV2.preLeitura.dia === agora.iso) {
+    pre = await GV2.preLeitura.p;
+  }
+  GV2.preLeitura = null;
+  const L = leituraPronta || pre || await GV2.ler(donos, agora);
+  if (!so && !leituraPronta) GV2.guardarTime(donos, L.emails);
   GV2.ultimaLeitura = { so: so || null, L: L };
   /* recém-abertos da semana: DEPOIS da primeira pintura (é uma ida a mais ao banco, e a carga
      não espera por ela); quando chega, repinta se a Rua estiver aberta */
