@@ -76078,7 +76078,7 @@ GV2.accCriar = async function () {
   const A = GV2.acc, f = A.form;
   if (A.enviando) return;
   const master = f.tipo === 'master';
-  const corpo = { nome: f.nome.trim(), email: f.email.trim(), tipo: master ? 'gestor' : 'vendedor', setor: master ? 'Outbound' : f.setor, senha: f.senha || undefined };
+  const corpo = { nome: f.nome.trim(), email: f.email.trim(), tipo: master ? 'gestor' : 'vendedor', setor: f.setor, senha: f.senha || undefined };
   if (f.hubspot.trim()) corpo.id_hubspot = f.hubspot.trim();
   A.msg = null; A.resultado = null;
   if (corpo.nome.length < 2) { A.msg = { erro: true, t: 'Escreva o nome completo.' }; return GV2.pintar(); }
@@ -76108,6 +76108,19 @@ GV2.accPapel = async function (id, tipo) {
   if (r.erro) { A.msg = { erro: true, t: r.erro }; return GV2.pintar(); }
   GV2.toast(tipo === 'gestor' ? 'Agora é master' : 'Agora é executivo');
   A.aberto = null; GV2.pintar(); GV2.accCarregar();
+};
+GV2.accSetor = async function (id) {
+  const A = GV2.acc, c = (A.contas || []).find(function (x) { return x.id === id; });
+  if (!c || A.enviando) return;
+  const novo = A.novoSetor || c.setor;
+  if (!novo || novo === c.setor) { A.msg = { erro: true, t: 'Escolha um setor diferente de ' + (c.setor || 'nenhum') + '.' }; return GV2.pintar(); }
+  A.enviando = true; A.msg = null; GV2.pintar();
+  const r = await GV2.accEdge('criar-usuario', { op: 'setor', id: id, setor: novo });
+  A.enviando = false;
+  if (r.erro) { A.msg = { erro: true, t: r.erro }; return GV2.pintar(); }
+  c.setor = novo;
+  A.msg = { erro: false, t: c.nome.split(' ')[0] + ' agora é do setor ' + novo + (r.setor_ve_lead === false ? ' — esse setor não vê lead.' : '.') };
+  GV2.toast('Setor salvo'); GV2.pintar(); GV2.accCarregar();
 };
 GV2.accDesativar = async function (id) {
   const A = GV2.acc, c = (A.contas || []).find(function (x) { return x.id === id; });
@@ -76148,7 +76161,7 @@ GV2.render.acessos = function () {
     + campo('Nome completo', inp('nome', 'text', 'Nome Sobrenome'))
     + campo('E-mail', inp('email', 'email', 'nome@takeat.app'))
     + (master ? '' : campo('ID do HubSpot (owner)', inp('hubspot', 'text', 'ex.: 83893603'), 'Em Configurações › Usuários e equipes do HubSpot. A tela confere antes de criar.'))
-    + (master ? '' : campo('Setor', '<select class="gv2-v6-in" data-gv2-acc="setor">' + opSetor + '</select>', 'Decide o que a pessoa enxerga. Executivo de rua: Outbound.'))
+    + campo('Setor', '<select class="gv2-v6-in" data-gv2-acc="setor">' + opSetor + '</select>', master ? 'Decide o que a pessoa enxerga no app. Para ver os leads: Outbound ou RPA.' : 'Decide o que a pessoa enxerga. Executivo de rua: Outbound.')
     + campo('Senha', inp('senha', 'text', 'vazio = o sistema gera uma'), 'Mínimo de 8 caracteres. Vazia, uma temporária aparece uma vez aqui.')
     + (A.msg && !A.aberto ? '<p class="' + (A.msg.erro ? 't-erro' : 't-ok') + ' gv2-acc-msg">' + GV2.e(A.msg.t) + '</p>' : '')
     + GV2.html.btn({ texto: A.enviando ? 'Criando…' : (master ? 'Criar master' : 'Criar executivo'), acao: 'acc:criar', tipo: 'prim', off: A.enviando })
@@ -76175,6 +76188,8 @@ GV2.render.acessos = function () {
           + '<div class="gv2-acc-gav-l"><b>Papel</b>' + (c.role === 'gestor'
             ? GV2.html.btn({ texto: 'Voltar a executivo', acao: 'acc:papel:' + c.id + ':vendedor', off: A.enviando })
             : GV2.html.btn({ texto: 'Tornar master', acao: 'acc:papel:' + c.id + ':gestor', off: A.enviando })) + '</div>'
+          + '<div class="gv2-acc-gav-l"><b>Setor</b><select class="gv2-v6-in" data-gv2-acc="novoSetor">' + A.setores.map(function (s) { return '<option value="' + GV2.e(s.nome) + '"' + (s.nome === (A.novoSetor || c.setor) ? ' selected' : '') + '>' + GV2.e(s.nome + (s.veLead ? '' : ' · não vê lead')) + '</option>'; }).join('') + '</select>'
+          + GV2.html.btn({ texto: 'Salvar setor', acao: 'acc:setor:' + c.id, off: A.enviando }) + '</div>'
           + '<div class="gv2-acc-gav-l"><b>Tirar o acesso</b>'
           + (c.carteira > 0 ? '<select class="gv2-v6-in" data-gv2-acc="para"><option value="">Quem fica com os ' + c.carteira + ' leads?</option>' + destinos.filter(function (d) { return d.id !== c.id; }).map(function (d) { return '<option value="' + GV2.e(d.hubspot) + '"' + (A.para === d.hubspot ? ' selected' : '') + '>' + GV2.e(d.nome) + '</option>'; }).join('') + '</select>' : '<span class="t-mute">sem carteira para passar</span>')
           + GV2.html.btn({ texto: A.enviando ? 'Tirando…' : (A.confirmar === c.id ? 'Confirmar: ' + c.nome.split(' ')[0] + ' não entra mais' : 'Tirar acesso de ' + c.nome.split(' ')[0]), acao: 'acc:tirar:' + c.id, tipo: A.confirmar === c.id ? 'prim' : '', off: A.enviando }) + '</div>'
@@ -76196,7 +76211,8 @@ GV2.accClique = function (parte) {
   if (parte[1] === 'recarregar') { A.contas = null; return GV2.accCarregar(); }
   if (parte[1] === 'tipo') { A.form.tipo = parte[2]; A.msg = null; return GV2.pintar(); }
   if (parte[1] === 'criar') return GV2.accCriar();
-  if (parte[1] === 'abrir') { A.aberto = A.aberto === parte[2] ? null : parte[2]; A.para = ''; A.msg = null; A.confirmar = null; return GV2.pintar(); }
+  if (parte[1] === 'abrir') { A.aberto = A.aberto === parte[2] ? null : parte[2]; A.para = ''; A.novoSetor = ''; A.msg = null; A.confirmar = null; return GV2.pintar(); }
+  if (parte[1] === 'setor') return GV2.accSetor(parte[2]);
   if (parte[1] === 'papel') return GV2.accPapel(parte[2], parte[3]);
   if (parte[1] === 'tirar') {
     /* dois cliques: o primeiro só arma (tirar acesso derruba a sessão da pessoa na rua) */
@@ -77766,7 +77782,7 @@ GV2.instalar = function () {
   raiz.addEventListener('input', function (ev) {
     const t = ev.target;
     if (GV2.pessoasInput && GV2.pessoasInput(t)) return;
-    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else GV2.acc.form[k] = t.value; return; }
+    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor') GV2.acc.novoSetor = t.value; else GV2.acc.form[k] = t.value; return; }
     if (t.matches('[data-gv2-comp]')) GV2.estado.compromissos[t.getAttribute('data-gv2-comp')] = t.value;
     if (t.matches('[data-gv2-comptx]')) { const k = t.getAttribute('data-gv2-comptx').split(':'); const c = GV2.estado.comp1a1[k[0]]; if (c && c[k[1]]) c[k[1]].t = t.value; }
     if (t.matches('[data-gv2-lote]')) { const g = GV2.estado.loteDados && GV2.estado.loteDados.grupos[Number(t.getAttribute('data-gv2-lote'))]; if (g) g.texto = t.value; }
@@ -77774,7 +77790,7 @@ GV2.instalar = function () {
   raiz.addEventListener('change', function (ev) {
     const t = ev.target;
     if (GV2.pessoasInput && t.matches('[data-gv2-obs]')) { GV2.pessoasInput(t); return; }
-    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else GV2.acc.form[k] = t.value; return; }
+    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor') GV2.acc.novoSetor = t.value; else GV2.acc.form[k] = t.value; return; }
     if (t.matches('[data-gv2-sel="praca"]')) { GV2.estado.praca = t.value; GV2.estado.destaque = null; GV2.pintar(); }
     if (t.matches('[data-gv2-compon]')) { const k = t.getAttribute('data-gv2-compon').split(':'); const c = GV2.estado.comp1a1[k[0]]; if (c && c[k[1]]) c[k[1]].on = t.checked; }
   });

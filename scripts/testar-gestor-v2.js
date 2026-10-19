@@ -675,14 +675,15 @@ tabelas.gv2_falta_etapa = [
     const hExec = GV2.render.acessos();
     A.form.tipo = 'master';
     const hMaster = GV2.render.acessos();
-    checar('acessos: executivo pede ID do HubSpot e setor; master não', hExec.indexOf('data-gv2-acc="hubspot"') > 0 && hExec.indexOf('data-gv2-acc="setor"') > 0
-      && hMaster.indexOf('data-gv2-acc="hubspot"') < 0 && hMaster.indexOf('data-gv2-acc="setor"') < 0 && hMaster.indexOf('Criar master') > 0);
+    checar('acessos: executivo pede ID do HubSpot; os dois escolhem o setor', hExec.indexOf('data-gv2-acc="hubspot"') > 0 && hExec.indexOf('data-gv2-acc="setor"') > 0
+      && hMaster.indexOf('data-gv2-acc="hubspot"') < 0 && hMaster.indexOf('data-gv2-acc="setor"') > 0 && hMaster.indexOf('Criar master') > 0);
     checar('acessos: a lista conta masters e executivos', hExec.indexOf('1 masters · 2 executivos') > 0);
     A.aberto = 'e1';
     const hGav = GV2.render.acessos();
     checar('acessos: tirar acesso de quem tem carteira pede o destino, e o destino não é a própria pessoa',
       hGav.indexOf('Quem fica com os 7 leads?') > 0 && hGav.indexOf('<option value="22"') > 0 && hGav.indexOf('<option value="11"') < 0);
     checar('acessos: executivo pode virar master', hGav.indexOf('acc:papel:e1:gestor') > 0);
+    checar('acessos: a gaveta troca o setor de quem já existe', hGav.indexOf('data-gv2-acc="novoSetor"') > 0 && hGav.indexOf('acc:setor:e1') > 0);
     A.aberto = null; A.contas = contas0; A.form.tipo = 'executivo';
   }
   /* FUNIL e TERRITÓRIO v5 (08/10/26) */
