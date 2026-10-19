@@ -44,7 +44,7 @@ const SEM_ACESSO_AINDA = [];
    é equipe_cockpit + profiles.id_hubspot no APP Outbound (é o que cockpit-dados lê). A lista é
    nominal de propósito: um e-mail novo fora dela continua reprovando, e quem entra precisa
    aparecer aqui E em equipe_cockpit, senão a tela de gestão não abre para ele. */
-const SO_NO_APP = ['fabiopanciera.takeat@gmail.com'];
+const SO_NO_APP = ['fabiopanciera.takeat@gmail.com', 'rodrigobrandao.takeat@gmail.com', 'juliosilva.takeat@gmail.com'];
 
 function lerEspelhoDoBanco() {
   if (!fs.existsSync(ARQ_TIME)) {
