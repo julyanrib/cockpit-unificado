@@ -55707,6 +55707,20 @@ GV2.accPapel = async function (id, tipo) {
   GV2.toast(tipo === 'gestor' ? 'Agora é master' : 'Agora é executivo');
   A.aberto = null; GV2.pintar(); GV2.accCarregar();
 };
+GV2.accSenha = async function (id) {
+  const A = GV2.acc, c = (A.contas || []).find(function (x) { return x.id === id; });
+  if (!c || A.enviando) return;
+  const s = (A.novaSenha || '').trim();
+  if (s && s.length < 8) { A.msg = { erro: true, t: 'A senha precisa de pelo menos 8 caracteres.' }; return GV2.pintar(); }
+  A.enviando = true; A.msg = null; A.senhaNova = null; GV2.pintar();
+  const r = await GV2.accEdge('criar-usuario', { op: 'senha', id: id, senha: s || undefined });
+  A.enviando = false;
+  if (r.erro) { A.msg = { erro: true, t: r.erro }; return GV2.pintar(); }
+  A.novaSenha = '';
+  if (r.senha) A.senhaNova = { id: id, senha: r.senha };
+  A.msg = { erro: false, t: 'Senha de ' + c.nome.split(' ')[0] + ' trocada' + (r.senha ? ' — copie a de cima e mande para a pessoa.' : '. Mande para a pessoa.') };
+  GV2.toast('Senha trocada'); GV2.pintar();
+};
 GV2.accSetor = async function (id) {
   const A = GV2.acc, c = (A.contas || []).find(function (x) { return x.id === id; });
   if (!c || A.enviando) return;
@@ -55788,6 +55802,9 @@ GV2.render.acessos = function () {
             : GV2.html.btn({ texto: 'Tornar master', acao: 'acc:papel:' + c.id + ':gestor', off: A.enviando })) + '</div>'
           + '<div class="gv2-acc-gav-l"><b>Setor</b><select class="gv2-v6-in" data-gv2-acc="novoSetor">' + A.setores.map(function (s) { return '<option value="' + GV2.e(s.nome) + '"' + (s.nome === (A.novoSetor || c.setor) ? ' selected' : '') + '>' + GV2.e(s.nome + (s.veLead ? '' : ' · não vê lead')) + '</option>'; }).join('') + '</select>'
           + GV2.html.btn({ texto: 'Salvar setor', acao: 'acc:setor:' + c.id, off: A.enviando }) + '</div>'
+          + '<div class="gv2-acc-gav-l"><b>Senha</b><input class="gv2-v6-in" type="text" data-gv2-acc="novaSenha" value="' + GV2.e(A.novaSenha || '') + '" placeholder="mín. 8 · vazio gera uma" autocomplete="off">'
+          + GV2.html.btn({ texto: A.enviando ? 'Salvando…' : 'Mudar senha', acao: 'acc:senha:' + c.id, off: A.enviando })
+          + (A.senhaNova && A.senhaNova.id === c.id ? '<span>Senha nova (aparece só agora): <code class="gv2-acc-senha">' + GV2.e(A.senhaNova.senha) + '</code></span>' : '') + '</div>'
           + '<div class="gv2-acc-gav-l"><b>Tirar o acesso</b>'
           + (c.carteira > 0 ? '<select class="gv2-v6-in" data-gv2-acc="para"><option value="">Quem fica com os ' + c.carteira + ' leads?</option>' + destinos.filter(function (d) { return d.id !== c.id; }).map(function (d) { return '<option value="' + GV2.e(d.hubspot) + '"' + (A.para === d.hubspot ? ' selected' : '') + '>' + GV2.e(d.nome) + '</option>'; }).join('') + '</select>' : '<span class="t-mute">sem carteira para passar</span>')
           + GV2.html.btn({ texto: A.enviando ? 'Tirando…' : (A.confirmar === c.id ? 'Confirmar: ' + c.nome.split(' ')[0] + ' não entra mais' : 'Tirar acesso de ' + c.nome.split(' ')[0]), acao: 'acc:tirar:' + c.id, tipo: A.confirmar === c.id ? 'prim' : '', off: A.enviando }) + '</div>'
@@ -55809,8 +55826,9 @@ GV2.accClique = function (parte) {
   if (parte[1] === 'recarregar') { A.contas = null; return GV2.accCarregar(); }
   if (parte[1] === 'tipo') { A.form.tipo = parte[2]; A.msg = null; return GV2.pintar(); }
   if (parte[1] === 'criar') return GV2.accCriar();
-  if (parte[1] === 'abrir') { A.aberto = A.aberto === parte[2] ? null : parte[2]; A.para = ''; A.novoSetor = ''; A.msg = null; A.confirmar = null; return GV2.pintar(); }
+  if (parte[1] === 'abrir') { A.aberto = A.aberto === parte[2] ? null : parte[2]; A.para = ''; A.novoSetor = ''; A.novaSenha = ''; A.senhaNova = null; A.msg = null; A.confirmar = null; return GV2.pintar(); }
   if (parte[1] === 'setor') return GV2.accSetor(parte[2]);
+  if (parte[1] === 'senha') return GV2.accSenha(parte[2]);
   if (parte[1] === 'papel') return GV2.accPapel(parte[2], parte[3]);
   if (parte[1] === 'tirar') {
 
@@ -57231,7 +57249,7 @@ GV2.instalar = function () {
   raiz.addEventListener('input', function (ev) {
     const t = ev.target;
     if (GV2.pessoasInput && GV2.pessoasInput(t)) return;
-    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor') GV2.acc.novoSetor = t.value; else GV2.acc.form[k] = t.value; return; }
+    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor' || k === 'novaSenha') GV2.acc[k] = t.value; else GV2.acc.form[k] = t.value; return; }
     if (t.matches('[data-gv2-comp]')) GV2.estado.compromissos[t.getAttribute('data-gv2-comp')] = t.value;
     if (t.matches('[data-gv2-comptx]')) { const k = t.getAttribute('data-gv2-comptx').split(':'); const c = GV2.estado.comp1a1[k[0]]; if (c && c[k[1]]) c[k[1]].t = t.value; }
     if (t.matches('[data-gv2-lote]')) { const g = GV2.estado.loteDados && GV2.estado.loteDados.grupos[Number(t.getAttribute('data-gv2-lote'))]; if (g) g.texto = t.value; }
@@ -57239,7 +57257,7 @@ GV2.instalar = function () {
   raiz.addEventListener('change', function (ev) {
     const t = ev.target;
     if (GV2.pessoasInput && t.matches('[data-gv2-obs]')) { GV2.pessoasInput(t); return; }
-    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor') GV2.acc.novoSetor = t.value; else GV2.acc.form[k] = t.value; return; }
+    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor' || k === 'novaSenha') GV2.acc[k] = t.value; else GV2.acc.form[k] = t.value; return; }
     if (t.matches('[data-gv2-sel="praca"]')) { GV2.estado.praca = t.value; GV2.estado.destaque = null; GV2.pintar(); }
     if (t.matches('[data-gv2-compon]')) { const k = t.getAttribute('data-gv2-compon').split(':'); const c = GV2.estado.comp1a1[k[0]]; if (c && c[k[1]]) c[k[1]].on = t.checked; }
   });
