@@ -663,11 +663,33 @@ tabelas.gv2_falta_etapa = [
     checar('v10: o x de y da pessoa é o total de visitas ÷ meta do dia, não o plano',
       GV2.visHoje(pz) === (pz.hoje.visitas_todas || 0) + ' de ' + pz.meta_visitas_dia);
   }
+  /* ACESSOS (19/10/26): a aba do Cockpit novo que substitui o painel antigo */
+  {
+    const A = GV2.acc, contas0 = A.contas;
+    A.contas = [
+      { id: 'm1', nome: 'Master Um', email: 'm@x', role: 'gestor', setor: 'Outbound', hubspot: '', desativado: false, alerta: '', carteira: 0 },
+      { id: 'e1', nome: 'Exec Um', email: 'e@x', role: 'user', setor: 'Outbound', hubspot: '11', desativado: false, alerta: '', carteira: 7 },
+      { id: 'e2', nome: 'Exec Dois', email: 'd@x', role: 'user', setor: 'Outbound', hubspot: '22', desativado: false, alerta: '', carteira: 3 }
+    ];
+    A.form.tipo = 'executivo';
+    const hExec = GV2.render.acessos();
+    A.form.tipo = 'master';
+    const hMaster = GV2.render.acessos();
+    checar('acessos: executivo pede ID do HubSpot e setor; master não', hExec.indexOf('data-gv2-acc="hubspot"') > 0 && hExec.indexOf('data-gv2-acc="setor"') > 0
+      && hMaster.indexOf('data-gv2-acc="hubspot"') < 0 && hMaster.indexOf('data-gv2-acc="setor"') < 0 && hMaster.indexOf('Criar master') > 0);
+    checar('acessos: a lista conta masters e executivos', hExec.indexOf('1 masters · 2 executivos') > 0);
+    A.aberto = 'e1';
+    const hGav = GV2.render.acessos();
+    checar('acessos: tirar acesso de quem tem carteira pede o destino, e o destino não é a própria pessoa',
+      hGav.indexOf('Quem fica com os 7 leads?') > 0 && hGav.indexOf('<option value="22"') > 0 && hGav.indexOf('<option value="11"') < 0);
+    checar('acessos: executivo pode virar master', hGav.indexOf('acc:papel:e1:gestor') > 0);
+    A.aberto = null; A.contas = contas0; A.form.tipo = 'executivo';
+  }
   /* FUNIL e TERRITÓRIO v5 (08/10/26) */
   {
     const nav = GV2.navHTML();
     const rots = (nav.match(/<span class="gv2-nav-rot">[^<]+</g) || []).map(function (x) { return x.replace('<span class="gv2-nav-rot">', '').replace('<', ''); });
-    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X nem Prospecção)', rots.slice(0, 7).join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook' && rots.slice(7).join(' · ') === 'Prova dos números · Ver como executivo' && nav.indexOf('>Do diretor<') > 0, rots.join(' · '));
+    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X nem Prospecção)', rots.slice(0, 7).join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook' && rots.slice(7).join(' · ') === 'Prova dos números · Acessos · Ver como executivo' && nav.indexOf('>Do diretor<') > 0, rots.join(' · '));
     checar('rolagem: corpo v5 e gaveta não deixam o cartão encolher (Por pessoa e "Para puxar" sumiam, 09/10/26)',
       tpl.indexOf('.gv2-corpo.gv2-v5 > *{flex-shrink:0;}') > 0 && tpl.indexOf('.gv2-rxg-corpo > *{flex-shrink:0;}') > 0);
     checar('mapa em tela cheia: todo mapa v5 ganha o botão e o mapa da Pessoa · dia reenquadra quando a caixa muda (09/10/26)',
