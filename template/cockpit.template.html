@@ -76166,7 +76166,7 @@ GV2.ler = async function (donos, agora, emailsProntos) {
     /* PESSOAS E RAIO X v4 (07/10/26): a disciplina de cada um e as leituras do gestor.
        reuniões = client_meetings ainda 'agendada' com a data passada (2 h de folga); o dono é
        created_by (uuid), que perfis traduz para o dono do HubSpot. */
-    reunioes: supa.from('client_meetings').select('id,client_id,created_by,scheduled_at,type,acao').eq('status', 'agendada')
+    reunioes: supa.from('client_meetings').select('id,client_id,created_by,scheduled_at,type,acao,clients(status)').eq('status', 'agendada')
       .lt('scheduled_at', new Date(Date.now() - 2 * 3600000).toISOString()).order('scheduled_at', { ascending: false }).limit(3000),
     perfis: supa.from('profiles').select('id,id_hubspot').in('id_hubspot', donos),
     filaFeitas: supa.from('fila_feitas').select('user_id,dia,estado,origem').gte('dia', GV2.somaDias(agora.iso, -6)),
@@ -79796,7 +79796,10 @@ GV2.disciplinaMontar = function (L, pessoas, agora, clientePorId, faltas) {
 
   GV2.v4Corte = new Date(Date.now() - GV2.V4_JANELA * 86400000).toISOString();
   const reunPor = {};
+  /* SÓ LEAD (19/10/26, a mesma regra do Para fechar do app): reunião de cliente ou ganho não é cobrança
+     de venda; ex-cliente (churn) fica, reconquista é venda */
   ((L.reunioes && L.reunioes.data) || []).forEach(function (r) {
+    const stc = r.clients && r.clients.status; if (stc === 'cliente' || stc === 'ganho_fs') return;
     const d = donoDoUid[r.created_by]; if (!d) return;
     (reunPor[d] = reunPor[d] || []).push({ id: r.id, cliente: nomeCli(r.client_id), quando: r.scheduled_at, tipo: r.type === 'follow_up' ? 'retorno' : 'reunião' });
   });
