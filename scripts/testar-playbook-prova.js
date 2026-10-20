@@ -48,7 +48,7 @@ const linhas = new Map();
 const supa = {
   from: () => ({
     select: () => ({ eq: async () => ({ data: [...linhas.values()], error: null }) }),
-    upsert: async (r) => { linhas.set(r.user_email + '|' + r.guia_slug, r); return { error: null }; },
+    upsert: async (r, o) => { const k = r.user_email + '|' + r.guia_slug; if (o && o.ignoreDuplicates && linhas.has(k)) return { error: null }; linhas.set(k, r); return { error: null }; },
   }),
 };
 const ctx = {
@@ -85,6 +85,10 @@ const pb = { paginas: [
   // ler de novo uma página já provada não rebaixa a prova no banco
   await api.marcar('a1', 'leitura', true);
   checar('o check em página provada não apaga a prova', linhas.get('fabio@x|a1').tipo === 'prova', 'ficou ' + linhas.get('fabio@x|a1').tipo);
+
+  // mesmo sem o cache (outra aba, app), a leitura gravada no banco não passa por cima da prova
+  checar('a leitura grava sem sobrescrever (ignoreDuplicates)',
+    tpl.indexOf("tipo === 'prova' ? { onConflict: 'user_email,guia_slug' } : { onConflict: 'user_email,guia_slug', ignoreDuplicates: true }") > -1);
 
   // a régua do gestor: só conta capítulo com prova
   checar('o gestor conta capítulo feito só com prova (lê o tipo)',
