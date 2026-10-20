@@ -8639,6 +8639,15 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
 .gv2-v6-premio{padding:6px 12px;border-radius:999px;background:color-mix(in srgb,var(--gv2-acao) 16%,transparent);color:var(--gv2-acao);font:700 12.5px var(--gv2-font);white-space:nowrap;}
 .gv2-v6-plac{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
 .gv2-v6-pc{display:flex;gap:8px;align-items:flex-start;text-align:left;padding:10px 12px;border-radius:12px;border:1px solid var(--gv2-line);background:var(--gv2-sub);color:inherit;cursor:pointer;min-width:0;}
+
+.gv2-vm-tab{display:flex;flex-direction:column;min-width:0;}
+.gv2-vm-lin{display:flex;gap:10px;align-items:baseline;padding:10px 0;border-top:1px solid var(--gv2-line);min-width:0;}
+.gv2-vm-lin > span{flex:1 1 auto;min-width:0;}
+.gv2-vm-lin > span b,.gv2-vm-lin > span small{display:block;overflow-wrap:anywhere;}
+.gv2-vm-lin.is-cab{border-top:0;padding-top:0;}
+.gv2-vm-lin.is-total{border-top:2px solid var(--gv2-line);}
+.gv2-vm-dia{flex:0 0 40px;}
+.gv2-vm-num{flex:0 0 76px;text-align:right;}
 .gv2-v6-pc > i{font:700 15px var(--gv2-font);font-style:normal;}
 .gv2-v6-pc > span{display:flex;flex-direction:column;gap:1px;min-width:0;}
 .gv2-v6-pc b{font:700 13.5px/1.3 var(--gv2-font);}
@@ -61720,7 +61729,7 @@ GV2.render.pessoas = function () {
   const comBt = '<button type="button" class="gv2-v5-btn" data-gv2="v6gav:com"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4h4l5 4V6L7 10H3zM16 9a4 4 0 010 6"/></svg>Comunicados'
     + (semLer ? '<span class="gv2-v6-sel">' + semLer + ' sem ler</span>' : '') + '</button>';
   return GV2.cabHTML('Pessoas', 'como cada um está e onde eu ajudo', comBt)
-    + '<div class="gv2-corpo gv2-v5 gv2-v5-pes">' + topo + (GV2.render.v6Placar ? GV2.render.v6Placar() : '') + '<div class="gv2-v5-pgrade">' + lis + GV2.render.v5Pessoa(sel) + '</div>' + GV2.faltaHTML() + '</div>'
+    + '<div class="gv2-corpo gv2-v5 gv2-v5-pes">' + topo + (GV2.render.v6Placar ? GV2.render.v6Placar() : '') + (GV2.render.v7Mes ? GV2.render.v7Mes() : '') + '<div class="gv2-v5-pgrade">' + lis + GV2.render.v5Pessoa(sel) + '</div>' + GV2.faltaHTML() + '</div>'
     + GV2.render.v5Gav() + (GV2.render.v6Gav ? GV2.render.v6Gav() : '')
     + (GV2.estado.p3rotacao ? '<div class="gv2-p3-veu" data-gv2="p3:rotfechar"></div><aside class="gv2-p3-folha"><div class="gv2-p3-folha-cab"><b>Rotação de campo</b>' + GV2.html.btn({ texto: 'Fechar', acao: 'p3:rotfechar' }) + '</div>' + GV2.render.rotacao(sel) + '</aside>' : '');
 };
@@ -62774,6 +62783,56 @@ GV2.render.v6Placar = function () {
   return '<section class="card gv2-v6-placar">' + cab + corpo + '</section>';
 };
 
+GV2.v7Mes = { estado: null, dados: null, erro: null, em: 0 };
+GV2.v7MesLer = function (forcar) {
+  const M = GV2.v7Mes;
+  if (M.estado === 'lendo' || (!forcar && M.estado && Date.now() - M.em < 120000)) return;
+  M.estado = 'lendo';
+  Promise.resolve().then(function () { return supa.rpc('vendas_do_mes'); }).then(function (r) {
+    M.em = Date.now();
+    if (r && r.error) { M.estado = 'erro'; M.erro = r.error.message || 'erro'; }
+    else if (r && r.data && r.data.erro) { M.estado = 'erro'; M.erro = r.data.erro; }
+    else { M.estado = 'ok'; M.dados = r.data; }
+    if (GV2.estado.aba === 'pessoas') GV2.pintar();
+  }, function (e) { M.estado = 'erro'; M.erro = (e && e.message) || 'erro'; M.em = Date.now(); if (GV2.estado.aba === 'pessoas') GV2.pintar(); });
+};
+GV2.v7MesNome = function (m) { const i = Number(String(m || '').slice(5, 7)) - 1; return GV2.MESES[i] || 'mês'; };
+GV2.render.v7Mes = function () {
+  GV2.v7MesLer(false);
+  const M = GV2.v7Mes, d = M.dados;
+  const sub = d ? GV2.pl(d.total.vendas, 'venda', 'vendas') + ' · ' + GV2.v6Reais(d.total.mrr) + ' de MRR · ' + GV2.v6Reais(d.total.valor) + ' de valor · sem pontos · leitura ' + GV2.hm(new Date(d.lidoEm)) : 'MRR e valor de cada um, sem pontos';
+  const cab = '<div class="gv2-v6-plac-cab"><div><b>' + GV2.e('Resultado do mês' + (d ? ' · ' + GV2.v7MesNome(d.mes) : '')) + '</b><span>' + GV2.e(sub) + '</span></div><div class="gv2-v6-plac-bts">'
+    + '<button type="button" class="gv2-v5-btn is-prim" data-gv2="v6gav:vendas">Todas as vendas do mês</button></div></div>';
+  let corpo;
+  if (!d && M.estado !== 'erro') corpo = '<div class="gv2-v6-lendo">lendo as vendas do mês…</div>';
+  else if (M.estado === 'erro' && !d) corpo = '<div class="gv2-v6-lendo">' + GV2.e('— · as vendas do mês não responderam (vendas_do_mes: ' + M.erro + ')') + '</div>';
+  else if (!d.ranking.length) corpo = '<div class="gv2-v6-lendo">Nenhuma venda no mês ainda.</div>';
+  else {
+    corpo = '<div class="gv2-v6-plac">' + d.ranking.map(function (l) {
+      const doTime = GV2.base && GV2.base.porId[String(l.ownerId)];
+      const dentro = '<i class="num">' + l.pos + 'º</i><span><b class="gv2-ellip">' + GV2.e(GV2.prim(l.nome)) + '</b>'
+        + '<b class="num">' + GV2.e(GV2.v6Reais(l.mrr) + '/mês') + '</b><small>' + GV2.e(GV2.pl(l.vendas, 'venda', 'vendas') + ' · ' + GV2.v6Reais(l.valor) + ' de valor') + '</small></span>';
+      return doTime ? '<button type="button" class="gv2-v6-pc" data-gv2="pessoa:' + GV2.e(l.ownerId) + '">' + dentro + '</button>' : '<div class="gv2-v6-pc">' + dentro + '</div>';
+    }).join('') + '</div><span class="gv2-v6-fonte">Fonte: HubSpot (Negócio Fechado e Enviado Onboarding no mês, pela competência) · a mesma lista do app · uma função só: vendas_do_mes</span>';
+  }
+  return '<section class="card gv2-v6-placar">' + cab + corpo + '</section>';
+};
+GV2.render.v7GavVendas = function () {
+  GV2.v7MesLer(false);
+  const M = GV2.v7Mes, d = M.dados;
+  if (!d) return '<div class="gv2-v6-lendo">' + GV2.e(M.estado === 'erro' ? '— · as vendas do mês não responderam (' + M.erro + ')' : 'lendo as vendas do mês…') + '</div>';
+  if (!d.vendas.length) return '<div class="gv2-v6-lendo">Nenhuma venda no mês ainda.</div>';
+  const dia = function (iso) { const x = new Date(new Date(iso).getTime() - 3 * 3600000).toISOString().slice(0, 10); return GV2.ddmm(x); };
+  return '<div class="gv2-vm-tab">'
+    + '<div class="gv2-vm-lin is-cab"><small class="gv2-vm-dia">dia</small><span><small>restaurante · executivo</small></span><small class="gv2-vm-num">MRR</small><small class="gv2-vm-num">valor</small></div>'
+    + d.vendas.map(function (v) {
+      return '<div class="gv2-vm-lin"><small class="gv2-vm-dia num">' + GV2.e(dia(v.fechou)) + '</small><span><b>' + GV2.e(v.nome || 'negócio') + '</b><small>' + GV2.e(GV2.prim(v.dono) + (v.ajustado ? ' · competência ajustada: ' + v.ajustado : '')) + '</small></span>'
+        + '<b class="gv2-vm-num num">' + GV2.e(GV2.v6Reais(v.mrr)) + '</b><b class="gv2-vm-num num">' + GV2.e(GV2.v6Reais(v.valor)) + '</b></div>';
+    }).join('')
+    + '<div class="gv2-vm-lin is-total"><small class="gv2-vm-dia"></small><span><b>' + GV2.e('Total · ' + GV2.pl(d.total.vendas, 'venda', 'vendas')) + '</b></span><b class="gv2-vm-num num">' + GV2.e(GV2.v6Reais(d.total.mrr)) + '</b><b class="gv2-vm-num num">' + GV2.e(GV2.v6Reais(d.total.valor)) + '</b></div>'
+    + '</div><span class="gv2-v6-fonte">Valor = o total do plano negociado (campo valor do HubSpot) · MRR = valor_de_mrr · fonte: vendas_do_mes</span>';
+};
+
 GV2.render.v6GavPontos = function () {
   const P = GV2.v6Placar, d = P.dados;
   const sel = d ? d.linhas.find(function (l) { return l.ownerId === GV2.estado.pessoa; }) || d.linhas[0] : null;
@@ -62876,9 +62935,10 @@ GV2.render.v6Gav = function () {
   const T = { pontos: ['Como a pontuação é feita', 'a mesma conta no app e no cockpit · visita e demo de segunda a sexta, venda até domingo', GV2.render.v6GavPontos],
     com: ['Comunicados', 'o que o time recebeu no app · últimos 30 dias', GV2.render.v6GavCom],
     comnovo: ['Novo comunicado', 'abre na tela inicial do app de cada um até tocar em Entendi', GV2.render.v6GavComNovo],
-    ranking: ['Ranking da semana', 'quem merece o bônus de R$ 250 · tudo o que está por trás dos pontos', function () { return GV2.render.v6GavRanking(); }] }[g];
+    ranking: ['Ranking da semana', 'quem merece o bônus de R$ 250 · tudo o que está por trás dos pontos', function () { return GV2.render.v6GavRanking(); }],
+    vendas: ['Vendas do mês', 'todas as vendas do mês, com MRR e valor · sem pontos', function () { return GV2.render.v7GavVendas(); }] }[g];
   if (!T) return '';
-  return '<div class="gv2-rxg-veu" data-gv2="v6gav:fechar"></div><aside class="gv2-rxg gv2-v5-gav gv2-v6-gav' + (g === 'ranking' ? ' is-larga' : '') + '" role="dialog" aria-label="' + GV2.e(T[0]) + '">'
+  return '<div class="gv2-rxg-veu" data-gv2="v6gav:fechar"></div><aside class="gv2-rxg gv2-v5-gav gv2-v6-gav' + (g === 'ranking' || g === 'vendas' ? ' is-larga' : '') + '" role="dialog" aria-label="' + GV2.e(T[0]) + '">'
     + '<header class="gv2-rxg-cab"><div><b>' + GV2.e(T[0]) + '</b><span>' + GV2.e(T[1]) + '</span></div><button type="button" class="gv2-rxg-x" data-gv2="v6gav:fechar" aria-label="Fechar">×</button></header>'
     + '<div class="gv2-rxg-corpo">' + T[2]() + '</div></aside>';
 };
