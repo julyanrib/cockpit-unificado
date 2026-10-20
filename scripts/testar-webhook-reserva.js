@@ -21,9 +21,9 @@ const handler = require(path.join(__dirname, '..', 'api', 'hubspot-webhook.js'))
 // 10:30 de Brasília (13:30 UTC): dentro da janela 07–22.
 const AGORA = Date.parse('2026-09-28T13:30:00Z');
 
-function pedido() {
-  const corpo = JSON.stringify([{ objectId: 1, propertyName: 'dealstage' }]);
-  const ts = String(AGORA);
+function pedido(eventos, agora = AGORA) {
+  const corpo = JSON.stringify(eventos || [{ objectId: 1, propertyName: 'dealstage' }]);
+  const ts = String(agora);
   const url = 'https://fieldsalestakeat.vercel.app/api/hubspot-webhook';
   const sig = crypto.createHmac('sha256', process.env.HUBSPOT_APP_SECRET).update('POST' + url + corpo + ts).digest('base64');
   const listeners = {};
@@ -35,7 +35,7 @@ function pedido() {
   return req;
 }
 
-async function rodar({ ultimaRodadaHaMin, lockGanho = true, githubUltimaFalha = false, emAndamento = 0 }) {
+async function rodar({ ultimaRodadaHaMin, lockGanho = true, githubUltimaFalha = false, emAndamento = 0, naFila = 0, eventos = null, agora = AGORA }) {
   const chamadas = [];
   global.fetch = async (url, opt = {}) => {
     const u = String(url);
@@ -43,7 +43,7 @@ async function rodar({ ultimaRodadaHaMin, lockGanho = true, githubUltimaFalha = 
     const resp = (status, corpo) => ({ ok: status < 300, status, json: async () => corpo, text: async () => JSON.stringify(corpo) });
     if (u.includes('/rest/v1/webhook_cooldown')) return resp(200, lockGanho ? [{ id: 1 }] : []);
     if (u.includes('status=in_progress')) return resp(200, { total_count: emAndamento });
-    if (u.includes('status=queued')) return resp(200, { total_count: 0 });
+    if (u.includes('status=queued')) return resp(200, { total_count: naFila });
     if (u.includes('/runs?per_page=1')) {
       if (githubUltimaFalha) return resp(502, {});
       const criada = ultimaRodadaHaMin == null ? [] : [{ created_at: new Date(AGORA - ultimaRodadaHaMin * 60000).toISOString() }];
@@ -53,10 +53,10 @@ async function rodar({ ultimaRodadaHaMin, lockGanho = true, githubUltimaFalha = 
     throw new Error('fetch inesperado: ' + u);
   };
   const realNow = Date.now;
-  Date.now = () => AGORA;
+  Date.now = () => agora;
   let saida = null;
   const res = { status(c) { this.c = c; return this; }, json(b) { saida = { status: this.c, ...b }; return this; } };
-  try { await handler(pedido(), res); } finally { Date.now = realNow; }
+  try { await handler(pedido(eventos, agora), res); } finally { Date.now = realNow; }
   return { saida, disparou: chamadas.some((u) => u.endsWith('/dispatches')) };
 }
 
@@ -69,6 +69,14 @@ const casos = [
   { nome: 'GitHub não responde a última rodada → não dispara', cfg: { ultimaRodadaHaMin: 240, githubUltimaFalha: true }, dispara: false },
   { nome: 'consulta recente (lock perdido) → não dispara', cfg: { ultimaRodadaHaMin: 240, lockGanho: false }, dispara: false },
   { nome: 'rodada em andamento → não dispara', cfg: { ultimaRodadaHaMin: 240, emAndamento: 1 }, dispara: false },
+  // VENDA (20/10/26): entrar em Negócio Fechado / Enviado Onboarding dispara na hora
+  { nome: 'venda (Negócio Fechado), robô rodou há 5 min → dispara', cfg: { ultimaRodadaHaMin: 5, lockGanho: false, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006162' }] }, dispara: true },
+  { nome: 'venda (Enviado Onboarding) → dispara', cfg: { ultimaRodadaHaMin: 5, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006163' }] }, dispara: true },
+  { nome: 'venda com rodada em andamento → dispara (entra na fila)', cfg: { ultimaRodadaHaMin: 2, emAndamento: 1, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006162' }] }, dispara: true },
+  { nome: 'venda com rodada já na fila → não dispara', cfg: { ultimaRodadaHaMin: 2, naFila: 1, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006162' }] }, dispara: false },
+  { nome: 'venda às 23h (fora da janela) → dispara', cfg: { ultimaRodadaHaMin: 5, agora: Date.parse('2026-09-29T02:00:00Z'), eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006162' }] }, dispara: true },
+  { nome: 'mudança para Demo, robô rodou há 5 min → não dispara', cfg: { ultimaRodadaHaMin: 5, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1395880471' }] }, dispara: false },
+  { nome: 'Ag. Pagamento não é venda → não dispara', cfg: { ultimaRodadaHaMin: 5, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1395880473' }] }, dispara: false },
 ];
 
 (async () => {

@@ -107,6 +107,22 @@ const WORKFLOW_FILE = 'daily-refresh.yml';
 // RESERVA_MINUTOS. Resultado: ~1 rodada a cada 2 h no expediente, venha de onde vier.
 const COOLDOWN_MINUTOS = 15;
 const RESERVA_MINUTOS = 110;
+// VENDA NÃO ESPERA A RESERVA (20/10/26, Julyan: "faz o robô rodar sozinho quando entrar venda").
+// A venda do Marco fechou às 15:34 e só entrou no ranking quando alguém rodou o robô à mão: a
+// reserva acima segura qualquer aviso por até 110 min. Negócio que ENTRA em Negócio Fechado ou
+// Enviado Onboarding (as duas etapas de ganho que o robô conta em vendasLivro) dispara na hora,
+// fora do cooldown, da reserva e da janela de expediente. A única trava que fica é não empilhar:
+// se já há uma rodada NA FILA, ela começa depois e já pega esta venda. Rodada em andamento não
+// segura (pode ter lido o HubSpot antes da venda): a nova entra na fila do concurrency do workflow.
+// O repositório é público desde então: minuto de Actions não custa, e venda são poucas por dia.
+const ETAPAS_DE_VENDA = ['1396006162', '1396006163'];
+function ehAvisoDeVenda(corpoCru) {
+  try {
+    const eventos = JSON.parse(corpoCru);
+    return (Array.isArray(eventos) ? eventos : [eventos]).some((e) => e && e.propertyName === 'dealstage'
+      && ETAPAS_DE_VENDA.includes(String(e.propertyValue)));
+  } catch (e) { return false; }
+}
 
 module.exports = async function handler(req, res) {
   /* O BOTÃO "ATUALIZAR HUBSPOT" DO GESTOR (09/10/26) mora aqui: o plano Hobby da Vercel aceita 12
@@ -159,6 +175,22 @@ module.exports = async function handler(req, res) {
   const bateu = bufEsperado.length === bufRecebido.length && crypto.timingSafeEqual(bufEsperado, bufRecebido);
   if (!bateu) {
     return res.status(401).json({ erro: 'Assinatura não confere — aviso recusado.' });
+  }
+
+  // ---- 2.2. venda: dispara já (ver ETAPAS_DE_VENDA) ----
+  if (ehAvisoDeVenda(corpoCru)) {
+    try {
+      const headersGitHub = { Authorization: `Bearer ${githubPat}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+      const naFila = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?status=queued&per_page=1`, { headers: headersGitHub });
+      const fila = naFila.ok ? await naFila.json() : { total_count: 0 };
+      if ((fila.total_count || 0) > 0) return res.status(200).json({ ok: true, disparado: false, venda: true, motivo: 'já há uma rodada na fila: ela pega esta venda' });
+      const disparo = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
+        { method: 'POST', headers: { ...headersGitHub, 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main', inputs: { origem: 'venda' } }) });
+      if (!disparo.ok) return res.status(200).json({ ok: true, disparado: false, venda: true, motivo: 'GitHub recusou: ' + disparo.status });
+      return res.status(200).json({ ok: true, disparado: true, venda: true });
+    } catch (e) {
+      return res.status(200).json({ ok: true, disparado: false, venda: true, motivo: 'exceção: ' + e.message });
+    }
   }
 
   const supaUrl = process.env.SUPABASE_URL;
