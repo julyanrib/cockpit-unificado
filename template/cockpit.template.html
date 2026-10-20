@@ -28583,7 +28583,12 @@ async function carregarPlaybookProgresso() {
       if (error) throw error;
       (data || []).forEach(row => {
         if (row.tipo === 'missao') base.missao.add(row.guia_slug);
-        else if (row.tipo === 'prova') base.prova.add(row.guia_slug);
+        /* QUIZ APROVADO JÁ É LEITURA (20/10/26). playbook_progresso tem UMA linha por
+           (email, página): o upsert da prova sobrescreve a linha 'leitura' da mesma página.
+           A trilha exige check E prova em todas as páginas, então na sessão seguinte o
+           capítulo provado voltava "sem check", não ficava provado e travava o próximo
+           (Fabio, 20/10: quiz às 07:31, capítulo 2 trancado). Prova conta nos dois. */
+        else if (row.tipo === 'prova') { base.prova.add(row.guia_slug); base.leitura.add(row.guia_slug); }
         else base.leitura.add(row.guia_slug);
         if (row.concluido_em) base.datas.set(row.guia_slug, String(row.concluido_em).slice(0, 10));
       });
@@ -28592,7 +28597,7 @@ async function carregarPlaybookProgresso() {
       const pendentes = playbookProgressoLocal();
       for (const p of pendentes) {
         const ok = await playbookGravarProgressoSupabase(p.slug, p.tipo).catch(() => false);
-        if (ok) { (p.tipo === 'missao' ? base.missao : base.leitura).add(p.slug); }
+        if (ok) { if (p.tipo === 'prova') base.prova.add(p.slug); (p.tipo === 'missao' ? base.missao : base.leitura).add(p.slug); }
       }
       if (pendentes.length) playbookProgressoLocalSalvar([]);
     } catch (e) { console.error('[Playbook] falha ao carregar progresso, seguindo com vazio:', e && e.message); }
@@ -28604,6 +28609,8 @@ async function carregarPlaybookProgresso() {
 
 async function playbookGravarProgressoSupabase(slug, tipo) {
   if (!supa || !sessaoAtual || !sessaoAtual.email) return false;
+  /* uma linha por página: 'leitura' nunca rebaixa uma página já provada no quiz */
+  if (tipo !== 'prova' && playbookProgressoCache && playbookProgressoCache.prova && playbookProgressoCache.prova.has(slug)) return true;
   const { error } = await supa.from('playbook_progresso')
     .upsert({ user_email: sessaoAtual.email, guia_slug: slug, tipo, concluido_em: new Date().toISOString() }, { onConflict: 'user_email,guia_slug' });
   return !error;
@@ -28620,6 +28627,7 @@ async function playbookMarcarProgresso(slug, tipo, concluido) {
     : tipo === 'prova' ? playbookProgressoCache.prova
     : playbookProgressoCache.leitura;
   if (concluido) conjunto.add(slug); else conjunto.delete(slug);
+  if (concluido && tipo === 'prova') playbookProgressoCache.leitura.add(slug);
   /* a data entra no cache junto: sem isso o ponto de estudo só apareceria na Daily na
      próxima sessão, quando o select trouxesse concluido_em de volta. */
   if (!playbookProgressoCache.datas) playbookProgressoCache.datas = new Map();
@@ -30640,7 +30648,9 @@ function pb9LigarLeitor(slot, pb, pagina, cap) {
   slot.querySelectorAll('[data-pb9-check]').forEach(function (btn) {
     btn.addEventListener('click', async function () {
       const id = btn.dataset.pb9Check;
-      const tinha = (typeof playbookLidos === 'function') && playbookLidos().has(id);
+      /* página já aprovada no quiz também "tem check": gravar 'leitura' por cima apagaria a prova */
+      const tinha = ((typeof playbookLidos === 'function') && playbookLidos().has(id))
+        || ((typeof pb7Provadas === 'function') && pb7Provadas().has(id));
       if (tinha) {
         if (typeof mostrarToast === 'function') {
           mostrarToast('Esta página já está com check. Para desfazer, use o histórico do capítulo.', 'atencao');
@@ -76427,7 +76437,7 @@ GV2.ler = async function (donos, agora, emailsProntos) {
        avanços pela folha do app (gv2_falta_etapa: o que faltou e o que se sabia) */
     fichasArmas: supa.from('fichas_de_rua').select('deal_id,client_id,owner_id,ocorrido_em,como_foi,sistema,dor,decisor_nome,decisor_papel,horario_dono,motivo_perdido,bairro,cidade,proximo,proximo_em,proximo_tipo,etapa_antes,etapa_depois').gte('ocorrido_em', GV2.somaDias(agora.iso, -70) + 'T03:00:00Z').order('ocorrido_em', { ascending: false }).limit(3000),
     faltaEtapa: supa.from('gv2_falta_etapa').select('negocio_id,exec_id,etapa,faltou,armas,criado_em').gte('criado_em', GV2.somaDias(agora.iso, -70) + 'T03:00:00Z').order('criado_em', { ascending: false }).limit(3000),
-    playbook: listaEmails.length ? supa.from('playbook_progresso').select('user_email,guia_slug,concluido_em').in('user_email', listaEmails) : Promise.resolve({ data: [] }),
+    playbook: listaEmails.length ? supa.from('playbook_progresso').select('user_email,guia_slug,tipo,concluido_em').in('user_email', listaEmails) : Promise.resolve({ data: [] }),
     /* PESSOAS E RAIO X v4 (07/10/26): a disciplina de cada um e as leituras do gestor.
        reuniões = client_meetings ainda 'agendada' com a data passada (2 h de folga); o dono é
        created_by (uuid), que perfis traduz para o dono do HubSpot. */
@@ -76981,7 +76991,9 @@ GV2.montar = async function (so, leituraPronta) {
     });
     const email = String(L.emails[id] || '').toLowerCase();
     const feitosPb = {};
-    (pbPorEmail[email] || []).forEach(function (x) { feitosPb[x.guia_slug] = x.concluido_em; });
+    /* capítulo feito = quiz aprovado em todas as páginas, a mesma régua da trilha do executivo
+       (20/10/26): só a leitura punha o gestor um nível à frente do que o executivo via */
+    (pbPorEmail[email] || []).forEach(function (x) { if (x.tipo === 'prova') feitosPb[x.guia_slug] = x.concluido_em; });
     const feitos = caps.map(function (c) { return c.paginas.every(function (pg) { return feitosPb[pg]; }); });
     let nivel = feitos.indexOf(false); nivel = nivel < 0 ? caps.length + 1 : nivel + 1;
     const datas = Object.keys(feitosPb).map(function (k) { return feitosPb[k]; }).sort();
