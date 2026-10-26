@@ -31159,6 +31159,31 @@ function preencherCabecalhoRodape() {
   const updatedEl = document.getElementById('updatedLine');
   updatedEl.textContent =
     `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${ativos} executivos${emPreparacao ? ` · ${emPreparacao} em preparação` : ''}`;
+  /* A CONFERÊNCIA AUTOMÁTICA (scripts/conferir-numeros.js, a cada rodada do robô): o resultado vai na
+     mesma linha, sem banner. Divergência abre a lista logo abaixo, num clique. */
+  (function () {
+    const velho = document.getElementById('confNumerosLista');
+    if (velho) velho.remove();
+    const conf = DATA.syncStatus && DATA.syncStatus.conferencia;
+    if (!conf || !conf.em) return;
+    const hh = new Date(Date.parse(conf.em) - 3 * 3600000).toISOString().slice(11, 16);
+    const itens = Array.isArray(conf.itens) ? conf.itens : [];
+    const botao = document.createElement('button');
+    botao.type = 'button';
+    botao.style.cssText = 'background:none;border:0;padding:0;font:inherit;cursor:' + (itens.length ? 'pointer' : 'default') + ';color:' + (itens.length ? 'var(--red)' : 'inherit') + ';';
+    botao.textContent = itens.length
+      ? ' · ' + itens.length + (itens.length === 1 ? ' divergência' : ' divergências') + ' na conferência das ' + hh + ' — ver'
+      : ' · números conferidos com o HubSpot e o banco às ' + hh;
+    updatedEl.appendChild(botao);
+    if (!itens.length) return;
+    const lista = document.createElement('div');
+    lista.id = 'confNumerosLista';
+    lista.hidden = true;
+    lista.style.cssText = 'margin:6px 0 2px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:12px;line-height:1.55;color:var(--ink);';
+    itens.forEach(function (i) { const li = document.createElement('div'); li.textContent = '• ' + i.texto; lista.appendChild(li); });
+    updatedEl.insertAdjacentElement('afterend', lista);
+    botao.addEventListener('click', function () { lista.hidden = !lista.hidden; });
+  }());
 
   // Rodapé da sidebar — mesma data/hora que já vem pronta em DATA.hubspotUpdatedAtFmt
   // ("DD/MM/AAAA às HH:MM"), só reformatada mais curta pra caber no rodapé estreito.
