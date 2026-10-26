@@ -53644,6 +53644,12 @@ function sm5Delta(atual, anterior, subirEhBom) {
   };
 }
 
+function sm5IaVelha(rs) {
+  const m = String((rs && rs.geradoEmFmt) || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return true;
+  return (Date.now() - Date.UTC(+m[3], +m[2] - 1, +m[1], 12)) > 8 * 86400000;
+}
+const SM5_IA_DESLIGADA = 'Leitura da IA desligada desde 17/10 — os números desta tela são de hoje.';
 function sm5Negrito(v) {
 
   let s = esc(v);
@@ -53765,7 +53771,8 @@ function sm5Dados() {
   Object.keys(snapReps).forEach(function (id) {
     if (idsDoBoard.indexOf(id) < 0) idsDoBoard.push(id);
   });
-  const analises = SM5_ANALISES || {};
+  const iaVelha = sm5IaVelha(rs);
+  const analises = iaVelha ? {} : (SM5_ANALISES || {});
   const ganhosPorDono = {}, reunPorDono = {}, criadosPorDono = {};
   (rs.ganhosSemanaDetalhe || []).forEach(function (g) {
     const id = String(g.ownerId); ganhosPorDono[id] = (ganhosPorDono[id] || 0) + 1;
@@ -53823,16 +53830,16 @@ function sm5Dados() {
       mes: mes, meta: meta, pct: pct, metaBatida: metaBatida, mesAtrasado: mesAtrasado,
       tend: tend,
 
-      gargalo: an.gargalo_semana || p.resumoIndividual
-        || 'Sem leitura da IA nesta semana — números acima vêm do snapshot do dia.',
+      gargalo: iaVelha ? SM5_IA_DESLIGADA : (an.gargalo_semana || p.resumoIndividual
+        || 'Sem leitura da IA nesta semana — números acima vêm do snapshot do dia.'),
       tendTexto: an.tendencia || '',
-      roteiro: sm5Roteiro(an.como_agir)
+      roteiro: iaVelha ? [{ tag: '', txt: 'O roteiro vinha da IA, que está desligada desde 17/10: monte o 1:1 com os números desta linha.' }] : sm5Roteiro(an.como_agir)
         || (Array.isArray(p.comoAgirIndividual) && p.comoAgirIndividual.length
           ? p.comoAgirIndividual.map(function (t, i) {
             return { tag: ['ABRIR', 'MANTER', 'COBRAR'][i] || 'COBRAR', txt: t };
           })
           : [{ tag: '', txt: 'Análise indisponível essa semana — revisar manualmente neste 1:1' }]),
-      compromissos: Array.isArray(rep.compromissos) ? rep.compromissos : []
+      compromissos: !iaVelha && Array.isArray(rep.compromissos) ? rep.compromissos : []
     };
     base.faixa = sm5Faixa(base);
     return base;
@@ -53912,11 +53919,12 @@ function sm5Dados() {
     mes: { feitos: fechadosDoTime, meta: metaDoTime, pct: pctMes,
       ritmoPct: Math.round(ritmo.fracao * 100), texto: mesTexto, cor: mesCor,
       diaRef: ritmo.decorridos + ' de ' + ritmo.uteis + ' dias úteis' },
-    leitura: rs.resumoGeral || '',
+    leitura: sm5IaVelha(rs) ? '' : (rs.resumoGeral || ''),
+    iaVelha: sm5IaVelha(rs),
 
     geradaEm: rs.geradoEmFmt || null,
-    jogadas: Array.isArray(rs.comoAgir) ? rs.comoAgir
-      : (rs.comoAgir ? [String(rs.comoAgir)] : []),
+    jogadas: sm5IaVelha(rs) ? [] : (Array.isArray(rs.comoAgir) ? rs.comoAgir
+      : (rs.comoAgir ? [String(rs.comoAgir)] : [])),
     conversoes: {
       criados: Number(k.leadsCriados || 0), reunioes: Number(k.reunioes || 0),
       ganhos: Number(k.ganhos || 0), perdidos: Number(k.perdidos || 0),
@@ -54066,12 +54074,12 @@ function sm5TelaHTML(d) {
     +     '<b style="font-family:var(--font-display);font-size:14px;">A leitura da semana</b>'
     +     '<span style="font-size:10px;color:var(--muted2);border:1px solid var(--line);border-radius:6px;'
     +       'padding:2px 7px;font-weight:700;">'
-    +       (d.geradaEm ? 'GERADA ' + esc(d.geradaEm) + ' · IA' : 'GERADA POR IA')
+    +       (d.iaVelha ? 'IA DESLIGADA' : d.geradaEm ? 'GERADA ' + esc(d.geradaEm) + ' · IA' : 'GERADA POR IA')
     +       '</span>'
     +     selo
     +   '</div>'
     +   '<div style="margin-top:12px;font-size:14px;line-height:1.7;color:var(--ink);">'
-    +     (d.leitura || 'A leitura desta semana não foi gerada.') + '</div>'
+    +     (d.iaVelha ? esc(SM5_IA_DESLIGADA) : (d.leitura || 'A leitura desta semana não foi gerada.')) + '</div>'
     +   '<div style="display:flex;gap:22px;margin-top:14px;padding-top:13px;'
     +     'border-top:1px dashed var(--line);font-size:12px;font-variant-numeric:tabular-nums;">'
     +     '<span><b style="color:var(--green);">' + conv.criados + ' criados</b> → <b>'
@@ -54096,8 +54104,9 @@ function sm5TelaHTML(d) {
     +       ' da semana</b>'
     +   '</div>'
     +   '<div style="display:grid;gap:9px;margin-top:13px;font-size:12.5px;">'
-    +     (jogadasHTML || '<span style="color:var(--muted2);">Nenhuma jogada veio na rodada desta '
-+       'semana.</span>')
+    +     (jogadasHTML || (d.iaVelha ? '<span style="color:var(--muted2);">As jogadas vinham da IA, que está desligada desde 17/10.</span>'
+      : '<span style="color:var(--muted2);">Nenhuma jogada veio na rodada desta '
++       'semana.</span>'))
     +   '</div>'
     + '</div>'
     + '</div>';
