@@ -164,31 +164,65 @@ async function conferir() {
     itens.push({ tipo: 'quentes', texto: 'Etapa diferente: ' + (hsQ[id].dealname || id) + ' está em ' + QUENTES[hsQ[id].dealstage] + ' no HubSpot e em ' + QUENTES[snapQ[id].stage] + ' no Cockpit.' });
   });
 
-  // 4 · plano × rota de hoje (dia útil)
+  // 4 · plano × rota de hoje (dia útil), negócio por negócio
   if (diaUtil) {
     const hoje = br.toISOString().slice(0, 10);
     const di = br.getUTCDay() - 1;
     const seg = new Date(Date.UTC(br.getUTCFullYear(), br.getUTCMonth(), br.getUTCDate() - di)).toISOString().slice(0, 10);
     const [planos, perfis, rotas] = await Promise.all([
       supa('planos_semanais?select=owner_id,grade&data_segunda=eq.' + seg),
-      supa('profiles?select=id,id_hubspot,full_name&id_hubspot=not.is.null'),
-      supa('field_routes?select=seller_id,field_route_stops(status)&route_date=eq.' + hoje),
+      supa('profiles?select=id,id_hubspot&id_hubspot=not.is.null'),
+      supa('field_routes?select=seller_id,field_route_stops(client_id,status)&route_date=eq.' + hoje),
     ]);
     const perfilDo = {};
-    perfis.forEach((p) => { perfilDo[String(p.id_hubspot)] = p; });
-    const paradas = {};
-    rotas.forEach((r) => { paradas[r.seller_id] = (paradas[r.seller_id] || 0) + (r.field_route_stops || []).filter((s) => s.status !== 'removed').length; });
-    let conferidos = 0;
+    perfis.forEach((p) => { perfilDo[String(p.id_hubspot)] = p.id; });
+    const paradasDe = {};
+    rotas.forEach((r) => { (r.field_route_stops || []).forEach((s) => { if (s.status !== 'removed') (paradasDe[r.seller_id] = paradasDe[r.seller_id] || []).push(s.client_id); }); });
+    const doDia = [];
     planos.forEach((p) => {
       if (donos.indexOf(String(p.owner_id)) < 0) return;
       const dia = Array.isArray(p.grade) ? p.grade[di] : null;
-      const contas = (Array.isArray(dia) ? dia : []).filter((s) => s && typeof s === 'object' && /^(c|n|r|m|l)-/.test(String(s.id || ''))).length;
-      const pf = perfilDo[String(p.owner_id)];
-      const naRota = pf ? (paradas[pf.id] || 0) : 0;
-      conferidos++;
-      if (contas !== naRota) itens.push({ tipo: 'plano', texto: nomeDe(p.owner_id) + ': ' + contas + ' contas hoje no Planejamento e ' + naRota + ' paradas na rota do app.' });
+      doDia.push({ owner: String(p.owner_id), slots: (Array.isArray(dia) ? dia : []).filter((s) => s && typeof s === 'object' && /^(c|n|r|m|l)-/.test(String(s.id || ''))) });
     });
-    checado.planos = conferidos;
+    const deals = [...new Set([].concat(...doDia.map((x) => x.slots)).filter((s) => /^(c|r)-/.test(s.id)).map((s) => s.id.slice(2)))];
+    const pinos = {};
+    const negocios = {};
+    for (let i = 0; i < deals.length; i += 100) {
+      const lote = deals.slice(i, i + 100).join(',');
+      (await supa('clients?select=id,id_hubspot,is_archived&id_hubspot=in.(' + lote + ')')).forEach((c) => {
+        const k = String(c.id_hubspot);
+        if (!pinos[k] || (pinos[k].is_archived && !c.is_archived)) pinos[k] = c;
+      });
+      (await supa('espelho_negocios?select=deal_id,props&deal_id=in.(' + lote + ')')).forEach((e) => { negocios[String(e.deal_id)] = e.props || {}; });
+    }
+    doDia.forEach((x) => {
+      const pid = perfilDo[x.owner];
+      const livres = (paradasDe[pid] || []).slice();
+      const nome = (id) => (negocios[id] || {}).dealname || id;
+      let novas = 0;
+      x.slots.forEach((s) => {
+        if (/^(n|m|l)-/.test(s.id)) { novas++; return; }
+        const deal = s.id.slice(2);
+        const pino = pinos[deal];
+        if (pino && !pino.is_archived) {
+          const k = livres.indexOf(pino.id);
+          if (k >= 0) livres.splice(k, 1);
+          else itens.push({ tipo: 'plano', texto: nomeDe(x.owner) + ': ' + nome(deal) + ' está no Planejamento de hoje e não está na rota do app.' });
+          return;
+        }
+        if (pino && pino.is_archived) {
+          itens.push({ tipo: 'plano', texto: nomeDe(x.owner) + ': o ponto de ' + nome(deal) + ' está arquivado no mapa, mas o negócio está ativo e no Planejamento de hoje.' });
+          return;
+        }
+        // sem ponto: negócio novo (a rotina que cria o ponto roda a cada 15 min) ou sem endereço (o Cockpit já mostra "sem lugar")
+        const n = negocios[deal] || {};
+        const novo = Date.now() - (Date.parse(n.createdate || '') || 0) < 24 * 3600000;
+        const semEndereco = !n.latitude && !n.logradouro;
+        if (!novo && !semEndereco) itens.push({ tipo: 'plano', texto: nomeDe(x.owner) + ': ' + nome(deal) + ' tem endereço no HubSpot, mas não virou ponto no mapa (fica fora da rota).' });
+      });
+      if (novas !== livres.length) itens.push({ tipo: 'plano', texto: nomeDe(x.owner) + ': ' + novas + ' contas novas hoje no Planejamento e ' + livres.length + ' paradas sem negócio na rota do app.' });
+    });
+    checado.planos = doDia.length;
   }
   return { itens, checado };
 }
