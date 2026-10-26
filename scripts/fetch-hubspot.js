@@ -215,6 +215,13 @@ function competenciaDe(dealId, mesDoClosedate) {
   const c = COMPETENCIA[String(dealId)];
   return c ? c.contaEm : mesDoClosedate;
 }
+/* VENDA CONFIRMADA PELO GESTOR (26/10/26). Venda paga cujo negócio NÃO está em etapa de ganho no
+   CRM por um defeito (o check-in de 23/10 tirou um negócio de Ag. Pagamento e pôs em Visita, e o
+   funil só anda uma etapa por vez). Como o ajuste de competência: uma decisão humana registrada, com
+   motivo, que a tela mostra como ajuste. Só conta enquanto o negócio NÃO estiver em ganho no mês —
+   quando o CRM for corrigido, a venda passa a vir do CRM e esta linha deixa de somar (nunca conta 2x). */
+const CONFIRMADAS = (METAS.vendasConfirmadas || []).filter(function (c) { return c && c.dealId && c.ownerId && c.contaEm; });
+let CONFIRMADAS_CONTANDO = []; // as que entraram no mês corrente nesta rodada (preenchida por vendasDoMesDetalhe)
 
 // CLONAGEM DE LEITURA (15/08/26) — Julyan: "clonar o pipeline do field sales pro
 // cockpit... contas alvo, reciclagem, enviado onboarding e perdidos". Só rótulo e cor
@@ -2036,7 +2043,7 @@ async function vendasDoMesDetalhe(desdeMesAnterior) {
        nunca se somam: para o Sandro, R$ 800/mes viraram R$ 9.600 porque o plano e anual. */
     properties: ['dealname', 'hubspot_owner_id', 'valor_de_mrr', 'amount', 'closedate']
   });
-  return results.filter(d => !isExcludedDeal(d)).map(d => {
+  const doCrm = results.filter(d => !isExcludedDeal(d)).map(d => {
     const fechou = d.properties.closedate || null;
     const mesCru = fechou ? String(diaBrasiliaDe(fechou) || '').slice(0, 7) : null;
     const conta = competenciaDe(d.id, mesCru);
@@ -2053,6 +2060,24 @@ async function vendasDoMesDetalhe(desdeMesAnterior) {
       ajustado: conta !== mesCru ? (COMPETENCIA[String(d.id)] || {}).motivo || 'ajuste de competência' : null
     };
   });
+  const mesIni = new Date(inicioMes.getTime() + 12 * 3600000).toISOString().slice(0, 7);
+  const mesAtual = String(diaBrasiliaDe(now.toISOString()) || '').slice(0, 7);
+  const jaNoCrm = new Set(doCrm.map(v => String(v.id)));
+  const extras = CONFIRMADAS.filter(c => c.contaEm >= mesIni && c.contaEm <= mesAtual && !jaNoCrm.has(String(c.dealId)));
+  const nomes = extras.length ? await hsNegociosEmLote(extras.map(c => c.dealId)).catch(() => ({})) : {};
+  const confirmadas = extras.map(c => ({
+    id: String(c.dealId),
+    nome: (nomes[String(c.dealId)] || {}).nome || 'venda confirmada',
+    ownerId: String(c.ownerId),
+    mrr: Math.round(Number(c.mrr) || 0),
+    receita: Math.round(Number(c.receita) || 0),
+    closedate: c.fechouEm || null,
+    mesDeCompetencia: c.contaEm,
+    ajustado: c.motivo || 'venda confirmada pelo gestor',
+    confirmada: true
+  }));
+  if (!desdeMesAnterior) CONFIRMADAS_CONTANDO = confirmadas.filter(v => v.mesDeCompetencia === mesAtual);
+  return doCrm.concat(confirmadas);
 }
 
 // Conta quantos negócios de Ganho (Negócio Fechado + Enviado Onboarding) fecharam HOJE
@@ -2273,10 +2298,11 @@ async function main() {
   // Fechados no mês corrente (pro KPI "Fechados no mês" vs. meta do time) — mesma
   // lógica de 2 etapas do ganhoSemana (Negócio Fechado + Enviado Onboarding), só que
   // com janela do mês em vez de 7 dias.
-  const fechadosNoMes = await stageTotalThisMonth([STAGES.ganho1, STAGES.ganho2]);
+  let fechadosNoMes = await stageTotalThisMonth([STAGES.ganho1, STAGES.ganho2]);
 
   // Detalhe dos fechados do mês (nome + dono + MRR) — pro quadro "Vendas do mês".
   const vendasMes = await vendasDoMesDetalhe();
+  fechadosNoMes += CONFIRMADAS_CONTANDO.length; // venda confirmada pelo gestor (metas.json)
   console.log(`Vendas do mês: ${vendasMes.length} negócios fechados no mês corrente (com MRR).`);
   let vendasLivro = vendasMes;
   try { vendasLivro = await vendasDoMesDetalhe(true); } catch (e) { console.warn('vendasLivro falhou, segue com o mês corrente:', e.message); }
@@ -2755,7 +2781,8 @@ async function main() {
     // Ganhos da semana desse executivo (pro painel "Ganhos por executivo")
     const ganhosSemanaDeals = await stageDealsLast7DaysByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
     // Fechados no MÊS desse executivo (pra coluna "Meta do mês" da tabela Por executivo)
-    const fechadosNoMesRep = await stageTotalThisMonthByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
+    const fechadosNoMesRep = await stageTotalThisMonthByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId)
+      + CONFIRMADAS_CONTANDO.filter(v => v.ownerId === String(rep.ownerId)).length;
     // Demos realizadas (entrou em Demo/Proposta) — o ranking do time pontua só estas
     let demosRealizadas = { semana: 0, semanaNomes: [], mes: 0, lista: [] };
     try { demosRealizadas = await demosRealizadasByOwner(rep.ownerId); }
