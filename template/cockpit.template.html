@@ -84227,14 +84227,21 @@ GV2.v8DemoAntes = function (pessoas) {
   }).length;
   return n ? '+ ' + n + ' de meses anteriores ainda em Demo/Proposta' : '';
 };
+/* 26/10/26: "melhor do mês" é quem MAIS FECHOU no mês (desempate: % do ritmo). Pela % do ritmo, a meta
+   menor da rampa (4) punha o André com 6 acima do Marco com 7. "Mais longe do ritmo" segue pela %. */
+GV2.v8OrdemFechou = function (x, y) {
+  return (y.R.cli.feito - x.R.cli.feito)
+    || (y.R.cli.feito / Math.max(0.1, y.R.cli.esp)) - (x.R.cli.feito / Math.max(0.1, x.R.cli.esp)) || x.p.nome.localeCompare(y.p.nome);
+};
 GV2.v8Ranking = function (pessoas) {
   const l = pessoas.filter(function (p) { return Number(p.meta_clientes_mes) > 0 && p.fase !== 'Preparação'; })
-    .map(function (p) { return { p: p, R: GV2.v8Ritmo(p) }; })
-    .sort(function (x, y) {
-      return (y.R.cli.feito / Math.max(0.1, y.R.cli.esp)) - (x.R.cli.feito / Math.max(0.1, x.R.cli.esp))
-        || (y.R.cli.feito - y.R.cli.esp) - (x.R.cli.feito - x.R.cli.esp) || x.p.nome.localeCompare(y.p.nome);
-    });
-  return { melhor: l.length > 1 ? l[0].p.id : null, pior: l.length > 1 ? l[l.length - 1].p.id : null };
+    .map(function (p) { return { p: p, R: GV2.v8Ritmo(p) }; });
+  const porRitmo = l.slice().sort(function (x, y) {
+    return (y.R.cli.feito / Math.max(0.1, y.R.cli.esp)) - (x.R.cli.feito / Math.max(0.1, x.R.cli.esp))
+      || (y.R.cli.feito - y.R.cli.esp) - (x.R.cli.feito - x.R.cli.esp) || x.p.nome.localeCompare(y.p.nome);
+  });
+  const porFechou = l.slice().sort(GV2.v8OrdemFechou);
+  return { melhor: l.length > 1 && porFechou[0].R.cli.feito > 0 ? porFechou[0].p.id : null, pior: l.length > 1 ? porRitmo[porRitmo.length - 1].p.id : null };
 };
 GV2.v8Gargalo = function (R) {
   const rv = R.vis.esp ? R.vis.feito / R.vis.esp : 1, rd = R.dem.esp ? R.dem.feito / R.dem.esp : 1;
@@ -84346,7 +84353,7 @@ GV2.render.v8PorPessoa = function () {
   const b = GV2.rx();
   const K = ['portas', 'decisor', 'demo', 'proposta', 'fechado'], ROT = ['portas', 'decisor', 'demo', 'negociação', 'fechado'];
   const linhas = b.pessoas.slice().map(function (p) { return { p: p, R: GV2.v8Ritmo(p) }; })
-    .sort(function (x, y) { return (y.R.cli.feito / Math.max(0.1, y.R.cli.esp)) - (x.R.cli.feito / Math.max(0.1, x.R.cli.esp)) || x.p.nome.localeCompare(y.p.nome); });
+    .sort(GV2.v8OrdemFechou);
   const rk = GV2.v8Ranking(b.pessoas), melhor = rk.melhor, pior = rk.pior;
   const html = linhas.map(function (x) {
     const p = x.p, R = x.R, G = GV2.v8Gargalo(R), f = R.f;
