@@ -31156,9 +31156,39 @@ function preencherCabecalhoRodape() {
      PARA SABER SE O ROBÔ RODOU, a fonte é o Supabase: a chave `sync-status` em
      cockpit_snapshot traz { falhas, ultimaExecucao, totalExecutivos }. Estimar isso
      a partir da idade de um arquivo local foi o que produziu o alarme falso. */
+  /* A META DO MÊS NA LINHA DE CIMA (28/10/26). O Julyan olhou o Cockpit, viu 52 e disse que a
+     meta de 44 "não foi atualizada". Ela estava: o arquivo já tinha novembro com 44 e o relógio
+     é que ainda não tinha virado. O sistema estava certo e a TELA NÃO TINHA COMO PROVAR —
+     e meta é o número que o time inteiro cobra, então "está lá, confia" não serve.
+
+     Duas frases, as duas só quando há o que dizer:
+       · a meta deste mês e, quando o mês que vem já está declarado, qual é e quando começa;
+       · o AVISO DE DESENCONTRO, se o mês das metas publicadas não for o mês de hoje em
+         Brasília. Acontece de verdade: 01/11/26 cai num domingo, e o robô só roda às 09:00 do
+         fim de semana — das 00:00 às 09:00 a tela mostraria a meta de outubro em novembro,
+         calada. Divergência que a tela conhece e não conta é a pior espécie. */
+  function metaNaLinha() {
+    const k = (DATA && DATA.kpisHub) || {};
+    const meta = Number(k.metaMensalFechados || 0);
+    if (!meta) return '';
+    const MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
+      'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    const nomeDoMes = (m) => (/^\d{4}-\d{2}$/.test(String(m)) ? MES[Number(String(m).slice(5, 7)) - 1] : null);
+    const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 7);
+    let txt = ` · Meta de ${nomeDoMes(k.metasMes) || 'este mês'}: ${meta} clientes`;
+    if (k.metasMes && k.metasMes !== hoje) {
+      txt += ` — ATENÇÃO: hoje já é ${nomeDoMes(hoje)}, e o robô ainda não rodou neste mês`;
+      return txt;
+    }
+    const p = k.metasProximo;
+    if (p && p.clientes) {
+      txt += ` · ${nomeDoMes(p.mes)}: ${p.clientes} já carregada, vale a partir de ${String(p.comecaEm).slice(8, 10)}/${String(p.comecaEm).slice(5, 7)}`;
+    }
+    return txt;
+  }
   const updatedEl = document.getElementById('updatedLine');
   updatedEl.textContent =
-    `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${ativos} executivos${emPreparacao ? ` · ${emPreparacao} em preparação` : ''}`;
+    `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${ativos} executivos${emPreparacao ? ` · ${emPreparacao} em preparação` : ''}${metaNaLinha()}`;
   /* A CONFERÊNCIA AUTOMÁTICA (scripts/conferir-numeros.js, a cada rodada do robô): o resultado vai na
      mesma linha, sem banner. Divergência abre a lista logo abaixo, num clique. */
   (function () {

@@ -117,6 +117,44 @@ delete copia3.porMes[algumMes].metas[alguem];
 conferir('pessoa sumida reprova', !!erroDe(() => conferirBloco(algumMes, copia3.porMes[algumMes])),
   'tirei uma pessoa do mês e o total do time continuou batendo');
 
+/* ── 7. O MÊS QUE VEM TEM DE APARECER NA TELA ──────────────────────────────────────────
+   Em 28/10 o Julyan olhou o Cockpit, viu 52 e disse que a meta de 44 "não foi atualizada".
+   Ela estava: novembro já estava no arquivo e o relógio é que não tinha virado. O sistema
+   acertou e a TELA não tinha como provar — e meta é o número que o time inteiro cobra. */
+const { proximoMesDeclarado } = require(path.join(raiz, 'scripts', 'metas-do-mes.js'));
+{
+  const p = proximoMesDeclarado(bruto, meses[0]);
+  conferir('o próximo mês declarado é encontrado', p && p.mes === meses[1],
+    'não achei o mês seguinte a ' + meses[0]);
+  conferir('e vem com o dia em que começa', p && p.comecaEm === meses[1] + '-01',
+    'sem a data a tela não sabe dizer a partir de quando vale');
+  conferir('e com o número do time', p && p.clientes === bruto.porMes[meses[1]].time.clientes,
+    'o número do próximo mês não bate com o arquivo');
+  conferir('o último mês declarado não inventa um seguinte',
+    proximoMesDeclarado(bruto, meses[meses.length - 1]) === null,
+    'prometeu um mês que ninguém declarou');
+  conferir('o robô publica o próximo mês', /metasProximo: METAS\.proximo \|\| null/.test(robo),
+    'sem isto a tela não tem o dado e a dúvida de 28/10 volta no mês que vem');
+  conferir('e o METAS do robô o calcula', /proximo: proximoMesDeclarado\(bruto, mes\)/.test(robo),
+    'o campo é publicado vazio');
+}
+/* O DESENCONTRO TEM DE SER DITO. 01/11/26 cai num DOMINGO e o robô só roda às 09:00 no fim de
+   semana: das 00:00 às 09:00 a tela mostraria a meta de outubro dentro de novembro. Pequeno,
+   mas é a mesma família de defeito que a divergência calada entre meta e venda. */
+{
+  const tplTxt = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
+  conferir('a tela mostra a meta do mês na linha de cima', /Meta de \$\{nomeDoMes\(k\.metasMes\)/.test(tplTxt),
+    'a linha não diz a meta, e a dúvida de 28/10 não tem resposta na tela');
+  conferir('a tela avisa quando o mês das metas não é o de hoje',
+    /k\.metasMes !== hoje/.test(tplTxt) && /ainda não rodou neste mês/.test(tplTxt),
+    'meta de outro mês em tela, calada — foi assim que 01/11 cairia num domingo sem ninguém ver');
+  conferir('e mostra o mês que vem quando ele já está carregado',
+    /j[áa] carregada, vale a partir de/.test(tplTxt),
+    'a tela não prova que a meta nova já está no sistema');
+  conferir('a linha é montada por função, não cravada',
+    /\$\{metaNaLinha\(\)\}/.test(tplTxt), 'a chamada sumiu de updatedLine');
+}
+
 // ── saída ─────────────────────────────────────────────────────────────────────────────
 if (falhas.length) {
   console.error('metas por mês: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length) + ':');
