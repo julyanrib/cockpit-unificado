@@ -43,7 +43,10 @@ const ctx = {
   pl6SlotId: (v) => (v && v.id) || null,
 };
 vm.createContext(ctx);
-vm.runInContext(fonte('pl6MesclarGrade') + '\n' + fonte('pl6Gravar') + '\nthis.gravar = pl6Gravar;', ctx);
+/* pl6CarimbarQuem entra na caixa porque pl6Gravar passou a chamá-la (28/10/26, "quem pôs a
+   porta"). A função DE VERDADE, recortada do template como as outras: um dublê aqui faria esta
+   suíte continuar verde com o carimbo quebrado, e o carimbo mexe na grade que ela confere. */
+vm.runInContext(fonte('pl6MesclarGrade') + '\n' + fonte('pl6CarimbarQuem') + '\n' + fonte('pl6Gravar') + '\nthis.gravar = pl6Gravar;', ctx);
 
 const tela = (segunda) => { ctx.pl6Plano = { data_segunda: segunda, grade: semanaDaTela, regioes: ['Tijuca'], fechado_em: '2026-10-12T12:00:00Z', fechado_por: 'gestor@x' }; };
 (async () => {

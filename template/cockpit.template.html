@@ -39284,6 +39284,42 @@ function pl6MesclarGrade(base, nova, fresca) {
   return out;
 }
 
+/* ══ QUEM PÔS A PORTA (pacote "a espinha do dia", §2.3, 28/10/26) ════════════════════════
+   O plano é um só e o executivo TAMBÉM planeja pelo Cockpit — então "feito no Cockpit", sozinho,
+   não diz se foi ele ou o gestor. É a diferença entre o app dizer "Plano de hoje" e "Plano do
+   gestor · montado às 09:12", e escrever a frase errada é pior do que não escrever nenhuma: ele
+   acorda achando que mexeram no dia dele quando ninguém mexeu.
+
+   SÓ A PORTA QUE NASCE NESTA GRAVAÇÃO é carimbada, e por isso o `fresca` (a grade que está no
+   banco AGORA) é o argumento: carimbar a grade inteira faria os 6.185 itens que já existem
+   virarem "de quem salvou a semana", que é falso para quase todos.
+
+   TAMBÉM NÃO CARIMBA O QUE VEIO DO APP (`origem` preenchido: app, app-agenda, passo, territorio).
+   Esses caminhos são sempre do dono da rota; a dúvida existe só aqui, onde as duas pessoas
+   escrevem pela mesma porta. A ponte plano_para_rota leva o valor para field_route_stops.posto_por
+   (migration 0225) e descarta palavra que não seja `executivo` ou `gestor`. */
+function pl6CarimbarQuem(grade, fresca, rep) {
+  if (!Array.isArray(grade)) return grade;
+  const quem = (sessaoAtual && String(sessaoAtual.ownerId) === String(rep.ownerId)) ? 'executivo' : 'gestor';
+  const jaExistia = new Set();
+  if (Array.isArray(fresca)) {
+    fresca.forEach(function (col) {
+      (Array.isArray(col) ? col : []).forEach(function (it) {
+        const id = it && typeof it === 'object' ? it.id : (typeof it === 'string' ? it : null);
+        if (id) jaExistia.add(String(id));
+      });
+    });
+  }
+  return grade.map(function (col) {
+    if (!Array.isArray(col)) return col;
+    return col.map(function (it) {
+      if (!it || typeof it !== 'object' || !it.id) return it;
+      if (it.quem || it.origem || jaExistia.has(String(it.id))) return it;
+      return Object.assign({}, it, { quem: quem });
+    });
+  });
+}
+
 async function pl6Gravar(rep, campos, segundaPedida) {
   if (!DATA.supabase || !supa) return { error: new Error('Sem Supabase nesta sessão.') };
   const segunda = segundaPedida || pl6SegundaEmFoco();
@@ -39301,6 +39337,7 @@ async function pl6Gravar(rep, campos, segundaPedida) {
     if (agora.error) { console.error('Plano semanal, releitura:', agora.error.message); return { error: agora.error }; }
     const fresca = agora.data && agora.data[0] ? agora.data[0].grade : null;
     if (Array.isArray(fresca)) grade = pl6MesclarGrade(base, grade, fresca);
+    grade = pl6CarimbarQuem(grade, fresca, rep);
   }
   /* em outra semana, regiões e "fechado" da tela não são dela: o upsert só leva a grade (e o que
      o chamador mandar), e o que a semana já tem no banco fica como está */
