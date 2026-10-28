@@ -22,6 +22,7 @@ const path = require('path');
 const raiz = path.join(__dirname, '..');
 const template = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
 const robo = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8');
+const metasDoMesSrc = fs.readFileSync(path.join(raiz, 'scripts', 'metas-do-mes.js'), 'utf8');
 const montar = fs.readFileSync(path.join(raiz, 'scripts', 'montar-dados.js'), 'utf8');
 
 /* As checagens de AUSÊNCIA olham CÓDIGO, não comentário: o comentário que explica um
@@ -1019,8 +1020,16 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
       && /const META_MENSAL_FECHADOS = \(METAS\.time && METAS\.time\.clientes\) \|\| 0;/.test(robo)
       && !/const META_MENSAL_FECHADOS = \d+;/.test(robo)
       && !/const META_MENSAL_POR_EXECUTIVO = \d+;/.test(robo));
+  /* A CONFERENCIA DA SOMA MUDOU DE ARQUIVO EM 28/10/26, nao de existencia: foi para
+     scripts/metas-do-mes.js junto com a escolha do mes. Esta guarda era cravada no TEXTO
+     do fetch-hubspot.js e ficou vermelha sem nada ter se perdido — o jeito honesto de
+     consertar e apontar para onde a regra mora agora E exigir que o robo passe por la,
+     em vez de afrouxar o que ela cobra. Ver scripts/testar-metas-por-mes.js, que sabota
+     a soma em tres lugares. */
   checar('e o robo falha alto se a soma dos individuais nao bater com o total do time',
-    /a soma de . \+ k \+ . da . \+ soma\[k\]/.test(robo.replace(/'/g, '.')));
+    /a soma de . \+ k \+ . d[áa] . \+ soma\[k\]/.test(metasDoMesSrc.replace(/'/g, '.'))
+      && /require\(.\.\/metas-do-mes.\)/.test(robo.replace(/'/g, '.'))
+      && !/JSON\.parse\(fs\.readFileSync\([^)]*metas\.json/.test(robo));
   checar('a meta de cada rep vai no payload, com os tres eixos',
     /metaMensal: metaDe\(rep\.ownerId\)\.clientes,/.test(robo)
       && /metaMrr: metaDe\(rep\.ownerId\)\.mrr,/.test(robo)

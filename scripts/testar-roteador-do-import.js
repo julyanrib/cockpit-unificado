@@ -84,6 +84,17 @@ const roteadorSobre = function (declSintetica) {
 };
 const declAntiga = JSON.parse(JSON.stringify(decl));
 const pessoaAntiga = nome => declAntiga.territorios.find(x => x.rep === nome);
+/*  A CÓPIA É A DECLARAÇÃO DE ONTEM, e nela quem saiu do time ainda andava. Em 28/10/26
+    a Renata e o Fabio foram desligados (ativo: false) e o roteador real, com razão,
+    passou a ignorá-los — mas esta cópia existe justamente para medir o MECANISMO do
+    roteador (sobra do município, meridiano, bairro nomeado vs. trecho de nome) num
+    território conhecido, não para dizer quem trabalha aqui hoje. Sem religá-los na
+    cópia, oito checagens de mecanismo passavam a medir o vazio.  */
+['Renata Pessoa', 'Fabio Aranha Panciera'].forEach((nome) => {
+  const p = declAntiga.territorios.find(x => x.rep === nome);
+  if (!p) throw new Error('a suíte precisa de ' + nome + ' na declaração: ela modela o território de antes');
+  delete p.ativo; delete p.desligadoEm;
+});
 pessoaAntiga('Sérgio Caetano').areas.push({ municipio: 'Guarulhos', uf: 'SP', bairros: ['Vila Augusta'] });
 pessoaAntiga('Renata Pessoa').areas.push({ municipio: 'Guarulhos', uf: 'SP', bairros: ['Macedo'] });
 pessoaAntiga('Renata Pessoa').areas.push({ municipio: 'Suzano', uf: 'SP', bairros: ['Centro'] });

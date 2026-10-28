@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { lerMetas, metasDoMes, mesBrasiliaDe } = require('./metas-do-mes');
 
 /* A CONTA DO REALIZADO MORA NA LIB (01/09/26) — ver a nota de abertura de
    lib/realizado.js. A tela da Daily v2 pergunta "o que já foi cumprido agora" a cada
@@ -174,27 +175,19 @@ function inicioDoGanhoVisivel() {
 //  o arquivo, sem tocar em codigo. A tabela metas_mensais no Supabase (que o prompt da
 //  Time v10 citava e que NUNCA existiu) e o proximo passo, quando o Julyan quiser
 //  editar sem PR — precisa do ok dele para o DDL.
+/*  A META VEM DO MES CORRENTE (28/10/26). O arquivo guarda um bloco por mes em `porMes`
+    e quem escolhe e o relogio, em horario de Brasilia — o mesmo recorte que conta o que
+    foi fechado no mes. Antes era um conjunto so, com um campo "mes" que ninguem lia: a
+    meta nova valia no instante do merge, e em 28/10 a de novembro quase entrou com tres
+    dias de outubro pela frente. A conferencia da soma roda em TODOS os meses do arquivo,
+    nao so no corrente: erro na meta de novembro falha em outubro, quando ainda da para
+    corrigir. Ver scripts/metas-do-mes.js. */
 const METAS = (function () {
   try {
-    const bruto = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'metas.json'), 'utf8'));
-    const soma = Object.values(bruto.metas || {}).reduce(function (s, m) {
-      return { clientes: s.clientes + (m.clientes || 0), mrr: s.mrr + (m.mrr || 0),
-        receita: s.receita + (m.receita || 0) };
-    }, { clientes: 0, mrr: 0, receita: 0 });
-    // A SOMA TEM DE BATER COM O TOTAL DA PLANILHA. Meta de time que nao e a soma das
-    // metas das pessoas e o tipo de numero que ninguem explica na reuniao — e foi
-    // exatamente o que aconteceu com os 80.
-    ['clientes', 'mrr', 'receita'].forEach(function (k) {
-      const esperado = (bruto.time || {})[k];
-      /* a gordura é DECLARADA no arquivo (time.gordura, 13/10/26: meta do time 52 com as pessoas
-         somando 44); fora dela, a soma tem de bater exatamente como antes */
-      const gordura = Number(((bruto.time || {}).gordura || {})[k]) || 0;
-      if (esperado != null && soma[k] + gordura !== esperado) {
-        throw new Error('data/metas.json: a soma de ' + k + ' da ' + soma[k]
-          + ' e o total do time diz ' + esperado);
-      }
-    });
-    return bruto;
+    const bruto = lerMetas(path.join(__dirname, '..', 'data', 'metas.json'));
+    const mes = mesBrasiliaDe();
+    const bloco = metasDoMes(bruto, mes);
+    return Object.assign({}, bruto, { mes: mes, metas: bloco.metas, time: bloco.time });
   } catch (e) {
     console.error('METAS: nao consegui ler data/metas.json — ' + e.message);
     throw e;   // meta errada em tela e pior que robo que nao roda
