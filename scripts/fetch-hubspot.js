@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { lerMetas, metasDoMes, mesBrasiliaDe } = require('./metas-do-mes');
+const { lerMetas, metasDoMes, mesBrasiliaDe, proximoMesDeclarado } = require('./metas-do-mes');
 
 /* A CONTA DO REALIZADO MORA NA LIB (01/09/26) — ver a nota de abertura de
    lib/realizado.js. A tela da Daily v2 pergunta "o que já foi cumprido agora" a cada
@@ -187,7 +187,8 @@ const METAS = (function () {
     const bruto = lerMetas(path.join(__dirname, '..', 'data', 'metas.json'));
     const mes = mesBrasiliaDe();
     const bloco = metasDoMes(bruto, mes);
-    return Object.assign({}, bruto, { mes: mes, metas: bloco.metas, time: bloco.time });
+    return Object.assign({}, bruto, { mes: mes, metas: bloco.metas, time: bloco.time,
+      proximo: proximoMesDeclarado(bruto, mes) });
   } catch (e) {
     console.error('METAS: nao consegui ler data/metas.json — ' + e.message);
     throw e;   // meta errada em tela e pior que robo que nao roda
@@ -2913,6 +2914,8 @@ async function main() {
       metaReceitaTime: META_RECEITA_TIME,
       metasVersao: METAS.versao || null,
       metasMes: METAS.mes || null,
+      /* O MES QUE VEM, para a tela poder provar que a meta nova ja esta carregada (28/10/26). */
+      metasProximo: METAS.proximo || null,
       taxaAvanco: emAbertoTime > 0 ? Math.round((avancaramSemanaTime / emAbertoTime) * 100) : 0
     },
     kpiDetalhe: {

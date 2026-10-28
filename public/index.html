@@ -22259,9 +22259,28 @@ function preencherCabecalhoRodape() {
     ? repsCadastrados.length - emPreparacao
     : (DATA.reps || []).length;
 
+  function metaNaLinha() {
+    const k = (DATA && DATA.kpisHub) || {};
+    const meta = Number(k.metaMensalFechados || 0);
+    if (!meta) return '';
+    const MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
+      'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    const nomeDoMes = (m) => (/^\d{4}-\d{2}$/.test(String(m)) ? MES[Number(String(m).slice(5, 7)) - 1] : null);
+    const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 7);
+    let txt = ` · Meta de ${nomeDoMes(k.metasMes) || 'este mês'}: ${meta} clientes`;
+    if (k.metasMes && k.metasMes !== hoje) {
+      txt += ` — ATENÇÃO: hoje já é ${nomeDoMes(hoje)}, e o robô ainda não rodou neste mês`;
+      return txt;
+    }
+    const p = k.metasProximo;
+    if (p && p.clientes) {
+      txt += ` · ${nomeDoMes(p.mes)}: ${p.clientes} já carregada, vale a partir de ${String(p.comecaEm).slice(8, 10)}/${String(p.comecaEm).slice(5, 7)}`;
+    }
+    return txt;
+  }
   const updatedEl = document.getElementById('updatedLine');
   updatedEl.textContent =
-    `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${ativos} executivos${emPreparacao ? ` · ${emPreparacao} em preparação` : ''}`;
+    `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${ativos} executivos${emPreparacao ? ` · ${emPreparacao} em preparação` : ''}${metaNaLinha()}`;
 
   (function () {
     const velho = document.getElementById('confNumerosLista');

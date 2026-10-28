@@ -73,4 +73,27 @@ function metasDoMes(bruto, mes) {
   return bloco;
 }
 
-module.exports = { mesBrasiliaDe, conferirBloco, lerMetas, metasDoMes };
+/*  O PRÓXIMO MÊS DECLARADO, PARA A TELA PODER MOSTRÁ-LO (28/10/26).
+    Em 28/10 o Julyan olhou o Cockpit, viu 52 e disse que a meta de 44 "não foi atualizada".
+    Ela estava: o arquivo já tinha novembro com 44 e o relógio é que ainda não tinha virado.
+    O sistema estava certo e a tela não tinha como provar isso — e meta é o número que o time
+    inteiro cobra, então "está lá, confia" não serve.
+
+    Devolve o PRIMEIRO mês declarado depois do atual, com o dia em que ele começa a valer.
+    Null quando não há nenhum — e aí a tela não promete mês que ninguém declarou. */
+function proximoMesDeclarado(bruto, mes) {
+  const seguintes = Object.keys((bruto && bruto.porMes) || {}).filter(function (m) { return m > mes; }).sort();
+  if (!seguintes.length) return null;
+  const alvo = seguintes[0];
+  const b = bruto.porMes[alvo];
+  return {
+    mes: alvo,
+    comecaEm: alvo + '-01',
+    clientes: (b.time && b.time.clientes) || 0,
+    mrr: (b.time && b.time.mrr) || 0,
+    receita: (b.time && b.time.receita) || 0,
+    pessoas: Object.keys(b.metas || {}).length,
+  };
+}
+
+module.exports = { mesBrasiliaDe, conferirBloco, lerMetas, metasDoMes, proximoMesDeclarado };
