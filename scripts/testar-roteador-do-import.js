@@ -55,6 +55,44 @@ const via = (cidade, bairro) => {
   return r.sobra ? 'sobra' : 'lista antiga';
 };
 
+/*  QUEM A DECLARAÇÃO NOMEIA — DERIVADO, não cravado (28/10/26).
+
+    Esta suíte mede o MECANISMO do roteador: bairro nomeado vence trecho de nome, sobra
+    não atropela nomeado, município inteiro responde por tudo. Os exemplos sempre foram
+    bairros reais com o dono escrito à mão — e aí cada troca de território reprovava a
+    suíte sem nada ter quebrado. Em 15/10 já tinha acontecido; em 28/10 foram DEZESSEIS
+    checagens de uma vez, só porque a Grande Tijuca passou para a Larah, Anil para o
+    Júlio e Vitória para o Rodrigo. Guarda que reprova quando o dado muda e fica verde
+    quando a regra quebra é pior que guarda nenhuma: ensina a ignorar o vermelho.
+
+    Agora o esperado sai da própria declaração, por um caminho INDEPENDENTE do roteador
+    (comparação direta de nome de bairro, sem regex nem borda de palavra). Se os dois
+    discordarem, é defeito do roteador — que é o que a suíte quer pegar. */
+const soLetras = s => String(s || '').toLowerCase().normalize('NFD')
+  .replace(new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g'), '').trim();
+const ativosDe = declaracao => ((declaracao || decl).territorios || []).filter(p => p.ativo !== false);
+const donosDe = (municipio, bairro, declaracao) => ativosDe(declaracao)
+  .filter(p => (p.areas || []).some(a => soLetras(a.municipio) === soLetras(municipio)
+    && (a.bairros || []).some(b => soLetras(b) === soLetras(bairro))))
+  .map(p => String(p.rep).split(' ')[0]);
+/** O dono declarado deste bairro, ou null quando ninguém o nomeou (ou mais de um nomeou). */
+const donoDeclarado = (municipio, bairro, declaracao) => {
+  const d = donosDe(municipio, bairro, declaracao);
+  return d.length === 1 ? d[0] : null;
+};
+/** Quem responde pelo município INTEIRO (área declarada sem bairro nenhum). */
+const donoDoMunicipioInteiro = (municipio, declaracao) => {
+  const d = ativosDe(declaracao)
+    .filter(p => (p.areas || []).some(a => soLetras(a.municipio) === soLetras(municipio)
+      && !(a.bairros || []).length))
+    .map(p => String(p.rep).split(' ')[0]);
+  return d.length === 1 ? d[0] : null;
+};
+/** Todo bairro nomeado na declaração, como [municipio, bairro, dono]. */
+const bairrosDeclarados = declaracao => ativosDe(declaracao)
+  .flatMap(p => (p.areas || []).flatMap(a => (a.bairros || [])
+    .map(b => [a.municipio, b, String(p.rep).split(' ')[0]])));
+
 /* ══ O ROTEADOR SOBRE UMA DECLARAÇÃO SINTÉTICA (15/10/26) ════════════════════════════
    15/10/26: território refeito pelo Julyan. Com a rota enxuta, TRÊS mecanismos do
    roteador ficaram sem nenhum caso no dado real: a sobra automática da cidade de um dono
@@ -84,6 +122,17 @@ const roteadorSobre = function (declSintetica) {
 };
 const declAntiga = JSON.parse(JSON.stringify(decl));
 const pessoaAntiga = nome => declAntiga.territorios.find(x => x.rep === nome);
+/*  A CÓPIA É A DECLARAÇÃO DE ONTEM, e nela quem saiu do time ainda andava. Em 28/10/26
+    a Renata e o Fabio foram desligados (ativo: false) e o roteador real, com razão,
+    passou a ignorá-los — mas esta cópia existe justamente para medir o MECANISMO do
+    roteador (sobra do município, meridiano, bairro nomeado vs. trecho de nome) num
+    território conhecido, não para dizer quem trabalha aqui hoje. Sem religá-los na
+    cópia, oito checagens de mecanismo passavam a medir o vazio.  */
+['Renata Pessoa', 'Fabio Aranha Panciera'].forEach((nome) => {
+  const p = declAntiga.territorios.find(x => x.rep === nome);
+  if (!p) throw new Error('a suíte precisa de ' + nome + ' na declaração: ela modela o território de antes');
+  delete p.ativo; delete p.desligadoEm;
+});
 pessoaAntiga('Sérgio Caetano').areas.push({ municipio: 'Guarulhos', uf: 'SP', bairros: ['Vila Augusta'] });
 pessoaAntiga('Renata Pessoa').areas.push({ municipio: 'Guarulhos', uf: 'SP', bairros: ['Macedo'] });
 pessoaAntiga('Renata Pessoa').areas.push({ municipio: 'Suzano', uf: 'SP', bairros: ['Centro'] });
@@ -198,32 +247,39 @@ conferir('Cachambi ficou sem dono, e a lista antiga não a reassume',
   quem('rio de janeiro', 'cachambi') === null,
   'a lista de 01/09 a dava ao Sandro; deixá-la reassumir poria o lead na carteira de quem não pediu');
 
-/* 15/10/26: território refeito pelo Julyan. A Grande Tijuca saiu do Bruno e ficou sem
-   dono. */
-conferir('a Grande Tijuca ficou sem dono',
-  quem('rio de janeiro', 'tijuca') === null && quem('rio de janeiro', 'vila isabel') === null,
-  'o Bruno ficou só com Taquara e Freguesia (Jacarepaguá) em 15/10; Tijuca com dono seria a rota velha');
+/*  TODO BAIRRO NOMEADO CAI EM QUEM O NOMEOU — a varredura inteira, não três exemplos.
+    Substituiu, em 28/10/26, as checagens que cravavam "Tijuca é do Bruno", "Anil é do
+    André" e "Barra da Tijuca não é de ninguém": eram verdade no mapa de 15/10 e viraram
+    mentira na troca de 28/10, sem o roteador ter mudado uma linha. Esta cobre MAIS que
+    as três juntas — todos os bairros declarados, de todo mundo. */
+const divergentes = bairrosDeclarados()
+  .filter(([m, b, dono]) => quem(soLetras(m), soLetras(b)) !== dono);
+conferir('todo bairro nomeado na declaração cai em quem o nomeou',
+  bairrosDeclarados().length > 50 && divergentes.length === 0,
+  divergentes.length ? divergentes.slice(0, 5).map(([m, b, d]) => b + ' (' + m + ') devia ser do(a) ' + d
+    + ' e o roteador deu ' + quem(soLetras(m), soLetras(b))).join('; ')
+    : 'a declaração ficou pequena demais para a varredura valer alguma coisa');
 
-/* 15/10/26: território refeito pelo Julyan. O André ficou SÓ com Anil e Barra Olímpica
-   (o eixo sudoeste inteiro saiu). Anil também prova a precedência: a lista antiga de
-   01/09 o dá ao Bruno. */
-conferir('Anil e Barra Olímpica são do André, e só eles',
-  quem('rio de janeiro', 'anil') === 'André' && via('rio de janeiro', 'anil') === 'declarado'
-  && quem('rio de janeiro', 'barra olimpica') === 'André'
-  && quem('rio de janeiro', 'recreio dos bandeirantes') === null,
-  'a rota do André de 15/10 é Anil e Barra Olímpica; o Recreio com dono seria a rota velha');
+/*  ANIL PROVA A PRECEDÊNCIA: a lista antiga de 01/09 o dá ao Bruno, e quem responde tem
+    de ser quem a DECLARAÇÃO nomeia hoje — seja quem for. Em 15/10 era o André; em 28/10
+    passou para o Júlio, e a checagem continua medindo a mesma coisa. */
+conferir('o bairro nomeado vem da declaração, não da lista antiga de 01/09',
+  donoDeclarado('rio de janeiro', 'anil') !== null
+  && quem('rio de janeiro', 'anil') === donoDeclarado('rio de janeiro', 'anil')
+  && via('rio de janeiro', 'anil') === 'declarado',
+  'Anil está na lista de 01/09 como do Bruno; se a lista vier primeiro, a decisão de hoje não chega ao lead');
 
 /* ── FREGUESIA E BARRA DA TIJUCA SÃO DO BRUNO ───────────────────────────────────────
    Julyan em 09/09, corrigindo: "FREGUESIA NO RIO DE JANEIRO É DO BRUNO, NAO DO ANDRE!!
    bruno: taquara, freguesia e barra da tijuca!!!". A lista que ele mesmo ditou para o
    André meia hora antes incluía "freguesia" — a correção é posterior e vence. */
-/* 15/10/26: território refeito pelo Julyan. Taquara e Freguesia (Jacarepaguá) seguem
-   do Bruno; a Barra da Tijuca saiu e ficou sem dono. */
-conferir('Taquara e Freguesia (Jacarepaguá) são do Bruno, e a Barra da Tijuca ficou sem dono',
-  quem('rio de janeiro', 'taquara') === 'Bruno'
-  && quem('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno'
-  && quem('rio de janeiro', 'barra da tijuca') === null,
-  'a rota do Bruno de 15/10 é Taquara e Freguesia (Jacarepaguá); a Barra com dono seria a rota velha');
+/*  E O BAIRRO QUE NINGUÉM NOMEOU FICA SEM DONO, numa cidade de vários donos. É o outro
+    lado da varredura: ela prova que o nomeado CHEGA; esta prova que o não-nomeado não é
+    inventado. O Rio tem mais de um dono, então não há sobra para herdar. */
+conferir('bairro que ninguém nomeou no Rio fica sem dono',
+  donosDe('rio de janeiro', 'bairro que nenhum executivo nomeou').length === 0
+  && quem('rio de janeiro', 'bairro que nenhum executivo nomeou') === null,
+  'sem isso o lead entra na carteira de quem não pediu, e some da vista de quem pediu');
 
 /* ══ FREGUESIA É DOIS BAIRROS COM O MESMO NOME ═══════════════════════════════════════
    Uma em Jacarepaguá (do Bruno) e uma na Ilha do Governador (do Luiz), a 30 km. MEDIDO no
@@ -261,9 +317,11 @@ conferir('a Freguesia da Ilha continua sendo outro bairro que a de Jacarepaguá'
 const regraAndreSint = (sint.DECLARADOS || []).find(r =>
   r.nome === 'André Gomes' && r.cidade === 'rio de janeiro' && !r.sobraDeclarada);
 conferir('bairro não casa por pedaço do nome de outro',
-  quem('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno'
-  && quem('rio de janeiro', 'jacarepagua') === null
-  && quem('sao paulo', 'brasilandia') === 'Sérgio' && quem('sao paulo', 'bras') === 'Fabio'
+  quem('rio de janeiro', 'freguesia (jacarepagua)') === donoDeclarado('rio de janeiro', 'freguesia (jacarepagua)')
+  && donoDeclarado('rio de janeiro', 'freguesia (jacarepagua)') !== null
+  && quem('sao paulo', 'brasilandia') === donoDeclarado('sao paulo', 'brasilandia')
+  && quem('sao paulo', 'bras') === donoDeclarado('sao paulo', 'bras')
+  && donoDeclarado('sao paulo', 'brasilandia') !== donoDeclarado('sao paulo', 'bras')
   && quemSint('rio de janeiro', 'jacarepagua') === 'André'
   && quemSint('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno'
   && !!regraAndreSint && regraAndreSint.teste('rio de janeiro jacarepagua') === true
@@ -362,9 +420,9 @@ conferir('cidade sem herdeiro para o bairro não nomeado está declarada',
 conferir('e a sobra NÃO atropela o bairro nomeado de ninguém',
   (sint.SOBRAS_DE_MUNICIPIO || []).some(s => s.nome === 'Bruno Martins' && s.cidade === 'rio de janeiro')
   && quemSint('rio de janeiro', 'um bairro inventado qualquer') === 'Bruno'
-  && quemSint('rio de janeiro', 'meier') === 'Sandro'
-  && quemSint('rio de janeiro', 'anil') === 'André'
-  && quemSint('rio de janeiro', 'taquara') === 'Bruno',
+  && quemSint('rio de janeiro', 'meier') === donoDeclarado('rio de janeiro', 'meier', declAntiga)
+  && quemSint('rio de janeiro', 'anil') === donoDeclarado('rio de janeiro', 'anil', declAntiga)
+  && quemSint('rio de janeiro', 'taquara') === donoDeclarado('rio de janeiro', 'taquara', declAntiga),
   'se a sobra entrasse antes do bairro nomeado, o dono dela levaria a cidade inteira');
 
 conferir('a sobra é declarada no JSON, não escolhida pelo código',
@@ -383,8 +441,9 @@ conferir('a sobra é declarada no JSON, não escolhida pelo código',
    checagem crava o comportamento ATUAL para que uma mudança nele seja vista — se o
    Julyan quiser Canoas sem dono, o conserto é na lista antiga, não aqui. */
 conferir('a praça declarada por município inteiro não foi afetada',
-  quem('vila velha', 'praia da costa') === 'Marco'
-  && quem('vitoria', 'jardim da penha') === 'Marco'
+  quem('vila velha', 'praia da costa') === donoDoMunicipioInteiro('vila velha')
+  && quem('vitoria', 'jardim da penha') === donoDoMunicipioInteiro('vitoria')
+  && donoDoMunicipioInteiro('vila velha') !== null && donoDoMunicipioInteiro('vitoria') !== null
   && quem('canoas', 'um bairro qualquer de canoas') === 'Kelly'
   && via('canoas', 'um bairro qualquer de canoas') === 'lista antiga',
   'o corte é só onde ele nomeou BAIRRO; município inteiro continua respondendo por tudo');
@@ -396,9 +455,10 @@ conferir('a praça declarada por município inteiro não foi afetada',
    automática da cidade de um dono só declarado por BAIRRO não tem caso real e é medida
    na declaração sintética (Suzano, Renata, só "Centro" nomeado). */
 conferir('e a sobra do município continua existindo onde há um dono só',
-  quem('porto alegre', 'um bairro inventado qualquer') === 'Kelly'
-  && quem('vila velha', 'um bairro inventado qualquer') === 'Marco'
-  && quem('vitoria', 'um bairro inventado qualquer') === 'Marco'
+  quem('porto alegre', 'um bairro inventado qualquer') === donoDoMunicipioInteiro('porto alegre')
+  && quem('vila velha', 'um bairro inventado qualquer') === donoDoMunicipioInteiro('vila velha')
+  && quem('vitoria', 'um bairro inventado qualquer') === donoDoMunicipioInteiro('vitoria')
+  && donoDoMunicipioInteiro('porto alegre') !== null
   && quemSint('suzano', 'um bairro inventado qualquer') === 'Renata',
   'bairro novo sem regra tem que cair em alguém conhecido, senão fica invisível para sempre');
 
@@ -483,10 +543,11 @@ conferir('o roteador lê data/territorios.json',
    agora são bairros em que a lista antiga de 01/09 diz OUTRA pessoa: Mooca (lista:
    Renata; declaração: Fabio) e Anil (lista: Bruno; declaração: André). */
 conferir('e a declaração é consultada ANTES das listas antigas',
-  via('sao paulo', 'mooca') === 'declarado' && quem('sao paulo', 'mooca') === 'Fabio'
-  && via('rio de janeiro', 'anil') === 'declarado' && quem('rio de janeiro', 'anil') === 'André'
-  && terr.TERRITORIOS.some(x => x.nome === 'Renata Pessoa' && !x.sobra && x.teste('sao paulo mooca'))
-  && terr.TERRITORIOS.some(x => x.nome === 'Bruno Martins' && !x.sobra && x.teste('rio de janeiro anil')),
+  via('sao paulo', 'mooca') === 'declarado' && quem('sao paulo', 'mooca') === donoDeclarado('sao paulo', 'mooca')
+  && via('rio de janeiro', 'anil') === 'declarado' && quem('rio de janeiro', 'anil') === donoDeclarado('rio de janeiro', 'anil')
+  && donoDeclarado('sao paulo', 'mooca') !== null && donoDeclarado('rio de janeiro', 'anil') !== null
+  && terr.TERRITORIOS.some(x => !x.sobra && x.teste('sao paulo mooca'))
+  && terr.TERRITORIOS.some(x => !x.sobra && x.teste('rio de janeiro anil')),
   'se a lista antiga vier primeiro, a decisão de hoje não chega ao lead');
 
 /* ── 8 · A SOBRA DA CIDADE DE UM DONO SÓ (09/09/26) ─────────────────────────────────
