@@ -154,16 +154,27 @@ conferir('todo município com rota entra na busca semanal',
   foraDaBusca.length === 0,
   'fora da busca: ' + foraDaBusca.join(', ') + ' — rota sem munição foi exatamente o buraco de 09/09');
 
-/* 15/10/26: território refeito pelo Julyan. Guarulhos (Sérgio × Renata) saiu da rota;
-   as cidades de mais de um dono agora são o Rio (Bruno, André, Sandro) e São Paulo
-   (Renata, Fabio, Sérgio). E a de um dono só (Porto Alegre, Vila Velha, Vitória) NÃO
-   ganha sub-cota: dividir a meta por bairro ali seria dividir entre uma pessoa só. */
+/* A REGRA, NÃO O ELENCO (28/10/26). Isto cravava "Rio tem 3 donos e São Paulo tem 3" e
+   quebrou na primeira mudança de time — entraram Larah e Júlio no Rio e Allef em São Paulo,
+   saíram Fabio e Renata, e o teste reprovou um território CERTO. A regra protegida nunca foi
+   o número: é "cidade de mais de um dono tem uma sub-cota por dono; cidade de um dono só não
+   tem". Agora o esperado SAI da declaração, então entrada e saída de gente não mexem aqui. */
 const metaDe = m => (CIDADES.find(c => c.municipio === m) || {}).metaBairros;
+const donosPorMunicipio = new Map();
+TERR.filter(t => t.ativo !== false).forEach(t => (t.areas || []).forEach(a => {
+  if (!a.municipio) return;
+  if (!donosPorMunicipio.has(a.municipio)) donosPorMunicipio.set(a.municipio, new Set());
+  donosPorMunicipio.get(a.municipio).add(t.rep);
+}));
+const subCotaErrada = [...donosPorMunicipio].filter(([m, donos]) => {
+  if (!CIDADES.some(c => c.municipio === m)) return true;
+  const meta = metaDe(m) || [];
+  return donos.size > 1 ? meta.length !== donos.size : meta.length > 0;
+}).map(([m, donos]) => m + ': ' + donos.size + ' dono(s), sub-cota ' + ((metaDe(m) || []).length));
 conferir('e a cidade com mais de um dono ganha sub-cota por bairro',
   CIDADES.filter(c => c.metaBairros).every(c => c.metaBairros.length > 1) &&
-  (metaDe('Rio de Janeiro') || []).length === 3 && (metaDe('São Paulo') || []).length === 3 &&
-  ['Porto Alegre', 'Vila Velha', 'Vitória'].every(m => CIDADES.some(c => c.municipio === m) && !metaDe(m)),
-  'sem sub-cota a cidade cumpre a meta com contas de uma zona só e a zona do colega nasce vazia');
+  donosPorMunicipio.size > 0 && subCotaErrada.length === 0,
+  subCotaErrada.join(' · ') + ' — sem sub-cota a cidade cumpre a meta com contas de uma zona só e a zona do colega nasce vazia');
 
 /* ══ OS DOIS DEFEITOS DO CASAMENTO DE BAIRRO (09/09/26) ═══════════════════════════════
    Os dois só apareceram quando eu derivei as sub-cotas da declaração e fui conferir
@@ -195,12 +206,12 @@ conferir('bairro de nome parecido não cai em quem tem o outro',
   'Vila Maria é do Sérgio e Vila Mariana não é de ninguém; substring manda as duas para o Sérgio e a sub-cota dele infla com bairro que ele não cobre');
 
 /* 15/10/26: território refeito pelo Julyan. Tijuca e Curicica ficaram sem dono; o par
-   de donos DIFERENTES no mesmo texto agora é Anil (André) e Taquara (Bruno). O apêndice
+   de donos DIFERENTES no mesmo texto é Anil (Júlio, desde 28/10/26) e Taquara (Bruno). O apêndice
    continua o mesmo tipo de lixo digitado à mão no CRM. */
 conferir('e o bairro com apêndice do CRM continua casando',
   donosDe('Rio de Janeiro', 'taquara shopping 45').join() === 'Bruno Martins' &&
-  donosDe('São Paulo', 'tatuape zona leste').join() === 'Fabio Aranha Panciera' &&
-  donosDe('Rio de Janeiro', 'anil entorno imediato de taquara').join() === 'André Gomes',
+  donosDe('São Paulo', 'tatuape zona leste').join() === 'Allef Costa da Silva' &&
+  donosDe('Rio de Janeiro', 'anil entorno imediato de taquara').join() === 'Júlio Pinto da Silva',
   'o CRM guarda bairro com contexto digitado à mão; igualdade pura perderia esses leads');
 
 /* A lista tem de ter casos que CASAM: só com bairro sem dono, "no máximo um" passaria
@@ -213,16 +224,20 @@ conferir('nenhum bairro conta para dois donos',
   ambiguosSP.every(b => donosDe('São Paulo', b).length <= 1) &&
   ['taquara', 'freguesia jacarepagua entorno imediato de taquara', 'anil entorno imediato de taquara', 'meier']
     .every(b => donosDe('Rio de Janeiro', b).length === 1) &&
-  ['vila maria', 'mooca', 'republica'].every(b => donosDe('São Paulo', b).length === 1),
+  /* 28/10/26: 'republica' saiu desta lista porque a Renata deixou o time e o CENTRO de São
+     Paulo (Sé, República, Bela Vista, Consolação…) ficou SEM EXECUTIVO — reprovar aqui era o
+     teste dizendo a verdade. Quem assume é decisão do Julyan; enquanto não assumir, o caso que
+     exige dono é 'santana' (Sérgio). */
+  ['vila maria', 'mooca', 'santana'].every(b => donosDe('São Paulo', b).length === 1),
   'lead contado em duas sub-cotas faz as duas parecerem cheias e a busca para antes de trazer o que falta');
 
 /* 15/10/26: território refeito pelo Julyan. Curicica ficou sem dono; o par de donos
-   diferentes passou a ser Anil (André) e Taquara (Bruno). Se a regra deixar de ser "o
+   diferentes é Anil (Júlio, desde 28/10/26) e Taquara (Bruno). Se a regra deixar de ser "o
    primeiro no texto", as duas frases caem no mesmo dono. */
 conferir('e quem ganha é o bairro que vem primeiro no texto',
-  donosDe('Rio de Janeiro', 'anil proximo de taquara').join() === 'André Gomes' &&
+  donosDe('Rio de Janeiro', 'anil proximo de taquara').join() === 'Júlio Pinto da Silva' &&
   donosDe('Rio de Janeiro', 'taquara proximo de anil').join() === 'Bruno Martins',
-  'o bairro é o que vem primeiro; o resto é contexto que alguém digitou — Anil é do André, Taquara é do Bruno');
+  'o bairro é o que vem primeiro; o resto é contexto que alguém digitou — Anil é do Júlio, Taquara é do Bruno');
 
 /* ── 7 · UMA FONTE SÓ ─────────────────────────────────────────────────────────────── */
 const semNota = backfill.replace(/\/\*[\s\S]*?\*\//g, ' ');

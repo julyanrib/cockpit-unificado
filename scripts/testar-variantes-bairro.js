@@ -14,13 +14,19 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) falha
 const dono = (b) => { const r = regraDoTerritorio('São Paulo', b); return r && r.owner ? r.nome : null; };
 
 for (const [b, quem] of [
-  ['Penha de Franca', 'Fabio'], ['PENHA DE FRANCA', 'Fabio'], ['Jardim Penha', 'Fabio'], ['Jardim America da Penha', 'Fabio'],
-  ['Vila Carrao', 'Fabio'], ['Jardim Vila Formosa', 'Fabio'], ['Parque da Vila Prudente', 'Fabio'], ['Parque da Mooca', 'Fabio'],
+  /* 28/10/26: a zona leste passou do Fabio para o Allef (o Fabio saiu do time). O que este
+     teste protege é a NORMALIZAÇÃO do nome do bairro — acento, caixa, parêntese colado —, não
+     quem é o dono; o nome aqui é só o rótulo do caso. */
+  ['Penha de Franca', 'Allef'], ['PENHA DE FRANCA', 'Allef'], ['Jardim Penha', 'Allef'], ['Jardim America da Penha', 'Allef'],
+  ['Vila Carrao', 'Allef'], ['Jardim Vila Formosa', 'Allef'], ['Parque da Vila Prudente', 'Allef'], ['Parque da Mooca', 'Allef'],
   ['Vila Maria Baixa', 'Sérgio'], ['Parque Mandaqui', 'Sérgio'], ['Casa Verde Alta', 'Sérgio'], ['Jardim Cidade Pirituba', 'Sérgio'],
-  ['Jardim Sao Paulo(Zona Norte)', 'Sérgio'], ['Alto do Pari', 'Renata'],
+  ['Jardim Sao Paulo(Zona Norte)', 'Sérgio'],
 ]) ok((dono(b) || '').startsWith(quem), `${b} → ${quem} (veio ${dono(b)})`);
 
-for (const b of ['Chacara Santana', 'CHACARA SANTANA', 'Jardim Sao Paulo(Zona Leste)', 'Vila Santana', 'Jardim Belem']) {
+/* 'Alto do Pari' mudou de lado em 28/10/26: era da Renata, que saiu do time, e o CENTRO de São
+   Paulo ficou SEM EXECUTIVO. Ele desce para a lista de baixo de propósito — enquanto estiver
+   aqui, este teste é o lembrete de que o centro não tem dono. */
+for (const b of ['Chacara Santana', 'CHACARA SANTANA', 'Jardim Sao Paulo(Zona Leste)', 'Vila Santana', 'Jardim Belem', 'Alto do Pari']) {
   ok(dono(b) === null, `${b} continua sem dono (fora dos bairros declarados)`);
 }
 
