@@ -71,7 +71,18 @@ const _real = new Date();
    regras deste produto são de rotina comercial de campo, escritas para segunda a sexta.
    O relógio continua sendo o de hoje (frescor de dados segue realista) e continua fixo
    dos dois lados; só recua para a sexta quando cai no fim de semana. */
-const _diaUtil = new Date(Date.UTC(_real.getUTCFullYear(), _real.getUTCMonth(), _real.getUTCDate()));
+/* ...E O DIA É O DE BRASÍLIA, NÃO O DE UTC (corrigido 28/10/26, às 21h15, com 1 teste
+   vermelho na mão). Terceira borda da mesma família, e a mais escondida: o relógio estava
+   fixo dos dois lados, só que ancorado no dia UTC. Das 21h00 às 23h59 de Brasília já é o
+   dia seguinte em UTC, então a suíte congelava "hoje" em AMANHÃ enquanto o núcleo
+   (cadDiaBRT) e o helper diasUteisAtras contavam em Brasília. Resultado medido: o toque
+   dado há 2 dias úteis aparecia com 2 dias de atraso em vez de 1, todo fim de tarde, sem
+   regressão nenhuma no código. Uma suíte que fica vermelha toda noite não é uma suíte: na
+   noite em que houver defeito de verdade, ninguém vai distinguir. */
+const _diaUtil = (function () {
+  const b = new Date(_real.getTime() - 3 * 3600000);
+  return new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate()));
+}());
 while (_diaUtil.getUTCDay() === 0 || _diaUtil.getUTCDay() === 6) _diaUtil.setUTCDate(_diaUtil.getUTCDate() - 1);
 const AGORA_MS = Date.UTC(_diaUtil.getUTCFullYear(), _diaUtil.getUTCMonth(), _diaUtil.getUTCDate(), 12, 0, 0);
 class DataFixa extends Date {
@@ -79,6 +90,21 @@ class DataFixa extends Date {
   static now() { return AGORA_MS; }
 }
 const HOJE = new Date(AGORA_MS);
+/* A GUARDA DA PRÓPRIA SUÍTE. O relógio congelado tem de cair no MESMO dia de Brasília que o
+   relógio de verdade (ou na sexta anterior, quando hoje é fim de semana). Sem esta linha, a
+   borda das 21h volta na primeira distração e eu passo outra noite procurando regressão onde
+   não há. Ela custa uma subtração e paga o serão inteiro. */
+(function conferirORelogio() {
+  const hojeBRT = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+  const fixoBRT = new Date(AGORA_MS - 3 * 3600000).toISOString().slice(0, 10);
+  const dow = new Date(hojeBRT + 'T12:00:00Z').getUTCDay();
+  const fimDeSemana = dow === 0 || dow === 6;
+  if (!fimDeSemana && fixoBRT !== hojeBRT) {
+    console.error('A SUÍTE ESTÁ COM O RELÓGIO ERRADO: congelou em ' + fixoBRT
+      + ' e hoje em Brasília é ' + hojeBRT + '. Qualquer vermelho daqui para baixo é dela, não do código.');
+    process.exit(1);
+  }
+}());
 const DIA = 86400000;
 function iso(d) { return new Date(d).toISOString().slice(0, 10); }
 function diasAtras(n) { return new Date(HOJE.getTime() - n * DIA); }
