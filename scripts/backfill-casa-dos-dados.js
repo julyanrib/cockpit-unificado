@@ -257,7 +257,11 @@ function normalizar(e) {
     // o endereço real (rua + bairro + cidade) via MapTiler logo abaixo, em buscarCidade —
     // não aqui, porque normalizar() é síncrona e geocodificar precisa de await.
     lat: null,
-    lng: null
+    lng: null,
+    // o centro do município (o mesmo ibge de cima) não vira pino: serve só de régua para
+    // o geocode abaixo recusar resultado em outra cidade. Sai do lead antes de importar.
+    _centro: end.ibge && end.ibge.latitude != null && end.ibge.longitude != null
+      ? { lat: Number(end.ibge.latitude), lng: Number(end.ibge.longitude) } : null
   };
 }
 
@@ -267,21 +271,45 @@ function normalizar(e) {
 // viés de proximidade aqui é seguro porque o endereço já tem cidade explícita —
 // diferente da busca por texto solto do executivo (ver geocodificarLocalAtuacao no
 // template, que precisa de viés porque o texto digitado não tem cidade junto).
+/* O PINO NA CIDADE ERRADA (auditoria de 30/10/26). Pegar o primeiro resultado da MapTiler
+   sem conferir nada pôs 538 recém-abertos empilhados no mesmo ponto (27 na Praça da Sé, o
+   centro de São Paulo, vários deles de Guarulhos) e 59 a mais de 60 km da cidade do cadastro
+   (lead de Guarulhos em Limeira, de São Paulo em Presidente Prudente). Quando a rua não é
+   achada, a MapTiler devolve o bairro, a cidade ou uma rua de mesmo nome em outro município.
+   Agora o resultado só vale se for no nível da rua (endereço, rua ou estabelecimento) E
+   ficar a até 40 km do centro do município. Fora disso o lead entra SEM coordenada: o
+   localizar-municao procura o restaurante pelo nome no Google e só então o pino nasce, no
+   lugar certo. Pino nenhum é melhor que pino na cidade errada. */
+const GEO_TIPOS_DE_RUA = ['address', 'street', 'road', 'poi'];
+const GEO_RAIO_DA_CIDADE_KM = 40;
+function distanciaKm(a, b) {
+  const rad = (x) => x * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+function geocodeAceito(feature, centro) {
+  if (!feature || !Array.isArray(feature.center)) return { ok: false, motivo: 'sem resultado' };
+  const tipos = Array.isArray(feature.place_type) ? feature.place_type : [];
+  if (!tipos.some((t) => GEO_TIPOS_DE_RUA.includes(t))) return { ok: false, motivo: 'resultado não é rua: ' + (tipos.join('/') || 'sem tipo') };
+  const [lng, lat] = feature.center;
+  if (centro && distanciaKm(centro, { lat, lng }) > GEO_RAIO_DA_CIDADE_KM) return { ok: false, motivo: 'fora da cidade' };
+  return { ok: true, lat, lng };
+}
 async function geocodificarEnderecoReal(item, maptilerKey) {
-  if (!maptilerKey) return item;
-  const texto = [item.endereco, item.bairro, item.cidade, item.estado].filter(Boolean).join(', ');
-  if (!texto) return item;
+  const { _centro, ...lead } = item;
+  if (!maptilerKey) return lead;
+  const texto = [lead.endereco, lead.bairro, lead.cidade, lead.estado].filter(Boolean).join(', ');
+  if (!texto) return lead;
   try {
     const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(texto)}.json?key=${maptilerKey}&country=br&language=pt`;
     const resp = await fetch(url);
-    if (!resp.ok) return item;
+    if (!resp.ok) return lead;
     const json = await resp.json();
-    const top = (json.features || [])[0];
-    if (!top || !Array.isArray(top.center)) return item;
-    const [lng, lat] = top.center;
-    return { ...item, lat, lng };
+    const r = geocodeAceito((json.features || [])[0], _centro);
+    return r.ok ? { ...lead, lat: r.lat, lng: r.lng } : lead;
   } catch (e) {
-    return item; // geocode é bônus (melhora a ordenação por distância) — falhar não pode derrubar a importação
+    return lead; // geocode é bônus — falhar não pode derrubar a importação
   }
 }
 
