@@ -62,6 +62,8 @@ function recortar(rotulo, inicio, fim) {
 
 const blocoGestores = recortar('lista de gestores que vendem',
   'const GESTORES_QUE_VENDEM = (function () {', '}());');
+const blocoExTime = recortar('lista de quem saiu do time',
+  'const EX_EXECUTIVOS = (function () {', '}());');
 const blocoAgregacao = recortar('agregação do mês',
   'const MESES_PT = [', '      ajustadas: ajustadas\n    };');
 
@@ -96,7 +98,7 @@ function rodar(vendas, usuarios) {
     console
   };
   vm.createContext(ctx);
-  vm.runInContext(blocoGestores + '\n{\n' + blocoAgregacao + '\n}\n', ctx,
+  vm.runInContext(blocoGestores + '\n' + blocoExTime + '\n{\n' + blocoAgregacao + '\n}\n', ctx,
     { filename: 'recorte-montar-dados.js' });
   return ctx.vendasMes;
 }
@@ -182,6 +184,33 @@ function rodar(vendas, usuarios) {
     (r.foraDoTime[0] || {}).nome, 'venda de quem saiu');
   eIgual('e com o owner que ninguém reconheceu',
     (r.foraDoTime[0] || {}).ownerId, '11111111');
+}
+
+/* ── 6b. QUEM SAIU DO TIME NO MÊS: A VENDA CONTA NO TOTAL, FORA DO PÓDIO ─────────── */
+{
+  /* Julyan, 30/10/26: "a venda da renata msm q ela tenha saído conta pra meta do mês".
+     Ela saiu de narrativas em 28/10 e a venda de 10/10 caía em foraDoTime: o placar do
+     time dizia 32 com 33 vendas no CRM. Quem saiu está em usuarios.json com `desligado`. */
+  const cadastroComSaida = { usuarios: USUARIOS.usuarios.concat([
+    { email: 'renata@takeat.app', role: 'rep', ownerId: '97353028', nome: 'Renata Pessoa', desligado: true }
+  ]) };
+  const outroMes = (MES.slice(0, 4) - 1) + MES.slice(4);
+  const r = rodar([
+    vender('Marco A', '86100505', 500, 1500),
+    vender('venda da Renata', '97353028', 559, 1677),
+    vender('venda antiga da Renata', '97353028', 300, 900, { mesDeCompetencia: outroMes }),
+    vender('de ninguém', '11111111', 800, 2400)
+  ], cadastroComSaida);
+  eIgual('a venda de quem saiu entra no total de clientes', r.totalClientes, 2);
+  eIgual('e no MRR do mês', r.totalMrr, 500 + 559);
+  eIgual('mas não no pódio', r.porRep.map(x => x.ownerId), ['86100505']);
+  eIgual('viaja identificada em exTime', (r.exTime || {}).count, 1);
+  eIgual('com o nome de quem vendeu', ((r.exTime || {}).clientes || [])[0].name, 'Renata Pessoa');
+  eIgual('competência de outro mês continua saindo, com o nome dela',
+    r.ajustadas.map(a => a.name), ['Renata Pessoa']);
+  eIgual('e dono desconhecido continua fora do total', (r.foraDoTime || []).map(x => x.ownerId), ['11111111']);
+  const semSaida = rodar([vender('Marco A', '86100505', 500, 1500)], cadastroComSaida);
+  eIgual('mês sem venda de quem saiu: exTime é null', semSaida.exTime, null);
 }
 
 /* ── 7. COMPETÊNCIA DE OUTRO MÊS NÃO ESTOURA COM A VENDA DO GESTOR ───────────────── */
