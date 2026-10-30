@@ -11,8 +11,14 @@
 //
 // Cada crédito vale uma vez:
 //   · achou telefone  -> grava no lead (leads_prospeccao) e no pino (clients) sem telefone;
-//   · não achou        -> marca telefone_normalizado = '0' no lead, e ele não é consultado
-//                         de novo (o app só lê `telefone`, então a marca não aparece).
+//   · não achou        -> marca telefone_normalizado = 'sem:<cnpj>' no lead, e ele não é
+//                         consultado de novo (o app só lê `telefone`, a marca não aparece);
+//   · número de enfeite (11 99999-9999, 21 2222-2222: o mesmo dígito depois do DDD) conta
+//     como "não achou";
+//   · número que já é de outro lead -> 'dup:<cnpj>', sem gravar o número.
+// A marca leva o CNPJ porque telefone_normalizado é ÚNICO no banco (é a chave de dedup da
+// importação): na primeira rodada, em 30/10, '0' fixo teria batido na trava no segundo
+// lead, e 19 números repetidos bateram nela e ficaram sem marca.
 // Preferência: celular (11 dígitos com 9 depois do DDD); sem celular, o primeiro número.
 // O app avisa no cartão que o telefone do cadastro do CNPJ pode ser do contador.
 //
@@ -43,8 +49,15 @@ async function rest(caminho, opcoes) {
   return txt ? JSON.parse(txt) : null;
 }
 
+/* número de enfeite: depois do DDD, o mesmo dígito repetido (99999-9999, 2222-2222) */
+function deEnfeite(t) {
+  let d = String(t).replace(/\D/g, '');
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2);
+  return /^\d{2}(\d)\1+$/.test(d);
+}
 /* celular primeiro: DDD + 9 + 8 dígitos (com ou sem 55 na frente) */
-function escolher(telefones) {
+function escolher(todos) {
+  const telefones = todos.filter((t) => !deEnfeite(t));
   const cel = telefones.find((t) => {
     let d = String(t).replace(/\D/g, '');
     if (d.length === 13 && d.startsWith('55')) d = d.slice(2);
@@ -68,13 +81,14 @@ function escolher(telefones) {
     + '&cnpj=not.is.null'
     + '&data_abertura=gte.' + desde
     + '&responsavel_owner_id=in.(' + donos.join(',') + ')'
-    + '&and=(or(telefone.is.null,telefone.eq.),or(telefone_normalizado.is.null,telefone_normalizado.neq.0))'
+    // sem telefone E sem marca: telefone_normalizado preenchido com telefone vazio é marca ('sem:', 'dup:')
+    + '&or=(telefone.is.null,telefone.eq.)&telefone_normalizado=is.null'
     + '&order=data_abertura.desc&limit=' + LIMITE;
   const leads = await rest(filtro);
   console.log((leads || []).length + ' recém-abertos sem telefone (até ' + DIAS + ' dias, executivo ativo, limite ' + LIMITE + ').');
   if (SO_CONTAR || !leads || !leads.length) return;
 
-  let achou = 0, sem = 0, erro = 0;
+  let achou = 0, sem = 0, dup = 0, erro = 0;
   for (const l of leads) {
     const cnpj = String(l.cnpj).replace(/\D/g, '');
     if (cnpj.length !== 14) { erro++; continue; }
@@ -88,11 +102,18 @@ function escolher(telefones) {
       const tel = escolher(acharTelefones(d));
       if (tel) {
         const so = tel.replace(/\D/g, '');
-        await rest('leads_prospeccao?id=eq.' + l.id, { method: 'PATCH', body: JSON.stringify({ telefone: tel, telefone_normalizado: so }) });
+        try {
+          await rest('leads_prospeccao?id=eq.' + l.id, { method: 'PATCH', body: JSON.stringify({ telefone: tel, telefone_normalizado: so }) });
+        } catch (e) {
+          if (!/ 409:/.test(String(e.message))) throw e;
+          // o número já é de outro lead: marca e segue, sem gravar o repetido
+          await rest('leads_prospeccao?id=eq.' + l.id, { method: 'PATCH', body: JSON.stringify({ telefone_normalizado: 'dup:' + cnpj }) });
+          dup++; await espera(400); continue;
+        }
         await rest('clients?lead_prospeccao_id=eq.' + l.id + '&or=(telefone.is.null,telefone.eq.)', { method: 'PATCH', body: JSON.stringify({ telefone: tel }) });
         achou++;
       } else {
-        await rest('leads_prospeccao?id=eq.' + l.id, { method: 'PATCH', body: JSON.stringify({ telefone_normalizado: '0' }) });
+        await rest('leads_prospeccao?id=eq.' + l.id, { method: 'PATCH', body: JSON.stringify({ telefone_normalizado: 'sem:' + cnpj }) });
         sem++;
       }
     } catch (e) {
@@ -100,5 +121,5 @@ function escolher(telefones) {
     }
     await espera(400);
   }
-  console.log('Com telefone: ' + achou + ' · sem telefone na Casa dos Dados: ' + sem + ' · erro: ' + erro + ' · créditos usados: ~' + (achou + sem) + '.');
+  console.log('Com telefone: ' + achou + ' · sem telefone (ou de enfeite): ' + sem + ' · número de outro lead: ' + dup + ' · erro: ' + erro + ' · créditos usados: ~' + (achou + sem + dup) + '.');
 })().catch((e) => { console.error(e); process.exit(1); });
