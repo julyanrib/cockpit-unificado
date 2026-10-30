@@ -1,0 +1,45 @@
+name: Celular dos recém-abertos (Casa dos Dados)
+
+# Julyan, 30/10/26: "pode colocar o celular, podemos gastar da casa dos dados".
+# Consulta o CNPJ (1 crédito cada) só dos recém-abertos de até 90 dias, no nome de um
+# executivo ativo e sem telefone. Roda segunda às 0h em Brasília, duas horas depois da
+# importação de domingo, para pegar os novos da semana. CNPJ sem telefone fica marcado e
+# não gasta crédito de novo. Detalhes em scripts/telefone-casa-dos-dados.js.
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      limite:
+        description: "Máximo de CNPJs nesta rodada (cada um gasta 1 crédito)"
+        required: false
+        default: "300"
+      so_contar:
+        description: "sim = só contar quantos seriam consultados, sem gastar crédito"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  celular:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Buscar o celular dos recém-abertos
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CASADOSDADOS_TOKEN: ${{ secrets.CASADOSDADOS_TOKEN }}
+          LIMITE: ${{ github.event.inputs.limite || '300' }}
+          SO_CONTAR: ${{ github.event.inputs.so_contar || '' }}
+        run: node scripts/telefone-casa-dos-dados.js
