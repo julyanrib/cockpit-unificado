@@ -8716,6 +8716,12 @@ button.exh-chip:hover{border-color:var(--gv2-line-btn);}
 .gv2-v6-in.is-area{min-height:160px;resize:vertical;}
 .gv2-acc{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:16px;align-items:start;}
 .gv2-acc > *{min-width:0;}
+.gv2-acc-orfa{grid-column:1 / -1;display:flex;flex-direction:column;}
+.gv2-acc-orfa-lin{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:10px 18px;border-top:1px solid var(--gv2-line);}
+.gv2-acc-orfa-lin small{white-space:normal;}
+.gv2-acc-orfa-lin .gv2-acc-msg{grid-column:1 / -1;}
+.gv2-acc-orfa-acao{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}
+@media (max-width:900px){.gv2-acc-orfa-lin{grid-template-columns:minmax(0,1fr);}.gv2-acc-orfa-acao{justify-content:flex-start;}}
 .gv2-acc-form{display:flex;flex-direction:column;gap:12px;padding:0 18px 18px;}
 .gv2-acc-ex{margin:0;font:500 13px/1.45 var(--gv2-font);color:var(--gv2-dim);}
 .gv2-acc-cp{display:flex;flex-direction:column;gap:6px;}
@@ -55718,6 +55724,7 @@ GV2.render.playbook = function () {
 };
 
 GV2.acc = { lendo: false, erro: null, contas: null, setores: [], carteiras: {}, aberto: null, para: '', enviando: false, resultado: null,
+  orfaos: null, orfaPara: {}, orfaConf: null, orfaMsg: null,
   form: { tipo: 'executivo', nome: '', email: '', hubspot: '', setor: 'Outbound', senha: '' }, msg: null };
 GV2.accCarregar = async function () {
   const A = GV2.acc;
@@ -55761,9 +55768,63 @@ GV2.accCarregar = async function () {
       const peso = function (c) { return c.desativado ? 4 : c.alerta ? 0 : c.role === 'gestor' ? 1 : c.role === 'user' ? 2 : 3; };
       return (peso(a) - peso(b)) || a.nome.localeCompare(b.nome);
     });
+
+    const saiu = A.contas.filter(function (c) { return c.desativado && c.hubspot; });
+    try {
+      const cont = await GV2.lerOrfaos(saiu.map(function (c) { return String(c.hubspot); }));
+      A.orfaos = saiu.map(function (c) { return Object.assign({ owner: String(c.hubspot), nome: c.nome }, cont[String(c.hubspot)]); })
+        .filter(function (o) { return o.lp + o.pinos + o.neg > 0; })
+        .sort(function (a, b) { return (b.lp + b.pinos) - (a.lp + a.pinos) || b.neg - a.neg; });
+    } catch (e) { A.orfaos = { erro: (e && e.message) || String(e) }; }
   } catch (e) { A.erro = (e && e.message) || String(e); }
   A.lendo = false;
   if (GV2.estado.aba === 'acessos') GV2.pintar();
+};
+
+GV2.ORFA_STATUS = ['pendente', 'atribuido', 'na_rota'];
+GV2.lerOrfaos = async function (owners) {
+  const out = {};
+  owners.forEach(function (o) { out[o] = { lp: 0, pinos: 0, neg: 0 }; });
+  if (!owners.length) return out;
+  for (let de = 0; de < 20000; de += 1000) {
+    const q = await supa.from('leads_prospeccao').select('responsavel_owner_id, hubspot_deal_id').in('responsavel_owner_id', owners)
+      .in('status', GV2.ORFA_STATUS).order('id').range(de, de + 999);
+    if (q.error) throw q.error;
+    (q.data || []).forEach(function (l) { if (!String(l.hubspot_deal_id || '').trim()) out[String(l.responsavel_owner_id)].lp += 1; });
+    if ((q.data || []).length < 1000) break;
+  }
+  for (let de = 0; de < 20000; de += 1000) {
+    const q = await supa.from('clients').select('vendedor_id_hubspot, id_hubspot').in('vendedor_id_hubspot', owners).eq('status', 'lead').order('id').range(de, de + 999);
+    if (q.error) throw q.error;
+    (q.data || []).forEach(function (c) { const o = out[String(c.vendedor_id_hubspot)]; if (String(c.id_hubspot || '').trim()) o.neg += 1; else o.pinos += 1; });
+    if ((q.data || []).length < 1000) break;
+  }
+  return out;
+};
+
+GV2.passarOrfaos = async function (de, para) {
+  const lp = await supa.from('leads_prospeccao').update({ responsavel_owner_id: para }).eq('responsavel_owner_id', de)
+    .in('status', GV2.ORFA_STATUS).or('hubspot_deal_id.is.null,hubspot_deal_id.eq.').select('id');
+  if (lp.error) return { erro: 'recém-abertos: ' + lp.error.message };
+  const pi = await supa.from('clients').update({ vendedor_id_hubspot: para }).eq('vendedor_id_hubspot', de).eq('status', 'lead')
+    .or('id_hubspot.is.null,id_hubspot.eq.').select('id');
+  if (pi.error) return { erro: (lp.data || []).length + ' recém-abertos passados, mas os pinos não: ' + pi.error.message, lp: (lp.data || []).length };
+  return { lp: (lp.data || []).length, pinos: (pi.data || []).length };
+};
+GV2.accPassarOrfa = async function (owner) {
+  const A = GV2.acc, o = (Array.isArray(A.orfaos) ? A.orfaos : []).find(function (x) { return x.owner === owner; }), para = A.orfaPara[owner];
+  if (!o || A.enviando) return;
+  if (!para) { A.orfaMsg = { owner: owner, erro: true, t: 'Escolha quem fica com a carteira de ' + o.nome.split(' ')[0] + '.' }; return GV2.pintar(); }
+
+  if (A.orfaConf !== owner) { A.orfaConf = owner; A.orfaMsg = null; return GV2.pintar(); }
+  A.orfaConf = null; A.enviando = true; GV2.pintar();
+  const r = await GV2.passarOrfaos(owner, para);
+  A.enviando = false;
+  const quem = ((A.contas || []).find(function (c) { return c.hubspot === para; }) || {}).nome || 'o novo dono';
+  A.orfaMsg = r.erro ? { owner: owner, erro: true, t: r.erro }
+    : { owner: owner, erro: false, t: r.lp + ' recém-abertos e ' + r.pinos + ' pinos agora são de ' + quem.split(' ')[0] + '.' + (o.neg ? ' Os ' + o.neg + ' negócios trocam de dono no HubSpot.' : '') };
+  GV2.v10.dia = null;
+  GV2.toast(r.erro ? 'Não passei tudo' : 'Carteira passada'); GV2.pintar(); GV2.accCarregar();
 };
 GV2.accPapelTxt = function (c) { return c.role === 'gestor' ? 'Master' : c.role === 'view' ? 'Só leitura' : 'Executivo'; };
 GV2.accEdge = async function (nome, corpo) {
@@ -55852,13 +55913,22 @@ GV2.accDesativar = async function (id) {
     if (movidos === 0) { A.enviando = false; A.msg = { erro: true, t: 'A carteira não mudou de dono (0 leads gravados). Nada mais foi feito.' }; return GV2.pintar(); }
   }
 
+  let recem = 0;
+  if (A.para && c.hubspot) {
+    const lp = await supa.from('leads_prospeccao').update({ responsavel_owner_id: A.para }).eq('responsavel_owner_id', c.hubspot)
+      .in('status', GV2.ORFA_STATUS).or('hubspot_deal_id.is.null,hubspot_deal_id.eq.').select('id');
+    if (lp.error) { A.enviando = false; A.msg = { erro: true, t: movidos + ' leads passados, mas os recém-abertos não (' + lp.error.message + '). O acesso continua.' }; GV2.accCarregar(); return GV2.pintar(); }
+    recem = (lp.data || []).length;
+  }
+
   const r = await GV2.accEdge('revogar-usuario', { id: id });
   if (r.erro) { A.enviando = false; A.msg = { erro: true, t: (movidos ? movidos + ' leads passados, mas o acesso não saiu: ' : 'O acesso não saiu: ') + r.erro }; GV2.accCarregar(); return GV2.pintar(); }
 
   const s = await supa.from('seller_classification').upsert({ seller_id: id, status: 'nao_vendedor' }, { onConflict: 'seller_id' });
   A.enviando = false; A.aberto = null; A.para = '';
   A.msg = s.error ? { erro: true, t: 'Acesso tirado' + (movidos ? ' e ' + movidos + ' leads passados' : '') + ', mas a pessoa ainda aparece como vendedora no app (' + s.error.message + ').' }
-    : { erro: false, t: c.nome + ' não entra mais' + (movidos ? ' · ' + movidos + ' leads passados' : '') + '.' };
+    : { erro: false, t: c.nome + ' não entra mais' + (movidos ? ' · ' + movidos + ' leads passados' : '') + (recem ? ' · ' + recem + ' recém-abertos passados' : '') + '. Negócios no HubSpot trocam de dono lá.' };
+  GV2.v10.dia = null;
   GV2.pintar(); GV2.accCarregar();
 };
 GV2.render.acessos = function () {
@@ -55922,7 +55992,29 @@ GV2.render.acessos = function () {
       + (fora.length ? '<details class="gv2-acc-fora"><summary>' + fora.length + ' sem acesso</summary>' + fora.map(linha).join('') + '</details>' : '') + '</div>'
       + '<div class="gv2-sem-pe">' + nM + ' masters · ' + nE + ' executivos · ' + (ativos.length - nM - nE) + ' só leitura' + (A.msg && !A.aberto && A.msg.erro === false ? ' · <b class="t-ok">' + GV2.e(A.msg.t) + '</b>' : '') + '</div>';
   }
-  return cab + '<div class="gv2-corpo is-fixo gv2-acc">' + form
+
+  let orfa = '';
+  if (A.orfaos && !Array.isArray(A.orfaos)) orfa = '<section class="card gv2-acc-orfa"><div class="card-cab"><span class="card-titulo">Carteira de quem saiu</span></div>' + GV2.html.estado('erro', 'Não li a carteira de quem saiu: ' + A.orfaos.erro) + '</section>';
+  else if (A.orfaos && A.orfaos.length && A.contas) {
+    const dest = A.contas.filter(function (c) { return !c.desativado && c.role === 'user' && c.hubspot; });
+    const tot = A.orfaos.reduce(function (s, o) { return s + Math.max(o.lp, o.pinos); }, 0), totNeg = A.orfaos.reduce(function (s, o) { return s + o.neg; }, 0);
+    orfa = '<section class="card gv2-acc-orfa"><div class="card-cab"><span class="card-titulo">Carteira de quem saiu</span><span class="card-sub">'
+      + GV2.e(tot + ' para repartir aqui' + (totNeg ? ' · ' + totNeg + ' negócios para trocar de dono no HubSpot' : '')) + '</span></div>'
+      + A.orfaos.map(function (o) {
+        const prim = o.nome.split(' ')[0], m = A.orfaMsg && A.orfaMsg.owner === o.owner ? A.orfaMsg : null, armado = A.orfaConf === o.owner;
+        const partes = [];
+        if (o.lp) partes.push(GV2.pl(o.lp, 'recém-aberto ou conta-alvo', 'recém-abertos e contas-alvo'));
+        if (o.pinos) partes.push(GV2.pl(o.pinos, 'pino sem negócio', 'pinos sem negócio'));
+        return '<div class="gv2-acc-orfa-lin"><div class="gv2-acc-quem"><b>' + GV2.e(o.nome) + '</b><span>' + GV2.e(partes.join(' · ') || 'nada para repartir aqui') + '</span>'
+          + (o.neg ? '<small class="t-mute">' + GV2.e(GV2.pl(o.neg, 'negócio', 'negócios') + ' ainda no nome de ' + prim + ' no HubSpot: o dono se troca lá, e o cockpit acompanha na próxima leitura.') + '</small>' : '') + '</div>'
+          + (o.lp + o.pinos ? '<div class="gv2-acc-orfa-acao"><select class="gv2-v6-in" data-gv2-acc="orfa:' + GV2.e(o.owner) + '"><option value="">Quem fica com a carteira?</option>'
+            + dest.map(function (d) { return '<option value="' + GV2.e(d.hubspot) + '"' + (A.orfaPara[o.owner] === d.hubspot ? ' selected' : '') + '>' + GV2.e(d.nome) + '</option>'; }).join('') + '</select>'
+            + GV2.html.btn({ texto: A.enviando && armado ? 'Passando…' : armado ? 'Confirmar: passar para ' + (((A.contas || []).find(function (c) { return c.hubspot === A.orfaPara[o.owner]; }) || {}).nome || '').split(' ')[0] : 'Passar', acao: 'acc:orfa:' + o.owner, tipo: armado ? 'prim' : '', off: A.enviando }) + '</div>' : '<span></span>')
+          + (m ? '<p class="' + (m.erro ? 't-erro' : 't-ok') + ' gv2-acc-msg">' + GV2.e(m.t) + '</p>' : '')
+          + '</div>';
+      }).join('') + '</section>';
+  }
+  return cab + '<div class="gv2-corpo is-fixo gv2-acc">' + orfa + form
     + '<section class="card gv2-acc-lista"><div class="card-cab"><span class="card-titulo">Contas</span><span class="card-sub">quem tem alerta vem primeiro</span></div>' + lista + '</section></div>';
 };
 GV2.accClique = function (parte) {
@@ -55931,6 +56023,7 @@ GV2.accClique = function (parte) {
   if (parte[1] === 'tipo') { A.form.tipo = parte[2]; A.msg = null; return GV2.pintar(); }
   if (parte[1] === 'criar') return GV2.accCriar();
   if (parte[1] === 'abrir') { A.aberto = A.aberto === parte[2] ? null : parte[2]; A.para = ''; A.novoSetor = ''; A.novaSenha = ''; A.senhaNova = null; A.msg = null; A.confirmar = null; return GV2.pintar(); }
+  if (parte[1] === 'orfa') return GV2.accPassarOrfa(parte.slice(2).join(':'));
   if (parte[1] === 'setor') return GV2.accSetor(parte[2]);
   if (parte[1] === 'senha') return GV2.accSenha(parte[2]);
   if (parte[1] === 'papel') return GV2.accPapel(parte[2], parte[3]);
@@ -57356,7 +57449,7 @@ GV2.instalar = function () {
   raiz.addEventListener('input', function (ev) {
     const t = ev.target;
     if (GV2.pessoasInput && GV2.pessoasInput(t)) return;
-    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor' || k === 'novaSenha') GV2.acc[k] = t.value; else GV2.acc.form[k] = t.value; return; }
+    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k.indexOf('orfa:') === 0) { GV2.acc.orfaPara[k.slice(5)] = t.value; GV2.acc.orfaConf = null; return; } if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor' || k === 'novaSenha') GV2.acc[k] = t.value; else GV2.acc.form[k] = t.value; return; }
     if (t.matches('[data-gv2-comp]')) GV2.estado.compromissos[t.getAttribute('data-gv2-comp')] = t.value;
     if (t.matches('[data-gv2-comptx]')) { const k = t.getAttribute('data-gv2-comptx').split(':'); const c = GV2.estado.comp1a1[k[0]]; if (c && c[k[1]]) c[k[1]].t = t.value; }
     if (t.matches('[data-gv2-lote]')) { const g = GV2.estado.loteDados && GV2.estado.loteDados.grupos[Number(t.getAttribute('data-gv2-lote'))]; if (g) g.texto = t.value; }
@@ -57364,7 +57457,7 @@ GV2.instalar = function () {
   raiz.addEventListener('change', function (ev) {
     const t = ev.target;
     if (GV2.pessoasInput && t.matches('[data-gv2-obs]')) { GV2.pessoasInput(t); return; }
-    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor' || k === 'novaSenha') GV2.acc[k] = t.value; else GV2.acc.form[k] = t.value; return; }
+    if (t.matches('[data-gv2-acc]')) { const k = t.getAttribute('data-gv2-acc'); if (k.indexOf('orfa:') === 0) { GV2.acc.orfaPara[k.slice(5)] = t.value; GV2.acc.orfaConf = null; return; } if (k === 'para') GV2.acc.para = t.value; else if (k === 'novoSetor' || k === 'novaSenha') GV2.acc[k] = t.value; else GV2.acc.form[k] = t.value; return; }
     if (t.matches('[data-gv2-sel="praca"]')) { GV2.estado.praca = t.value; GV2.estado.destaque = null; GV2.pintar(); }
     if (t.matches('[data-gv2-compon]')) { const k = t.getAttribute('data-gv2-compon').split(':'); const c = GV2.estado.comp1a1[k[0]]; if (c && c[k[1]]) c[k[1]].on = t.checked; }
   });
@@ -61486,7 +61579,97 @@ GV2.v5Grupos = function () {
   const ns = b.planoErro || b.agora.min < 360 ? [] : b.pessoas.filter(function (p) { return sit[p.id].k === 'naosaiu'; });
   if (ns.length) g.push({ k: 'naosaiu', l: 'Ainda não saiu', sev: 3, info: true, curta: 'antes da janela habitual', regra: 'antes da janela habitual (4 últimas semanas)',
     chips: ns.map(function (p) { return chip(p, GV2.v5Janela(p)); }) });
+  GV2.v10Grupos(g, b, chip);
   return { grupos: g, sit: sit };
+};
+
+GV2.V10_UM_DIAS = 7;
+GV2.v10 = { dia: null, lendo: false, erro: null, d: null };
+GV2.v10Ler = async function () {
+  const b = GV2.base, V = GV2.v10;
+  if (!b || V.lendo || typeof supa === 'undefined' || !supa) return;
+  const chave = b.agora.iso + '|' + b.ontemIso;
+  if (V.dia === chave) return;
+  V.lendo = true; V.dia = chave;
+  try {
+    const donos = b.pessoas.map(function (p) { return String(p.id); });
+    const ini = new Date(b.ontemIso + 'T03:00:00Z'), fim = new Date(ini.getTime() + 86400000);
+    const r = await Promise.all([
+      supa.from('profiles').select('id, id_hubspot, full_name').not('id_hubspot', 'is', null),
+      supa.from('um_a_um').select('owner_id, data').in('owner_id', donos).order('data', { ascending: false }).limit(1000),
+      supa.from('client_visits').select('visited_by, client_id').gte('visited_at', ini.toISOString()).lt('visited_at', fim.toISOString()).limit(5000),
+      supa.from('fichas_de_rua').select('criado_por, client_id').gte('ocorrido_em', ini.toISOString()).lt('ocorrido_em', fim.toISOString()).limit(5000),
+      supa.from('fecho_do_dia').select('pessoa').eq('dia', b.ontemIso)
+    ]);
+    r.forEach(function (x) { if (x.error) throw x.error; });
+    const ownerDe = {}, saiu = [];
+    (r[0].data || []).forEach(function (p) {
+      ownerDe[p.id] = String(p.id_hubspot);
+      if (/DESATIVADO/i.test(p.full_name || '')) saiu.push({ owner: String(p.id_hubspot), nome: String(p.full_name).replace(/\s*\/\s*DESATIVADO\s*$/i, '').trim() });
+    });
+    const ultimo = {};
+    (r[1].data || []).forEach(function (u) { const o = String(u.owner_id); if (!ultimo[o] || String(u.data) > ultimo[o]) ultimo[o] = String(u.data).slice(0, 10); });
+    const fichas = {};
+    (r[3].data || []).forEach(function (f) { fichas[f.criado_por + '|' + f.client_id] = true; });
+    const visitas = {}, semFicha = {};
+    (r[2].data || []).forEach(function (v) {
+      const o = ownerDe[v.visited_by];
+      if (!o) return;
+      const k = v.visited_by + '|' + v.client_id;
+      if (visitas[k]) return;
+      visitas[k] = true;
+      const s = semFicha[o] = semFicha[o] || { visitas: 0, sem: 0 };
+      s.visitas += 1;
+      if (!fichas[k]) s.sem += 1;
+    });
+    const fechou = {};
+    (r[4].data || []).forEach(function (f) { if (ownerDe[f.pessoa]) fechou[ownerDe[f.pessoa]] = true; });
+    let orfaos = [];
+    if (saiu.length) {
+      const cont = await GV2.lerOrfaos(saiu.map(function (s) { return s.owner; }));
+      orfaos = saiu.map(function (s) { return Object.assign({}, s, cont[s.owner]); }).filter(function (s) { return s.lp + s.pinos > 0; })
+        .sort(function (x, y) { return (y.lp + y.pinos) - (x.lp + x.pinos); });
+    }
+    V.d = { ultimo: ultimo, semFicha: semFicha, fechou: fechou, orfaos: orfaos };
+    V.erro = null;
+  } catch (e) { V.erro = (e && e.message) || String(e); V.d = null; }
+  V.lendo = false;
+  GV2.v5SeloMem = null;
+  if (GV2.estado.aba === 'time') GV2.pintar();
+};
+GV2.v10Grupos = function (g, b, chip) {
+  const V = GV2.v10;
+  if (!V.lendo && V.dia !== b.agora.iso + '|' + b.ontemIso) setTimeout(GV2.v10Ler, 0);
+  const d = V.d;
+  if (!d) return;
+  const util = GV2.util(b.agora.iso);
+
+  const dias = function (iso) { return Math.round((Date.parse(b.agora.iso + 'T12:00:00Z') - Date.parse(iso + 'T12:00:00Z')) / 86400000); };
+  const um = b.pessoas.map(function (p) { const u = d.ultimo[String(p.id)]; return { p: p, u: u, n: u ? dias(u) : null }; })
+    .filter(function (x) { return x.n == null || x.n > GV2.V10_UM_DIAS; })
+    .sort(function (x, y) { return (y.n == null ? 1e9 : y.n) - (x.n == null ? 1e9 : x.n); });
+  if (um.length) g.push({ k: 'umaum', l: '1:1 atrasado', sev: 2, curta: 'mais de ' + GV2.V10_UM_DIAS + ' dias', regra: 'nenhum 1:1 registrado nos últimos ' + GV2.V10_UM_DIAS + ' dias · o coaching do livro é semanal, uma habilidade por vez',
+    chips: um.map(function (x) { return chip(x.p, x.n == null ? 'nenhum registrado' : 'último há ' + x.n + ' dias', 'v5gav:um:' + x.p.id); }),
+    btn: 'Abrir a pauta', acao: 'v5gav:um:' + um[0].p.id });
+
+  const sf = util ? b.pessoas.map(function (p) { return { p: p, s: d.semFicha[String(p.id)] }; }).filter(function (x) { return x.s && x.s.sem > 0; })
+    .sort(function (x, y) { return y.s.sem - x.s.sem; }) : [];
+  if (sf.length) g.push({ k: 'semficha', l: 'Visita sem ficha', sev: 2, curta: b.ontemRot + ' · sem "como foi"', regra: b.ontemRot + ' · check-in sem a ficha do mesmo restaurante · sem ficha não há próximo passo nem coaching',
+    chips: sf.map(function (x) { return chip(x.p, x.s.sem + ' de ' + x.s.visitas + ' sem ficha', 'v5dia:' + x.p.id + ':' + b.ontemIso); }),
+    btn: 'Ver o dia', acao: 'v5dia:' + sf[0].p.id + ':' + b.ontemIso });
+
+  const nf = util ? b.pessoas.filter(function (p) { const s = d.semFicha[String(p.id)]; return s && s.visitas > 0 && !d.fechou[String(p.id)]; }) : [];
+  if (nf.length) g.push({ k: 'semfecho', l: 'Não fechou o dia', sev: 3, curta: b.ontemRot + ' · pergunte no 1:1', regra: b.ontemRot + ' · teve visita e não fechou o dia no app (a folha das 18h)',
+    chips: nf.map(function (p) { return chip(p, GV2.pl(d.semFicha[String(p.id)].visitas, 'porta', 'portas'), 'v5dia:' + p.id + ':' + b.ontemIso); }),
+    btn: 'Ver o dia', acao: 'v5dia:' + nf[0].id + ':' + b.ontemIso });
+
+  if (d.orfaos.length) {
+
+    const tot = d.orfaos.reduce(function (s, o) { return s + Math.max(o.lp, o.pinos); }, 0);
+    g.push({ k: 'orfa', l: 'Carteira de quem saiu', sev: 2, curta: tot + ' sem dono ativo', regra: 'recém-abertos e pinos sem negócio no nome de quem perdeu o acesso · ninguém visita e os colegas não veem o selo de recém-aberto',
+      chips: d.orfaos.map(function (o) { const ini = o.nome.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join(''); return { ini: ini || '?', n: o.nome.split(' ')[0], s: Math.max(o.lp, o.pinos) + ' para repartir', tip: o.nome + ' · ' + o.lp + ' recém-abertos e contas-alvo, ' + o.pinos + ' pinos sem negócio', a: 'menu:acessos' }; }),
+      btn: 'Repartir', acao: 'menu:acessos' });
+  }
 };
 
 GV2.v5Selo = function () {
