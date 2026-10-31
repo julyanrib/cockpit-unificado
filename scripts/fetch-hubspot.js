@@ -1309,6 +1309,49 @@ async function stageTotalLast7Days(stageIdOuLista) {
    90 dias porque perda antiga nao ensina nada sobre o time de agora. Devolve o total do
    time por motivo E por executivo, porque a assinatura de perda de cada um e diferente —
    e e ela que faz o 1:1 ser individual. */
+
+/* ══ PERDA DEPOIS DA DEMO (31/10/26, prancha "Acelerar o Field Sales" v2, tela 0c) ══════════
+   Em outubro a demo que vira cliente caiu de 52% para 34%. A pergunta do gestor é: por que
+   perdemos DEPOIS da demo, agora contra antes? "Depois da demo" = o negócio perdido passou
+   por Demo/Proposta (hs_v2_date_entered_<Demo>, confiável desde julho/26 — a mesma régua
+   da demo realizada). Compara o mês corrente com a base de julho e agosto, por motivo e por
+   executivo. Motivo vazio é linha própria ("Sem motivo registrado"): nada é inventado.
+   Só leitura no HubSpot, uma busca a mais no fetch que já roda. */
+const PERDA_BASE = { de: '2026-07-01', ate: '2026-08-31', rotulo: 'julho e agosto' };
+async function perdasDepoisDaDemo() {
+  const propDemo = 'hs_v2_date_entered_' + STAGES.demoProposta;
+  const desde = Date.parse(PERDA_BASE.de + 'T03:00:00Z');
+  const results = await hsSearchAll({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'EQ', value: STAGES.perdido },
+        { propertyName: 'closedate', operator: 'GTE', value: String(desde) },
+        { propertyName: propDemo, operator: 'HAS_PROPERTY' }
+      ]
+    }],
+    properties: ['dealname', 'hubspot_owner_id', 'motivo_do_perdido', 'closedate', propDemo]
+  });
+  const b = agoraBrasilia();
+  const mesAtual = b.toISOString().slice(0, 7);
+  const vazio = () => ({ total: 0, porMotivo: {}, porOwner: {} });
+  const base = vazio(), mes = vazio();
+  results.filter(d => !isExcludedDeal(d)).forEach(d => {
+    const p = d.properties || {};
+    const dia = new Date((Date.parse(p.closedate || '') || 0) - 3 * 3600000).toISOString().slice(0, 10);
+    const alvo = dia.slice(0, 7) === mesAtual ? mes : (dia >= PERDA_BASE.de && dia <= PERDA_BASE.ate ? base : null);
+    if (!alvo) return;
+    const motivo = String(p.motivo_do_perdido || '').trim() || 'Sem motivo registrado';
+    const owner = String(p.hubspot_owner_id || '') || 'sem-dono';
+    alvo.total += 1;
+    alvo.porMotivo[motivo] = (alvo.porMotivo[motivo] || 0) + 1;
+    if (!alvo.porOwner[owner]) alvo.porOwner[owner] = { total: 0, porMotivo: {} };
+    alvo.porOwner[owner].total += 1;
+    alvo.porOwner[owner].porMotivo[motivo] = (alvo.porOwner[owner].porMotivo[motivo] || 0) + 1;
+  });
+  return { base: Object.assign({ de: PERDA_BASE.de, ate: PERDA_BASE.ate, rotulo: PERDA_BASE.rotulo }, base), mes: Object.assign({ mes: mesAtual }, mes), lidoEm: new Date().toISOString() };
+}
+
 async function motivosDePerda() {
   const noventaDias = Date.now() - 90 * 24 * 60 * 60 * 1000;
   const results = await hsSearchAll({
@@ -2281,6 +2324,12 @@ async function main() {
   } catch (e) {
     console.error('AVISO: motivo de perda não veio nesta rodada (' + e.message + '). O resto do refresh segue.');
   }
+  let perdasPosDemo = null;
+  try {
+    perdasPosDemo = await perdasDepoisDaDemo();
+  } catch (e) {
+    console.error('AVISO: perda depois da demo não veio nesta rodada (' + e.message + '). O resto do refresh segue.');
+  }
   let historicoEtapas = null;
   try {
     historicoEtapas = await historicoDeEtapas();
@@ -2923,6 +2972,7 @@ async function main() {
       perdidos: perdidoSemanaDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id }))
     },
     motivosPerda,
+    perdasPosDemo,
     historicoEtapas,
     funil: {
       labels: ['Backlog', 'Prospecção', 'Visita', 'Conversa com Decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
