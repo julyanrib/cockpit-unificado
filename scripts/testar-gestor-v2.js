@@ -1450,6 +1450,52 @@ tabelas.gv2_falta_etapa = [
       /\{ id: 'cad', nome: 'Cadência'/.test(tpl) && /const propAtivo = s\.proposito \|\| \(typeof GV2 !== 'undefined' && GV2\.PL7 \? 'cad'/.test(tpl)
         && /if \(verbo === 'cadaba'\)/.test(tpl) && /\$\{d\.cadHTML \|\| ''\}/.test(tpl) && /\$\{d\.cadAbasHTML \|\| ''\}/.test(tpl));
   }
+  /* ── GRUPO 0 do "Acelerar Field Sales v2" (#920, 31/10/26): quente parado, demo sem retorno,
+     perda depois da demo. Negócios falsos com horas relativas ao relógio de verdade. ── */
+  {
+    const negEra = GV2.base.negocios, dataEra = global.DATA.perdasPosDemo;
+    const ha = function (h) { return new Date(Date.now() - h * 3600000).toISOString(); };
+    const neg = function (id, o) { return Object.assign({ id: id, nome: 'N' + id, dono: '1', etapa_idx: 4, mrr: 500, dias: 9, agPag: false, proximo_passo: 'ligar', lead: {} }, o); };
+    GV2.base.negocios = [
+      neg('semPasso', { proximo_passo: null, lead: { temperatura: 'quente', ultimaInteracao: ha(2) } }),
+      neg('semToque', { lead: { temperatura: 'quente', ultimaInteracao: ha(72) } }),
+      neg('emDia', { lead: { temperatura: 'quente', ultimaInteracao: ha(10) } }),
+      neg('agPag', { agPag: true, etapa_idx: 5, proximo_passo: null, lead: { temperatura: 'quente', ultimaInteracao: ha(200) } }),
+      neg('morno', { proximo_passo: null, lead: { temperatura: 'morno', ultimaInteracao: ha(200) } }),
+      neg('demoMuda', { etapa_idx: 3, lead: { temperatura: 'morno', entrouNaEtapaEm: ha(72), ultimaInteracao: ha(71.5) } }),
+      neg('demoVoltou', { etapa_idx: 3, lead: { temperatura: 'morno', entrouNaEtapaEm: ha(72), ultimaInteracao: ha(60) } }),
+      neg('demoNova', { etapa_idx: 3, lead: { temperatura: 'morno', entrouNaEtapaEm: ha(10) } })
+    ];
+    const qp = GV2.g0QuenteParado().map(function (x) { return x.n.id; });
+    checar('g0 · quente parado: sem próximo passo OU sem toque há 48 h; em dia, Ag. pagamento e morno ficam fora',
+      qp.sort().join() === 'semPasso,semToque', qp.join());
+    const dm = GV2.g0DemoSemRetorno().map(function (x) { return x.n.id; });
+    checar('g0 · demo sem retorno: 48 h na Demo sem toque depois de 1 h da entrada; o toque da própria demo não conta',
+      dm.join() === 'demoMuda', dm.join());
+    const cnaEra = GV2.cobrarNoApp, cneEra = GV2.cobrarNegocio;
+    let recado = null, hubspot = false;
+    GV2.cobrarNoApp = function (p, texto) { recado = texto; return Promise.resolve(false); };
+    GV2.cobrarNegocio = function () { hubspot = true; return Promise.resolve(false); };
+    await GV2.g0Cobrar('semToque');
+    GV2.cobrarNoApp = cnaEra; GV2.cobrarNegocio = cneEra;
+    checar('g0 · Cobrar vira recado no app com o prefixo que a semana reconhece, e nunca tarefa no HubSpot',
+      /^Quente parado: NsemToque está 3 dias sem andar\./.test(String(recado)) && !hubspot, String(recado));
+    global.DATA.perdasPosDemo = {
+      mes: { total: 5, porMotivo: { 'Preço': 3, 'Outros': 2 }, porOwner: { '1': { total: 3, porMotivo: { 'Preço': 3 } }, '99': { total: 2, porMotivo: { 'Outros': 2 } } } },
+      base: { total: 4, rotulo: 'julho e agosto', porMotivo: { 'Sem retorno': 4 }, porOwner: { '2': { total: 1, porMotivo: { 'Sem retorno': 1 } }, '98': { total: 3, porMotivo: { 'Sem retorno': 3 } } } },
+      lidoEm: '2026-10-31T12:00:00Z'
+    };
+    const pd = GV2.render.g0Perda();
+    checar('g0 · perda: o título traz mês e base; a tabela soma o título, com quem saiu do time numa linha só',
+      /5 perdas depois da demo em .* · 4 em julho e agosto/.test(pd)
+        && /<b>Quem saiu do time<\/b><\/td><td class="num">3<\/td><td class="num">2<\/td><td>Outros<\/td>/.test(pd)
+        && /<td class="num">0<\/td><td class="num">3<\/td><td>Preço<\/td>/.test(pd), pd.slice(0, 400));
+    global.DATA.perdasPosDemo = null;
+    checar('g0 · perda: sem a leitura do robô, o cartão diz que chega na próxima, sem número inventado',
+      /chega na próxima leitura do HubSpot pelo robô/.test(GV2.render.g0Perda()));
+    GV2.base.negocios = negEra; global.DATA.perdasPosDemo = dataEra;
+  }
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
