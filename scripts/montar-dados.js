@@ -477,6 +477,8 @@ function montarDadosCompletos() {
        sentada. O objeto vai INTEIRO para o gestor, então os campos novos viajam
        sozinhos — não há lista de campos aqui que precise ser atualizada. */
     motivosPerda: hubspot.motivosPerda || null,
+    /* perda depois da demo, mês contra julho–agosto (prancha v2, 0c) — só o gestor lê */
+    perdasPosDemo: hubspot.perdasPosDemo || null,
     /* Conversão por turma, velocidade de etapa e ciclo — o gestor recebe inteiro. */
     historicoEtapas: hubspot.historicoEtapas || null,
     funil: hubspot.funil,
