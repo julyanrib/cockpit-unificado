@@ -1578,6 +1578,73 @@ tabelas.gv2_falta_etapa = [
     GV2.estado.rpGav = null; GV2.estado.rpForm = null; GV2.estado.rpErro = null;
   }
 
+  /* ── OS 7 COMBINADOS (handoff "Acelerar Field Sales v2", 2a–2c · 31/10/26): o semáforo só mostra,
+     a ocorrência é do gestor, o degrau sai do histórico do mesmo combinado, registro falso é o 3. ── */
+  {
+    const cbEra = Object.assign({}, GV2.cb), supaEra = global.supa.from;
+    const pessoa = function (id, ownerId, o) { return Object.assign({ pessoa: id, ownerId: ownerId, nome: 'Pessoa ' + id,
+      visitas: { visitas: 41, provadas: 40, comPasso: 33, naHora: 34, divergencias: [] }, fichas: { donoAusente: 19, voltaMarcada: 9 },
+      vespera: { dias: 5, planejados: 4, semPlano: ['2026-10-27'] },
+      rituais: { umAUm: 0, ultimoUmAUm: '2026-10-14', fechoDias: [{ dia: '2026-10-30', fechou: false }], marcados: [
+        { dia: '2026-10-26', ritual: 'daily', presente: true }, { dia: '2026-10-27', ritual: 'daily', presente: true }, { dia: '2026-10-26', ritual: 'simulacao', presente: true }, { dia: '2026-10-28', ritual: 'simulacao', presente: false }] },
+      aceite: { versao: GV2.CB.versao, aceitoEm: '2026-10-05', registradoPor: 'Julyan' }, ocorrencias: [] }, o); };
+    const bia = pessoa('bia', '1', { ocorrencias: [{ id: 'o1', combinado: 3, degrau: 1, dia: '2026-10-13', oQue: 'combinou ficha antes da próxima porta' }] });
+    const rui = pessoa('rui', '2', { aceite: null, visitas: { visitas: 10, provadas: 9, comPasso: 10, naHora: 10, divergencias: [{ dia: '2026-10-27', nome: 'Bar do Zé', clientId: 'c9' }] } });
+    GV2.cb.d = { segunda: '2026-10-26', sexta: '2026-10-30', ate: '2026-10-30', hoje: '2026-10-30', pessoas: [bia, rui], lidoEm: '2026-10-30T21:00:00Z' };
+    GV2.cb.em = Date.now(); GV2.cb.lendo = false; GV2.cb.erro = null;
+    /* gravar relê o quadro (cbLer): o supa falso devolve outra coisa, então o teste repõe o mundo antes do passo */
+    const mundoCb = GV2.cb.d;
+    const M = GV2.cbMedir(bia);
+    checar('combinados · as 7 medidas e o semáforo (95 / 80): 98% verde, 80% e 83% âmbar, 47% vermelho, 0 divergência verde, 4 de 5 âmbar',
+      M.map(function (m) { return m.val + ':' + m.k; }).join(' | ') === '98%:ok | 80%:av | 83%:av | 47%:erro | 0 divergências:ok | 4 de 5 dias:av | 3 de 6:erro'
+        && M[3].como === 'dono ausente em 19 · volta marcada em 9', M.map(function (m) { return m.val + ':' + m.k; }).join(' | '));
+    const R = GV2.cbRituais(bia);
+    checar('combinados · rituais: daily e simulação só o que foi marcado; 1:1 e fecho da fonte',
+      R.daily.feito === 2 && R.daily.total === 2 && R.sim.feito === 1 && R.sim.total === 2 && R.um.feito === 0 && R.fecho.total === 1 && R.feito === 3 && R.total === 6, JSON.stringify(R));
+    checar('combinados · divergência na auditoria é vermelho na hora', GV2.cbMedir(rui)[4].k === 'erro' && GV2.cbMedir(rui)[4].curto === '1');
+    checar('combinados · o degrau sai do histórico do MESMO combinado; registro falso vai direto ao 3',
+      GV2.cbDegrau(bia, 3, false) === 2 && GV2.cbDegrau(bia, 4, false) === 1 && GV2.cbDegrau(bia, 4, true) === 3
+        && GV2.cbDegrau(pessoa('z', '3', { ocorrencias: [{ combinado: 3, degrau: 2, dia: '2026-10-20' }] }), 3, false) === 3
+        && GV2.cbDegrau(pessoa('z', '3', { ocorrencias: [{ combinado: 3, degrau: 2, dia: '2026-06-01' }] }), 3, false) === 1);
+    GV2.estado.pessoa = '1';
+    const pag = GV2.render.cbPessoa(GV2.base.porId['1']);
+    checar('combinados · 2a: a tabela, o aceite, os rituais e a sugestão do próximo degrau (o cockpit só sugere)',
+      /Os 7 combinados de \S+ · semana 26 a 30\/10/.test(pag) && /quebrado/.test(pag) && /no combinado/.test(pag) && /aceito/.test(pag)
+        && /Rituais da semana/.test(pag) && /Visita com o dono em 47% nesta semana\. Se registrar, é o degrau 1: conversa\./.test(pag)
+        && /data-gv2="cb:ocor:bia:4"/.test(pag), pag.slice(0, 200));
+    const time = GV2.render.cbTime();
+    checar('combinados · 2c: a grade do time, o aceite pendente e a divergência com "Ver a auditoria"',
+      /time: 86% das visitas com ficha na hora · dono ausente em 75% das portas/.test(time) && /is-av">pendente/.test(time)
+        && /1 divergência na auditoria: visita de 27\/10 em Bar do Zé sem prova no endereço da ficha\. Se for registro falso, vai direto para a advertência\./.test(time)
+        && /data-gv2="v5dia:2:2026-10-27">Ver a auditoria/.test(time), time.slice(0, 300));
+    const itPauta = GV2.cbPautaItem(GV2.base.porId['2']);
+    checar('combinados · a pauta do 1:1 ganha o aceite pendente no fim (os itens de antes não mudam); com o aceite em dia, não',
+      itPauta && itPauta.rot === 'Os 7 combinados' && GV2.cbPautaItem(GV2.base.porId['1']) === null
+        && /\{ rot: 'Tendência', tom: caiu \? 'erro' : 'mute', t: tend \}\n  \]\.concat\(GV2\.cbPautaItem && GV2\.cbPautaItem\(p\) \? \[GV2\.cbPautaItem\(p\)\] : \[\]\);/.test(codigo), JSON.stringify(itPauta));
+    const gravou = [];
+    global.supa.from = function (tab) { return { insert: function (row) { gravou.push({ tab: tab, row: row }); return Promise.resolve({ error: null }); } }; };
+    GV2.estado.cbGav = { pessoa: 'bia', n: 3 }; GV2.estado.cbForm = { oQue: '7 de 41 visitas sem ficha antes da próxima porta.' };
+    const dr = GV2.render.cbGav();
+    checar('combinados · 2b: o drawer propõe o degrau 2 (plano escrito) com a conversa de 13/10 como feita',
+      /Registrar plano escrito/.test(dr) && /13\/10 · Ficha na hora/.test(dr) && /este registro · prazo de 2 semanas/.test(dr), dr.slice(0, 200));
+    await GV2.cbRegistrar('bia');
+    checar('combinados · registrar grava a ocorrência com o degrau e o prazo de 2 semanas do plano escrito',
+      gravou.length === 1 && gravou[0].tab === 'ocorrencias' && gravou[0].row.degrau === 2 && gravou[0].row.combinado === 3 && gravou[0].row.prazo === '2026-11-13' && !gravou[0].row.registro_falso, JSON.stringify(gravou));
+    gravou.length = 0;
+    GV2.estado.cbGav = { pessoa: 'rui', n: 5 }; GV2.estado.cbForm = { falso: true, oQue: 'Visita de 27/10 registrada sem ter acontecido.' };
+    await GV2.cbRegistrar('rui');
+    checar('combinados · registro falso grava direto no degrau 3', gravou.length === 1 && gravou[0].row.degrau === 3 && gravou[0].row.registro_falso === true, JSON.stringify(gravou));
+    gravou.length = 0;
+    GV2.cb.d = mundoCb; GV2.cb.em = Date.now(); GV2.cb.lendo = false;
+    GV2.estado.cbGav = { pessoa: 'rui', n: 2 }; GV2.estado.cbForm = { oQue: '  ' };
+    await GV2.cbRegistrar('rui');
+    checar('combinados · sem escrever o que aconteceu, não grava', !gravou.length && /o que aconteceu/.test(GV2.estado.cbErro || ''), JSON.stringify({ g: gravou, e: GV2.estado.cbErro }));
+    checar('combinados · nenhuma escrita no HubSpot no módulo', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.CB = {'), codigo.indexOf('GV2.cbPautaItem = function'))));
+    global.supa.from = supaEra;
+    Object.assign(GV2.cb, cbEra);
+    GV2.estado.cbGav = null; GV2.estado.cbForm = null; GV2.estado.cbErro = null;
+  }
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
