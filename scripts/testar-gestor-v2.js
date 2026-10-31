@@ -691,7 +691,8 @@ tabelas.gv2_falta_etapa = [
   {
     const nav = GV2.navHTML();
     const rots = (nav.match(/<span class="gv2-nav-rot">[^<]+</g) || []).map(function (x) { return x.replace('<span class="gv2-nav-rot">', '').replace('<', ''); });
-    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X nem Prospecção)', rots.slice(0, 7).join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook' && rots.slice(7).join(' · ') === 'Prova dos números · Acessos · Ver como executivo' && nav.indexOf('>Do diretor<') > 0, rots.join(' · '));
+    /* 31/10/26: a Rampa entra logo abaixo de Pessoas (handoff "Acelerar Field Sales v2", 1a); o resto do menu não muda */
+    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Rampa · Propostas · Playbook (sem Raio X nem Prospecção)', rots.slice(0, 8).join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Rampa · Propostas · Playbook' && rots.slice(8).join(' · ') === 'Prova dos números · Acessos · Ver como executivo' && nav.indexOf('>Do diretor<') > 0, rots.join(' · '));
     checar('rolagem: corpo v5 e gaveta não deixam o cartão encolher (Por pessoa e "Para puxar" sumiam, 09/10/26)',
       tpl.indexOf('.gv2-corpo.gv2-v5 > *{flex-shrink:0;}') > 0 && tpl.indexOf('.gv2-rxg-corpo > *{flex-shrink:0;}') > 0);
     checar('mapa em tela cheia: todo mapa v5 ganha o botão e o mapa da Pessoa · dia reenquadra quando a caixa muda (09/10/26)',
@@ -1494,6 +1495,87 @@ tabelas.gv2_falta_etapa = [
     checar('g0 · perda: sem a leitura do robô, o cartão diz que chega na próxima, sem número inventado',
       /chega na próxima leitura do HubSpot pelo robô/.test(GV2.render.g0Perda()));
     GV2.base.negocios = negEra; global.DATA.perdasPosDemo = dataEra;
+  }
+
+  /* ── A RAMPA (handoff "Acelerar Field Sales v2", 1a–1c · 31/10/26): a fase sai das aprovações,
+     aprovar exige evidência e data, sem bater pede motivo, prospecção antes da S4 vira alerta. ── */
+  {
+    const rpEra = Object.assign({}, GV2.rp), supaEra = global.supa.from;
+    const sem = function (seg, provadas, uteis) { return { segunda: seg, provadas: provadas, uteis: uteis == null ? 5 : uteis }; };
+    const pes = function (id, o) { return Object.assign({ pessoa: id, ownerId: null, nome: 'Pessoa ' + id, inicio: '2026-10-05', turma: '2026-10-05', padrinhoNome: 'Marco Filho', dia: 27, fases: {}, decisao: null,
+      medido: { demos: 0, clientes: 0, visitasBase: 0, prospeccao: 0, prospeccaoDias: [], semanas: [] } }, o); };
+    const ap = function (d, real) { return { aprovadaEm: d, aprovadaPor: 'Julyan', evidencia: 'Gravação', realizado: real || {} }; };
+    const camila = pes('camila', { fases: { s1: ap('2026-10-12', { reunioes: 10, simulacoes: 3 }) }, medido: { demos: 16, clientes: 0, visitasBase: 0, prospeccao: 0, prospeccaoDias: [], semanas: [] } });
+    const fabio = pes('fabio', { fases: { s1: ap('2026-10-12'), s23: ap('2026-10-26') }, medido: { demos: 17, clientes: 0, visitasBase: 6, prospeccao: 0, prospeccaoDias: [], semanas: [] } });
+    const diego = pes('diego', { fases: { s1: ap('2026-10-13'), s23: { estendidaAte: '2026-11-06', motivo: 'faltam demos', realizado: {} } },
+      medido: { demos: 9, clientes: 0, visitasBase: 0, prospeccao: 3, prospeccaoDias: ['2026-10-27', '2026-10-28'], semanas: [] } });
+    const leandro = pes('leandro', { inicio: '2026-09-14', turma: '2026-09-14', dia: 48, fases: { s1: ap('2026-09-21'), s23: ap('2026-10-05'), s4: ap('2026-10-14') },
+      medido: { demos: 18, clientes: 0, visitasBase: 13, prospeccao: 0, prospeccaoDias: [], semanas: [sem('2026-10-19', 20), sem('2026-10-26', 21)] } });
+    GV2.rp.d = { hoje: '2026-10-31', pessoas: [camila, fabio, diego, leandro], lidoEm: '2026-10-31T11:00:00Z' };
+    GV2.rp.em = Date.now(); GV2.rp.lendo = false; GV2.rp.erro = null; GV2.rp.equipe = [];
+    const est = function (x) { return GV2.RP.fases.map(function (f, i) { const s = GV2.rpFase(x, i); return s.k + (s.k === 'off' ? '(' + (s.ant.k === 'cur' ? 'a partir ' + GV2.somaDias(s.ant.prazo, 1) : 'depois ' + s.ant.f.curto) + ')' : ''); }).join(' '); };
+    checar('rampa · a fase sai das aprovações: S2–3 vencida sem aprovar trava as seguintes ("depois da S2–3")',
+      est(camila) === 'ok av off(depois S2–3) off(depois S4)', est(camila));
+    checar('rampa · S4 em curso até o dia 30 e a rua "a partir de" o dia seguinte',
+      est(fabio) === 'ok ok cur off(a partir 2026-11-04)' && GV2.rpFase(fabio, 2).prazo === '2026-11-03', est(fabio));
+    checar('rampa · fase estendida fica em curso até a nova data',
+      GV2.rpFase(diego, 1).k === 'cur' && GV2.rpFase(diego, 1).estendida && GV2.rpFase(diego, 1).prazo === '2026-11-06', JSON.stringify(GV2.rpFase(diego, 1)));
+    const D = GV2.rpD45(leandro);
+    checar('rampa · dia 45 = dia 1 + 44; sem decisão depois dele é vencido',
+      D.data === '2026-10-28' && D.vencida && GV2.rpD45(fabio).data === '2026-11-18' && !GV2.rpD45(fabio).vencida, JSON.stringify(D));
+    checar('rampa · "estende" marca nova data e pede outra decisão nela',
+      (function () { const y = pes('y', { decisao: { decisao: 'estende', novaData: '2026-11-13', plano: 'semana 1: 5 por dia' } }); const d = GV2.rpD45(y); return d.pendente && d.data === '2026-11-13' && !d.vencida; })());
+    checar('rampa · prospecção antes da S4 aprovada é alerta (nunca trava); depois da S4 não',
+      GV2.rpProsp(diego) && !GV2.rpProsp(leandro) && GV2.rpDiasTxt(['2026-10-28', '2026-10-27']) === '27 e 28/10' && GV2.rpDiasTxt(['2026-10-30', '2026-11-02']) === '30/10 e 02/11');
+    checar('rampa · a rua aprova com 6 por dia por 2 semanas seguidas (semanas inteiras)',
+      GV2.rpRuaOk({ medido: { semanas: [sem('a', 30), sem('b', 31)] } }) && !GV2.rpRuaOk({ medido: { semanas: [sem('a', 29), sem('b', 31)] } })
+        && !GV2.rpRuaOk({ medido: { semanas: [sem('a', 30), sem('b', 18, 3)] } }) && GV2.rpVisitasDia(leandro) === 4.2);
+    GV2.estado.rpTurma = '2026-10-05';
+    const html = GV2.render.rampa();
+    checar('rampa · o quadro tem as turmas com contagem, a célula vencida com "Aprovar fase" e o alerta de prospecção com o padrinho',
+      /Turma 05\/10<span class="num">3<\/span>/.test(html) && /Turma 14\/09<span class="num">1<\/span>/.test(html)
+        && /Venceu 25\/10 sem aprovar/.test(html) && /data-gv2="rp:aprovar:camila:s23">Aprovar fase/.test(html)
+        && /3 visitas de prospecção em 27 e 28\/10, antes da S4 aprovada/.test(html) && /Estendida até 06\/11/.test(html)
+        && /A partir de 04\/11/.test(html) && /Em curso · até 03\/11/.test(html), html.slice(0, 300));
+    const g = [];
+    GV2.rpGrupos(g, GV2.base, function (p, s, a) { return { n: p.nome, s: s, a: a }; });
+    checar('rampa · "Quem precisa de você": fase vencida e dia 45 sem decisão',
+      g.map(function (x) { return x.k; }).join() === 'rpfase,rpd45' && g[0].chips[0].s === 'S2–3 venceu 25/10' && g[1].chips[0].s === 'venceu 28/10', JSON.stringify(g.map(function (x) { return x.chips; })));
+    const it = GV2.rpSemanaItens('2026-10-26');
+    checar('rampa · a semana do gestor ganha "Aprovações da rampa" e "Dia 45 decidido"',
+      it.length === 2 && it[0].t === 'Aprovações da rampa' && it[0].feito === 1 && it[0].total === 2 && it[1].t === 'Dia 45 decidido' && it[1].total === 1, JSON.stringify(it));
+    /* gravar: aprovar exige evidência; sem bater a meta pede motivo; nada vai para o HubSpot */
+    const gravou = [];
+    global.supa.from = function (tab) { return { upsert: function (row, o) { gravou.push({ tab: tab, row: row, o: o }); return Promise.resolve({ error: null }); },
+      update: function (row) { return { eq: function () { return { eq: function () { gravou.push({ tab: tab, row: row }); return Promise.resolve({ error: null }); } }; } }; } }; };
+    GV2.estado.rpGav = { t: 'aprovar', pessoa: 'camila', fase: 's23' };
+    GV2.estado.rpForm = { n_demoAprovada: '1' };
+    await GV2.rpAprovar('camila', 's23');
+    checar('rampa · aprovar sem evidência não grava', !gravou.length && /evidência/.test(GV2.estado.rpErro || ''), GV2.estado.rpErro);
+    GV2.estado.rpForm = { n_demoAprovada: '1', evTipo: 'Gravação', evDet: 'demo de 23/10' };
+    await GV2.rpAprovar('camila', 's23');
+    checar('rampa · aprovar fora do prazo pede o motivo escrito', !gravou.length && /fora do prazo/.test(GV2.estado.rpErro || ''), GV2.estado.rpErro);
+    GV2.estado.rpForm = { n_demoAprovada: '0', evTipo: 'Gravação', evDet: 'demo de 23/10', motivo: 'Bateu em 23/10; a aprovação ficou para depois.' };
+    await GV2.rpAprovar('camila', 's23');
+    checar('rampa · a contagem manual que não bate a meta também pede motivo (aqui ele existe e grava)', gravou.length === 1, GV2.estado.rpErro);
+    const lin = gravou[0] && gravou[0].row;
+    checar('rampa · a aprovação grava fase, data, quem, evidência e o realizado do momento em rampa_fases',
+      gravou[0].tab === 'rampa_fases' && lin.fase === 's23' && lin.aprovada_em === '2026-10-31' && lin.evidencia === 'Gravação · demo de 23/10'
+        && lin.realizado.demos === 16 && lin.realizado.demoAprovada === 0 && gravou[0].o.onConflict === 'pessoa,fase', JSON.stringify(gravou[0]));
+    await new Promise(function (r) { setTimeout(r, 5); });
+    gravou.length = 0;
+    GV2.estado.rpForm = { d45: 'estende', texto: 'curto' };
+    await GV2.rpDecidir('leandro');
+    checar('rampa · estender no dia 45 pede o plano escrito', !gravou.length && /plano/.test(GV2.estado.rpErro || ''), GV2.estado.rpErro);
+    GV2.estado.rpForm = { d45: 'estende', texto: 'Semana 1: 5 por dia, rota na véspera. Semana 2: 6 por dia.' };
+    await GV2.rpDecidir('leandro');
+    checar('rampa · "estende com plano" grava a decisão com nova data de 15 dias e o plano',
+      gravou.length === 1 && gravou[0].tab === 'rampa_decisao_d45' && gravou[0].row.decisao === 'estende' && gravou[0].row.nova_data === '2026-11-15' && /Semana 1/.test(gravou[0].row.plano), JSON.stringify(gravou[0]));
+    await new Promise(function (r) { setTimeout(r, 5); });
+    checar('rampa · nenhuma escrita no HubSpot no módulo', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.RP = {'), codigo.indexOf('GV2.rpSemanaItens = function'))));
+    global.supa.from = supaEra;
+    Object.assign(GV2.rp, rpEra);
+    GV2.estado.rpGav = null; GV2.estado.rpForm = null; GV2.estado.rpErro = null;
   }
 
   if (falhas.length) {
