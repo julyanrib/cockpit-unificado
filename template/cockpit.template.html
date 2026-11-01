@@ -13345,6 +13345,23 @@ button.gv2-cb-nome:hover{text-decoration:underline;}
 .gv2-ld-nat-bt{display:flex;flex-wrap:wrap;gap:8px;flex:none;}
 @media (max-width:1240px){.gv2-ld-pessoa{grid-template-columns:minmax(0,1fr);}}
 @media (max-width:640px){.gv2-ld-nat{flex-direction:column;align-items:flex-start;}}
+/* ── O CLIENTE QUE FICA (handoff "Acelerar Field Sales v2", 6a): só tokens --gv2-* ── */
+.gv2-cf{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);gap:var(--gv2-gap);align-items:start;}
+.gv2-cf-gl{display:grid;grid-template-columns:minmax(110px,1.2fr) repeat(4,minmax(84px,1fr)) 104px;gap:10px;align-items:center;width:100%;min-width:640px;min-height:52px;padding:8px 16px;border:0;border-top:1px solid var(--gv2-line);background:none;color:inherit;font:inherit;text-align:left;box-sizing:border-box;}
+button.gv2-cf-gl{cursor:pointer;} button.gv2-cf-gl:hover{background:var(--gv2-hov);}
+.gv2-cf-gl.is-aberto{background:var(--gv2-sub);}
+.gv2-cf-gl.is-th{min-height:48px;background:var(--gv2-sub);font:700 11.5px/1.25 var(--gv2-font);text-transform:uppercase;letter-spacing:.04em;color:var(--gv2-mute);}
+.gv2-cf-gl.is-th small{display:block;font:500 11.5px/1.3 var(--gv2-font);text-transform:none;letter-spacing:0;color:var(--gv2-dim);}
+.gv2-cf-gl.is-erro{box-shadow:inset 3px 0 0 var(--gv2-acao);}
+.gv2-cf-gl > b.num{font:700 13.5px/1.3 var(--gv2-font);font-variant-numeric:tabular-nums;}
+.gv2-cf-det{display:flex;flex-direction:column;gap:0;min-width:640px;padding:4px 16px 12px 32px;border-top:1px solid var(--gv2-line);background:var(--gv2-sub);}
+.gv2-cf-det .gv2-rp-chip{max-width:260px;}
+.gv2-cf-vazio{padding:12px 16px;}
+.gv2-cf-com{background:transparent;border:1px dashed var(--gv2-line-btn);box-shadow:none;}
+.gv2-cf-com .t-av{color:var(--gv2-av);}
+.gv2-cf-com .t-dim{color:var(--gv2-faint);font:700 14px/1.3 var(--gv2-font);}
+.gv2-cf-aviso{padding:12px 14px;border-radius:10px;background:var(--gv2-chip);color:var(--gv2-dim);font:600 13px/1.45 var(--gv2-font);}
+@media (max-width:1240px){.gv2-cf{grid-template-columns:minmax(0,1fr);}}
 .gv2-acc-orfa{grid-column:1 / -1;display:flex;flex-direction:column;}
 .gv2-acc-orfa-lin{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:10px 18px;border-top:1px solid var(--gv2-line);}
 .gv2-acc-orfa-lin small{white-space:normal;}
@@ -78107,6 +78124,7 @@ GV2.clique = function (ev) {
   if (GV2.hbComando && GV2.hbComando(cmd, parte)) return;
   if (GV2.rcComando && GV2.rcComando(cmd, parte)) return;
   if (GV2.ldComando && GV2.ldComando(cmd, parte)) return;
+  if (GV2.cfComando && GV2.cfComando(cmd, parte)) return;
   if (GV2.v5PessoasComando && GV2.v5PessoasComando(cmd, parte)) return;
   if (GV2.v5TerrComando && GV2.v5TerrComando(cmd, parte)) return;
   if (GV2.rotaComando && GV2.rotaComando(cmd, parte)) return;
@@ -84914,6 +84932,124 @@ GV2.ldComando = function (cmd, parte) {
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && GV2.estado.ldGav) { GV2.estado.ldGav = null; GV2.estado.ldErro = null; GV2.pintar(); } });
 })();
 
+/* ══ O CLIENTE QUE FICA (handoff "Acelerar Field Sales v2", tela 6a · 01/11/26) ══════════════════
+   No fim de Pessoas (não existe aba Mês, então, como o handoff manda, o cartão fica só aqui): por
+   executivo, as vendas que já fizeram 60 dias, quantas estão ativas e pagando e quantas usam de
+   verdade. Ao lado, a prévia da comissão em duas partes, desligada pela chave até a diretoria aprovar.
+   Fonte: o robô traz do HubSpot as vendas (DATA.clienteQueFica: dono, data e CNPJ) e
+   cliente_que_fica() (0236) cruza pelo CNPJ com os clientes da Takeat — a situação no CS, a última
+   cobrança recebida no ASAAS e os dias com comanda. A situação é a de HOJE: a foto diária dos
+   clientes só existe desde 27/09, então "aos 60 dias" exato ainda não dá para medir para trás.
+   Só leitura; nada escreve no HubSpot nem no ASAAS. */
+GV2.CF = {
+  CACHE_MS: 300000,
+  /* ativo = na carteira (ativo ou em risco no CS) e com cobrança recebida há até 35 dias */
+  COBRANCA_DIAS: 35,
+  /* uso real = comanda em pelo menos 20 dos últimos 30 dias (handoff, USO_REAL, provisório) */
+  USO_REAL_DIAS: 20,
+  verde: 75, ambar: 50,
+  /* a comissão em duas partes só aparece quando a diretoria aprovar (handoff, COMISSAO_DUAS_PARTES) */
+  COMISSAO_DUAS_PARTES: false
+};
+GV2.cf = { d: null, lendo: false, erro: null, em: 0, chave: null };
+GV2.cfVendas = function () { const C = typeof DATA !== 'undefined' && DATA && DATA.clienteQueFica; return C && Array.isArray(C.vendas) ? C : null; };
+GV2.cfLer = function (forcar) {
+  const F = GV2.cf, C = GV2.cfVendas();
+  if (!C) return;
+  const chave = C.lidoEm + ':' + C.vendas.length;
+  if (F.lendo || (!forcar && F.chave === chave && F.em && Date.now() - F.em < GV2.CF.CACHE_MS)) return;
+  if (typeof supa === 'undefined' || !supa) { F.erro = 'sem conexão com o banco'; F.em = Date.now(); F.chave = chave; return; }
+  F.lendo = true;
+  Promise.resolve().then(function () { return supa.rpc('cliente_que_fica', { p_vendas: C.vendas.map(function (v) { return { id: v.id, cnpj: v.cnpj }; }) }); }).then(function (r) {
+    F.lendo = false; F.em = Date.now(); F.chave = chave;
+    if (r && (r.error || (r.data && r.data.erro))) { F.erro = (r.error && r.error.message) || r.data.erro; F.d = null; }
+    else { F.erro = null; F.d = (r && r.data) || { vendas: [] }; }
+    if (GV2.estado.aba === 'pessoas') GV2.pintar();
+  }, function (e) { F.lendo = false; F.em = Date.now(); F.chave = chave; F.erro = (e && e.message) || 'erro'; if (GV2.estado.aba === 'pessoas') GV2.pintar(); });
+};
+/* cada venda com o que se sabe dela: achou o cliente, está pagando, usa de verdade */
+GV2.cfLinhas = function () {
+  const C = GV2.cfVendas(), F = GV2.cf.d;
+  if (!C || !F) return null;
+  const por = {};
+  (F.vendas || []).forEach(function (x) { por[String(x.id)] = x; });
+  const hoje = F.hoje || GV2.base.agora.iso, corte = GV2.somaDias(hoje, -GV2.CF.COBRANCA_DIAS);
+  return C.vendas.map(function (v) {
+    const x = por[String(v.id)] || {};
+    const naCarteira = x.situacao === 'ativo' || x.situacao === 'em_risco';
+    const ativo = !!(x.achou && naCarteira && x.ultimaCobranca && x.ultimaCobranca >= corte);
+    const uso = ativo && Number(x.diasComanda) >= GV2.CF.USO_REAL_DIAS;
+    return { v: v, x: x, achou: !!x.achou, ativo: ativo, uso: uso };
+  });
+};
+GV2.cfSinal = function (pct) { return pct == null ? { k: '', t: 'sem venda' } : pct >= GV2.CF.verde ? { k: 'ok', t: 'fica' } : pct >= GV2.CF.ambar ? { k: 'av', t: 'atenção' } : { k: 'erro', t: 'não fica' }; };
+GV2.cfGrupos = function (L) {
+  const g = {}, fora = [];
+  L.forEach(function (l) {
+    const o = l.v.ownerId && GV2.base.porId[String(l.v.ownerId)] ? String(l.v.ownerId) : null;
+    if (o) (g[o] = g[o] || []).push(l); else fora.push(l);
+  });
+  const conta = function (ls) { const n = ls.length, a = ls.filter(function (l) { return l.ativo; }).length, u = ls.filter(function (l) { return l.uso; }).length; return { n: n, ativos: a, uso: u, pct: n ? Math.round(u / n * 100) : null, ls: ls }; };
+  const out = Object.keys(g).map(function (o) { return Object.assign({ o: o, nome: GV2.nomeDe(o) }, conta(g[o])); })
+    .sort(function (a, b) { return (b.pct == null ? -1 : b.pct) - (a.pct == null ? -1 : a.pct) || b.n - a.n; });
+  if (fora.length) out.push(Object.assign({ o: 'fora', nome: 'Quem saiu do time' }, conta(fora)));
+  return out;
+};
+GV2.cfEstado = function (l) {
+  if (!l.achou) return { k: '', t: l.v.cnpj ? 'não achado no CS pelo CNPJ' : 'venda sem CNPJ no HubSpot' };
+  if (l.uso) return { k: 'ok', t: 'pagando · comanda em ' + l.x.diasComanda + ' de 30 dias' };
+  if (l.ativo) return { k: 'av', t: 'pagando · comanda em ' + (Number(l.x.diasComanda) || 0) + ' de 30 dias' };
+  if (l.x.situacao === 'ex') return { k: 'erro', t: 'saiu · ' + (l.x.etapa || 'cancelado') };
+  return { k: 'erro', t: (l.x.etapa || 'na carteira') + ' · ' + (l.x.ultimaCobranca ? 'última cobrança ' + GV2.ddmm(l.x.ultimaCobranca) : 'sem cobrança recebida') };
+};
+GV2.render.cfTime = function () {
+  const C = GV2.cfVendas();
+  if (!C) return '';
+  GV2.cfLer(false);
+  const F = GV2.cf;
+  const cab = function (sub) { return '<div class="gv2-cb-cab"><div><b>' + GV2.e('O cliente que fica · vendas de ' + GV2.ddmm(C.de) + ' a ' + GV2.ddmm(C.ate)) + '</b><span>' + GV2.e(sub) + '</span></div><small>' + GV2.e('HubSpot + ASAAS + comandas' + (F.d && F.d.lidoEm ? ' · ' + GV2.ddmm(String(F.d.lidoEm).slice(0, 10)) + ' ' + GV2.horaDe(F.d.lidoEm) : '')) + '</small></div>'; };
+  let tab;
+  if (F.erro && !F.d) tab = '<section class="card gv2-cb">' + cab('') + GV2.html.estado('erro', 'Não cruzei as vendas com os clientes agora (' + F.erro + ').') + '</section>';
+  else if (!F.d) tab = '<div class="gv2-esq" style="height:260px"></div>';
+  else {
+    const L = GV2.cfLinhas(), G = GV2.cfGrupos(L);
+    const n = L.length, u = L.filter(function (l) { return l.uso; }).length, semAchar = L.filter(function (l) { return !l.achou; }).length;
+    const aberto = GV2.estado.cfAberto;
+    const th = '<div class="gv2-cf-gl is-th"><span>Pessoa</span><span>Vendidos<small>já com 60 dias</small></span><span>Ativos hoje<small>pagando no ASAAS</small></span><span>Com uso real<small>comandas</small></span><span>Ficou<small>uso ÷ vendidos</small></span><span>Sinal</span></div>';
+    const linhas = G.map(function (g) {
+      const s = GV2.cfSinal(g.pct), ab = aberto === g.o;
+      const det = ab ? '<div class="gv2-cf-det">' + g.ls.slice().sort(function (a, b) { return a.v.fechou < b.v.fechou ? 1 : -1; }).map(function (l) {
+        const e = GV2.cfEstado(l);
+        return '<div class="gv2-rp-pede"><div><b>' + GV2.e(l.v.nome) + '</b><small>' + GV2.e('vendeu ' + GV2.ddmm(l.v.fechou || '') + (g.o === 'fora' ? ' · ' + GV2.nomeDe(l.v.ownerId) : '')) + '</small></div><span class="gv2-rp-chip' + (e.k ? ' is-' + e.k : '') + '">' + GV2.e(e.t) + '</span></div>';
+      }).join('') + '</div>' : '';
+      return '<button type="button" class="gv2-cf-gl' + (s.k === 'erro' ? ' is-erro' : '') + (ab ? ' is-aberto' : '') + '" data-gv2="cf:abrir:' + GV2.e(g.o) + '" aria-expanded="' + ab + '">'
+        + '<b class="gv2-cb-nome">' + GV2.e(g.o === 'fora' ? g.nome : GV2.prim(g.nome)) + '</b><b class="num">' + g.n + '</b><b class="num t-dim">' + g.ativos + '</b><b class="num">' + g.uso + '</b>'
+        + '<b class="num' + (s.k ? ' t-' + s.k : '') + '">' + (g.pct == null ? '—' : g.pct + '%') + '</b><span><span class="gv2-rp-chip' + (s.k ? ' is-' + s.k : '') + '">' + GV2.e(s.t) + '</span></span></button>' + det;
+    }).join('');
+    tab = '<section class="card gv2-cb gv2-cb-time">' + cab('time: ' + GV2.pl(n, 'vendido', 'vendidos') + ', ' + u + ' com uso real hoje' + (n ? ' (' + Math.round(u / n * 100) + '%)' : '') + ' · toque numa linha para ver as vendas')
+      + '<div class="gv2-cb-grade">' + th + (linhas || '<p class="gv2-g0-sub gv2-cf-vazio">nenhuma venda nessa janela</p>') + '</div>'
+      + '<p class="gv2-rp-pe">' + GV2.e('Ativo = na carteira do CS e com cobrança recebida no ASAAS nos últimos ' + GV2.CF.COBRANCA_DIAS + ' dias. Uso real = comanda em pelo menos ' + GV2.CF.USO_REAL_DIAS + ' dos últimos 30 dias (provisório). A situação é a de hoje: a foto diária dos clientes começou em ' + GV2.ddmm((F.d.fotoDesde || '2026-09-27')) + '. Verde ' + GV2.CF.verde + '% ou mais · âmbar ' + GV2.CF.ambar + ' a ' + (GV2.CF.verde - 1) + '% · vermelho abaixo.'
+        + (semAchar ? ' ' + GV2.pl(semAchar, 'venda não foi achada', 'vendas não foram achadas') + ' no CS pelo CNPJ e conta como não ficou.' : '')) + '</p></section>';
+  }
+  return '<div class="gv2-cf">' + tab + GV2.render.cfComissao() + '</div>';
+};
+/* a prévia da comissão em duas partes: atrás da chave, sem valor nenhum enquanto estiver desligada */
+GV2.render.cfComissao = function () {
+  const ligada = GV2.CF.COMISSAO_DUAS_PARTES;
+  return '<section class="card gv2-cb gv2-cf-com"><small class="gv2-rp-kick t-av">' + (ligada ? 'Aprovada pela diretoria' : 'Aguarda a diretoria') + '</small>'
+    + '<div class="gv2-cb-cab"><div><b>Prévia da comissão em duas partes</b><span>Parte 1 na assinatura. Parte 2 quando o cliente está ativo e usando aos 60 dias.</span></div></div>'
+    + '<div class="gv2-rp-pede"><div><b>Parte 1 · assinatura</b></div><b class="num t-dim">—</b></div>'
+    + '<div class="gv2-rp-pede"><div><b>Parte 2 · cliente ativo aos 60 dias</b></div><b class="num t-dim">—</b></div>'
+    + '<div class="gv2-cf-aviso">Só aparece quando a diretoria aprovar a regra. Até lá, sem valores.</div>'
+    + '<div class="gv2-hb-pe"><button type="button" class="gv2-v5-btn" disabled aria-disabled="true">Desligado</button></div></section>';
+};
+GV2.cfComando = function (cmd, parte) {
+  if (cmd !== 'cf') return false;
+  if (parte[1] === 'abrir') { GV2.estado.cfAberto = GV2.estado.cfAberto === parte[2] ? null : parte[2]; GV2.pintar(); return true; }
+  if (parte[1] === 'ler') { GV2.cfLer(true); return true; }
+  return false;
+};
+
 GV2.render.time = function () {
   const b = GV2.base, t = b.time;
   GV2.v5Semana(b.agora.iso);
@@ -85254,7 +85390,7 @@ GV2.render.pessoas = function () {
   const comBt = '<button type="button" class="gv2-v5-btn" data-gv2="v6gav:com"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4h4l5 4V6L7 10H3zM16 9a4 4 0 010 6"/></svg>Comunicados'
     + (semLer ? '<span class="gv2-v6-sel">' + semLer + ' sem ler</span>' : '') + '</button>';
   return GV2.cabHTML('Pessoas', 'como cada um está e onde eu ajudo', comBt)
-    + '<div class="gv2-corpo gv2-v5 gv2-v5-pes">' + topo + (GV2.render.v6Placar ? GV2.render.v6Placar() : '') + (GV2.render.v7Mes ? GV2.render.v7Mes() : '') + '<div class="gv2-v5-pgrade">' + lis + GV2.render.v5Pessoa(sel) + '</div>' + (GV2.render.cbPessoa ? GV2.render.cbPessoa(sel) : '') + (GV2.render.hbPessoa ? GV2.render.hbPessoa(sel) : '') + (GV2.render.ldPessoa ? GV2.render.ldPessoa(sel) : '') + (GV2.render.cbTime ? GV2.render.cbTime() : '') + (GV2.render.hbTime ? GV2.render.hbTime() : '') + (GV2.render.ldTime ? GV2.render.ldTime() : '') + GV2.faltaHTML() + '</div>'
+    + '<div class="gv2-corpo gv2-v5 gv2-v5-pes">' + topo + (GV2.render.v6Placar ? GV2.render.v6Placar() : '') + (GV2.render.v7Mes ? GV2.render.v7Mes() : '') + '<div class="gv2-v5-pgrade">' + lis + GV2.render.v5Pessoa(sel) + '</div>' + (GV2.render.cbPessoa ? GV2.render.cbPessoa(sel) : '') + (GV2.render.hbPessoa ? GV2.render.hbPessoa(sel) : '') + (GV2.render.ldPessoa ? GV2.render.ldPessoa(sel) : '') + (GV2.render.cbTime ? GV2.render.cbTime() : '') + (GV2.render.hbTime ? GV2.render.hbTime() : '') + (GV2.render.ldTime ? GV2.render.ldTime() : '') + (GV2.render.cfTime ? GV2.render.cfTime() : '') + GV2.faltaHTML() + '</div>'
     + GV2.render.v5Gav() + (GV2.render.v6Gav ? GV2.render.v6Gav() : '') + (GV2.render.cbGav ? GV2.render.cbGav() : '')
     + (GV2.estado.p3rotacao ? '<div class="gv2-p3-veu" data-gv2="p3:rotfechar"></div><aside class="gv2-p3-folha"><div class="gv2-p3-folha-cab"><b>Rotação de campo</b>' + GV2.html.btn({ texto: 'Fechar', acao: 'p3:rotfechar' }) + '</div>' + GV2.render.rotacao(sel) + '</aside>' : '');
 };

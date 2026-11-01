@@ -1352,6 +1352,42 @@ async function perdasDepoisDaDemo() {
   return { base: Object.assign({ de: PERDA_BASE.de, ate: PERDA_BASE.ate, rotulo: PERDA_BASE.rotulo }, base), mes: Object.assign({ mes: mesAtual }, mes), lidoEm: new Date().toISOString() };
 }
 
+/* ══ O CLIENTE QUE FICA (01/11/26, prancha "Acelerar o Field Sales" v2, tela 6a) ══════════════
+   Quem vendeu e quem ficou: as vendas ganhas no pipeline de Field Sales que JÁ completaram 60
+   dias, numa janela de 120 dias (closedate entre hoje − 180 e hoje − 60), com o dono e o CNPJ.
+   O cockpit cruza pelo CNPJ com os clientes da Takeat (clientes_takeat: a situação no CS, a
+   última cobrança recebida no ASAAS e os dias com comanda), porque o "executivo" daquela
+   tabela é o dono do TERRITÓRIO, não quem vendeu. Só leitura no HubSpot. */
+const CLIENTE_FICA = { DIAS: 60, JANELA_DIAS: 120 };
+async function vendasQueJaFizeram60Dias() {
+  const agora = Date.now();
+  const ate = agora - CLIENTE_FICA.DIAS * 86400000;
+  const de = ate - CLIENTE_FICA.JANELA_DIAS * 86400000;
+  const results = await hsSearchAll({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'IN', values: [STAGES.ganho1, STAGES.ganho2] },
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(de), highValue: String(ate) }
+      ]
+    }],
+    properties: ['dealname', 'hubspot_owner_id', 'closedate', 'cnpj_cpf', 'valor_de_mrr']
+  });
+  const dia = (ms) => new Date(ms - 3 * 3600000).toISOString().slice(0, 10);
+  const vendas = results.filter(d => !isExcludedDeal(d)).map(d => {
+    const p = d.properties || {};
+    return {
+      id: String(d.id),
+      nome: p.dealname || 'negócio ' + d.id,
+      ownerId: p.hubspot_owner_id ? String(p.hubspot_owner_id) : null,
+      fechou: p.closedate ? dia(Date.parse(p.closedate)) : null,
+      cnpj: String(p.cnpj_cpf || '').replace(/\D/g, '') || null,
+      mrr: Math.round(parseFloat(p.valor_de_mrr) || 0)
+    };
+  });
+  return { de: dia(de), ate: dia(ate), dias: CLIENTE_FICA.DIAS, vendas: vendas, lidoEm: new Date().toISOString() };
+}
+
 async function motivosDePerda() {
   const noventaDias = Date.now() - 90 * 24 * 60 * 60 * 1000;
   const results = await hsSearchAll({
@@ -2330,6 +2366,12 @@ async function main() {
   } catch (e) {
     console.error('AVISO: perda depois da demo não veio nesta rodada (' + e.message + '). O resto do refresh segue.');
   }
+  let clienteQueFica = null;
+  try {
+    clienteQueFica = await vendasQueJaFizeram60Dias();
+  } catch (e) {
+    console.error('AVISO: as vendas de 60 dias (o cliente que fica) não vieram nesta rodada (' + e.message + '). O resto do refresh segue.');
+  }
   let historicoEtapas = null;
   try {
     historicoEtapas = await historicoDeEtapas();
@@ -2973,6 +3015,7 @@ async function main() {
     },
     motivosPerda,
     perdasPosDemo,
+    clienteQueFica,
     historicoEtapas,
     funil: {
       labels: ['Backlog', 'Prospecção', 'Visita', 'Conversa com Decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
