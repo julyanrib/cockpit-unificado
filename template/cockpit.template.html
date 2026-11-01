@@ -13330,6 +13330,21 @@ button.gv2-cb-nome:hover{text-decoration:underline;}
 .gv2-rc-ap{grid-template-columns:minmax(0,1fr) auto;}
 .gv2-rc-ap > b{font:700 22px/1.3 var(--gv2-font);color:var(--gv2-ink);text-align:right;}
 @media (max-width:640px){.gv2-rc-datas{grid-template-columns:minmax(0,1fr);}}
+/* ── PADRINHO E LÍDER DE PRAÇA (handoff "Acelerar Field Sales v2", 5a–5b): só tokens --gv2-* ── */
+.gv2-ld-pessoa{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--gv2-gap);align-items:start;}
+.gv2-ld-gl{display:grid;grid-template-columns:96px minmax(150px,1.4fr) repeat(4,minmax(110px,1fr)) 64px;gap:10px;align-items:center;min-width:900px;min-height:56px;padding:8px 16px;border-top:1px solid var(--gv2-line);box-sizing:border-box;}
+.gv2-ld-gl.is-th{min-height:44px;background:var(--gv2-sub);font:700 11.5px/1.25 var(--gv2-font);text-transform:uppercase;letter-spacing:.04em;color:var(--gv2-mute);}
+.gv2-ld-gl.is-th small{display:block;font:500 11.5px/1.3 var(--gv2-font);text-transform:none;letter-spacing:0;color:var(--gv2-dim);}
+.gv2-ld-gl > b.num{font:700 13.5px/1.3 var(--gv2-font);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.gv2-ld-af{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.gv2-ld-af b{font:600 13px/1.35 var(--gv2-font);color:var(--gv2-ink);}
+.gv2-ld-af b + b{font-weight:500;color:var(--gv2-dim);}
+.gv2-ld-nat{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:var(--gv2-rota-soft);}
+.gv2-ld-nat span{font:600 13px/1.45 var(--gv2-font);color:var(--gv2-rota);}
+.gv2-ld-nat .gv2-v5-btn{flex:none;}
+.gv2-ld-nat-bt{display:flex;flex-wrap:wrap;gap:8px;flex:none;}
+@media (max-width:1240px){.gv2-ld-pessoa{grid-template-columns:minmax(0,1fr);}}
+@media (max-width:640px){.gv2-ld-nat{flex-direction:column;align-items:flex-start;}}
 .gv2-acc-orfa{grid-column:1 / -1;display:flex;flex-direction:column;}
 .gv2-acc-orfa-lin{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:10px 18px;border-top:1px solid var(--gv2-line);}
 .gv2-acc-orfa-lin small{white-space:normal;}
@@ -78091,6 +78106,7 @@ GV2.clique = function (ev) {
   if (GV2.cbComando && GV2.cbComando(cmd, parte)) return;
   if (GV2.hbComando && GV2.hbComando(cmd, parte)) return;
   if (GV2.rcComando && GV2.rcComando(cmd, parte)) return;
+  if (GV2.ldComando && GV2.ldComando(cmd, parte)) return;
   if (GV2.v5PessoasComando && GV2.v5PessoasComando(cmd, parte)) return;
   if (GV2.v5TerrComando && GV2.v5TerrComando(cmd, parte)) return;
   if (GV2.rotaComando && GV2.rotaComando(cmd, parte)) return;
@@ -84687,6 +84703,217 @@ GV2.rcComando = function (cmd, parte) {
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && GV2.estado.rcGav) { GV2.estado.rcGav = null; GV2.estado.rcForm = null; GV2.estado.rcErro = null; GV2.pintar(); } });
 })();
 
+/* ══ PADRINHO E PRÓXIMO LÍDER DE PRAÇA (handoff "Acelerar Field Sales v2", telas 5a e 5b · 01/11/26) ══
+   5a · na página do pleno (quem não está em rampa), dois cartões novos: "Padrinho de" (os afilhados da
+        Rampa e como estão) e "Rumo a líder de praça" (os 4 critérios do Playbook, os mesmos para todos).
+   5b · no fim de Pessoas, os plenos contra os 4 critérios, lado a lado, e o destaque de quem cumpre mais
+        e não tem afilhado em curso: o padrinho natural da próxima turma ("Indicar padrinho").
+   Fonte: lider_quadro() (0235). O estado de cada afilhado sai das mesmas funções da aba Rampa (rpFase,
+   rpAtual, rpD45). "Indicar padrinho" grava em rampa_pessoas.padrinho. Nada aqui escreve no HubSpot. */
+GV2.LD = {
+  CACHE_MS: 120000,
+  /* 3 meses no ritmo = média de 6 visitas com prova por dia útil, nos 3 meses fechados (handoff, LIDER_RITMO) */
+  RITMO_DIA: 6,
+  MESES_RITMO: 3,
+  /* abaixo disso a conversão diz "amostra pequena" e não cumpre nem falha */
+  AMOSTRA_DEMOS: 10,
+  /* as ocorrências existem desde 31/10/26 (0232): "nenhuma" vale daí em diante */
+  OCORRENCIAS_DESDE: '2026-10-31',
+  criterios: ['3 meses no ritmo', 'Demo vira cliente acima da média', 'Nenhuma ocorrência de registro', 'Uma turma bem formada']
+};
+GV2.ld = { d: null, lendo: false, erro: null, em: 0 };
+GV2.ldLer = function (forcar) {
+  const L = GV2.ld;
+  if (L.lendo || (!forcar && L.em && Date.now() - L.em < GV2.LD.CACHE_MS)) return;
+  if (typeof supa === 'undefined' || !supa) { L.erro = 'sem conexão com o banco'; L.em = Date.now(); return; }
+  L.lendo = true;
+  Promise.resolve().then(function () { return supa.rpc('lider_quadro'); }).then(function (r) {
+    L.lendo = false; L.em = Date.now();
+    if (r && (r.error || (r.data && r.data.erro))) { L.erro = (r.error && r.error.message) || r.data.erro; L.d = null; }
+    else { L.erro = null; L.d = (r && r.data) || { pessoas: [] }; }
+    GV2.pintar();
+  }, function (e) { L.lendo = false; L.em = Date.now(); L.erro = (e && e.message) || 'erro'; GV2.pintar(); });
+};
+GV2.ldPessoas = function () { return (GV2.ld.d && GV2.ld.d.pessoas) || []; };
+GV2.ldDe = function (ownerId) { return GV2.ldPessoas().find(function (x) { return String(x.ownerId) === String(ownerId); }) || null; };
+GV2.ldPlenos = function () { return GV2.ldPessoas().filter(function (x) { return !x.emRampa; }); };
+GV2.ldMesNome = function (iso) { return GV2.MESES[Number(String(iso).slice(5, 7)) - 1]; };
+/* dias úteis do mês inteiro, seg a sex (a mesma conta da habilidade do mês) */
+GV2.ldUteisMes = function (mes) { return GV2.hbUteis(mes, GV2.somaDias(GV2.hbMesSeguinte(mes), -1)); };
+GV2.ldDiasDe = function (de, ate) { return Math.round((new Date(ate + 'T12:00:00Z') - new Date(de + 'T12:00:00Z')) / 86400000); };
+
+/* 1 · 3 meses no ritmo */
+GV2.ldRitmo = function (x) {
+  const d = GV2.ld.d || {};
+  const ms = (x.meses || []).filter(function (m) { return m.mes < d.mes; }).slice(-GV2.LD.MESES_RITMO).map(function (m) {
+    const u = GV2.ldUteisMes(m.mes), v = u ? Math.round(Number(m.provadas) / u * 10) / 10 : 0;
+    return { mes: m.mes, v: v, ok: v >= GV2.LD.RITMO_DIA };
+  });
+  const n = ms.filter(function (m) { return m.ok; }).length, ult = ms[ms.length - 1];
+  return { ok: n === GV2.LD.MESES_RITMO, n: n, ms: ms, val: n + ' de ' + GV2.LD.MESES_RITMO,
+    sub: ult ? GV2.ldMesNome(ult.mes) + ' ficou em ' + GV2.virg(ult.v) + ' visitas/dia' : 'sem mês fechado ainda',
+    chip: n === GV2.LD.MESES_RITMO ? null : 'falta ' + GV2.pl(GV2.LD.MESES_RITMO - n, 'mês', 'meses') };
+};
+/* 2 · demo vira cliente acima da média do time (os 3 meses fechados, soma ÷ soma) */
+GV2.ldConvTime = function () {
+  let dm = 0, cl = 0;
+  GV2.ldPlenos().forEach(function (x) { dm += Number(x.conv && x.conv.demos) || 0; cl += Number(x.conv && x.conv.clientes) || 0; });
+  return dm ? Math.round(cl / dm * 100) : null;
+};
+GV2.ldConv = function (x) {
+  const dm = Number(x.conv && x.conv.demos) || 0, cl = Number(x.conv && x.conv.clientes) || 0, tm = GV2.ldConvTime();
+  if (dm < GV2.LD.AMOSTRA_DEMOS) return { ok: false, pequena: true, val: dm ? Math.round(cl / dm * 100) + '%' : '—', sub: 'amostra pequena · ' + GV2.pl(dm, 'demo', 'demos') + ' em 3 meses', chip: 'amostra pequena' };
+  const v = Math.round(cl / dm * 100);
+  return { ok: tm != null && v > tm, v: v, val: v + '%', sub: 'time ' + (tm == null ? '—' : tm + '%') + ' · últimos 3 meses · ' + cl + ' de ' + dm, chip: tm != null && v > tm ? null : 'abaixo do time' };
+};
+/* 3 · nenhuma ocorrência de registro (combinado 5 ou registro falso) */
+GV2.ldRegistro = function (x) {
+  const n = Number(x.registro && x.registro.n) || 0;
+  return { ok: !n, val: n ? GV2.pl(n, 'ocorrência', 'ocorrências') : '', sub: n ? 'a última em ' + GV2.ddmm(x.registro.ultima) : 'desde ' + GV2.ddmm(GV2.LD.OCORRENCIAS_DESDE) + ', quando as ocorrências começaram', chip: n ? 'em análise' : null };
+};
+/* o estado de um afilhado, com as funções da aba Rampa */
+GV2.ldAfilhado = function (a) {
+  const rua = a.fases && a.fases.rua && a.fases.rua.aprovadaEm;
+  const turma = 'turma ' + GV2.ddmm(a.turma || a.inicio);
+  if (rua) {
+    const F = GV2.rpFase(a, GV2.RP.fases.length - 1), noPrazo = rua <= F.prazo;
+    return { k: 'formado', bem: noPrazo, chip: ['formado', noPrazo ? 'is-ok' : 'is-av'], s: turma + ' · 4 fases em ' + (GV2.ldDiasDe(a.inicio, rua) + 1) + ' dias' + (noPrazo ? '' : ' · depois do prazo'), curto: noPrazo ? 'formado' : 'formado fora do prazo' };
+  }
+  if (a.encerradaEm) return { k: 'encerrou', chip: ['saiu da rampa', ''], s: turma + ' · saiu em ' + GV2.ddmm(String(a.encerradaEm).slice(0, 10)), curto: 'saiu da rampa' };
+  const s = GV2.rpAtual(a), D = GV2.rpD45(a), dia = GV2.ldDiasDe(a.inicio, GV2.rpHoje()) + 1;
+  if (D.vencida) return { k: 'curso', chip: ['dia 45 vencido', 'is-erro'], s: turma + ' · dia ' + dia + ' · decisão do dia 45 venceu ' + GV2.ddmm(D.data), curto: 'dia 45 vencido' };
+  if (s && s.k === 'av') return { k: 'curso', chip: ['aprovação atrasada', 'is-av'], s: turma + ' · dia ' + dia + ' · ' + s.f.curto + ' venceu ' + GV2.ddmm(s.prazo), curto: s.f.curto + ' atrasada' };
+  return { k: 'curso', chip: ['em curso', 'is-cur'], s: turma + ' · dia ' + dia + (s ? ' · ' + s.f.curto + ' até ' + GV2.ddmm(s.prazo) : ''), curto: (s ? s.f.curto + ' ' : '') + 'em curso' };
+};
+/* 4 · uma turma bem formada: um afilhado com a rua aprovada no prazo */
+GV2.ldTurma = function (x) {
+  const as = (x.afilhados || []).map(function (a) { return { a: a, e: GV2.ldAfilhado(a) }; });
+  const bem = as.filter(function (y) { return y.e.bem; });
+  const curso = as.filter(function (y) { return y.e.k === 'curso'; });
+  if (bem.length) return { ok: true, val: GV2.lista(bem.map(function (y) { return GV2.prim(y.a.nome); })), sub: 'formado no prazo', chip: null, curso: curso.length };
+  return { ok: false, val: '', sub: curso.length ? GV2.pl(curso.length, 'afilhado em curso', 'afilhados em curso') : as.length ? 'nenhum formado no prazo' : 'sem afilhado ainda',
+    chip: curso.length ? 'em curso' : as.length ? 'falta' : 'sem afilhado', curso: curso.length };
+};
+GV2.ldCriterios = function (x) {
+  const c = [GV2.ldRitmo(x), GV2.ldConv(x), GV2.ldRegistro(x), GV2.ldTurma(x)];
+  return { c: c, n: c.filter(function (y) { return y.ok; }).length };
+};
+
+/* ── 5a · na página do pleno ── */
+GV2.render.ldPessoa = function (p) {
+  GV2.ldLer(false);
+  const L = GV2.ld;
+  if (L.erro && !L.d) return '<section class="card gv2-cb">' + GV2.html.estado('erro', 'Não li os critérios de líder agora (' + L.erro + ').') + '</section>';
+  if (!L.d) return '<div class="gv2-esq" style="height:200px"></div>';
+  const x = GV2.ldDe(p.id);
+  if (!x || x.emRampa) return '';
+  const as = x.afilhados || [];
+  const pad = '<section class="card gv2-cb"><div class="gv2-cb-cab"><div><b>Padrinho de</b><span>da Rampa</span></div></div>'
+    + (as.length ? as.map(function (a) {
+      const e = GV2.ldAfilhado(a);
+      return '<div class="gv2-rp-pede"><div><b>' + GV2.e(a.nome) + '</b><small>' + GV2.e(e.s) + '</small></div><span class="gv2-rp-chip ' + e.chip[1] + '">' + GV2.e(e.chip[0]) + '</span></div>';
+    }).join('') : '<p class="gv2-g0-sub">' + GV2.e(GV2.prim(x.nome) + ' ainda não é padrinho de ninguém. O padrinho se escolhe ao colocar a pessoa na Rampa.') + '</p>')
+    + '<div class="gv2-hb-pe"><button type="button" class="gv2-v5-btn" data-gv2="aba:rampa">Abrir a Rampa</button></div>'
+    + GV2.g0Rod('rampa_fases', L.d.lidoEm) + '</section>';
+  const C = GV2.ldCriterios(x);
+  const lid = '<section class="card gv2-cb"><div class="gv2-cb-cab"><div><b>Rumo a líder de praça</b><span>critérios publicados no Playbook, os mesmos para todo mundo</span></div><b class="num">' + C.n + ' de 4</b></div>'
+    + C.c.map(function (c, i) {
+      const tom = c.ok ? 'ok' : c.pequena ? '' : 'av';
+      return '<div class="gv2-rp-pede"><div><b>' + GV2.e(GV2.LD.criterios[i]) + '</b><small>' + GV2.e(c.sub) + '</small></div><span class="gv2-rp-pv">'
+        + (c.val ? '<b class="num' + (i === 0 && !c.ok ? ' t-av' : '') + '">' + GV2.e(c.val) + '</b>' : '')
+        + '<span class="gv2-rp-chip' + (tom ? ' is-' + tom : '') + '">' + GV2.e(c.ok ? 'cumpre' : c.chip || 'falta') + '</span></span></div>';
+    }).join('')
+    + GV2.g0Rod('visitas + HubSpot + ocorrências', L.d.lidoEm) + '</section>';
+  return '<div class="gv2-ld-pessoa">' + pad + lid + '</div>';
+};
+
+/* ── 5b · o próximo líder de praça, no fim de Pessoas ── */
+GV2.ldNaturais = function () {
+  const ps = GV2.ldPlenos().map(function (x) { return { x: x, C: GV2.ldCriterios(x), curso: GV2.ldTurma(x).curso }; });
+  const livres = ps.filter(function (y) { return !y.curso && GV2.base.porId[String(y.x.ownerId)]; });
+  const max = livres.reduce(function (a, y) { return Math.max(a, y.C.n); }, 0);
+  return max ? livres.filter(function (y) { return y.C.n === max; }) : [];
+};
+GV2.render.ldTime = function () {
+  GV2.ldLer(false);
+  const L = GV2.ld;
+  if (!L.d) return L.erro ? '<section class="card gv2-cb">' + GV2.html.estado('erro', 'Não li os critérios de líder agora (' + L.erro + ').') + '</section>' : '';
+  const ps = GV2.ldPlenos().map(function (x) { return { x: x, C: GV2.ldCriterios(x) }; })
+    .sort(function (a, b) { return b.C.n - a.C.n || String(a.x.nome).localeCompare(String(b.x.nome)); });
+  if (!ps.length) return '';
+  /* o aviso fica embaixo do último padrinho natural da tabela, com os nomes na ordem da tabela */
+  const natSet = {};
+  GV2.ldNaturais().forEach(function (z) { natSet[z.x.pessoa] = 1; });
+  const nat = ps.filter(function (y) { return natSet[y.x.pessoa]; });
+  const tm = GV2.ldConvTime(), ultimoNat = nat.length ? nat[nat.length - 1].x.pessoa : null;
+  const chip = function (k, t) { return '<span><span class="gv2-rp-chip' + (k ? ' is-' + k : '') + '">' + GV2.e(t) + '</span></span>'; };
+  const th = '<div class="gv2-ld-gl is-th"><span>Pleno</span><span>Afilhados</span><span>3 meses no ritmo</span><span>Demo vira cliente<small>' + GV2.e('time ' + (tm == null ? '—' : tm + '%')) + '</small></span><span>Registro</span><span>Turma formada</span><span>Cumpre</span></div>';
+  const linhas = ps.map(function (y) {
+    const x = y.x, c = y.C.c, p = GV2.base.porId[String(x.ownerId)];
+    const nome = p ? '<button type="button" class="gv2-cb-nome" data-gv2="v8pagina:' + GV2.e(p.id) + '">' + GV2.e(GV2.prim(x.nome)) + '</button>' : '<b class="gv2-cb-nome">' + GV2.e(GV2.prim(x.nome)) + '</b>';
+    const as = (x.afilhados || []).slice(0, 2).map(function (a) { return GV2.prim(a.nome) + ' · ' + GV2.ldAfilhado(a).curto; });
+    const af = as.length ? '<span class="gv2-ld-af">' + as.map(function (t) { return '<b>' + GV2.e(t) + '</b>'; }).join('') + '</span>' : '<span class="t-dim">—</span>';
+    const alerta = x.pessoa === ultimoNat ?'<div class="gv2-ld-nat"><span>' + GV2.e((nat.length > 1 ? GV2.lista(nat.map(function (z) { return GV2.prim(z.x.nome); })) + ' cumprem ' : 'Cumpre ') + y.C.n + ' de 4 e ' + (nat.length > 1 ? 'não têm afilhado em curso: são os padrinhos naturais da próxima turma.' : 'não tem afilhado em curso: é o padrinho natural da próxima turma.')) + '</span>'
+      + '<span class="gv2-ld-nat-bt">' + nat.map(function (z) { return '<button type="button" class="gv2-v5-btn" data-gv2="ld:indicar:' + z.x.pessoa + '">' + GV2.e(nat.length > 1 ? 'Indicar ' + GV2.prim(z.x.nome) : 'Indicar padrinho') + '</button>'; }).join('') + '</span></div>' : '';
+    return '<div class="gv2-ld-gl">' + nome + af
+      + chip(c[0].ok ? 'ok' : 'av', c[0].val)
+      + chip(c[1].pequena ? '' : c[1].ok ? 'ok' : 'erro', c[1].pequena ? 'amostra pequena' : c[1].val)
+      + chip(c[2].ok ? 'ok' : 'av', c[2].ok ? 'limpo' : 'em análise')
+      + chip(c[3].ok ? 'ok' : c[3].curso ? 'av' : '', c[3].ok ? c[3].val : c[3].chip)
+      + '<b class="num">' + y.C.n + ' de 4</b>' + alerta + '</div>';
+  }).join('');
+  return '<section class="card gv2-cb gv2-cb-time"><div class="gv2-cb-cab"><div><b>Próximo líder de praça</b><span>o próximo líder sai de dentro, depois de formar alguém</span></div><small>' + GV2.e('rampa_fases + visitas + HubSpot' + (L.d.lidoEm ? ' · ' + GV2.ddmm(String(L.d.lidoEm).slice(0, 10)) + ' ' + GV2.horaDe(L.d.lidoEm) : '')) + '</small></div>'
+    + '<div class="gv2-cb-grade">' + th + linhas + '</div></section>' + GV2.render.ldGav();
+};
+/* o drawer "Indicar padrinho": quem está na Rampa sem padrinho */
+GV2.render.ldGav = function () {
+  const g = GV2.estado.ldGav;
+  if (!g) return '';
+  GV2.rpLer(false);
+  const pad = GV2.ldPessoas().find(function (x) { return x.pessoa === g.padrinho; });
+  if (!pad) return '';
+  const sem = GV2.rpPessoas().filter(function (x) { return !x.padrinho && x.pessoa !== pad.pessoa; });
+  const erro = GV2.estado.ldErro ? '<p class="gv2-rp-erro" role="alert">' + GV2.e(GV2.estado.ldErro) + '</p>' : '';
+  const corpo = !GV2.rp.d ? '<p class="gv2-g0-sub">lendo a Rampa…</p>'
+    : sem.length ? '<div class="gv2-rp-box"><small class="gv2-rp-kick">Na Rampa sem padrinho</small>' + sem.map(function (x) {
+      return '<div class="gv2-rp-pede"><div><b>' + GV2.e(x.nome) + '</b><small>' + GV2.e('turma ' + GV2.ddmm(x.turma) + ' · dia ' + Math.max(1, x.dia)) + '</small></div>'
+        + '<button type="button" class="gv2-v5-btn" data-gv2="ld:padrinho:' + pad.pessoa + ':' + x.pessoa + '">' + GV2.e('Indicar ' + GV2.prim(pad.nome)) + '</button></div>';
+    }).join('') + '</div>'
+      : '<div class="gv2-cb-sug">Ninguém na Rampa está sem padrinho. Ao colocar a próxima turma na Rampa, escolha o padrinho no mesmo formulário.</div>';
+  return '<div class="gv2-rxg-veu gv2-rp-veu" data-gv2="ld:fechar"></div><aside class="gv2-rxg gv2-rp-gav" role="dialog" aria-label="Indicar padrinho">'
+    + '<header class="gv2-rxg-cab"><div><small class="gv2-rp-kick">Pessoas · próximo líder</small><b>Indicar padrinho</b><span>' + GV2.e(GV2.prim(pad.nome) + ' · cumpre ' + GV2.ldCriterios(pad).n + ' de 4') + '</span></div><button type="button" class="gv2-rxg-x" data-gv2="ld:fechar" aria-label="Fechar">×</button></header>'
+    + '<div class="gv2-rxg-corpo">' + corpo + erro + '</div>'
+    + '<footer class="gv2-rp-gpe"><button type="button" class="gv2-v5-btn" data-gv2="ld:fechar">Fechar</button><button type="button" class="gv2-v5-btn" data-gv2="ld:rampa">Abrir a Rampa</button></footer></aside>';
+};
+GV2.ldIndicar = async function (padrinho, afilhado) {
+  const pad = GV2.ldPessoas().find(function (x) { return x.pessoa === padrinho; });
+  const af = GV2.rpPessoas().find(function (x) { return x.pessoa === afilhado; });
+  if (!pad || !af) return;
+  GV2.estado.ldErro = 'Gravando…'; GV2.pintar();
+  const r = await Promise.resolve().then(function () {
+    return supa.from('rampa_pessoas').update({ padrinho: padrinho, atualizado_em: new Date().toISOString() }).eq('pessoa', afilhado);
+  }).then(function (y) { return y; }, function (e) { return { error: e }; });
+  if (r && r.error) { GV2.estado.ldErro = 'Não gravou: ' + (r.error.message || r.error); GV2.toast(GV2.estado.ldErro, 'erro'); return GV2.pintar(); }
+  GV2.estado.ldErro = null; GV2.estado.ldGav = null;
+  GV2.toast(GV2.prim(pad.nome) + ' é padrinho de ' + GV2.prim(af.nome) + ' ✓');
+  GV2.rpLer(true); GV2.ldLer(true);
+  GV2.pintar();
+};
+GV2.ldComando = function (cmd, parte) {
+  if (cmd !== 'ld') return false;
+  const a = parte[1];
+  if (a === 'ler') { GV2.ldLer(true); return true; }
+  if (a === 'indicar') { GV2.estado.ldGav = { padrinho: parte[2] }; GV2.estado.ldErro = null; GV2.rpLer(false); GV2.pintar(); return true; }
+  if (a === 'padrinho') { GV2.ldIndicar(parte[2], parte[3]); return true; }
+  if (a === 'fechar') { GV2.estado.ldGav = null; GV2.estado.ldErro = null; GV2.pintar(); return true; }
+  if (a === 'rampa') { GV2.estado.ldGav = null; GV2.estado.ldErro = null; GV2.ir('rampa'); return true; }
+  return false;
+};
+(function () {
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && GV2.estado.ldGav) { GV2.estado.ldGav = null; GV2.estado.ldErro = null; GV2.pintar(); } });
+})();
+
 GV2.render.time = function () {
   const b = GV2.base, t = b.time;
   GV2.v5Semana(b.agora.iso);
@@ -85027,7 +85254,7 @@ GV2.render.pessoas = function () {
   const comBt = '<button type="button" class="gv2-v5-btn" data-gv2="v6gav:com"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10v4h4l5 4V6L7 10H3zM16 9a4 4 0 010 6"/></svg>Comunicados'
     + (semLer ? '<span class="gv2-v6-sel">' + semLer + ' sem ler</span>' : '') + '</button>';
   return GV2.cabHTML('Pessoas', 'como cada um está e onde eu ajudo', comBt)
-    + '<div class="gv2-corpo gv2-v5 gv2-v5-pes">' + topo + (GV2.render.v6Placar ? GV2.render.v6Placar() : '') + (GV2.render.v7Mes ? GV2.render.v7Mes() : '') + '<div class="gv2-v5-pgrade">' + lis + GV2.render.v5Pessoa(sel) + '</div>' + (GV2.render.cbPessoa ? GV2.render.cbPessoa(sel) : '') + (GV2.render.hbPessoa ? GV2.render.hbPessoa(sel) : '') + (GV2.render.cbTime ? GV2.render.cbTime() : '') + (GV2.render.hbTime ? GV2.render.hbTime() : '') + GV2.faltaHTML() + '</div>'
+    + '<div class="gv2-corpo gv2-v5 gv2-v5-pes">' + topo + (GV2.render.v6Placar ? GV2.render.v6Placar() : '') + (GV2.render.v7Mes ? GV2.render.v7Mes() : '') + '<div class="gv2-v5-pgrade">' + lis + GV2.render.v5Pessoa(sel) + '</div>' + (GV2.render.cbPessoa ? GV2.render.cbPessoa(sel) : '') + (GV2.render.hbPessoa ? GV2.render.hbPessoa(sel) : '') + (GV2.render.ldPessoa ? GV2.render.ldPessoa(sel) : '') + (GV2.render.cbTime ? GV2.render.cbTime() : '') + (GV2.render.hbTime ? GV2.render.hbTime() : '') + (GV2.render.ldTime ? GV2.render.ldTime() : '') + GV2.faltaHTML() + '</div>'
     + GV2.render.v5Gav() + (GV2.render.v6Gav ? GV2.render.v6Gav() : '') + (GV2.render.cbGav ? GV2.render.cbGav() : '')
     + (GV2.estado.p3rotacao ? '<div class="gv2-p3-veu" data-gv2="p3:rotfechar"></div><aside class="gv2-p3-folha"><div class="gv2-p3-folha-cab"><b>Rotação de campo</b>' + GV2.html.btn({ texto: 'Fechar', acao: 'p3:rotfechar' }) + '</div>' + GV2.render.rotacao(sel) + '</aside>' : '');
 };

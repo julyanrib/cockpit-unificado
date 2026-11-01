@@ -1816,6 +1816,60 @@ tabelas.gv2_falta_etapa = [
     GV2.estado.rcGav = null; GV2.estado.rcForm = null; GV2.estado.rcErro = null;
   }
 
+  /* ── PADRINHO E LÍDER DE PRAÇA (handoff "Acelerar Field Sales v2", 5a–5b · 01/11/26): os 4 critérios do
+     Playbook, os afilhados com o estado da Rampa e o padrinho natural da próxima turma. ── */
+  {
+    const ldEra = Object.assign({}, GV2.ld), rpEra = Object.assign({}, GV2.rp), supaEra = global.supa.from, ldLerEra = GV2.ldLer, rpLerEra = GV2.rpLer;
+    const mes = function (m, n) { return { mes: m, provadas: n }; };
+    const formado = { pessoa: 'igor', nome: 'Igor Santana', inicio: '2026-08-03', turma: '2026-08-03', encerradaEm: null,
+      fases: { s1: { aprovadaEm: '2026-08-09' }, s23: { aprovadaEm: '2026-08-22' }, s4: { aprovadaEm: '2026-08-31' }, rua: { aprovadaEm: '2026-09-25' } }, decisao: { decisao: 'avanca' } };
+    const atrasada = { pessoa: 'camila', nome: 'Camila Reis', inicio: '2026-10-05', turma: '2026-10-05', encerradaEm: null, fases: { s1: { aprovadaEm: '2026-10-10' } }, decisao: null };
+    GV2.ld.d = { hoje: '2026-11-12', mes: '2026-11-01', de: '2026-08-01', lidoEm: '2026-11-12T15:00:00Z', pessoas: [
+      { pessoa: 'ana', ownerId: '1', nome: 'Ana Lima', emRampa: false, meses: [mes('2026-08-01', 130), mes('2026-09-01', 140), mes('2026-10-01', 120), mes('2026-11-01', 40)], conv: { demos: 30, clientes: 12 }, registro: { n: 0, ultima: null }, afilhados: [formado, atrasada] },
+      { pessoa: 'bia', ownerId: '2', nome: 'Bia Souza', emRampa: false, meses: [mes('2026-08-01', 130), mes('2026-09-01', 140), mes('2026-10-01', 135), mes('2026-11-01', 30)], conv: { demos: 20, clientes: 6 }, registro: { n: 1, ultima: '2026-11-06' }, afilhados: [] },
+      { pessoa: 'caio', ownerId: '3', nome: 'Caio Prado', emRampa: false, meses: [mes('2026-08-01', 0), mes('2026-09-01', 0), mes('2026-10-01', 0), mes('2026-11-01', 0)], conv: { demos: 5, clientes: 3 }, registro: { n: 0, ultima: null }, afilhados: [] },
+      { pessoa: 'leo', ownerId: '1', nome: 'Leo Novo', emRampa: true, meses: [], conv: { demos: 0, clientes: 0 }, registro: { n: 0 }, afilhados: [] }] };
+    GV2.ld.em = Date.now(); GV2.ld.lendo = false; GV2.ld.erro = null; GV2.ldLer = function () {};
+    GV2.rp.d = { hoje: '2026-11-12', lidoEm: '2026-11-12T15:00:00Z', pessoas: [{ pessoa: 'zed', nome: 'Zed Novo', inicio: '2026-11-09', turma: '2026-11-09', dia: 4, padrinho: null, fases: {}, medido: {} },
+      { pessoa: 'camila', nome: 'Camila Reis', inicio: '2026-10-05', turma: '2026-10-05', dia: 39, padrinho: 'ana', fases: {}, medido: {} }] };
+    GV2.rp.em = Date.now(); GV2.rp.lendo = false; GV2.rpLer = function () {};
+    const ana = GV2.ld.d.pessoas[0], bia = GV2.ld.d.pessoas[1], caio = GV2.ld.d.pessoas[2];
+    const R = GV2.ldRitmo(ana);
+    checar('líder · 3 meses no ritmo: 6 visitas com prova por dia útil nos 3 meses fechados (outubro em 5,5 falta)',
+      R.n === 2 && !R.ok && R.sub === 'outubro ficou em 5,5 visitas/dia' && R.chip === 'falta 1 mês' && GV2.ldRitmo(bia).ok === true, JSON.stringify(R));
+    checar('líder · demo vira cliente contra o time (soma ÷ soma, sem a rampa); com menos de 10 demos, amostra pequena',
+      GV2.ldConvTime() === 38 && GV2.ldConv(ana).ok && GV2.ldConv(ana).val === '40%' && !GV2.ldConv(bia).ok && GV2.ldConv(caio).pequena === true, JSON.stringify([GV2.ldConvTime(), GV2.ldConv(ana), GV2.ldConv(caio)]));
+    checar('líder · registro: ocorrência do combinado 5 ou de registro falso tira o critério', GV2.ldRegistro(ana).ok && !GV2.ldRegistro(bia).ok && GV2.ldRegistro(bia).chip === 'em análise');
+    const eF = GV2.ldAfilhado(formado), eA = GV2.ldAfilhado(atrasada);
+    checar('padrinho · o afilhado com as regras da Rampa: formado no prazo (54 dias) e S2–3 com aprovação atrasada',
+      eF.bem === true && /4 fases em 54 dias/.test(eF.s) && eA.chip[0] === 'aprovação atrasada' && /dia 39 · S2–3 venceu 25\/10/.test(eA.s) && GV2.ldTurma(ana).ok && GV2.ldTurma(ana).val === 'Igor', JSON.stringify([eF, eA]));
+    checar('líder · Ana cumpre 3 de 4; Bia e Caio, 1 de 4', GV2.ldCriterios(ana).n === 3 && GV2.ldCriterios(bia).n === 1 && GV2.ldCriterios(caio).n === 1);
+    const pag = GV2.render.ldPessoa(GV2.base.porId['1']);
+    checar('líder · 5a: "Padrinho de" com os afilhados e "Rumo a líder de praça" com 3 de 4 e o chip de cada critério',
+      /Padrinho de/.test(pag) && /Igor Santana/.test(pag) && /is-ok">formado/.test(pag) && /is-av">aprovação atrasada/.test(pag)
+        && /Rumo a líder de praça/.test(pag) && />3 de 4</.test(pag) && /falta 1 mês/.test(pag) && /data-gv2="aba:rampa">Abrir a Rampa/.test(pag), pag.slice(0, 300));
+    checar('líder · quem está em rampa não tem os cartões', GV2.render.ldPessoa({ id: '9' }) === '' || !/Leo/.test(GV2.render.ldPessoa({ id: '9' })));
+    const tab = GV2.render.ldTime();
+    checar('líder · 5b: a tabela dos plenos (a rampa fora), "time 38%", e o padrinho natural: quem cumpre mais e não tem afilhado em curso',
+      /Próximo líder de praça/.test(tab) && /time 38%/.test(tab) && !/Leo/.test(tab) && tab.indexOf('>Ana<') < tab.indexOf('>Bia<')
+        && /Bia e Caio cumprem 1 de 4 e não têm afilhado em curso: são os padrinhos naturais da próxima turma\./.test(tab) && /data-gv2="ld:indicar:bia">Indicar Bia/.test(tab) && /data-gv2="ld:indicar:caio">Indicar Caio/.test(tab)
+        && tab.indexOf('gv2-ld-nat') > tab.indexOf('>Caio<')
+        && /Camila · S2–3 atrasada/.test(tab) && /amostra pequena/.test(tab) && /em análise/.test(tab), tab.slice(0, 400));
+    GV2.ldComando('ld', ['ld', 'indicar', 'bia']);
+    const dr = GV2.render.ldGav();
+    checar('padrinho · "Indicar padrinho" lista só quem está na Rampa sem padrinho', /Zed Novo/.test(dr) && !/Camila/.test(dr) && /data-gv2="ld:padrinho:bia:zed">Indicar Bia/.test(dr), dr.slice(0, 300));
+    const gravou = [];
+    global.supa.from = function (tab2) { return { update: function (row) { return { eq: function (k, v) { gravou.push({ tab: tab2, row: row, onde: [k, v] }); return Promise.resolve({ error: null }); } }; } }; };
+    await GV2.ldIndicar('bia', 'zed');
+    checar('padrinho · indicar grava o padrinho em rampa_pessoas, sem HubSpot',
+      gravou.length === 1 && gravou[0].tab === 'rampa_pessoas' && gravou[0].row.padrinho === 'bia' && gravou[0].onde.join() === 'pessoa,zed' && !GV2.estado.ldGav, JSON.stringify(gravou));
+    checar('padrinho e líder · nenhuma escrita no HubSpot no módulo', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.LD = {'), codigo.indexOf('GV2.ldComando = function'))));
+    global.supa.from = supaEra;
+    GV2.ldLer = ldLerEra; GV2.rpLer = rpLerEra;
+    Object.assign(GV2.ld, ldEra); Object.assign(GV2.rp, rpEra);
+    GV2.estado.ldGav = null; GV2.estado.ldErro = null;
+  }
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
