@@ -1740,12 +1740,22 @@ tabelas.gv2_falta_etapa = [
     por('2026-11-12');
     const praca3 = GV2.base.porId['3'] && GV2.base.porId['3'].praca;
     const L = GV2.rcPlacar(disputa), vit = L.find(function (l) { return l.praca === 'Vitória'; }), rio = L.find(function (l) { return l.praca === praca3; });
-    checar('disputa · placar por praça: o valor da disputa, onde começou (14 dias antes) e o último dia; quem está em rampa fica fora',
-      vit && vit.n === 2 && vit.v === 63 && vit.ini === 43 && vit.hoje === 80 && rio && rio.v === 30 && rio.ini === 20, JSON.stringify(L));
-    checar('disputa · lidera quem mais subiu desde o começo (Vitória +20 contra +10)', vit.lidera === true && rio.lidera === false);
+    /* 01/11/26: os novatos entram na disputa (Julyan) — o Leo, em rampa, soma no time de Vitória */
+    checar('disputa · placar por praça: o valor da disputa, onde começou (14 dias antes) e o último dia; quem está em rampa entra no time',
+      vit && vit.n === 3 && vit.v === 86 && vit.ini === 43 && vit.hoje === 80 && rio && rio.v === 30 && rio.ini === 20, JSON.stringify(L));
+    checar('disputa · lidera quem mais subiu desde o começo (Vitória +43 contra +10)', vit.lidera === true && rio.lidera === false);
+    /* a taxa "passo" é passo cumprido ÷ passo vencido (0238), não visita com passo ÷ visita */
+    const dpassos = { id: 'd2', nome: 'Passo cumprido', taxa: 'passo', times: 'praca', inicio: '2026-11-09', fim: '2026-11-20' };
+    const pesEra = pessoas.slice();
+    pessoas.length = 0;
+    pessoas.push({ pessoa: 'ana', ownerId: '1', nome: 'Ana Lima', emRampa: false, dias: [{ d: '2026-11-10', v: 10, p: 10, cp: 10, nh: 10, f: 10, o: 0, m: 0, pv: 4, pc: 3 }] });
+    por('2026-11-12');
+    checar('disputa · a taxa do passo é passos cumpridos ÷ passos que venceram', GV2.rcValor('passo', pessoas, '2026-11-09', '2026-11-12') === 75 && /passos cumpridos até o dia seguinte ÷ passos que venceram/.test(GV2.rcTaxaDef('passo').como));
+    pessoas.length = 0; pesEra.forEach(function (x) { pessoas.push(x); });
+    por('2026-11-12');
     const c1 = GV2.render.rcDisputa();
     checar('disputa · 4a: nome, período, faltam dias úteis, traço do começo e a primeira auditoria na sexta',
-      /Disputa da vez · 09\/11 a 20\/11/.test(c1) && /Ficha antes da próxima porta/.test(c1) && /faltam 6 dias úteis/.test(c1) && /começou em 43%/.test(c1)
+      /Disputa da vez · 09\/11 a 20\/11/.test(c1) && /Ficha antes da próxima porta/.test(c1) && /faltam 5 dias úteis/.test(c1) /* 20/11 é feriado */ && /começou em 43%/.test(c1)
         && /is-ok">lidera/.test(c1) && /A primeira auditoria é na sexta 13\/11/.test(c1), c1.slice(0, 400));
     por('2026-11-14');
     const c2 = GV2.render.rcDisputa();
@@ -1991,6 +2001,20 @@ tabelas.gv2_falta_etapa = [
     GV2.hb.d = hbEra; GV2.hbLer = hbLerEra;
     checar('auditoria · a carteira de quem saiu só vai para quem está no time de rua', /doTimeRua\[String\(c\.hubspot\)\]/.test(codigo));
     checar('auditoria · a semana de propostas soma quem entrou em Negociação desde a segunda, mesmo no mês anterior', /entrouNegociacaoEm[\s\S]{0,120}>= seg && doTime\(n\.dono\)\) marcaSem/.test(codigo));
+  }
+
+  /* ── O COMBINADO 2 MEDE O PASSO CUMPRIDO (0238, 01/11/26): o app obriga o passo na ficha, então "ter
+     passo" dava sempre 100%; agora é o passo que venceu e teve toque até o dia seguinte ── */
+  {
+    const base = { visitas: { visitas: 20, provadas: 20, comPasso: 20, naHora: 18, divergencias: [] }, fichas: { donoAusente: 0, voltaMarcada: 0 }, vespera: { dias: 5, planejados: 5 }, rituais: {} };
+    const m1 = GV2.cbMedir(Object.assign({}, base, { passos: { julgados: 8, cumpridos: 6, semComoSaber: 2, faltaram: [] } }))[1];
+    checar('combinado 2 · o passo cumprido: 6 de 8 = 75%, atenção, e diz quantos ficaram sem como saber',
+      m1.val === '75%' && m1.k === 'erro' && /6 de 8 passos cumpridos até o dia seguinte · 2 sem como saber/.test(m1.como), JSON.stringify(m1));
+    const m2 = GV2.cbMedir(Object.assign({}, base, { passos: { julgados: 0, cumpridos: 0, semComoSaber: 0, faltaram: [] } }))[1];
+    checar('combinado 2 · sem passo vencido na semana, sem dado (não 100%)', m2.val === '—' && m2.pct === null && /nenhum passo venceu ainda/.test(m2.como));
+    const m3 = GV2.cbMedir(base)[1];
+    checar('combinado 2 · sem o dado novo (banco antigo), a conta de antes', m3.val === '100%' && /com próximo passo e data/.test(m3.como));
+    checar('combinado 2 · a descrição diz o que mede', GV2.CB.itens[1].s === 'a data marcada é cumprida');
   }
 
   /* ── O LAÇO QUE CONGELAVA A HOJE DO EXECUTIVO (01/11/26): pedir uma semana que outra parte da tela
