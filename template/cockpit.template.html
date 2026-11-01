@@ -40297,7 +40297,11 @@ function pl6DadosFinal(rep) {
     : (typeof isoDate === 'function' ? isoDate(new Date()) : '');
   const naGrade = grade.flat().map(pl6SlotId).filter(Boolean);
   const livres = todos.filter(l => naGrade.indexOf(l.id) < 0);
-  const agendadas = naGrade.length;
+  /* o número do topo conta o que a grade MOSTRA (visita e rua, sem órfã): uma parada espelhada de um
+     negócio fora da carteira dava "1 agendada" com os 5 dias vazios (auditoria 01/11/26) */
+  const agendadas = grade.reduce(function (s, col) {
+    return s + pl6ItensDoDia(col, porId).filter(function (x) { return x.tipo === 'visita' || x.tipo === 'rua'; }).length;
+  }, 0);
   /* O RITMO SAI DA MESMA GRADE que a tela desenha — nenhuma segunda leitura, e por
      isso nenhuma chance de o KPI e os cartões discordarem. */
   const ritmo = pl6RitmoDoDia(grade, dias, rep && rep.ownerId);
@@ -40348,6 +40352,9 @@ function pl6DadosFinal(rep) {
       .sort(function (a, b) { return b.valor - a.valor; });
   }());
   let pl6VazioK = 0;
+  /* cada conta é sugerida em UM dia só (auditoria 01/11/26: com um bairro só na carteira, os 5 dias
+     sugeriam as mesmas 3 contas — o pedido de 05/10 já pedia isso) */
+  const pl6SugUsadas = new Set();
   /* O QUE ABRE A ABA SE MEDE (23/09/26). Follow-up é o começo certo do dia — a promessa
      já feita vem antes da conta nova. Mas cravar "follow" abriria a aba numa lista
      vazia para quase todo o time: são 3 passos vencidos em 140 negócios abertos. Lista
@@ -40750,7 +40757,7 @@ function pl6DadosFinal(rep) {
         cnt: n === 0 ? (d.feriado ? 'feriado' : 'vazio') : (n === 1 ? '1 parada' : n + ' paradas'),
         /* CAPACIDADE VISÍVEL (Planejamento v2): um segmento por visita até a meta, âmbar abaixo dela e
            verde ao chegar; sem teto (16/10/26), o que passa da meta aparece como "+N". */
-        capN: n, capMeta: Number(metaDoDia) || 6,
+        capN: n, capMeta: d.feriado ? 0 : (Number(metaDoDia) || 6), feriado: !!d.feriado,
         /* o MINI MAPA DO DIA (Planejamento v2): só o dia aberto carrega as paradas com lugar, na
            ordem da rota, e a hora que a tela mostra (fixa, ≈ estimada ou a marcada) */
         pl7MapaOn: 'pl7mapa:' + di,
@@ -40802,15 +40809,22 @@ function pl6DadosFinal(rep) {
         vazio: n === 0 && !s.sel,
         vazioRot: 'dia livre — escolha uma conta na munição e coloque na hora que quiser',
         sug: (function () {
-          if (!(n === 0 && !s.sel && !passouDoDia) || !pl6SugRegioes.length) return null;
+          if (!(n === 0 && !s.sel && !passouDoDia) || d.feriado || !pl6SugRegioes.length) return null;
           /* a região que ele já digitou para o dia manda; senão, o próximo bairro da fila */
           const chaveDigitada = regTxt ? pl6ChaveBairro(regTxt) : '';
           let g = chaveDigitada ? pl6SugRegioes.find(function (x) { return pl6ChaveBairro(x.nome) === chaveDigitada; }) : null;
-          if (!g) { g = pl6SugRegioes[pl6VazioK % pl6SugRegioes.length]; pl6VazioK += 1; }
+          const novas = function (x) { return x.contas.filter(function (l) { return !pl6SugUsadas.has(l.id); }); };
+          if (!g) {
+            for (let t = 0; t < pl6SugRegioes.length && !g; t++) { const c = pl6SugRegioes[(pl6VazioK + t) % pl6SugRegioes.length]; if (novas(c).length) g = c; }
+            pl6VazioK += 1;
+          }
+          if (!g || !novas(g).length) return null;
+          const escolhidas = novas(g).slice(0, 3);
+          escolhidas.forEach(function (l) { pl6SugUsadas.add(l.id); });
           const alt = pl6SugRegioes.filter(function (x) { return x !== g; }).slice(0, 2);
           return {
             nome: esc(g.nome), n: String(g.contas.length), on: esc(di + '.' + g.chave), chave: esc(pl6ChaveBairro(g.nome)),
-            contas: g.contas.slice(0, 3).map(function (l) {
+            contas: escolhidas.map(function (l) {
               return { nome: esc(l.nome || 'conta'), sub: esc([l.etapa || (l.tipo === 'n' ? 'conta nova' : ''), l.nota != null ? String(l.nota).replace('.', ',') + '★' : ''].filter(Boolean).join(' · ')),
                 on: 'pegar:' + l.id };
             }),
@@ -41615,7 +41629,7 @@ function pl6TelaFinalHTML(d) {
           ${dia.resumoApp ? '' : `<b style="margin-left:auto;font:900 11px 'Poppins',sans-serif;color:${dia.cntCor};font-variant-numeric:tabular-nums;">${dia.cnt}</b>`}
         </div>
         ${dia.resumoApp ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;font:800 11.5px 'Poppins',sans-serif;font-variant-numeric:tabular-nums;"><b style="color:var(--ink);">${esc(dia.resumoApp.plano)}</b><span style="color:var(--muted2);">${esc(dia.resumoApp.visitas)}</span></div>` : ''}
-        ${typeof GV2 !== 'undefined' && GV2.PL7 ? GV2.PL7.capacidadeHTML(dia.capN, dia.capMeta, dia.mixTxt) : ''}
+        ${typeof GV2 !== 'undefined' && GV2.PL7 ? (dia.feriado ? '<div class="pl7-cap"><b>feriado · sem meta</b></div>' : GV2.PL7.capacidadeHTML(dia.capN, dia.capMeta, dia.mixTxt)) : ''}
         <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
         <div style="position:relative;flex:1;min-width:0;" data-pl6-reg-caixa="${dia.di}">
           <input type="text" value="${dia.regiao}" data-pl6-reg-in="${dia.di}" placeholder="bairro do dia" style="width:100%;box-sizing:border-box;border:1px solid ${dia.regBorda};border-radius:999px;background:var(--panel);padding:7px 12px;font:800 10.5px 'Poppins',sans-serif;color:var(--plum-ink);outline:none;min-height:32px;">
@@ -90153,9 +90167,9 @@ PL7.cadencia = function (todos, naGrade, hoje) {
 PL7.regras = function (cad, grade, dias, meta, slotId, diaPassou) {
   const m = Number(meta) || 6;
   const porDia = (dias || []).map(function (d, i) {
-    return { passou: diaPassou ? diaPassou(d.iso) : false, n: ((grade && grade[i]) || []).filter(function (v) { return slotId ? slotId(v) : v; }).length };
+    return { passou: diaPassou ? diaPassou(d.iso) : false, feriado: PL7.semExpediente(d), n: ((grade && grade[i]) || []).filter(function (v) { return slotId ? slotId(v) : v; }).length };
   });
-  const abertos = porDia.filter(function (x) { return !x.passou; });
+  const abertos = porDia.filter(function (x) { return !x.passou && !x.feriado; });
   const abaixo = abertos.filter(function (x) { return x.n < m; }).length;
   const r = [
     { n: 1, t: 'Todo quente com data na semana', ok: cad.quente === 0, st: cad.quente + (cad.quente === 1 ? ' quente sem data' : ' quentes sem data'), aba: 'q' },
@@ -90205,6 +90219,8 @@ PL7.comparar = function (naGrade, hoje) {
    ordem da cadência (quentes → vencidos → o resto). Nada é gravado até ele confirmar; aí cada conta
    entra pelo caminho de sempre (pl6AgendarNoSlot: tarefa no HubSpot + grade). Conta nova (CNPJ) fica
    de fora: virar negócio pede os dados da etapa, uma a uma. */
+/* feriado e fim de semana: a marca do dia (pl6) ou o calendário do GV2 */
+PL7.semExpediente = function (d) { return !!(d && (d.feriado || (d.iso && GV2.util && !GV2.util(d.iso)))); };
 PL7.montar = function (fila, grade, dias, meta, slotId, diaPassou, fora) {
   const m = Number(meta) || 6;
   const livres = (fila || []).filter(function (l) { return l && l.tipo === 'c' && !(fora && fora.has(l.id)); });
@@ -90212,6 +90228,7 @@ PL7.montar = function (fila, grade, dias, meta, slotId, diaPassou, fora) {
   const out = [];
   (dias || []).forEach(function (d, i) {
     if (diaPassou && diaPassou(d.iso)) return;
+    if (PL7.semExpediente(d)) return; /* feriado não recebe conta (01/11/26) */
     const tem = ((grade && grade[i]) || []).filter(function (v) { return slotId ? slotId(v) : v; }).length;
     const itens = [];
     while (tem + itens.length < m && k < livres.length) itens.push(livres[k++]);
