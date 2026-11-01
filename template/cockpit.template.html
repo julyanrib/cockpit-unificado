@@ -81238,7 +81238,8 @@ GV2.filtroNegocios = function (k, lista) {
   if (k === 'semarma') return ns.filter(function (n) { return n.etapa_idx >= 3 && !n.agPag && (!n.arma || !n.arma.sistema || !n.arma.dor); });
   if (k === 'quentes') return ns.filter(function (n) { return n.quente; });
   if (k === 'travados') return ns.filter(function (n) { return n.travado; });
-  if (k === 'sempasso') return ns.filter(function (n) { return n.semPasso; });
+  /* a mesma conta da Hoje do executivo e do Planejamento v3 (01/11/26): Prospecção conta */
+  if (k === 'sempasso') return GV2.semProximoPasso(ns);
   if (k === 'sempasso-quentes') return ns.filter(function (n) { return n.quente && !n.agPag && !n.proximo_passo; });
   if (k === 'todos') return ns.filter(function (n) { return n.etapa_idx >= 1; });
   return ns;
@@ -81345,6 +81346,21 @@ GV2.rxGavFechar = function () {
 /* sem nada datado de hoje em diante: "vencida desde dd/mm" quando há tarefa aberta vencida (o executivo
    não fechou nem remarcou), "sem próximo passo" quando não há tarefa nenhuma — o mesmo que o app chama de atrasado */
 GV2.textoSemPasso = function (n) { return n && n.vencidaDesde ? 'vencida desde ' + GV2.ddmm(n.vencidaDesde) : 'sem próximo passo'; };
+/* ══ "SEM PRÓXIMO PASSO" É UMA FUNÇÃO SÓ (Planejamento v3, 01/11/26) ══════════════════════════
+   O número aparecia com duas regras: a Hoje do executivo (EXH4.semPasso, Prospecção dentro, Ag.
+   Pagamento fora) e o filtro "Sem próximo passo" do Raio X do gestor (n.semPasso, que tirava a
+   Prospecção). O app foi alinhado à regra da Hoje em 01/11, e o Planejamento v3 mostra o mesmo
+   contador ("31 sem próximo passo → 0"). Daqui em diante os três lugares chamam esta função.
+   Próximo passo = tarefa ou reunião do HubSpot de hoje em diante, ou item no Planejamento de hoje
+   em diante (os dois viram n.proximo_passo na montagem da base); passo vencido não conta.
+   "marcados" é o passo que acabou de ser dado nesta sessão (a Hoje e o Planejamento gravam no
+   HubSpot e marcam aqui, para o número descer na hora, antes da próxima carga).
+   O n.semPasso da base continua existindo para o "puxar" e os quentes do gestor: só a CONTAGEM
+   "sem próximo passo" mostrada às pessoas mudou de regra. */
+GV2.temProximoPasso = function (n, marcados) { return !!n && (!!n.proximo_passo || !!(marcados && marcados[n.id])); };
+GV2.semProximoPasso = function (negocios, marcados) {
+  return (negocios || []).filter(function (n) { return !!n && !n.agPag && !GV2.temProximoPasso(n, marcados); });
+};
 GV2.rxLinhaNeg = function (n) {
   const c = GV2.estado.cobrados['neg:' + n.id];
   const acao = n.agPag ? '<span class="t-dim gv2-v4-fin">com o financeiro</span>'
@@ -89660,7 +89676,8 @@ EXH4.meus = function (p, b) { return (b.negocios || []).filter(function (n) { re
 /* ativo para "com plano" = aberto fora de Ag. Pagamento (que é do financeiro, nunca se cobra) */
 EXH4.ativos = function (p, b) { return EXH4.meus(p, b).filter(function (n) { return !n.agPag; }); };
 EXH4.temPasso = function (n) { return !!n.proximo_passo || !!EXH4.estado.marcados[n.id]; };
-EXH4.semPasso = function (p, b) { return EXH4.ativos(p, b).filter(function (n) { return !EXH4.temPasso(n); }); };
+/* a regra mora em GV2.semProximoPasso (Planejamento v3, 01/11/26): o Planejamento e o Raio X do gestor chamam a mesma */
+EXH4.semPasso = function (p, b) { return GV2.semProximoPasso(EXH4.meus(p, b), EXH4.estado.marcados); };
 /* QUENTE DA CADÊNCIA (16/10/26, Julyan escolheu): Conversa com Decisor em diante (Decisor, Demo/Proposta,
    Negociação, Ag. Pagamento). Uma regra só para a Hoje, o Planejamento e a mensagem das 18h
    (PWA api/avisos-sem-passo.js). O n.quente da base (idx >= 4) segue sendo o do gestor: provável,
@@ -90426,6 +90443,217 @@ PL7.toquesHTML = function (arr, grande) {
   const n = arr.filter(Boolean).length;
   return '<span class="pl7-toques' + (grande ? ' is-grande' : '') + '" title="' + n + ' de 6 semanas com toque registrado"><small>toques · 6 sem</small>'
     + arr.map(function (v) { return '<i' + (v ? ' class="is-ok"' : '') + '></i>'; }).join('') + '</span>';
+};
+
+/* ══ PLANEJAMENTO DO EXECUTIVO v3 (01/11/26, design_handoff_planejamento_v3) ══════════════════
+   Julyan: "Planejamento no field sales é o que importa. Integração app e cockpit na hora. Os leads
+   precisam de próximo passo." A aba deixa de ser "monte a sua semana" e vira "nenhum lead fica sem
+   próximo passo, e a semana cabe na rua": a fila "Sem próximo passo" à esquerda, a grade de 5 dias
+   com a meta e a média da pessoa à direita, e a grade se repinta sozinha, por dia.
+
+   AS CONTAS SÃO PURAS E MORAM AQUI EM CIMA, separadas da tela, porque a suíte
+   scripts/testar-planejamento-v3.js roda este bloco num vm. Nenhuma delas lê o DOM, o banco ou o
+   relógio: tudo chega por argumento (Planejamento v3, 01/11/26).
+
+   O MODELO QUE AS CONTAS ENTENDEM (montado pela tela a partir do que já existe):
+     lead  { ref, nome, etapaIdx 0..4, dias, quente, bairro (chave de lugar do pl6), semEnd, venc, ficou, alvo }
+     dia   { iso, feriado (nome ou ''), passou, hoje }
+     cont  quantas paradas cada dia já tem (com as propostas, quando a revisão está aberta)
+     bSel  o bairro ESCOLHIDO pelo executivo em cada dia (null = automático)
+     bDia  o bairro efetivo de cada dia (escolhido > o mais comum entre as paradas > o da rota) */
+const PLV3 = GV2.PLV3 = {};
+PLV3.META_PADRAO = 6;
+PLV3.FATOR_AVISO = 1.5;
+/* as cores de etapa são dado (as mesmas do pino do mapa), por etapa_idx da base */
+PLV3.ETAPAS = [['Prospecção', '#94A3B8'], ['Visita', '#60A5FA'], ['Conversa com Decisor', '#A78BFA'], ['Demo/Proposta', '#F59E0B'], ['Negociação', '#F97316']];
+/* os nomes na ordem de GV2.feriadosDoAno: os 9 fixos, depois os 4 que saem da Páscoa */
+PLV3.NOMES_FERIADO = ['Confraternização', 'Tiradentes', 'Dia do Trabalho', 'Independência', 'Nossa Senhora Aparecida', 'Finados',
+  'Proclamação da República', 'Consciência Negra', 'Natal', 'Carnaval', 'Carnaval', 'Sexta-feira Santa', 'Corpus Christi'];
+PLV3.nomeFeriado = function (iso) {
+  const t = String(iso || '').slice(0, 10);
+  const i = GV2.feriadosDoAno(Number(t.slice(0, 4))).indexOf(t);
+  if (i >= 0) return PLV3.NOMES_FERIADO[i] || 'feriado';
+  /* feriado acrescentado à mão (municipal) em GV2.FERIADOS: sem nome no calendário */
+  return GV2.FERIADOS.indexOf(t) >= 0 ? 'feriado' : '';
+};
+
+/* ── 1 · a fila, por dinheiro ──
+   Negociação → Demo/Proposta → Conversa com Decisor → Visita → Prospecção; dentro da etapa, primeiro
+   o passo vencido e o que ficou para trás num dia que passou; depois, mais dias na etapa. */
+PLV3.ordemPorDinheiro = function (fila) {
+  const urg = function (l) { return (l.venc || l.ficou || l.tirado) ? 1 : 0; };
+  return (fila || []).slice().sort(function (a, b) {
+    return ((Number(b.etapaIdx) || 0) - (Number(a.etapaIdx) || 0)) || (urg(b) - urg(a)) || ((Number(b.dias) || 0) - (Number(a.dias) || 0))
+      || String(a.nome || '').localeCompare(String(b.nome || ''));
+  });
+};
+
+/* ── 2 · a média da pessoa ──
+   Visitas com prova por dia útil na janela [de, ate] (a tela passa as últimas 4 semanas que a base já lê,
+   visitas_com_prova). Fonte fora do ar devolve fonte 'fora' e valor null: a tela escreve "—" e o nome da
+   fonte, nunca 0. Sem nenhuma visita com prova na janela (o novato), vale a meta da fase. */
+PLV3.mediaVisitas = function (visitas, dono, de, ate, uteisEntre, metaFase) {
+  const fase = Number(metaFase) || PLV3.META_PADRAO;
+  if (!Array.isArray(visitas)) return { v: null, fonte: 'fora' };
+  const n = visitas.filter(function (v) { return v && v.provada && String(v.owner_id) === String(dono) && v.dia >= de && v.dia <= ate; }).length;
+  const u = typeof uteisEntre === 'function' ? uteisEntre(de, ate) : 0;
+  if (!n || !u) return { v: fase, fonte: 'fase', n: n, u: u };
+  return { v: Math.round(n / u * 10) / 10, fonte: 'historico', n: n, u: u };
+};
+/* o aviso de capacidade: passa de 1,5 × a média. Avisa, não trava. */
+PLV3.limiteCapacidade = function (media) { const m = Number(media); return isFinite(m) && m > 0 ? Math.round(m * PLV3.FATOR_AVISO * 10) / 10 : null; };
+PLV3.acimaDaCapacidade = function (n, media) { const lim = PLV3.limiteCapacidade(media); return lim != null && Number(n) > lim; };
+
+/* ── 3 · a meta da semana (só leitura; ninguém digita promessa) ──
+   visitas = visitas por dia × dias úteis da semana (feriado não tem meta);
+   fechamentos = o que falta da meta do mês ÷ as semanas que faltam no mês (contando a planejada). */
+/* as semanas que faltam no mês da segunda planejada, contando ela: as segundas do mesmo mês a partir dela */
+PLV3.semanasQueFaltam = function (segunda) {
+  const mes = String(segunda).slice(0, 7);
+  let n = 0;
+  for (let s = String(segunda); s.slice(0, 7) === mes && n < 6; s = GV2.somaDias(s, 7)) n++;
+  return Math.max(1, n);
+};
+PLV3.metaDaSemana = function (metaDia, dias, metaMes, fechadosMes, semanasRestantes) {
+  const uteis = (dias || []).filter(function (d) { return d && !d.feriado; }).length;
+  const md = Number(metaDia) || PLV3.META_PADRAO;
+  const mm = metaMes == null || metaMes === '' ? null : Number(metaMes);
+  const fech = mm == null || !isFinite(mm) ? null
+    : Math.max(0, Math.ceil(Math.max(0, mm - (Number(fechadosMes) || 0)) / Math.max(1, Number(semanasRestantes) || 1)));
+  return { visitas: md * uteis, uteis: uteis, metaDia: md, fechamentos: fech };
+};
+
+/* ── 4 · o bairro do dia ──
+   o ESCOLHIDO pelo executivo; senão, o mais comum entre as paradas do dia; senão, o da rota (o "bairro do
+   dia" que já existia). Empate entre paradas: o primeiro que apareceu, para não piscar entre renders. */
+PLV3.bairroMaisComum = function (paradas) {
+  const c = {}, ordem = [];
+  (paradas || []).forEach(function (p) { const b = p && p.bairro; if (!b) return; if (!(b in c)) { c[b] = 0; ordem.push(b); } c[b]++; });
+  let melhor = null;
+  ordem.forEach(function (b) { if (melhor == null || c[b] > c[melhor]) melhor = b; });
+  return melhor;
+};
+PLV3.bairroDoDia = function (escolhido, paradas, daRota) {
+  if (escolhido) return escolhido;
+  return PLV3.bairroMaisComum(paradas) || daRota || null;
+};
+
+/* ── 5 · AS SUGESTÕES: UMA CONTA SÓ, usada no bloco Quentes, no atalho "Pôr em …" da linha e no bloco de cada dia ──
+   É ela que garante que um lead nunca é sugerido em 2 dias: cada lead sai daqui com UM dia ou nenhum.
+     dias elegíveis = úteis, não passados (hoje só antes das 10:00), e nenhum enquanto a revisão do "Dar data" está aberta
+     vaga[dia] = meta − paradas no dia
+     1. quentes sem passo e com endereço: o dia com vaga do mesmo bairro; senão, o 1º dia com vaga EM AUTOMÁTICO
+        (dia com bairro escolhido só recebe aquele bairro, quentes inclusive). Sem limite de 3.
+     2. os outros sem passo, com endereço: só o mesmo bairro, até 3 por dia.
+     3. contas-alvo com endereço, fora da grade: só o mesmo bairro, até 3 por dia.
+   Conta sem endereço nunca é sugerida para visita. */
+PLV3.elegivel = function (d, antesDas10) { return !!d && !d.feriado && !d.passou && (!d.hoje || !!antesDas10); };
+/* soltar / "Pôr num dia": hoje aceita a qualquer hora (quem põe sabe que vai); feriado e dia passado não */
+PLV3.aceitaSoltar = function (d) { return !!d && !d.feriado && !d.passou; };
+/* o contador da faixa ("31 sem próximo passo → 0"): a MESMA função do card da Hoje e do Raio X do gestor */
+PLV3.contador = function (p, b) { return GV2.semProximoPasso(EXH4.meus(p, b), EXH4.estado.marcados).length; };
+PLV3.sugestoes = function (o) {
+  const meta = Number(o.meta) || PLV3.META_PADRAO;
+  const dias = o.dias || [];
+  const cont = o.cont || [];
+  const bDia = o.bDia || [];
+  const bSel = o.bSel || [];
+  const usados = o.usados || {};
+  const elig = o.revisando ? [] : dias.map(function (d, i) { return PLV3.elegivel(d, o.antesDas10) ? i : -1; }).filter(function (i) { return i >= 0; });
+  const livre = {}, porDia = {}, deLead = {};
+  dias.forEach(function (d, i) { porDia[i] = []; });
+  elig.forEach(function (i) { livre[i] = Math.max(0, meta - (Number(cont[i]) || 0)); });
+  const pegar = function (l, i, origem) {
+    porDia[i].push({ ref: l.ref, nome: l.nome, etapaIdx: l.etapaIdx, bairro: l.bairro, origem: origem, mesmo: bDia[i] === l.bairro });
+    livre[i]--;
+    deLead[l.ref] = { dia: i, mesmo: bDia[i] === l.bairro };
+  };
+  const cand = (o.fila || []).filter(function (l) { return l && !l.semEnd && l.bairro && !usados[l.ref]; });
+  const quentesSem = [];
+  cand.filter(function (l) { return l.quente; }).forEach(function (l) {
+    let i = elig.filter(function (j) { return livre[j] > 0 && bDia[j] === l.bairro; })[0];
+    if (i === undefined) i = elig.filter(function (j) { return livre[j] > 0 && !bSel[j]; })[0];
+    if (i === undefined) { quentesSem.push(l); return; }
+    pegar(l, i, 'quente');
+  });
+  cand.filter(function (l) { return !l.quente; }).forEach(function (l) {
+    const i = elig.filter(function (j) { return livre[j] > 0 && bDia[j] === l.bairro && porDia[j].length < 3; })[0];
+    if (i !== undefined) pegar(l, i, 'fila');
+  });
+  (o.alvos || []).filter(function (a) { return a && !a.semEnd && a.bairro && !usados[a.ref] && !deLead[a.ref]; }).forEach(function (a) {
+    const i = elig.filter(function (j) { return livre[j] > 0 && bDia[j] === a.bairro && porDia[j].length < 3; })[0];
+    if (i !== undefined) pegar(a, i, 'alvo');
+  });
+  /* quente com endereço mas sem bairro conhecido também fica sem dia: entra no bloco como "sem dia" */
+  (o.fila || []).forEach(function (l) { if (l && l.quente && !l.semEnd && !l.bairro && !usados[l.ref]) quentesSem.push(l); });
+  return { porDia: porDia, deLead: deLead, quentesSem: quentesSem, elegiveis: elig };
+};
+
+/* ── 6 · "Dar data a todos": a proposta (nada é gravado até confirmar) ──
+   com endereço → VISITA no dia com vaga, pelo bairro (a regra da seção 5: o dia do mesmo bairro; senão o 1º
+   dia com vaga em automático), até a meta do dia; o que não cabe, e todo lead sem endereço → TAREFA: ligar
+   para os quentes, WhatsApp para o resto, espalhadas pelos dias úteis que não passaram (não ocupam porta).
+   Feriado não recebe visita nem tarefa. */
+PLV3.proposta = function (o) {
+  const meta = Number(o.meta) || PLV3.META_PADRAO;
+  const dias = o.dias || [], cont = o.cont || [], bDia = o.bDia || [], bSel = o.bSel || [];
+  const visita = dias.map(function (d, i) { return PLV3.elegivel(d, o.antesDas10) ? i : -1; }).filter(function (i) { return i >= 0; });
+  const tarefa = dias.map(function (d, i) { return d && !d.feriado && !d.passou ? i : -1; }).filter(function (i) { return i >= 0; });
+  const vaga = {};
+  visita.forEach(function (i) { vaga[i] = Math.max(0, meta - (Number(cont[i]) || 0)); });
+  let rr = 0;
+  const itens = [];
+  (o.fila || []).forEach(function (l) {
+    if (!l) return;
+    let d;
+    if (!l.semEnd && l.bairro) {
+      d = visita.filter(function (i) { return vaga[i] > 0 && bDia[i] === l.bairro; })[0];
+      if (d === undefined) d = visita.filter(function (i) { return vaga[i] > 0 && !bSel[i]; })[0];
+    }
+    if (d !== undefined) { vaga[d]--; itens.push({ ref: l.ref, dia: d, tipo: 'visita' }); return; }
+    if (!tarefa.length) return;
+    itens.push({ ref: l.ref, dia: tarefa[rr++ % tarefa.length], tipo: l.quente ? 'ligar' : 'whats' });
+  });
+  return itens;
+};
+/* "ter 10 ▾": o clique passa a linha para o próximo dia útil da proposta (dá a volta) */
+PLV3.proximoDiaDaProposta = function (dias, atual, tipo, antesDas10) {
+  const ok = (dias || []).map(function (d, i) { return (tipo === 'visita' ? PLV3.elegivel(d, antesDas10) : (d && !d.feriado && !d.passou)) ? i : -1; }).filter(function (i) { return i >= 0; });
+  if (!ok.length) return atual;
+  const k = ok.indexOf(atual);
+  return ok[(k + 1) % ok.length];
+};
+/* quantas paradas cada dia passa a ter com a proposta aberta (os contadores dos dias contam as propostas) */
+PLV3.contComProposta = function (cont, itens) {
+  const c = (cont || []).slice();
+  (itens || []).forEach(function (it) { if (it.tipo === 'visita') c[it.dia] = (Number(c[it.dia]) || 0) + 1; });
+  return c;
+};
+
+/* ── 7 · o topo coerente ──
+   "na grade N" = a soma exata dos cartões dos dias úteis; "dias cobertos" = dias úteis com pelo menos 1 cartão;
+   "N feitas" = cartões com check-in. */
+PLV3.topo = function (dias, cartoes) {
+  let na = 0, cob = 0, feitas = 0, uteis = 0;
+  (dias || []).forEach(function (d, i) {
+    if (!d || d.feriado) return;
+    uteis++;
+    const cs = (cartoes && cartoes[i]) || [];
+    na += cs.length;
+    if (cs.length) cob++;
+    feitas += cs.filter(function (c) { return c && c.feita; }).length;
+  });
+  return { naGrade: na, cobertos: cob, uteis: uteis, feitas: feitas };
+};
+
+/* ── 8 · mover o excesso: "mover 3 para sex" vai para o dia útil (não passado) com menos paradas ── */
+PLV3.diaComMenos = function (dias, cont, exceto, antesDas10) {
+  let melhor = null;
+  (dias || []).forEach(function (d, i) {
+    if (i === exceto || !d || d.feriado || d.passou) return;
+    if (melhor == null || (Number(cont[i]) || 0) < (Number(cont[melhor]) || 0)) melhor = i;
+  });
+  return melhor;
 };
 
 /* FIM DO BLOCO GV2 (17/10/26): o login pode ter chegado antes deste script carregar; ele deixa
