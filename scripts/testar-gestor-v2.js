@@ -1915,6 +1915,62 @@ tabelas.gv2_falta_etapa = [
     global.DATA.clienteQueFica = dataEra; GV2.cfLer = cfLerEra; Object.assign(GV2.cf, cfEra); GV2.estado.cfAberto = null;
   }
 
+  /* ── OS EXPERIMENTOS DO TIME (handoff "Acelerar Field Sales v2", 7a · 01/11/26): no fim do Funil,
+     hipótese, indicador, dono, período e resultado; os 3 do ebook como sugestão até o gestor planejar;
+     um de cada vez por indicador; no fim, vira regra, descarta ou repete. ── */
+  {
+    const exEra = Object.assign({}, GV2.ex), exLerEra = GV2.exLer, supaEra = global.supa.from, pintaEra = GV2.pintar, toastEra = GV2.toast;
+    GV2.exLer = function () {}; GV2.pintar = function () {}; GV2.toast = function () {};
+    const dono = GV2.base.pessoas[0].id;
+    GV2.ex.d = { hoje: '2026-11-01', lidoEm: '2026-11-01T21:00:00Z', lista: [
+      { id: 'e1', medida: 'horario_dono', hipotese: 'Horário do dono', pergunta: 'visitar entre 14h30 e 17h encontra mais o dono?', indicador: 'conversa com o dono ÷ visitas', dono: dono, inicio: '2026-10-19', fim: '2026-11-13',
+        parcial: { a: { n: 45, x: 22 }, b: { n: 51, x: 16 }, ate: '2026-11-01' } },
+      { id: 'e2', medida: 'livre', hipotese: 'Ligar antes', pergunta: null, indicador: 'demos ÷ visitas', dono: null, inicio: '2026-09-01', fim: '2026-09-30', parcial: null },
+      { id: 'e3', medida: 'followup_48h', hipotese: 'Follow-up de 48 h', indicador: 'clientes ÷ demos', dono: null, inicio: '2026-08-01', fim: '2026-08-31', veredito: 'regra', resultado: 'fecha 12 pontos a mais', parcial: null }] };
+    GV2.ex.em = Date.now(); GV2.ex.erro = null; GV2.ex.lendo = false;
+    const h = GV2.render.exFunil();
+    checar('experimentos · 7a: o cartão com a fonte, as colunas e a regra do fim',
+      /Experimentos do time/.test(h) && /3 da lista do ebook · um de cada vez por indicador/.test(h) && /fichas de rua \+ HubSpot · 01\/11/.test(h)
+        && /<span>Hipótese<\/span><span>Indicador<\/span><span>Dono<\/span><span>Período<\/span><span>Resultado<\/span>/.test(h) && /No fim, uma de três: vira regra no Playbook, descarta, ou repete com mais amostra\./.test(h), h.slice(0, 400));
+    checar('experimentos · o parcial na língua do indicador, com a taxa só a partir de 3',
+      /parcial: 49% das 14h30 às 17h, 31% no resto do dia · 96 visitas/.test(h) && GV2.exPct({ n: 2, x: 2 }) === '—' && GV2.exPct({ n: 3, x: 1 }) === '33%', h);
+    checar('experimentos · em curso, escrever o resultado, concluído com o veredito, nessa ordem',
+      h.indexOf('data-gv2="ex:abrir:e2"') < h.indexOf('data-gv2="ex:abrir:e1"') && h.indexOf('data-gv2="ex:abrir:e1"') < h.indexOf('data-gv2="ex:abrir:e3"')
+        && /escrever o resultado/.test(h) && /is-cur">em curso/.test(h) && /fecha 12 pontos a mais<\/span><span class="gv2-rp-chip is-ok">virou regra/.test(h) && /<b class="gv2-ex-d">o time<\/b>/.test(h));
+    checar('experimentos · o do ebook que ainda não existe aparece como sugestão, com Planejar, e nada é gravado sozinho',
+      /Recém-aberto primeiro/.test(h) && /data-gv2="ex:planejar:recem_aberto"/.test(h) && !/ex:planejar:horario_dono/.test(h) && !/ex:planejar:followup_48h/.test(h) && /sugestão do ebook/.test(h));
+    let gravado = null;
+    global.supa.from = function (t) { return {
+      insert: async function (l) { gravado = { t: t, op: 'insert', l: l }; return { error: null }; },
+      update: function (l) { return { eq: async function (c, v) { gravado = { t: t, op: 'update', l: l, id: v }; return { error: null }; } }; } }; };
+    GV2.exComando('ex', ['ex', 'planejar', 'recem_aberto']);
+    const gv = GV2.render.exGav();
+    checar('experimentos · planejar a sugestão abre a gaveta já preenchida, com 28 dias a partir de hoje',
+      /Novo experimento/.test(gv) && /value="Recém-aberto primeiro"/.test(gv) && /value="2026-11-01"/.test(gv) && /value="2026-11-28"/.test(gv) && /O time inteiro/.test(gv), gv.slice(0, 300));
+    await GV2.exSalvar();
+    checar('experimentos · planejar grava só na tabela experimentos, com a régua do ebook',
+      gravado && gravado.t === 'experimentos' && gravado.op === 'insert' && gravado.l.medida === 'recem_aberto' && gravado.l.indicador === 'demos ÷ visitas' && gravado.l.inicio === '2026-11-01' && !GV2.estado.exGav, JSON.stringify(gravado));
+    GV2.exComando('ex', ['ex', 'abrir', 'e2']);
+    gravado = null;
+    await GV2.exConcluir();
+    checar('experimentos · o resultado pede uma de três antes de gravar', gravado === null && /uma de três/.test(GV2.estado.exErro || ''));
+    GV2.exComando('ex', ['ex', 'veredito', 'repete']); GV2.exForm('resultado', 'amostra pequena, repetir em novembro');
+    await GV2.exConcluir();
+    checar('experimentos · registrar o resultado grava o veredito e o texto',
+      gravado && gravado.op === 'update' && gravado.id === 'e2' && gravado.l.veredito === 'repete' && gravado.l.resultado === 'amostra pequena, repetir em novembro' && !!gravado.l.concluido_em, JSON.stringify(gravado));
+    GV2.exComando('ex', ['ex', 'novo']); GV2.exForm('medida', 'livre'); GV2.exForm('hipotese', 'Teste'); GV2.exForm('indicador', 'demos ÷ visitas'); GV2.exForm('fim', '2026-10-01');
+    gravado = null; await GV2.exSalvar();
+    checar('experimentos · fim antes do início não grava', gravado === null && /depois do início/.test(GV2.estado.exErro || ''));
+    global.supa.from = function () { return { insert: async function () { return { error: { code: '23P01', message: 'x' } }; } }; };
+    GV2.exForm('fim', '2026-11-20'); await GV2.exSalvar();
+    checar('experimentos · um de cada vez: a recusa do banco vira frase', /Um de cada vez/.test(GV2.estado.exErro || ''), GV2.estado.exErro);
+    GV2.exFechar();
+    checar('experimentos · o módulo não escreve no HubSpot', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.EX = {'), codigo.indexOf('GV2.exComando = function'))));
+    GV2.ex.d = null; GV2.ex.erro = 'falhou';
+    checar('experimentos · sem o banco, o cartão diz o erro', /Não li os experimentos agora \(falhou\)/.test(GV2.render.exFunil()));
+    global.supa.from = supaEra; GV2.exLer = exLerEra; GV2.pintar = pintaEra; GV2.toast = toastEra; Object.assign(GV2.ex, exEra);
+  }
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
