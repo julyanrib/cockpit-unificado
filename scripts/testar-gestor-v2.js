@@ -2058,6 +2058,19 @@ tabelas.gv2_falta_etapa = [
       checar('dados do servidor · a linha sem patamar nem meta de dinheiro vira "sem meta", as outras ficam como vieram', !!m && sb.DATA.reps[0].metaMensal === 0 && sb.DATA.reps[0].patamarMeta === 'sem meta' && sb.DATA.reps[1].metaMensal === 8 && sb.DATA.reps[2].metaMensal === 0, JSON.stringify(sb.DATA.reps));
       checar('dados do servidor · a correção roda no login e no farol', (tpl.match(/Object\.assign\(DATA, (corpo\.dados|dados)\);\n\s*if \(typeof repsSemMetaInventada === 'function'\) repsSemMetaInventada\(\);/g) || []).length === 2);
     }
+    {
+      /* Planejamento do executivo (auditoria 01/11/26): feriado sem meta, sem sugestão e fora do "montar a semana" */
+      const PL7 = GV2.PL7;
+      const dias = [{ iso: '2026-11-02', rot: 'seg', data: '02/11', feriado: true }, { iso: '2026-11-03', rot: 'ter', data: '03/11' }];
+      const fila = [1, 2, 3, 4, 5, 6, 7, 8].map(function (i) { return { id: 'c' + i, tipo: 'c' }; });
+      const mt = PL7.montar(fila, [[], []], dias, 6, function (v) { return v; }, function () { return false; }, null);
+      checar('planejamento · "montar a semana" não põe conta no feriado', mt.length === 1 && mt[0].iso === '2026-11-03' && mt.total === 6, JSON.stringify(mt));
+      const rg = PL7.regras({ quente: 0, venc: 0, cnpj: 0, sem: 0 }, [[], ['a', 'b', 'c', 'd', 'e', 'f']], dias, 6, function (v) { return v; }, function () { return false; });
+      checar('planejamento · a regra "todo dia com 6+" não conta o feriado', rg.filter(function (x) { return x.n === 4; })[0].ok === true, JSON.stringify(rg[3]));
+      checar('planejamento · feriado sem sugestão, sugestão sem conta repetida entre dias, topo conta o que a grade mostra',
+        /\|\| d\.feriado \|\| !pl6SugRegioes\.length\) return null;/.test(tpl) && /const pl6SugUsadas = new Set\(\);/.test(tpl) && /escolhidas\.forEach\(function \(l\) \{ pl6SugUsadas\.add\(l\.id\); \}\);/.test(tpl)
+          && /const agendadas = grade\.reduce\(function \(s, col\) \{\s*return s \+ pl6ItensDoDia\(col, porId\)/.test(tpl) && /feriado · sem meta/.test(tpl));
+    }
     checar('ver como executivo · quem está fora do time fica sem meta, não com 10', tpl.indexOf("fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta'") > -1 && tpl.indexOf('fechadosNoMes: 0, metaMensal: 10,') < 0);
   }
 
