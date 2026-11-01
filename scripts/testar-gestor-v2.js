@@ -2049,6 +2049,8 @@ tabelas.gv2_falta_etapa = [
     checar('semana do executivo · no domingo a semana fechou: o que falta "ficou faltando"', s2.meta === 30 && s2.aberta === false && /sem\.aberta \? 'faltam ' \+ sem\.faltam : 'ficaram faltando '/.test(codigo), JSON.stringify(s2));
     checar('rua da semana · feriado aparece como feriado e fica fora da meta', /return '<span class="gv2-sem-cel is-sem">feriado<\/span>'/.test(codigo) && /p\.meta_visitas_dia \* dias\.filter\(function \(d\) \{ return GV2\.util\(d\.iso\); \}\)\.length/.test(codigo));
     checar('time · a legenda das metas sai do ranking, não do "8 e 2" escrito à mão', /metaPorPat/.test(tpl) && !/2 para quem está em rampa/.test(tpl));
+    checar('rua da semana do gestor · semana fechada diz "ficaram faltando"', /\(aberta \? 'faltam ' : 'ficaram faltando '\) \+ \(meta - feito - falta\)/.test(codigo) && /const aberta = b\.semana\.some\(function \(d\) \{ return GV2\.util\(d\.iso\) && d\.iso >= b\.agora\.iso; \}\);/.test(codigo));
+    checar('ver como executivo · quem está fora do time fica sem meta, não com 10', tpl.indexOf("fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta'") > -1 && tpl.indexOf('fechadosNoMes: 0, metaMensal: 10,') < 0);
   }
 
   if (falhas.length) {
