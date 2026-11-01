@@ -1971,6 +1971,28 @@ tabelas.gv2_falta_etapa = [
     global.supa.from = supaEra; GV2.exLer = exLerEra; GV2.pintar = pintaEra; GV2.toast = toastEra; Object.assign(GV2.ex, exEra);
   }
 
+  /* ── AUDITORIA 01/11/26: o dia 1º do mês, o "ontem" que não é ontem, a semana de propostas que
+     atravessa o mês e quem recebe a carteira de quem saiu ── */
+  {
+    const agEra = GV2.base.agora, ontEra = GV2.base.ontemIso, hbEra = GV2.hb.d, hbLerEra = GV2.hbLer;
+    GV2.hbLer = function () {};
+    /* domingo 01/11: o mês não tem dia útil fechado; o último dia útil foi sexta 30/10 */
+    GV2.base.agora = Object.assign({}, agEra, { iso: '2026-11-01', min: 700 }); GV2.base.ontemIso = '2026-10-30';
+    checar('auditoria · no domingo, o último dia útil é "na sexta 30/10", não "ontem"', GV2.ontemDe() === 'na sexta 30/10' && GV2.ontemCurto() === 'Sex 30/10', GV2.ontemDe());
+    checar('auditoria · na terça, ontem é ontem', GV2.ontemDe('2026-11-02', '2026-11-03') === 'ontem');
+    checar('auditoria · dia 1º antes do primeiro dia útil: "mês começando", não "no ritmo"', GV2.v8Comecando() && GV2.v8Selo(0, 0).t === 'mês começando' && /O mês começa terça 03\/11/.test(GV2.v8Gargalo(GV2.v8Ritmo(null)).t), JSON.stringify([GV2.v8Comecando(), GV2.v8Mes(), GV2.v8Selo(0, 0), GV2.v8Gargalo(GV2.v8Ritmo(null))]));
+    const mk = function (id, meta, fech) { return { id: id, nome: id, meta_clientes_mes: meta, fase: 'Pleno', funil_mes: { portas: 0, decisor: 0, demo: 0, proposta: 0, fechado: fech } }; };
+    checar('auditoria · sem esperado ainda, ninguém é "mais longe do ritmo"', GV2.v8Ranking([mk('a', 4, 0), mk('z', 8, 0)]).pior === null);
+    GV2.hb.d = { time: { anterior: { p: 312, f: 290, o: 140, m: 96, c: 39, pessoas: 6 } } };
+    const ant = GV2.render.v8MesAnterior();
+    checar('auditoria · o Funil mostra outubro fechado enquanto novembro não começa', /Outubro fechado/.test(ant) && />312</.test(ant) && /48%/.test(ant) && /41% das demos/.test(ant), ant.slice(0, 300));
+    GV2.base.agora = agEra; GV2.base.ontemIso = ontEra;
+    checar('auditoria · com o mês andando, o quadro do mês anterior some', GV2.render.v8MesAnterior() === '' || !GV2.v8Comecando());
+    GV2.hb.d = hbEra; GV2.hbLer = hbLerEra;
+    checar('auditoria · a carteira de quem saiu só vai para quem está no time de rua', /doTimeRua\[String\(c\.hubspot\)\]/.test(codigo));
+    checar('auditoria · a semana de propostas soma quem entrou em Negociação desde a segunda, mesmo no mês anterior', /entrouNegociacaoEm[\s\S]{0,120}>= seg && doTime\(n\.dono\)\) marcaSem/.test(codigo));
+  }
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
