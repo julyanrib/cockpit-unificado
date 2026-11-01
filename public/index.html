@@ -11945,8 +11945,23 @@ function cadenciaMotivosDeSaida() {
   return (cfg && Array.isArray(cfg.motivosDeSaida)) ? cfg.motivosDeSaida : [];
 }
 
+const FERIADOS_BR_CACHE = {};
+function feriadosDoAnoBR(y) {
+  if (FERIADOS_BR_CACHE[y]) return FERIADOS_BR_CACHE[y];
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  const pascoa = Date.UTC(y, mes - 1, dia);
+  const fixos = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'].map(md => y + '-' + md);
+  const moveis = [-48, -47, -2, 60].map(n => new Date(pascoa + n * 86400000).toISOString().slice(0, 10));
+  return (FERIADOS_BR_CACHE[y] = fixos.concat(moveis));
+}
+function ehFeriadoBR(iso) { const t = String(iso || '').slice(0, 10); return t.length === 10 && feriadosDoAnoBR(Number(t.slice(0, 4))).indexOf(t) >= 0; }
+
+function isoLocalBR(dt) { return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
+
 function cadDiaBRT(ms) { return new Date(ms - 3 * 3600000).toISOString().slice(0, 10); }
-function cadEhUtil(iso) { const d = new Date(iso + 'T12:00:00Z').getUTCDay(); return d !== 0 && d !== 6; }
+function cadEhUtil(iso) { const d = new Date(iso + 'T12:00:00Z').getUTCDay(); return d !== 0 && d !== 6 && !ehFeriadoBR(iso); }
 function cadSomarUteis(iso, n) {
   const d = new Date(iso + 'T12:00:00Z');
   let k = 0;
@@ -15714,8 +15729,8 @@ function fn2Hero(r, itens, movimentos) {
     : (valorTotal > 0
         ? fn2Rs(valorTotal) + ' MRR em jogo nas etapas abertas'
           + (semPasso > 0
-              ? ' — ' + semPasso + ' cartão' + (semPasso === 1 ? '' : '(ões)') + ' sem próximo passo '
-                + (mrrSemPasso > 0 ? 'seguram ' + fn2Rs(mrrSemPasso) + '.' : 'e nenhum com valor no CRM.')
+              ? ' — ' + semPasso + (semPasso === 1 ? ' cartão' : ' cartões') + ' sem próximo passo '
+                + (mrrSemPasso > 0 ? (semPasso === 1 ? 'segura ' : 'seguram ') + fn2Rs(mrrSemPasso) + '.' : 'e nenhum com valor no CRM.')
               : ' — todos com tarefa datada ✓')
         : total + (total === 1 ? ' negócio em jogo' : ' negócios em jogo')
           + ' · nenhum com valor no CRM ainda — a régua diz quem você toca hoje');
@@ -16397,7 +16412,7 @@ function fn3DataISO(uteis) {
   let iso = (typeof agendaChave === 'function' && typeof agendaAgora === 'function')
     ? agendaChave(agendaAgora()) : new Date().toISOString().slice(0, 10);
   if (typeof addDays !== 'function') return iso;
-  const fds = function (d) { const w = new Date(d + 'T12:00:00').getDay(); return w === 0 || w === 6; };
+  const fds = function (d) { const w = new Date(d + 'T12:00:00').getDay(); return w === 0 || w === 6 || ehFeriadoBR(d); };
 
   let guarda = 0;
   while (fds(iso) && guarda++ < 7) iso = addDays(iso, 1);
@@ -18396,7 +18411,7 @@ function pm8DiasUteisRestantesNoMes() {
   let n = 0;
   for (let d = new Date(h); d <= fim; d.setDate(d.getDate() + 1)) {
     const w = d.getDay();
-    if (w !== 0 && w !== 6) n++;
+    if (w !== 0 && w !== 6 && !ehFeriadoBR(isoLocalBR(d))) n++;
   }
   return n;
 }
@@ -18424,13 +18439,14 @@ function pm8Sugestao() {
 
   const pv = (typeof GV2 !== 'undefined' && GV2.DV && GV2.DV.estado.p) ? GV2.DV.estado.p : null;
   const metaDia = pv && pv.meta_visitas_dia ? pv.meta_visitas_dia : 6;
+  const uteisSem = (typeof pl6Dias === 'function' && typeof pl6SegundaDaSemana === 'function') ? pl6Dias(pl6SegundaDaSemana()).filter(d => !d.feriado).length : 5;
   return {
-    fechamentos, visitas: metaDia * 5, prospeccao: 4,
+    fechamentos, visitas: metaDia * uteisSem, prospeccao: 4,
     porque: {
       fechamentos: pedidoPelaMeta > maduros
-        ? 'a meta pediria ' + pedidoPelaMeta + ', mas você tem ' + maduros + ' negócio(s) maduro(s) em Negociação/Ag. Pagamento — prometer mais que isso seria ficção'
-        : 'gap de ' + gap + ' para a meta de ' + meta + ', dividido pelas ' + semanas + ' semana(s) que faltam no mês',
-      visitas: 'a meta do seu gestor: ' + metaDia + ' visitas com prova por dia × 5 dias',
+        ? 'a meta pediria ' + pedidoPelaMeta + ', mas você tem ' + maduros + (maduros === 1 ? ' negócio maduro' : ' negócios maduros') + ' em Negociação/Ag. Pagamento — prometer mais que isso seria ficção'
+        : 'gap de ' + gap + ' para a meta de ' + meta + ', dividido ' + (semanas === 1 ? 'pela 1 semana que falta' : 'pelas ' + semanas + ' semanas que faltam') + ' no mês',
+      visitas: 'a meta do seu gestor: ' + metaDia + ' visitas com prova por dia × ' + uteisSem + (uteisSem === 1 ? ' dia útil' : ' dias úteis') + (uteisSem < 5 ? ' (semana com feriado)' : ''),
       prospeccao: 'quatro por semana é o mínimo que mantém o funil alimentado — abaixo disso ele seca em duas semanas'
     },
     maduros, gap, meta, semanas
@@ -21088,7 +21104,7 @@ function pb7Streak() {
   const d = new Date();
   for (let i = 0; i < 60; i++) {
     const iso = isoDate(d);
-    const fds = d.getDay() === 0 || d.getDay() === 6;
+    const fds = d.getDay() === 0 || d.getDay() === 6 || ehFeriadoBR(iso);
     if (dias.has(iso)) n++;
     else if (!fds && i > 0) break;
     else if (!fds && i === 0) {   }
@@ -24626,7 +24642,7 @@ function tm2DiasUteisNoMes(ref, ateDia) {
   let n = 0;
   for (let d = 1; d <= limite; d++) {
     const dow = new Date(ano, mes, d).getDay();
-    if (dow !== 0 && dow !== 6) n++;
+    if (dow !== 0 && dow !== 6 && !ehFeriadoBR(isoLocalBR(new Date(ano, mes, d)))) n++;
   }
   return n;
 }
@@ -26496,7 +26512,7 @@ function agendaP2(n) { return String(n).padStart(2, '0'); }
 function agendaChave(d) { return d.getUTCFullYear() + '-' + agendaP2(d.getUTCMonth() + 1) + '-' + agendaP2(d.getUTCDate()); }
 function agendaHhmm(d) { return agendaP2(d.getUTCHours()) + ':' + agendaP2(d.getUTCMinutes()); }
 function agendaAgora() { return agendaParaBRT(new Date().toISOString()); }
-function agendaDiaUtil(d) { const w = d.getUTCDay(); return w >= 1 && w <= 5; }
+function agendaDiaUtil(d) { const w = d.getUTCDay(); return w >= 1 && w <= 5 && !ehFeriadoBR(agendaChave(d)); }
 function agendaSegunda(off) {
   const h = agendaAgora(), dow = h.getUTCDay(), s = new Date(h.getTime());
 
@@ -27141,8 +27157,9 @@ function pl6Dias(segunda) {
   return [0, 1, 2, 3, 4].map(i => {
     const iso = addDays(segunda, i);
     const d = new Date(iso + 'T12:00:00');
+
     return { rot: rot[i], rotLongo: longo[i],
-      data: agendaP2(d.getDate()) + '/' + agendaP2(d.getMonth() + 1), iso: iso };
+      data: agendaP2(d.getDate()) + '/' + agendaP2(d.getMonth() + 1), iso: iso, feriado: ehFeriadoBR(iso) };
   });
 }
 
@@ -28658,7 +28675,7 @@ function fpAtalhosHTML() {
   while (dias.length < 5) {
     d = addDays(d, 1);
     const w = new Date(d + 'T12:00:00Z').getUTCDay();
-    if (w === 0 || w === 6) continue;
+    if (w === 0 || w === 6 || ehFeriadoBR(d)) continue;
     dias.push({ iso: d, rot: nomes[w] + ' ' + d.slice(8, 10) + '/' + d.slice(5, 7) });
   }
   return '<div class="fp-atalhos"><div class="fp-linha">'
@@ -28871,7 +28888,9 @@ function pl6DadosFinal(rep) {
 
   const ritmo = pl6RitmoDoDia(grade, dias, rep && rep.ownerId);
   const diaAba = pl6DiaDaAba(dias, s.diaAba, hojeISOPl6);
-  const diasCobertos = grade.filter(col => col.some(v => pl6SlotId(v))).length;
+  const diasCobertos = grade.filter((col, i) => !(dias[i] && dias[i].feriado) && col.some(v => pl6SlotId(v))).length;
+  const diasUteisSemana = dias.filter(d => !d.feriado).length;
+  const feriadosSemana = dias.filter(d => d.feriado).map(d => d.data);
 
   const comProposito = livres.map(function (l) {
     const p = pl6PropositoDoLead(l);
@@ -29097,11 +29116,11 @@ function pl6DadosFinal(rep) {
 
     kpis: (function () {
       const r6 = pl6ResumoApp(hojeISOPl6);
-      const meta = pl6MetaVisitasDia() * 5;
+      const meta = pl6MetaVisitasDia() * diasUteisSemana;
       return [
         { rot: 'Hoje', v: r6 ? r6.plano : '—', cor: 'var(--ink)', sub: r6 ? r6.visitasLonga : 'lendo o plano de hoje', hoje: true },
         { rot: 'Visitas agendadas', v: String(agendadas), cor: agendadas ? '#1E9E7B' : 'var(--ter)', sub: 'paradas na semana · meta ' + meta + ' com prova' },
-        { rot: 'Dias cobertos', v: diasCobertos + ' de 5', cor: 'var(--ink)', sub: diasCobertos >= 5 ? 'todo dia tem rota' : (5 - diasCobertos) + (5 - diasCobertos === 1 ? ' dia sem rota' : ' dias sem rota') }
+        { rot: 'Dias cobertos', v: diasCobertos + ' de ' + diasUteisSemana, cor: 'var(--ink)', sub: (diasCobertos >= diasUteisSemana ? 'todo dia útil tem rota' : (diasUteisSemana - diasCobertos) + (diasUteisSemana - diasCobertos === 1 ? ' dia sem rota' : ' dias sem rota')) + (feriadosSemana.length ? ' · feriado ' + feriadosSemana.join(', ') : '') }
       ];
     }()),
 
@@ -29119,7 +29138,7 @@ function pl6DadosFinal(rep) {
       } else if (its.length) {
         marca = String(its.length); cor = 'var(--ink)';
       } else {
-        marca = passado ? '—' : 'livre'; cor = 'var(--ter)';
+        marca = dd.feriado ? 'feriado' : passado ? '—' : 'livre'; cor = 'var(--ter)';
       }
       return {
         rot: esc(dd.rot + ' ' + String(dd.data).slice(0, 2)),
@@ -29197,7 +29216,7 @@ function pl6DadosFinal(rep) {
         resumoApp: d.iso <= hojeISOPl6 ? pl6ResumoApp(d.iso) : null,
         di: String(di),
 
-        cnt: n === 0 ? 'vazio' : (n === 1 ? '1 parada' : n + ' paradas'),
+        cnt: n === 0 ? (d.feriado ? 'feriado' : 'vazio') : (n === 1 ? '1 parada' : n + ' paradas'),
 
         capN: n, capMeta: Number(metaDoDia) || 6,
 
@@ -35312,9 +35331,10 @@ function addDays(dateISO, n) {
   d.setDate(d.getDate() + n);
   return isoDate(d);
 }
+
 function isWeekend(dateISO) {
   const dow = new Date(dateISO + 'T12:00:00').getDay();
-  return dow === 0 || dow === 6;
+  return dow === 0 || dow === 6 || ehFeriadoBR(dateISO);
 }
 function addBusinessDays(dateISO, direction) {
   let d = addDays(dateISO, direction);
@@ -35797,7 +35817,7 @@ async function calcularStreakPlano(ownerId, hojeISO) {
     .select('data,status').eq('owner_id', ownerId).eq('status', 'plano_fechado').gte('data', desde);
   if (error) { console.error('Streak do plano — não consegui ler planos_diarios:', error.message); return vazio; }
   const fechados = new Set((data || []).map(x => x.data));
-  const ehUtil = iso => { const dw = new Date(iso + 'T12:00:00').getUTCDay(); return dw !== 0 && dw !== 6; };
+  const ehUtil = iso => { const dw = new Date(iso + 'T12:00:00').getUTCDay(); return dw !== 0 && dw !== 6 && !ehFeriadoBR(iso); };
 
   let dias = 0, cursor = addDays(hojeISO, -1);
   while (dias < 60) {
@@ -38031,7 +38051,7 @@ function renderManagerDailyRoutine(contexto) {
     if (minutosAgora < limiteSeguinte) { indiceAtual = i; break; }
   }
 
-  const fimDeSemana = diaSemana === 0 || diaSemana === 6;
+  const fimDeSemana = diaSemana === 0 || diaSemana === 6 || ehFeriadoBR(isoLocalBR(agora));
   const etapas = fimDeSemana ? [
     { hora: '08:40', titulo: 'Leitura opcional', texto: 'Confirme a saúde da carga e anote decisões, sem transformar o descanso do time em cobrança.' },
     { hora: '09:00', titulo: 'Sem Daily', texto: variacaoDaily[diaSemana] },
@@ -38160,7 +38180,7 @@ async function renderCockpitExecutionCommand() {
 
   const ehDiaUtilHoje = (() => {
     const dow = new Date().getDay();
-    return dow !== 0 && dow !== 6;
+    return dow !== 0 && dow !== 6 && !ehFeriadoBR(isoLocalBR(new Date()));
   })();
   const corSeUtil = (valorOk, corRuim) => !ehDiaUtilHoje ? 'var(--muted2)' : (valorOk ? 'var(--green)' : corRuim);
 
@@ -38498,7 +38518,7 @@ function sequenciaDeExecucao(ownerId, ateDataISO) {
 function cicloFechadoDaSemana(ownerId, ateDataISO) {
   const fimDeSemana = isoStr => {
     const dow = new Date(isoStr + 'T12:00:00Z').getUTCDay();
-    return dow === 0 || dow === 6;
+    return dow === 0 || dow === 6 || ehFeriadoBR(isoStr);
   };
 
   const dias = [];
@@ -44293,7 +44313,7 @@ function v5VpDiasUteisDesde(iso) {
   const d = new Date(new Date(iso).toLocaleDateString('sv-SE', tz) + 'T12:00:00-03:00');
   const fim = new Date(new Date().toLocaleDateString('sv-SE', tz) + 'T12:00:00-03:00');
   let n = 0;
-  while (d < fim) { d.setUTCDate(d.getUTCDate() + 1); const w = d.getUTCDay(); if (w !== 0 && w !== 6) n++; }
+  while (d < fim) { d.setUTCDate(d.getUTCDate() + 1); const w = d.getUTCDay(); if (w !== 0 && w !== 6 && !ehFeriadoBR(d.toISOString().slice(0, 10))) n++; }
   return n;
 }
 
@@ -44639,7 +44659,7 @@ function h10Noite() { return h10HoraBRT() >= 18; }
 function h10HojeISO() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
 function h10ProximoUtil(iso) {
   let d = addDays(iso, 1);
-  for (let i = 0; i < 4; i++) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w !== 0 && w !== 6) break; d = addDays(d, 1); }
+  for (let i = 0; i < 6; i++) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w !== 0 && w !== 6 && !ehFeriadoBR(d)) break; d = addDays(d, 1); }
   return d;
 }
 function h10NoPwa() { return typeof v5NoPwa === 'function' && v5NoPwa(); }
@@ -44739,7 +44759,7 @@ async function h10LerDia(uid, iso) {
 
 function h10UtilAnterior(iso) {
   let d = addDays(iso, -1);
-  for (let i = 0; i < 4; i++) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w !== 0 && w !== 6) break; d = addDays(d, -1); }
+  for (let i = 0; i < 6; i++) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); if (w !== 0 && w !== 6 && !ehFeriadoBR(d)) break; d = addDays(d, -1); }
   return d;
 }
 
@@ -53998,7 +54018,7 @@ function sm5RitmoDoMes() {
   const ultimo = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
   for (let d = 1; d <= ultimo; d++) {
     const dow = new Date(Date.UTC(ano, mes, d)).getUTCDay();
-    if (dow === 0 || dow === 6) continue;
+    if (dow === 0 || dow === 6 || ehFeriadoBR(new Date(Date.UTC(ano, mes, d)).toISOString().slice(0, 10))) continue;
     uteis++;
     if (d <= diaHoje) decorridos++;
   }
@@ -55938,7 +55958,7 @@ GV2.render.propAcomp = function () {
     return { acao: 'propsel:' + i, celulas: [
       '<b class="gv2-ellip">' + GV2.e(r.cliente) + '</b>', '<span class="t-mute gv2-ellip">' + GV2.e(r.executivo) + '</span>', '<span class="gv2-ellip">' + GV2.e(r.plano || '—') + '</span>',
       '<b class="num">' + (r.mrr ? GV2.rsCheio(r.mrr) : '—') + '</b>', '<span class="num ' + (venc ? 't-erro' : 't-mute') + '">' + GV2.e(r.valeAteRot || '—') + '</span>',
-      '<span><span class="gv2-status ' + cls + '">' + GV2.e(st) + '</span></span>'] };
+      '<span><span class="gv2-status ' + cls + '">' + GV2.e(st === 'venceu ontem' ? 'venceu ' + GV2.ontemDe() : st) + '</span></span>'] };
   });
   const tabela = '<section class="card" style="flex:1;min-height:0;display:flex;flex-direction:column;">' + GV2.html.tabela({ colunas: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,.9fr) 90px 90px 130px',
     cabecalho: ['Cliente', 'Executivo', 'Plano', 'MRR', 'Vale até', 'Status'], linhas: linhas, vazio: 'Nenhuma proposta registrada neste mês.' }) + '</section>';
@@ -57810,7 +57830,7 @@ GV2.conferir = function (p, c, base) {
 
     const tot = p.ontem.visitas_todas || 0;
     const ok = tot >= p.meta_visitas_dia;
-    return { ok: ok, ev: 'ontem ' + tot + ' de ' + p.meta_visitas_dia + ' visitas com prova' + (p.ontem.paradas_plano ? ' · ' + p.ontem.visitas_com_prova + ' do plano de ' + p.ontem.paradas_plano : ' · sem plano') + (p.w.length ? ' · média da semana ' + GV2.virg(p.w[p.w.length - 1]) : '') };
+    return { ok: ok, ev: GV2.ontemDe() + ': ' + tot + ' de ' + p.meta_visitas_dia + ' visitas com prova' + (p.ontem.paradas_plano ? ' · ' + p.ontem.visitas_com_prova + ' do plano de ' + p.ontem.paradas_plano : ' · sem plano') + (p.w.length ? ' · média da semana ' + GV2.virg(p.w[p.w.length - 1]) : '') };
   }
   if (c.regra === 'travados_com_data') {
     const com = p.travados.filter(function (n) { return n.proximo_passo; }).length;
@@ -59602,7 +59622,7 @@ GV2.p3Agora = function (p) {
   const st = GV2.stAgora(p);
 
   const exc = util && p.hoje.paradas_plano === 0
-    ? '<div class="gv2-p3-exc"><div><b>' + GV2.e('Sem plano hoje' + (p.ontem.paradas_plano ? ', e ontem ' + (p.furou ? 'furou ' + p.furou + ' de ' + p.ontem.paradas_plano : 'fez ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano) : '')) + '</b><span>' + GV2.e('O pedido vai no WhatsApp e no sino do app de ' + n + '.') + '</span></div>'
+    ? '<div class="gv2-p3-exc"><div><b>' + GV2.e('Sem plano hoje' + (p.ontem.paradas_plano ? ', e ' + GV2.ontemDe() + ' ' + (p.furou ? 'furou ' + p.furou + ' de ' + p.ontem.paradas_plano : 'fez ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano) : '')) + '</b><span>' + GV2.e('O pedido vai no WhatsApp e no sino do app de ' + n + '.') + '</span></div>'
       + GV2.html.btn({ texto: b.foraDaJornada ? 'Pedir o plano de amanhã' : 'Pedir o plano até 15h', tipo: 'acao', tam: 'lg', acao: 'cobrar:pessoa:' + p.id }) + '</div>'
     : util && p.hoje.paradas_plano > 0 && p.hoje.visitas_com_prova === 0 && !b.antesDaJornada
     ? '<div class="gv2-p3-exc"><div><b>' + GV2.e('Nenhuma visita com prova ' + (b.foraDaJornada ? 'hoje' : 'até ' + GV2.hm())) + '</b><span>' + GV2.e(GV2.v4TextoExc(p)) + '</span></div>'
@@ -62317,7 +62337,7 @@ GV2.render.rpQuadro = function () {
   const pracas = {};
   sel.gente.forEach(function (x) { const p = GV2.base.porId[String(x.ownerId)]; if (p && p.praca) pracas[p.praca] = true; });
   const pr = Object.keys(pracas);
-  const tit = 'Turma ' + GV2.ddmm(sel.k) + (pr.length ? ' · praça ' + pr.join(' e ') : '') + ' · ' + GV2.pl(sel.gente.length, 'pessoa', 'pessoas');
+  const tit = 'Turma ' + GV2.ddmm(sel.k) + (pr.length ? ' · ' + (pr.length > 1 ? 'praças ' : 'praça ') + GV2.lista(pr) : '') + ' · ' + GV2.pl(sel.gente.length, 'pessoa', 'pessoas');
   const sub = diaT > GV2.RP.DIAS ? 'dia ' + diaT + ' · passou dos 60 dias' : 'dia ' + Math.max(1, diaT) + ' de ' + GV2.RP.DIAS + ' · prospecção só depois da S4 aprovada (dia 30)';
   const lido = GV2.rp.d && GV2.rp.d.lidoEm;
   const cab = '<div class="gv2-rp-tcab"><div><b>' + GV2.e(tit) + '</b><span>' + GV2.e(sub) + '</span></div><small>' + GV2.e('rampa_fases + visitas + demos do app' + (lido ? ' · ' + GV2.ddmm(String(lido).slice(0, 10)) + ' ' + GV2.horaDe(lido) : '')) + '</small></div>';
@@ -64427,7 +64447,7 @@ GV2.render.v5PorPessoa = function (sit) {
       + '<button type="button" class="gv2-v5-pp-c is-link" data-gv2="' + abre + '"><b class="num">' + GV2.e(planoT) + '</b><small class="' + (p.hoje.sem_lugar && !fonte ? 't-av' : '') + '">' + GV2.e(planoS) + '</small></button>'
       + '<span class="gv2-v5-pp-c gv2-v5-pp-x" title="' + GV2.e(x + ' visitas · ' + xS) + '"><b class="num' + (p.hoje.visitas_todas ? '' : ' t-dim') + '">' + GV2.e(x) + '</b><small>' + GV2.e(xCurto) + '</small></span>'
       + '<button type="button" class="gv2-v5-pp-c" data-gv2="' + abre + '"><b class="num ' + jC + '">' + GV2.e(jT) + '</b><small>' + GV2.e(jS) + '</small></button>'
-      + '<span class="gv2-v5-pp-c" title="' + GV2.e('ontem: ' + ontemT + (ontemS ? ' · ' + ontemS : '') + ' · ' + oj) + '"><b class="num' + (furou ? ' t-av' : '') + '">' + GV2.e(ontemT) + '</b><small>' + GV2.e(ontemS || oj) + '</small></span>'
+      + '<span class="gv2-v5-pp-c" title="' + GV2.e(GV2.ontemDe() + ': ' + ontemT + (ontemS ? ' · ' + ontemS : '') + ' · ' + oj) + '"><b class="num' + (furou ? ' t-av' : '') + '">' + GV2.e(ontemT) + '</b><small>' + GV2.e(ontemS || oj) + '</small></span>'
       + '<button type="button" class="num gv2-v5-pp-n is-link" data-gv2="v8neg:quentes:' + p.id + '" title="os quentes de ' + GV2.e(GV2.prim(p.nome)) + '">' + p.quentes.length + '</button>'
       + '<button type="button" class="num gv2-v5-pp-n' + (p.travados.length >= 4 ? ' t-av' : '') + '" data-gv2="v8neg:travados:' + p.id + '" title="os travados de ' + GV2.e(GV2.prim(p.nome)) + '">' + p.travados.length + '</button>'
       + '<span class="gv2-v5-pp-a">' + acao + '</span></div>';
@@ -65231,7 +65251,8 @@ EXH.cartoesHTML = function (p, b, m) {
   const card = function (rot, val, leg, nasce, acao, tom) {
     return '<button type="button" class="exh-num" data-exh="' + acao + '"><small>' + GV2.e(rot) + '</small><b class="' + (tom || '') + '">' + GV2.e(val) + '</b><span>' + GV2.e(leg) + '</span><em>' + GV2.e(nasce) + '</em></button>';
   };
-  const planoV = fora ? '—' : p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem rota';
+
+  const planoV = fora ? '—' : p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : GV2.util(b.agora.iso) ? 'sem rota' : 'sem expediente';
   const planoL = fora ? 'o plano não respondeu' : (p.hoje.visitas_todas || 0) + ' de ' + p.meta_visitas_dia + ' visitas com prova' + (p.hoje.sem_lugar ? ' · ' + GV2.pl(p.hoje.sem_lugar, 'sem lugar no mapa', 'sem lugar no mapa') : '');
   const mesV = r.meta ? r.fechados + ' de ' + r.meta : String(r.fechados || 0);
   const mesL = 'clientes' + (r.proxima != null ? ' · a próxima vale +' + GV2.rsCheio(r.proxima) : '');
@@ -65380,7 +65401,7 @@ EXH.meuDiaHTML = function (p, b, m) {
       + (dh.estado === 'erro' ? '<div class="exh-fora"><b>a rota do dia não respondeu</b><span>' + GV2.e(dh.erro || '') + '</span>' + EXH.bt('Tentar de novo', 'recarregar', 'av') + '</div>' : '<div class="exh-lendo"></div>');
   }
   const noite = m === 'noite';
-  const tit = p.hoje.paradas_plano ? 'Plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' · ' + (p.hoje.visitas_todas || 0) + ' de ' + p.meta_visitas_dia + ' visitas com prova' : 'Sem plano hoje · ' + (p.hoje.visitas_todas || 0) + ' de ' + p.meta_visitas_dia + ' visitas com prova';
+  const tit = p.hoje.paradas_plano ? 'Plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' · ' + (p.hoje.visitas_todas || 0) + ' de ' + p.meta_visitas_dia + ' visitas com prova' : GV2.util(b.agora.iso) ? 'Sem plano hoje · ' + (p.hoje.visitas_todas || 0) + ' de ' + p.meta_visitas_dia + ' visitas com prova' : 'Sem expediente hoje' + ((p.hoje.visitas_todas || 0) ? ' · ' + GV2.pl(p.hoje.visitas_todas, 'visita com prova', 'visitas com prova') : '');
   const linhas = dh.itens.map(function (x) {
     let selo;
     if (x.feita) selo = '<span class="exh-selo is-ok">feita com prova · ' + GV2.e(x.prova || '') + '</span>';
@@ -68327,18 +68348,22 @@ EXH4.regras = function (p, b) {
   const meta = p.meta_visitas_dia || 6;
   const paradas = p.hoje.paradas_plano || 0;
   const r = [];
-  r.push(b.planoErro ? { n: 1, t: 'Plano do dia montado', st: 'o plano não respondeu', e: 'nao', acao: 'recarregar' }
+
+  const util = GV2.util(b.agora.iso);
+  if (!util) r.push({ n: 1, t: 'Plano do dia montado', st: 'sem expediente hoje', e: 'nao', acao: 'aba:viewAgenda' });
+  else r.push(b.planoErro ? { n: 1, t: 'Plano do dia montado', st: 'o plano não respondeu', e: 'nao', acao: 'recarregar' }
     : paradas >= meta ? { n: 1, t: 'Plano do dia montado', st: paradas + ' paradas', e: 'ok', acao: 'aba:viewAgenda' }
       : { n: 1, t: 'Plano do dia montado', st: paradas ? paradas + ' de ' + meta + ' paradas' : 'falta montar', e: 'pend', acao: 'aba:viewAgenda' });
   r.push(sp ? { n: 2, t: 'Todo lead ativo com próximo passo', st: sp + ' sem plano', e: 'pend', acao: 'rolar:exh4Sem' } : { n: 2, t: 'Todo lead ativo com próximo passo', st: 'todos com plano', e: 'ok', acao: 'rolar:exh4Sem' });
   r.push(qs ? { n: 3, t: 'Todo quente com data', st: qs + (qs === 1 ? ' quente sem data' : ' quentes sem data'), e: 'pend', acao: 'rolar:exh4Quentes' } : { n: 3, t: 'Todo quente com data', st: 'todos com data', e: 'ok', acao: 'rolar:exh4Quentes' });
   r.push(sf.length ? { n: 4, t: 'Toda visita com ficha', st: sf.length === 1 ? sf[0].cliente + ' sem "como foi"' : sf.length + ' sem ficha', e: 'pend', acao: 'pino:' + (sf[0].id || '') }
     : { n: 4, t: 'Toda visita com ficha', st: 'toda visita com ficha', e: 'ok', acao: 'aba:viewPDIs:dvDisc' });
-  if (a.min < 18 * 60) r.push({ n: 5, t: 'Fechar o dia até 19h', st: 'abre às 18h', e: 'nao', acao: 'aba:viewAgenda' });
+  if (util && a.min < 18 * 60) r.push({ n: 5, t: 'Fechar o dia até 19h', st: 'abre às 18h', e: 'nao', acao: 'aba:viewAgenda' });
   else {
-    const am = EXH.dia(p, EXH.proximoUtil(b.agora.iso));
+    const prox = EXH.proximoUtil(b.agora.iso), am = EXH.dia(p, prox);
     const ok = am.estado === 'ok' && am.itens.length > 0;
-    r.push({ n: 5, t: 'Fechar o dia até 19h', st: am.estado !== 'ok' ? 'lendo o amanhã…' : ok ? 'amanhã montado' : 'montar amanhã', e: ok ? 'ok' : am.estado !== 'ok' ? 'nao' : 'pend', acao: 'aba:viewAgenda' });
+    const rotProx = prox === GV2.somaDias(b.agora.iso, 1) ? 'amanhã' : GV2.DIAS[GV2.dow(prox)] + ' ' + GV2.ddmm(prox);
+    r.push({ n: 5, t: util ? 'Fechar o dia até 19h' : 'Montar o próximo dia útil', st: am.estado !== 'ok' ? 'lendo ' + rotProx + '…' : ok ? rotProx + ' montado' : 'montar ' + rotProx, e: ok ? 'ok' : am.estado !== 'ok' ? 'nao' : 'pend', acao: 'aba:viewAgenda' });
   }
   return r;
 };
