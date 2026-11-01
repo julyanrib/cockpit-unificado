@@ -32166,7 +32166,7 @@ function repForaDoTimeCosturar() {
   DATA.reps.push({ ownerId: id, name: sessaoAtual.nome || sessaoAtual.email || 'Você', praca: '', tag: '', tagLabel: '', gargalo: '',
     boasPraticas: [], compromissos: [], compromissosPrazo: [], open: abertos.length, stages: stages,
     criticos: criticos, travados: travados, abertos: abertos, quentes: quentes, leadsTravados: travados.length,
-    ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 10, metaMrr: 0, metaReceita: 0, patamarMeta: '',
+    ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta', /* fora da planilha: sem meta, não 10 (01/11/26) */
     visitasHubspotHoje: 0, avancosHojeNomes: [], propostasHojeNomes: [], avancosHubspotHoje: 0, propostasHubspotHoje: 0, fechamentosHubspotHoje: 0,
     foraDoTime: true });
 }
@@ -81928,7 +81928,7 @@ DV.cartoesV3 = function (p, b, r, d) {
   num.contagem = true; // séries de contagem: a semana em andamento não "piora"
   return '<div class="dv-c5s">'
     + card('Hoje', fora ? '—' : GV2.temRua(p) ? GV2.visHoje(p) : GV2.util(b.agora.iso) ? 'sem rota' : 'sem expediente', fora ? 'o plano não respondeu' : p.hoje.paradas_plano ? 'do plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : GV2.util(b.agora.iso) ? 'sem plano hoje' : 'fim de semana ou feriado', DV.tendHTML(t.plano, pct, 'plano cumprido'), fora ? 't-dim' : '')
-    + card('Semana', fora ? '—' : feitoSem + ' de ' + metaSem, fora ? 'o plano não respondeu' : 'visitas com prova · ' + (metaSem - feitoSem > 0 ? 'faltam ' + (metaSem - feitoSem) : 'meta batida'), DV.tendHTML(t.semana, num, 'visitas com prova'), fora ? 't-dim' : '')
+    + card('Semana', fora ? '—' : feitoSem + ' de ' + metaSem, fora ? 'o plano não respondeu' : 'visitas com prova · ' + (metaSem - feitoSem > 0 ? (b.semana.some(function (x) { return GV2.util(x.iso) && x.iso >= b.agora.iso; }) ? 'faltam ' : 'ficaram faltando ') + (metaSem - feitoSem) : 'meta batida'), DV.tendHTML(t.semana, num, 'visitas com prova'), fora ? 't-dim' : '')
     + card('Mês', r.meta ? r.fechados + ' de ' + r.meta : String(r.fechados || 0), 'clientes' + (r.proxima != null ? ' · a próxima vale +' + GV2.rsCheio(r.proxima) : ''), DV.tendHTML(t.ganhos, num, 'ganhos por semana'), r.meta && r.fechados >= r.meta ? 't-ok' : '')
     + card('Porta → decisor', [f.portas, f.decisor, f.demo, f.proposta, f.fechado].map(function (x) { return x == null ? '—' : String(x); }).join(' → '), 'portas · decisor · demo · proposta · fechado', DV.tendHTML(t.decisor, pct, 'decisor por porta'))
     + card('Sem desfecho', d.nReunioes == null ? '—' : String(d.nReunioes), d.nReunioes == null ? 'as reuniões não responderam' : (d.nReunioes === 1 ? 'reunião' : 'reuniões'), DV.tendHTML(t.reun, num, 'reuniões da semana sem desfecho', true), d.nReunioes ? 't-av' : '')
@@ -82304,6 +82304,8 @@ GV2.render.v5Semana = function () {
   const metas = b.pessoas.map(function (p) { return p.meta_visitas_dia; });
   const metaIgual = metas.every(function (m) { return m === metas[0]; });
   const uteis = b.semana.filter(function (d) { return GV2.util(d.iso); }).length;
+  /* semana fechada (fim de semana): o que falta virou "ficou faltando" (auditoria 01/11/26) */
+  const aberta = b.semana.some(function (d) { return GV2.util(d.iso) && d.iso >= b.agora.iso; });
   const cab = '<div class="gv2-v5-gr-l is-cab"><span>Pessoa</span>' + b.semana.map(function (d) { return '<span class="' + (d.hoje ? 'is-hoje' : '') + '">' + GV2.e(d.rot + (d.hoje ? ' · hoje' : '')) + '</span>'; }).join('') + '<span class="is-dir">Feito + plano</span></div>';
   const linhas = b.pessoas.map(function (p) {
     let feito = 0, falta = 0;
@@ -82331,7 +82333,7 @@ GV2.render.v5Semana = function () {
     const meta = p.meta_visitas_dia * b.semana.filter(function (d) { return GV2.util(d.iso); }).length;
     const ok = feito + falta >= meta;
     return '<div class="gv2-v5-gr-l"><b class="gv2-ellip">' + GV2.e(p.nome) + '</b>' + cels
-      + '<span class="gv2-v5-gr-tot"><b class="num' + (ok ? ' t-ok' : '') + '">' + feito + ' + ' + falta + '</b><small>' + GV2.e('de ' + meta + ' · ' + (ok ? 'cobre a meta' : 'faltam ' + (meta - feito - falta))) + '</small>'
+      + '<span class="gv2-v5-gr-tot"><b class="num' + (ok ? ' t-ok' : '') + '">' + feito + ' + ' + falta + '</b><small>' + GV2.e('de ' + meta + ' · ' + (ok ? 'cobre a meta' : (aberta ? 'faltam ' : 'ficaram faltando ') + (meta - feito - falta))) + '</small>'
       /* a meta dos recém-abertos (5 por semana), visitados com prova */
       + '<small class="' + (GV2.novosSemana && (GV2.novosSemana[p.id] || 0) >= 5 ? 't-ok' : '') + '" title="restaurantes com CNPJ aberto há até 90 dias visitados com prova nesta semana">' + GV2.e('recém-abertos ' + (GV2.novosSemana ? (GV2.novosSemana[p.id] || 0) : '—') + ' de 5') + '</small></span></div>';
   }).join('');
