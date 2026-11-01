@@ -82049,6 +82049,500 @@ DV.clique = function (ev) {
 DV.instalar = function () { if (DV.instalado || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return; DV.instalado = true; document.addEventListener('click', DV.clique); };
 DV.instalar();
 
+/* ══ DESENVOLVIMENTO v2, O JOGO DA CARREIRA (Desenvolvimento v2, 01/11/26) ═══════════════════
+   "Eu tenho certeza que ninguém clica na aba Desenvolvimento. Tem que gamificar." A tela responde em
+   5 s: onde eu estou, o que eu ganho a seguir e quanto falta. É o espelho do "Meu desempenho" do app:
+   os dois leem desenvolvimento_quadro() (migração 0240 do app), que junta TODOS os blocos no banco, e
+   cada lado só formata. A formatação abaixo (DV2.*, funções puras) é a MESMA do app
+   (supabase/functions/_compartilhado/desenvolvimentoV2.ts): as duas suítes formatam a mesma fixture e
+   comparam com a mesma saída esperada (scripts/fixtures/desenvolvimento-v2/). Se um lado mudar uma
+   frase ou uma conta e o outro não, uma das suítes cai.
+   O DV antigo (o espelho do 1:1 de 07/10) continua inteiro: localStorage['desenvolvimento-v1'] = '1'
+   volta para ele. */
+const DV2 = { estado: { q: null, erro: null, lendo: null, umAberto: false, celebrou: {}, viuNovas: {}, toastEm: null, vistasGravadas: {} } };
+GV2.DV2 = DV2;
+DV2.DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+DV2.DIAS_LONGOS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+DV2.MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+DV2.dia = function (iso) { return String(iso || '').slice(0, 10); };
+DV2.dow = function (iso) { return new Date(DV2.dia(iso) + 'T12:00:00Z').getUTCDay(); };
+DV2.ddmm = function (iso) { const d = DV2.dia(iso); return d.slice(8, 10) + '/' + d.slice(5, 7); };
+DV2.diaCurto = function (iso) { return DV2.DIAS[DV2.dow(iso)] + ' ' + DV2.ddmm(iso); };
+DV2.somaDias = function (iso, n) { const d = new Date(DV2.dia(iso) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+DV2.diasEntre = function (de, ate) { return Math.round((Date.parse(DV2.dia(ate) + 'T12:00:00Z') - Date.parse(DV2.dia(de) + 'T12:00:00Z')) / 86400000); };
+DV2.mesNome = function (iso) { return DV2.MESES[Number(String(iso).slice(5, 7)) - 1]; };
+DV2.reais = function (v) { return 'R$ ' + String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); };
+DV2.virg = function (v) { return (Math.round(v * 10) / 10).toFixed(1).replace('.', ','); };
+DV2.pl = function (n, um, varios) { return n + ' ' + (n === 1 ? um : varios); };
+DV2.NUM = ['zero', 'uma', 'duas', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez'];
+DV2.Cap = function (s) { return s.charAt(0).toUpperCase() + s.slice(1); };
+DV2.prim = function (nome) { return String(nome || '').trim().split(/\s+/)[0] || ''; };
+DV2.pct = function (n, d) { return d > 0 ? Math.round((n / d) * 100) : null; };
+
+/* ── 2 · a semana: a disputa dos R$ 250 ── */
+DV2.menorAcao = function (falta) {
+  const N = DV2.NUM, C = DV2.Cap;
+  if (falta <= 3) return 'Uma visita com prova já passa.';
+  if (falta <= 25) { const v = Math.ceil(falta / 3); return v <= 2 ? C(N[v]) + ' visitas com prova passam.' : 'Uma demo (25) já passa.'; }
+  const d = Math.floor(falta / 25), r = falta - 25 * d, v = Math.ceil(r / 3);
+  const dT = d === 1 ? 'Uma demo' : C(N[Math.min(d, 10)]) + ' demos';
+  if (r <= 0) return dT + (d > 1 ? ' passam.' : ' passa.');
+  if (v > 2) return C(N[Math.min(d + 1, 10)]) + ' demos passam.';
+  return dT + ' e ' + (v === 1 ? 'uma visita' : N[v] + ' visitas') + ' passam.';
+};
+DV2.semanaDoExecutivo = function (q) {
+  const regra = [{ v: '100', t: 'venda' }, { v: '25', t: 'demo' }, { v: '3', t: 'visita com prova' }];
+  const nota = 'ponto só nasce de prova: GPS ou foto na visita, HubSpot na demo e na venda';
+  const kicker = 'A SEMANA · DISPUTA DOS R$ 250';
+  const S = q.semana;
+  if (!S) return { fora: true, fonte: q.fontes.semana || 'placar_da_semana', kicker: kicker, ate: '', ateCurto: '', pts: '—', posTexto: '— · ' + (q.fontes.semana || 'placar_da_semana') + ' não respondeu', posTom: 'mute', podio: [], proximo: 'O placar volta assim que a fonte responder. Os seus pontos continuam contando.', regra: regra, nota: nota };
+  /* a semana do bônus é de segunda a sexta 23:59 (0191): o texto diz até que dia, sem hora inventada */
+  const ate = 'até ' + DV2.diaCurto(S.sexta) + (S.uteis < 5 ? ' · ' + DV2.pl(S.uteis, 'dia útil', 'dias úteis') : '');
+  const novato = q.pessoa.fase === 'novato';
+  const lider = S.podio.find(function (x) { return x.pos === 1; });
+  const comecou = !lider || lider.pts <= 0;
+  let posTexto, proximo;
+  const podio = [];
+  if (novato) {
+    posTexto = 'na rampa · placar de você contra você';
+    proximo = 'Na rampa, a sua disputa é com você: ' + S.pts + ' pts nesta semana' + (S.passada ? ', ' + S.passada.pts + ' na passada.' : '.');
+  } else if (S.pos == null) {
+    posTexto = 'fora do placar do bônus';
+    proximo = 'Você não disputa o placar do bônus: estes são os seus pontos da semana.';
+  } else if (comecou) {
+    posTexto = 'a semana começou';
+    proximo = 'A semana começou: todo mundo com 0. A 1ª visita com prova de hoje já põe você no placar.';
+  } else {
+    posTexto = S.pos + 'º no placar da praça';
+    /* o pódio em 2º · 1º · 3º; só o top 3 e "o próximo a passar", nunca a lista (regra 3 do README) */
+    const alturas = [44, 62, 34];
+    [2, 1, 3].forEach(function (p, i) {
+      const x = S.podio.find(function (y) { return y.pos === p; });
+      if (x) podio.push({ nome: x.eu ? 'você' : DV2.prim(x.nome), pts: String(x.pts), lugar: p + 'º', eu: x.eu, altura: alturas[i] });
+    });
+    if (S.pos === 1) proximo = S.segundo ? 'Você lidera com ' + (S.pts - S.segundo.pts) + ' pts de vantagem sobre ' + DV2.prim(S.segundo.nome) + '.' : 'Você lidera a semana.';
+    else if (S.acima) { const falta = S.acima.pts - S.pts + 1; proximo = 'Faltam ' + falta + ' pts para passar ' + DV2.prim(S.acima.nome) + '. ' + DV2.menorAcao(falta); }
+    else proximo = 'Cada visita com prova soma 3 pts.';
+  }
+  return { fora: false, fonte: null, kicker: kicker, ate: ate, ateCurto: DV2.diaCurto(S.sexta), pts: String(S.pts), posTexto: posTexto, posTom: !novato && S.pos === 1 && !comecou ? 'ok' : 'mute', podio: podio, proximo: proximo, regra: regra, nota: nota };
+};
+
+/* ── 3 · a missão da semana (os textos do README §6.1) ── */
+DV2.MISSOES = {
+  porta: { combinado: 'A porta é provada', titulo: 'Toda visita com GPS ou foto', unidade: 'dias com todas as visitas provadas', selo: 'Porta provada', icone: 'map-pin', prova: 'o GPS no pino ou a foto da visita' },
+  fila: { combinado: 'Próximo passo e data', titulo: 'Zerar a fila sem próximo passo antes das 18h', unidade: 'dias com a fila zerada', selo: 'Fila zerada', icone: 'check-circle', prova: 'a fila zerada antes das 18h' },
+  naHora: { combinado: 'Ficha na hora', titulo: 'Registrar o como foi antes de ligar o carro', unidade: 'dias com 100% em até 15 min', selo: 'Registro na hora', icone: 'clock', prova: 'a hora da ficha contra a hora do check-in' },
+  dono: { combinado: 'Visita com o dono', titulo: 'Marcar a volta em toda ausência do dono', unidade: 'dias com a volta marcada', selo: 'Volta marcada', icone: 'users', prova: 'a ficha "dono ausente" com a volta marcada' },
+  registro: { combinado: 'Registro verdadeiro', titulo: 'Passar a auditoria de sexta sem divergência', unidade: 'auditoria sem divergência', selo: 'Registro verdadeiro', icone: 'shield-check', prova: 'a auditoria de sexta' },
+  plano: { combinado: 'Dia planejado', titulo: 'Fechar 4 dias com 70% ou mais do plano feito', unidade: 'dias com 70% do plano', selo: 'Plano cumprido', icone: 'calendar', prova: 'o plano contra as visitas feitas' },
+  rituais: { combinado: 'Rituais', titulo: 'Daily e 1:1 da semana sem faltar', unidade: 'rituais da semana', selo: 'Ritual em dia', icone: 'users', prova: 'a presença nos rituais' },
+  novato: { combinado: 'Rampa', titulo: 'Fazer 4 visitas com prova por dia útil', unidade: 'dias com 4 ou mais', selo: 'Primeira semana no ritmo', icone: 'map-pin', prova: 'o GPS ou a foto da visita' }
+};
+DV2.missaoDaSemana = function (q) {
+  const M = q.missao;
+  if (!M) {
+    const f = q.fontes.missao || 'visitas e fichas';
+    return { fora: true, fonte: f, id: '', kicker: 'MISSÃO DA SEMANA', prazo: '', titulo: '—', n: 0, alvo: 0, contagem: '—', unidade: f + ' não respondeu', passos: [], premio: '', selo: '', icone: 'target', nota: 'A missão volta quando a fonte responder. A prova que você fizer hoje continua valendo.', cumprida: false, cumpridaEm: null, celebra: '' };
+  }
+  const T = DV2.MISSOES[M.id] || DV2.MISSOES.naHora;
+  const cumprida = !!M.cumpridaEm;
+  const prazo = 'até ' + DV2.diaCurto(M.prazo);
+  const fer = (M.dias || []).find(function (x) { return !!x.feriado; });
+  let nota;
+  if (cumprida) nota = 'Fechou sozinha ' + (M.cumpridaEm === q.hoje ? 'hoje' : DV2.diaCurto(M.cumpridaEm)) + ', com ' + T.prova + '.';
+  else if (fer) nota = 'O feriado de ' + DV2.diaCurto(fer.d) + ' não conta: o prazo é ' + DV2.diaCurto(M.prazo) + ', com ' + DV2.pl(M.uteis, 'dia útil', 'dias úteis') + '.';
+  else if (M.n === 0 && q.hoje === (q.semana ? q.semana.segunda : '')) nota = 'Missão nova, escolhida pelo hábito em que você está mais longe do time. Fecha sozinha quando a prova chega.';
+  else if (M.id === 'novato') nota = 'A missão do novato vem da fase da rampa. Fecha sozinha com o GPS ou a foto da visita.';
+  else nota = 'Fecha sozinha quando a prova chega: ' + T.prova + '. Feriado e fim de semana não contam.';
+  const passos = [];
+  for (let i = 0; i < M.alvo; i++) passos.push(i < M.n);
+  return {
+    fora: false, fonte: null, id: M.id, kicker: cumprida ? 'MISSÃO CUMPRIDA' : 'MISSÃO DA SEMANA', prazo: prazo, titulo: T.titulo,
+    n: M.n, alvo: M.alvo, contagem: M.n + ' de ' + M.alvo, unidade: T.unidade, passos: passos,
+    premio: 'Cumpra ' + prazo + ' e ganhe o selo ' + T.selo, selo: T.selo, icone: T.icone, nota: nota, cumprida: cumprida, cumpridaEm: M.cumpridaEm,
+    celebra: 'O selo ' + T.selo + ' entrou na sua coleção.'
+  };
+};
+
+/* ── 4 · as sequências ── */
+DV2.sequencias = function (q) {
+  const S = q.sequencias;
+  if (!S) { const f = q.fontes.sequencias || 'visitas com prova'; return { fora: true, fonte: f, itens: [], nota: '— · ' + f + ' não respondeu. A chama não apaga por falta de leitura.', notaTom: 'dim' }; }
+  const tira = function (k) {
+    return (S.dias || []).map(function (x) {
+      const feito = k === 'rua' ? x.rua : x.fila;
+      const st = feito ? 'ok' : x.feriado ? 'fer' : x.d === q.hoje ? 'hoje' : 'nao';
+      return { rotulo: st === 'fer' ? 'feriado' : DV2.DIAS[DV2.dow(x.d)] + ' ' + x.d.slice(8, 10), st: st };
+    });
+  };
+  const r = S.rua, f = S.fila;
+  const itens = [
+    { id: 'rua', titulo: r.atual > 0 ? 'Na rua há ' + DV2.pl(r.atual, 'dia seguido', 'dias seguidos') : 'Na rua: 0 dias',
+      sub: 'recorde ' + DV2.pl(r.recorde, 'dia', 'dias') + ' · ' + (r.atual === 0 ? 'a chama acende na 1ª visita com prova' : r.atual === r.recorde ? 'é o seu recorde' : 'visita com prova em todo dia útil'),
+      acesa: r.atual > 0, icone: 'flame', dias: tira('rua') },
+    { id: 'fila', titulo: f.atual > 0 ? 'Fila zerada há ' + DV2.pl(f.atual, 'dia', 'dias') : 'Fila zerada: 0 dias',
+      sub: f.medido ? 'recorde ' + DV2.pl(f.recorde, 'dia', 'dias') + ' · nenhum lead sem próximo passo às 18h' : 'ainda sem dia de fila zerada · zere a fila de Tarefas antes das 18h',
+      acesa: f.atual > 0, icone: 'check-circle', dias: tira('fila') }
+  ];
+  const fer = (S.dias || []).find(function (x) { return !!x.feriado; });
+  return {
+    fora: false, fonte: null, itens: itens,
+    nota: fer ? 'Feriado não conta: ' + DV2.diaCurto(fer.d) + ' (' + fer.feriado + ') não apagou a sua sequência.' : 'A chama só apaga se um dia útil passar sem fazer. Fim de semana e feriado não apagam.',
+    notaTom: fer ? 'av' : 'dim'
+  };
+};
+
+/* ── 5 · o mês: a escada do variável (RETROATIVO, data/comissionamento.json: a faixa nova vale para
+   todos os clientes do mês; as faixas chegam do banco, nenhum valor mora aqui) ── */
+DV2.faixaDe = function (faixas, n) { return faixas.find(function (f) { return n >= Number(f.de || 0) && (f.ate == null || n <= Number(f.ate)); }) || null; };
+DV2.totalDe = function (faixas, n) { const f = DV2.faixaDe(faixas, n); return f ? n * Number(f.porCliente) : 0; };
+DV2.escadaDoVariavel = function (q) {
+  const V = q.variavel;
+  if (!V) { const f = q.fontes.variavel || 'HubSpot'; return { fora: true, fonte: f, titulo: '—', sub: f + ' não respondeu: o variável volta quando a fonte responder. Nenhuma venda se perde.', faixas: [], rodape: '— · ' + f, meta: '', proximaVale: null }; }
+  const faixas = (V.faixas || []).slice().sort(function (a, b) { return Number(a.de) - Number(b.de); });
+  const v = Number(V.vendas) || 0, meta = Number(V.meta) || 0, nx = v + 1;
+  const vale = DV2.totalDe(faixas, nx) - DV2.totalDe(faixas, v);
+  const fHoje = DV2.faixaDe(faixas, v), fProx = DV2.faixaDe(faixas, nx);
+  const muda = !!(fHoje && fProx && fHoje !== fProx);
+  const mes = DV2.mesNome(V.mes + '-01');
+  let titulo, sub;
+  if (meta > 0 && v >= meta) { titulo = 'Meta batida: ' + v + ' de ' + meta + '.'; sub = 'Cada venda a mais vale +' + DV2.reais(vale) + '.'; }
+  else if (muda) { titulo = 'A ' + nx + 'ª venda muda a faixa: +' + DV2.reais(vale) + '.'; sub = 'Falta 1 venda. Hoje cada venda vale +' + DV2.reais(fHoje.porCliente) + '; a partir da ' + nx + 'ª, +' + DV2.reais(fProx.porCliente) + '.'; }
+  else {
+    titulo = 'A ' + nx + 'ª venda vale +' + DV2.reais(vale) + '.';
+    const seguinte = faixas.find(function (f) { return Number(f.de) > nx; });
+    sub = v === 0 ? DV2.Cap(mes) + ' começou. A escada sobe a cada contrato fechado no HubSpot.'
+      : seguinte && (!meta || Number(seguinte.de) <= meta) ? 'Faltam ' + DV2.pl(Number(seguinte.de) - v, 'venda', 'vendas') + ' para a faixa de +' + DV2.reais(seguinte.porCliente) + ' por venda.'
+      : 'Faltam ' + DV2.pl(Math.max(0, meta - v), 'venda', 'vendas') + ' para a meta.';
+  }
+  /* um degrau por venda até a meta (ou até as vendas, se passou), agrupado por faixa */
+  const ate = Math.max(meta, v);
+  const grupos = [];
+  for (let k = 1; k <= ate; k++) {
+    const f = DV2.faixaDe(faixas, k);
+    const rot = f ? '+' + DV2.reais(f.porCliente) + ' por venda' : 'sem faixa';
+    let g = grupos[grupos.length - 1];
+    if (!g || g.rotulo !== rot) { g = { rotulo: rot, atual: false, degraus: [] }; grupos.push(g); }
+    g.degraus.push({ n: k, st: k <= v ? 'feita' : k === nx ? 'proxima' : 'futura' });
+  }
+  grupos.forEach(function (g) { g.atual = g.degraus.some(function (d) { return d.n === nx; }) || (v >= ate && g.degraus.some(function (d) { return d.n === v; })); });
+  return {
+    fora: false, fonte: null, titulo: titulo, sub: sub, faixas: grupos,
+    rodape: (v ? DV2.reais(DV2.totalDe(faixas, v)) + ' em ' + mes + ' até aqui' : mes + ' começou') + ' · comissionamento.json',
+    meta: 'meta ' + meta + (q.pessoa.fase === 'novato' ? ' · novato' : ''), proximaVale: vale
+  };
+};
+
+/* ── 6 · a habilidade do mês (o chefão): a conta do valor() do app e do GV2.HB ── */
+DV2.TAXAS = {
+  dono: { t: 'Sair com o dono', pct: true, un: 'pontos' },
+  demo: { t: 'Virar demo', pct: true, un: 'pontos' },
+  fechar: { t: 'Fechar', pct: true, un: 'pontos' },
+  volume: { t: 'Volume', pct: false, un: 'visitas por semana' }
+};
+DV2.valorTaxa = function (k, s, uteis, pessoas) {
+  if (pessoas == null) pessoas = 1;
+  if (!s) return null;
+  if (k === 'dono') return DV2.pct(s.o, s.f);
+  if (k === 'demo') return DV2.pct(s.m, s.p);
+  if (k === 'fechar') return DV2.pct(Math.max(0, s.c), s.m);
+  const sem = uteis / 5;
+  return sem > 0 && pessoas > 0 ? Math.round(s.p / pessoas / sem) : null;
+};
+DV2.fmtTaxa = function (k, v) { return v == null ? '—' : DV2.TAXAS[k] && DV2.TAXAS[k].pct ? v + '%' : String(v); };
+DV2.FASES = [
+  { k: 's1', t: 'S1 · Conhecer o produto e a praça', curto: 'S1', dia: 1, hab: 'Na S1, é conhecer o produto e a praça: o Playbook e a primeira semana com o padrinho.' },
+  { k: 's23', t: 'S2–3 · Ir junto com o padrinho', curto: 'S2–3', dia: 8, hab: 'Na S2–3, é ir junto com o padrinho e anotar as objeções. A habilidade do mês começa depois da formatura.' },
+  { k: 's4', t: 'S4–6 · Rua com o padrinho de longe', curto: 'S4–6', dia: 22, hab: 'Na S4–6, é a rua com o padrinho de longe: 4 visitas com prova por dia útil.' },
+  { k: 'rua', t: 'S7–8 · Rua sozinho e formatura', curto: 'S7–8', dia: 43, hab: 'Na S7–8, é a rua sozinho até a formatura: 3 clientes no mês.' }
+];
+DV2.faseAtual = function (R) { return DV2.FASES.find(function (f) { return !(R.fases && R.fases[f.k] && R.fases[f.k].aprovadaEm); }) || null; };
+DV2.habilidadeDoMes = function (q) {
+  const vazio = { modo: 'convite', fonte: null, nome: '', com: '', caixas: [], bateu: false, falta: '', barra: null, conviteT: '', conviteS: '' };
+  if (q.pessoa.fase === 'novato') {
+    const R = q.carreira && q.carreira.rampa, f = R ? DV2.faseAtual(R) : null;
+    return Object.assign(vazio, { modo: 'novato', conviteT: 'Na rampa, a habilidade é a da fase.', conviteS: f ? f.hab : 'A habilidade do mês começa depois da formatura.' });
+  }
+  const H = q.habilidade;
+  if (!H) { const f = q.fontes.habilidade || 'habilidade_quadro'; return Object.assign(vazio, { modo: 'fora', fonte: f, conviteT: '—', conviteS: f + ' não respondeu agora.' }); }
+  const h = H.habilidade;
+  if (!h) {
+    const um = q.umAUm ? DV2.DIAS_LONGOS[DV2.dow(q.umAUm.proximo)] : 'próximo';
+    /* a sugestão: o maior gap contra o time no mês (o anterior, antes da primeira visita do mês) */
+    const qual = H.total && (H.total.atual.p + H.total.atual.f + H.total.atual.m > 0) ? 'atual' : 'anterior';
+    const ut = H.uteis ? H.uteis[qual] : 0;
+    let s = null;
+    Object.keys(DV2.TAXAS).forEach(function (k) {
+      const eu = DV2.valorTaxa(k, H.total ? H.total[qual] : null, ut);
+      const tm = H.time ? DV2.valorTaxa(k, H.time[qual], ut, Number(H.time[qual].pessoas) || 0) : null;
+      if (eu == null || tm == null || tm <= 0 || eu >= tm) return;
+      const gap = (tm - eu) / tm;
+      if (!s || gap > s.gap) s = { k: k, eu: eu, time: tm, gap: gap };
+    });
+    return Object.assign(vazio, { modo: 'convite', conviteT: 'Combine a habilidade do mês no 1:1 de ' + um + '.',
+      conviteS: 'Escolha uma só, com antes e meta.' + (s ? ' Sugestão pelo seu maior gap com o time: ' + DV2.TAXAS[s.k].t + ' (você ' + DV2.fmtTaxa(s.k, s.eu) + ', time ' + DV2.fmtTaxa(s.k, s.time) + ').' : '') });
+  }
+  const T = DV2.TAXAS[h.taxa] || { t: h.taxa, pct: true, un: 'pontos' };
+  const agora = H.agora, meta = Number(h.meta), antes = h.antes == null ? null : Number(h.antes);
+  const bateu = agora != null && agora >= meta;
+  const por = DV2.prim(h.combinadaPor);
+  return {
+    modo: 'ativa', fonte: null, nome: T.t,
+    com: 'combinada' + (por && por.indexOf('@') < 0 ? ' com ' + por : '') + ' no 1:1 de ' + DV2.ddmm(h.combinadaEm),
+    caixas: [{ rotulo: 'Antes', valor: DV2.fmtTaxa(h.taxa, antes), tom: 'dim' }, { rotulo: 'Meta', valor: DV2.fmtTaxa(h.taxa, meta), tom: 'mute' }, { rotulo: 'Agora', valor: DV2.fmtTaxa(h.taxa, agora), tom: bateu ? 'ok' : 'av' }],
+    bateu: bateu,
+    falta: bateu ? 'Bateu a meta. A medalha "' + T.t + ' · ' + DV2.fmtTaxa(h.taxa, meta) + '" entrou na coleção.'
+      : agora == null ? 'Ainda sem dado no mês: a primeira visita do mês já mostra o agora.'
+      : 'Faltam ' + DV2.pl(Math.round(meta - agora), T.un === 'pontos' ? 'ponto' : 'visita por semana', T.un) + '. No dia em que bater, vira medalha.',
+    barra: agora == null ? null : { agora: agora, antes: antes, meta: meta }, conviteT: '', conviteS: ''
+  };
+};
+
+/* ── 7 · a carreira e o Playbook ── */
+DV2.criteriosDeLider = function (q) {
+  const C = q.carreira, L = C && C.lider;
+  if (!L) return [];
+  const media = function (m) { return m.uteis ? m.provadas / m.uteis : 0; };
+  const fechados = (L.meses || []).filter(function (m) { return m.mes.slice(0, 7) < q.hoje.slice(0, 7); }).slice(-3);
+  const noRitmo = fechados.filter(function (m) { return media(m) >= 6; });
+  const pior = fechados.slice().reverse().find(function (m) { return media(m) < 6; });
+  const c1 = { ok: fechados.length === 3 && noRitmo.length === 3, t: '3 meses no ritmo de 6 visitas com prova por dia útil',
+    s: fechados.length === 3 && noRitmo.length === 3 ? fechados.map(function (m) { return DV2.mesNome(m.mes) + ' ' + DV2.virg(media(m)); }).join(' · ') + ' · cumprido'
+      : noRitmo.length + ' de 3 · falta ' + DV2.pl(3 - noRitmo.length, 'mês', 'meses') + (pior ? ': ' + DV2.mesNome(pior.mes) + ' ficou em ' + DV2.virg(media(pior)) : '') };
+  const eu = L.conv && L.conv.demos ? DV2.pct(L.conv.clientes, L.conv.demos) : null;
+  const tm = C.timeConv && C.timeConv.demos ? DV2.pct(C.timeConv.clientes, C.timeConv.demos) : null;
+  const c2 = { ok: eu != null && tm != null && eu > tm, t: 'Demo vira cliente acima do time',
+    s: eu == null ? 'sem demo nos 3 meses fechados' : eu + '% × time ' + (tm == null ? '—' : tm + '%') + (eu != null && tm != null && eu > tm ? ' · cumprido' : '') };
+  const nReg = L.registro ? Number(L.registro.n) || 0 : 0;
+  const c3 = { ok: nReg === 0, t: 'Registro verdadeiro',
+    s: nReg === 0 ? 'nenhuma ocorrência de registro · cumprido' : DV2.pl(nReg, 'ocorrência', 'ocorrências') + ' de registro' + (L.registro && L.registro.ultima ? ' · a última em ' + DV2.ddmm(L.registro.ultima) : '') };
+  const afs = L.afilhados || [];
+  const formou = function (a) { return a.fases && a.fases.rua && a.fases.rua.aprovadaEm; };
+  const formado = afs.find(function (a) { return formou(a); });
+  const aberto = afs.find(function (a) { return !formou(a); });
+  const c4 = { ok: !!formado, t: 'Padrinho de um novato que se formou',
+    s: formado ? DV2.prim(formado.nome) + ' se formou em ' + DV2.ddmm(formado.fases.rua.aprovadaEm) + ' · cumprido'
+      : aberto ? DV2.prim(aberto.nome) + ', seu afilhado, está no dia ' + Math.min(60, DV2.diasEntre(aberto.inicio, q.hoje) + 1) + ' de 60'
+      : 'sem afilhado ainda · o gestor indica o padrinho na Rampa' };
+  return [c1, c2, c3, c4];
+};
+DV2.carreira = function (q) {
+  const C = q.carreira;
+  if (!C) { const f = q.fontes.carreira || 'rampa_quadro'; return { fora: true, fonte: f, onde: '—', degraus: [], liderN: 0 }; }
+  const vendas = q.variavel ? q.variavel.vendas : null, meta = q.variavel ? q.variavel.meta : null;
+  const mes = DV2.mesNome(q.hoje);
+  if (q.pessoa.fase === 'novato') {
+    const R = C.rampa;
+    if (!R) return { fora: true, fonte: 'rampa_quadro', onde: 'rampa', degraus: [], liderN: 0 };
+    const atual = DV2.faseAtual(R);
+    const formatura = DV2.somaDias(R.inicio, 59);
+    const crit = DV2.FASES.map(function (f) {
+      const a = R.fases && R.fases[f.k] && R.fases[f.k].aprovadaEm;
+      const por = R.fases && R.fases[f.k] && R.fases[f.k].aprovadaPor;
+      return { ok: !!a, t: f.t, s: a ? 'aprovada' + (por && String(por).indexOf('@') < 0 ? ' por ' + DV2.prim(String(por)) : '') + ' em ' + DV2.ddmm(a)
+        : atual && atual.k === f.k ? 'em curso' : f.k === 'rua' ? 'dia 60 · ' + (meta || 3) + ' clientes no mês' : 'começa em ' + DV2.ddmm(DV2.somaDias(R.inicio, f.dia - 1)) };
+    });
+    const idx = atual ? DV2.FASES.indexOf(atual) : -1;
+    const fimFase = idx >= 0 && idx < DV2.FASES.length - 1 ? DV2.somaDias(R.inicio, DV2.FASES[idx + 1].dia - 2) : formatura;
+    return {
+      fora: false, fonte: null, onde: 'rampa · dia ' + R.dia + ' de 60', liderN: 0,
+      degraus: [
+        { t: 'Rampa', s: 'dia ' + R.dia + ' de 60' + (R.padrinhoNome ? ' · padrinho: ' + DV2.prim(R.padrinhoNome) : '') + ' · meta ' + (meta || 3) + ' clientes em ' + mes, st: 'atual', crit: crit,
+          barra: { pct: Math.max(0, Math.min(100, Math.round((R.dia / 60) * 100))), t: 'dia ' + R.dia + ' de 60 · formatura em ' + DV2.ddmm(formatura) },
+          proximo: atual ? 'Próximo passo: fechar a ' + atual.curto + (R.padrinhoNome ? ' com ' + DV2.prim(R.padrinhoNome) : '') + ' até ' + DV2.ddmm(fimFase) + '.' : 'Próximo passo: a formatura no dia 60.' },
+        { t: 'Pleno', s: 'depois da formatura · meta de 8 clientes', st: 'futuro', crit: [], barra: null, proximo: null },
+        { t: 'Líder de praça', s: '4 critérios, medidos todo mês', st: 'futuro', crit: [], barra: null, proximo: null }
+      ]
+    };
+  }
+  const crit = DV2.criteriosDeLider(q);
+  const n = crit.filter(function (c) { return c.ok; }).length;
+  const falta = crit.find(function (c) { return !c.ok; });
+  return {
+    fora: false, fonte: null, onde: 'pleno · líder em ' + n + ' de 4', liderN: n,
+    degraus: [
+      { t: 'Rampa', s: C.formadaEm ? 'formada em ' + DV2.ddmm(C.formadaEm) : 'formada', st: 'feito', crit: [], barra: null, proximo: null },
+      { t: 'Pleno', s: 'meta de ' + (meta == null ? '—' : meta) + ' clientes · ' + (vendas == null ? '—' : vendas) + ' de ' + (meta == null ? '—' : meta) + ' em ' + mes, st: 'atual', crit: [], barra: null, proximo: null },
+      { t: 'Líder de praça · ' + n + ' de 4', s: n === 3 ? 'Falta 1 critério.' : 'Os critérios são os mesmos que o gestor vê.', st: 'futuro', crit: crit, barra: null,
+        proximo: !crit.length ? null : falta ? 'Próximo passo: ' + falta.s + '.' : 'Próximo passo: os 4 critérios estão cumpridos; a promoção é conversa do 1:1.' }
+    ]
+  };
+};
+/* o nível é o capítulo em que a pessoa está (o mesmo "Nível N" da Pessoas do gestor): capítulo feito =
+   quiz aprovado em todas as páginas dele. Ler sem passar no quiz não sobe. */
+DV2.nivelPlaybook = function (q, capitulos) {
+  if (!q.playbook || !capitulos || !capitulos.length) return { fora: true, nivel: 0, total: 0, completa: false, feitos: [], titulo: 'Playbook · —', sub: (q.fontes.playbook || 'playbook_progresso') + ' não respondeu', proximo: null, ganhoEm: null };
+  const em = {};
+  q.playbook.forEach(function (x) { em[x.slug] = x.em; });
+  const feitos = capitulos.map(function (c) { return c.paginas.length > 0 && c.paginas.every(function (p) { return !!em[p]; }); });
+  let nivel = feitos.indexOf(false); nivel = nivel < 0 ? capitulos.length + 1 : nivel + 1;
+  const completa = nivel > capitulos.length;
+  /* o dia em que subiu: a última prova do capítulo que fechou o nível atual */
+  const ult = nivel > 1 ? capitulos[nivel - 2].paginas.map(function (p) { return em[p]; }).filter(Boolean).sort().pop() || null : null;
+  const prox = completa ? null : capitulos[nivel - 1].titulo;
+  return {
+    fora: false, nivel: nivel, total: capitulos.length, completa: completa, feitos: feitos,
+    titulo: completa ? 'Playbook · trilha completa' : 'Playbook · nível ' + nivel + ' de ' + capitulos.length,
+    sub: completa ? 'todos os capítulos com o quiz aprovado' : 'próximo capítulo: ' + prox + ' · quiz de 5 min · passar sobe o nível e ele aparece no seu perfil',
+    proximo: prox, ganhoEm: ult ? DV2.dia(ult) : null
+  };
+};
+
+/* ── 8 · a coleção ── */
+DV2.NOME_COMBINADO = {
+  1: { t: 'A porta é provada', como: 'das visitas com prova' },
+  3: { t: 'Ficha na hora', como: 'em até 15 min' },
+  4: { t: 'Visita com o dono', como: 'das ausências com volta marcada' }
+};
+DV2.ultimaCom = function (G, prefixo) {
+  return G.filter(function (g) { return g.id === prefixo || g.id.indexOf(prefixo + ':') === 0; }).sort(function (a, b) { return a.em < b.em ? 1 : a.em > b.em ? -1 : 0; })[0] || null;
+};
+DV2.colecao = function (q, capitulos) {
+  const C = q.colecao;
+  if (!C) { const f = q.fontes.colecao || 'conquistas'; return { fora: true, fonte: f, n: '—', itens: [], reconhecimento: null }; }
+  const G = C.ganhas || [], P = C.progresso, M = q.missao, H = q.habilidade, pb = DV2.nivelPlaybook(q, capitulos);
+  const novato = q.pessoa.fase === 'novato';
+  const mes = q.hoje.slice(0, 7);
+  const U = DV2.ultimaCom;
+  const seq = function (n, alvo) { return { progresso: Math.min(n, alvo) + ' de ' + alvo + ' dias', pctProgresso: Math.round((Math.min(n, alvo) / alvo) * 100) }; };
+  const missao = function (id) { return M && M.id === id ? { progresso: M.n + ' de ' + M.alvo + ' dias', pctProgresso: Math.round((M.n / M.alvo) * 100) } : { progresso: 'quando for a missão da semana', pctProgresso: 0 }; };
+  const h = H && H.habilidade;
+  const L = q.carreira && q.carreira.lider;
+  const afAberto = L ? (L.afilhados || []).find(function (a) { return !(a.fases && a.fases.rua && a.fases.rua.aprovadaEm); }) : null;
+  const dest = U(G, 'destaque');
+  const destComb = dest && dest.detalhe ? DV2.NOME_COMBINADO[Number(dest.detalhe.combinado)] : null;
+  const diaAf = afAberto ? Math.min(60, DV2.diasEntre(afAberto.inicio, q.hoje) + 1) : 0;
+  const defs = [
+    { id: 'na_rua', t: 'Na rua 5 dias seguidos', icone: 'flame', g: U(G, 'na_rua'), prog: seq(P.na_rua, 5) },
+    { id: 'primeiro_contrato', t: 'Primeiro contrato do mês', icone: 'trophy', g: G.find(function (x) { return x.id === 'primeiro_contrato:' + mes; }) || null, prog: { progresso: '0 de 1 venda em ' + DV2.mesNome(q.hoje), pctProgresso: 0 } },
+    { id: 'destaque', t: 'Destaque da sexta' + (destComb ? ' · ' + destComb.t : ''), icone: 'star', g: dest, prog: { progresso: 'ainda não', pctProgresso: 0 } },
+    { id: 'missao:porta', t: 'Porta provada', icone: 'map-pin', g: U(G, 'missao:porta'), prog: missao('porta') },
+    { id: 'playbook', t: 'Playbook nível ' + Math.max(2, pb.nivel), icone: 'book', g: null, ganhoEm: pb.nivel >= 2 ? pb.ganhoEm : null,
+      prog: { progresso: pb.fora ? '—' : 'passe no quiz do capítulo ' + Math.max(1, pb.nivel), pctProgresso: 0 } },
+    { id: 'missao:naHora', t: 'Registro na hora', icone: 'clock', g: U(G, 'missao:naHora'), prog: missao('naHora') },
+    { id: 'fila_zerada', t: 'Fila zerada 5 dias', icone: 'check-circle', g: U(G, 'fila_zerada'), prog: seq(P.fila_zerada, 5) },
+    { id: 'missao:fila', t: 'Fila zerada na semana', icone: 'check-circle', g: U(G, 'missao:fila'), prog: missao('fila') },
+    { id: 'missao:dono', t: 'Volta marcada', icone: 'users', g: U(G, 'missao:dono'), prog: missao('dono') },
+    { id: 'quentes_4', t: '4 contatos em todos os quentes', icone: 'users', g: U(G, 'quentes_4'),
+      prog: !P.quentes ? { progresso: '—', pctProgresso: 0 } : !P.quentes.medido || !P.quentes.de ? { progresso: 'sem quentes', pctProgresso: 0 } : { progresso: P.quentes.n + ' de ' + P.quentes.de + ' quentes', pctProgresso: Math.round((P.quentes.n / P.quentes.de) * 100) } },
+    { id: 'demo_seguidas', t: 'Demo 3 dias seguidos', icone: 'zap', g: U(G, 'demo_seguidas'), prog: seq(P.demo_seguidas, 3) },
+    { id: 'missao:novato', t: 'Primeira semana no ritmo', icone: 'map-pin', g: U(G, 'missao:novato'), prog: missao('novato'), mostrar: novato || !!U(G, 'missao:novato') },
+    { id: 'habilidade', t: h ? (DV2.TAXAS[h.taxa] ? DV2.TAXAS[h.taxa].t : h.taxa) + ' · ' + DV2.fmtTaxa(h.taxa, Number(h.meta)) : 'Habilidade do mês batida', icone: 'target', g: G.find(function (x) { return x.id === 'habilidade:' + mes; }) || null,
+      prog: novato ? { progresso: 'depois da formatura', pctProgresso: 0 } : !h ? { progresso: 'sem habilidade combinada', pctProgresso: 0 }
+        : H.agora == null ? { progresso: '— de ' + DV2.fmtTaxa(h.taxa, Number(h.meta)), pctProgresso: 0 }
+        : { progresso: DV2.fmtTaxa(h.taxa, H.agora) + ' de ' + DV2.fmtTaxa(h.taxa, Number(h.meta)), pctProgresso: Math.min(100, Math.round((H.agora / Math.max(1, Number(h.meta))) * 100)) } },
+    { id: 'padrinho', t: 'Padrinho de um formado', icone: 'shield-check', g: U(G, 'padrinho'),
+      prog: novato ? { progresso: 'depois de formado', pctProgresso: 0 } : afAberto ? { progresso: DV2.prim(afAberto.nome) + ' no dia ' + diaAf + ' de 60', pctProgresso: Math.round((diaAf / 60) * 100) } : { progresso: 'sem afilhado', pctProgresso: 0 } }
+  ];
+  const itens = defs.filter(function (x) { return x.mostrar !== false; }).map(function (x) {
+    const em = x.g ? DV2.dia(x.g.em) : x.ganhoEm || null;
+    const ganha = !!em;
+    const nova = !!(x.g && !x.g.vista);
+    return { id: x.id, t: x.t, icone: x.icone, ganha: ganha, nova: nova, em: em,
+      d: !ganha ? '' : nova && em === q.hoje ? 'novo · hoje' : nova ? 'novo · ganha em ' + DV2.ddmm(em) : 'ganha em ' + DV2.ddmm(em),
+      progresso: ganha ? '' : x.prog.progresso, pctProgresso: ganha ? 0 : x.prog.pctProgresso };
+  });
+  /* as ganhas primeiro; dentro de cada grupo, a ordem do catálogo */
+  const ordenadas = itens.filter(function (x) { return x.ganha; }).concat(itens.filter(function (x) { return !x.ganha; }));
+  const R = C.reconhecimento, nc = R ? DV2.NOME_COMBINADO[R.combinado] : null;
+  return {
+    fora: false, fonte: null, n: ordenadas.filter(function (x) { return x.ganha; }).length + ' de ' + ordenadas.length + ' ganhas', itens: ordenadas,
+    reconhecimento: R && nc ? 'Você foi o destaque da semana em ' + nc.t + ' (' + R.pct + '% ' + nc.como + ') · ' + DV2.diaCurto(R.sexta) : null
+  };
+};
+/* as conquistas que a pessoa ainda não viu (o toast e o selo "1 nova"), com o nome da coleção */
+DV2.conquistasNovas = function (q, capitulos) {
+  const C = q.colecao;
+  if (!C) return [];
+  const col = DV2.colecao(q, capitulos);
+  return (C.ganhas || []).filter(function (g) { return !g.vista; }).map(function (g) {
+    const base = g.id.indexOf('missao:') === 0 ? g.id.split(':').slice(0, 2).join(':') : g.id.split(':')[0];
+    const m = col.itens.find(function (x) { return x.id === base; });
+    const nome = m ? m.t : base;
+    return { id: g.id, titulo: (base.indexOf('missao:') === 0 ? 'Selo ' : 'Medalha ') + nome };
+  });
+};
+DV2.toastDaConquista = function (n) { return { kicker: 'CONQUISTA DESBLOQUEADA', titulo: n.titulo, acao: 'ver a coleção' }; };
+
+/* ── 1 · o 1:1 em uma linha: começa pelo que a pessoa conquistou ── */
+DV2.umAUmLinha = function (q, capitulos) {
+  const U = q.umAUm;
+  if (!U) return { convite: true, texto: '— · ' + (q.fontes.umAUm || 'um_a_um') + ' não respondeu', itens: [] };
+  const quando = U.proximo === q.hoje ? 'hoje ' + U.hora : DV2.DIAS_LONGOS[DV2.dow(U.proximo)] + ' ' + DV2.ddmm(U.proximo) + ' ' + U.hora;
+  if (!U.ultimo) return { convite: true, texto: 'Ainda sem 1:1 registrado. Combine o primeiro com o seu gestor na ' + DV2.DIAS_LONGOS[DV2.dow(U.proximo)] + ': ele começa pelo que você conquistou.', itens: [] };
+  const col = q.colecao ? DV2.colecao(q, capitulos) : null;
+  const ult = DV2.dia(U.ultimo);
+  const desde = col ? col.itens.filter(function (m) { return m.ganha && m.em && m.em > ult; }) : [];
+  const mi = DV2.missaoDaSemana(q);
+  const itens = desde.map(function (m) { return { tom: 'ok', t: m.t + ' · ganha em ' + DV2.ddmm(m.em) }; });
+  if (!mi.fora) itens.push({ tom: mi.cumprida ? 'ok' : 'rota', t: 'Missão da semana · ' + mi.selo + ' · ' + (mi.cumprida ? 'cumprida' : mi.contagem) });
+  const nMed = desde.filter(function (m) { return m.id.indexOf('missao:') !== 0; }).length;
+  const nMis = desde.filter(function (m) { return m.id.indexOf('missao:') === 0; }).length + (mi.cumprida && !desde.some(function (m) { return m.id === 'missao:' + mi.id; }) ? 1 : 0);
+  const partes = [nMed ? DV2.pl(nMed, 'medalha', 'medalhas') : '', nMis ? DV2.pl(nMis, 'missão cumprida', 'missões cumpridas') : !mi.fora ? '1 missão em curso' : ''].filter(Boolean);
+  return { convite: false, texto: 'Seu 1:1 é ' + quando + ' · leve: ' + (partes.length ? partes.join(' · ') : 'a semana'), itens: itens };
+};
+
+/* ── 9 · você contra você ── */
+DV2.vsVoce = function (q) {
+  const S = q.semana, Q = q.sequencias, V = q.vsVoce, X = q.variavel;
+  const rec = Q ? Q.rua.recorde : null;
+  if (q.pessoa.fase === 'novato') {
+    return [
+      { v: S ? S.pts + ' pts' : '—', t: 'esta semana', s: S ? (S.passada ? S.passada.pts + ' na passada' : 'a primeira semana') : (q.fontes.semana || 'placar_da_semana') },
+      { v: rec == null ? '—' : DV2.pl(rec, 'dia', 'dias'), t: 'sua maior sequência na rua', s: Q && Q.rua.atual > 0 && Q.rua.atual === Q.rua.recorde ? 'é agora' : '' },
+      { v: X ? X.vendas + ' de ' + X.meta : '—', t: 'clientes no mês', s: 'meta de ' + DV2.mesNome(q.hoje) }
+    ];
+  }
+  const segunda = !!(S && q.hoje === S.segunda);
+  const ant = DV2.MESES[(Number(q.hoje.slice(5, 7)) + 10) % 12];
+  return [
+    { v: S && S.recorde ? S.recorde.pts + ' pts' : '—', t: segunda && S && S.recorde ? 'sua melhor semana: dá para bater' : 'sua melhor semana', s: S && S.recorde ? 'semana de ' + DV2.ddmm(S.recorde.segunda) : 'ainda sem semana fechada' },
+    { v: rec == null ? '—' : DV2.pl(rec, 'dia', 'dias'), t: 'seu recorde de sequência na rua', s: Q ? (Q.rua.atual > 0 && Q.rua.atual === rec ? 'é agora' : 'agora: ' + DV2.pl(Q.rua.atual, 'dia', 'dias')) : (q.fontes.sequencias || '') },
+    V ? { v: V.vendasMes + ' × ' + V.vendasMesAnterior, t: 'vendas: ' + DV2.mesNome(q.hoje) + ' × ' + ant, s: 'até o ' + V.diaDoMes + 'º dia do mês' } : { v: '—', t: 'vendas no mês', s: q.fontes.vsVoce || 'pontos_eventos' }
+  ];
+};
+
+/* ── as entradas: a pílula do Hoje e os pushes da semana (os pushes saem do push-fila do app; estão
+   aqui para a paridade dos textos) ── */
+DV2.pilula = function (q) {
+  const M = q.missao, S = q.sequencias;
+  const a = !M ? 'Missão —' : M.cumpridaEm ? 'Missão cumprida' : 'Missão ' + M.n + ' de ' + M.alvo;
+  const b = !S ? 'Na rua —' : 'Na rua ' + DV2.pl(S.rua.atual, 'dia', 'dias');
+  return a + ' · ' + b;
+};
+DV2.pushSegunda = function (q) {
+  const M = q.missao;
+  if (!M) return null;
+  const T = DV2.MISSOES[M.id] || DV2.MISSOES.naHora;
+  return { titulo: 'Sua missão da semana', texto: T.titulo + ' · ' + DV2.pl(M.alvo, 'dia', 'dias') + ' · selo ' + T.selo };
+};
+/* abaixo do 3º, o push diz a posição e o recorde; nunca "último" (regra 3 do README) */
+DV2.pushSexta = function (q) {
+  const S = q.semana;
+  if (!S) return null;
+  const novato = q.pessoa.fase === 'novato';
+  const rec = S.recorde ? S.recorde.pts : null;
+  const fim = rec != null && S.pts > rec ? ' · é o seu novo recorde' : rec != null ? ' · seu recorde é ' + rec : '';
+  if (novato || S.pos == null) return { titulo: 'A sua semana fechou', texto: 'Você fechou a semana com ' + S.pts + ' pts' + (S.passada ? ' · na passada foram ' + S.passada.pts : '') + fim };
+  return { titulo: 'A sua semana fechou', texto: 'Você fechou a semana com ' + S.pts + ' pts, ' + S.pos + 'º' + fim };
+};
+
+/* ── a tela inteira ── */
+DV2.montar = function (q, capitulos) {
+  const pb = DV2.nivelPlaybook(q, capitulos);
+  const R = q.carreira && q.carreira.rampa;
+  return {
+    cab: {
+      sub: (DV2.prim(q.pessoa.nome) || 'Você') + ' · onde você está, o que ganha a seguir e quanto falta',
+      selos: [{ t: q.pessoa.fase === 'novato' ? (R ? 'Rampa · dia ' + R.dia + ' de 60' : 'Rampa') : 'Pleno', tom: 'pri' },
+        { t: pb.fora ? 'Playbook —' : pb.completa ? 'Playbook completo' : 'Playbook nível ' + pb.nivel, tom: 'rota' }]
+    },
+    umAUm: DV2.umAUmLinha(q, capitulos), semana: DV2.semanaDoExecutivo(q), missao: DV2.missaoDaSemana(q), sequencias: DV2.sequencias(q),
+    variavel: DV2.escadaDoVariavel(q), habilidade: DV2.habilidadeDoMes(q), carreira: DV2.carreira(q), playbook: pb,
+    colecao: DV2.colecao(q, capitulos), vs: DV2.vsVoce(q), pilula: DV2.pilula(q), novas: DV2.conquistasNovas(q, capitulos)
+  };
+};
+
 /* ══ RUA v5 (08/10/26, entrega go.zip · telas-alvo 2a–2i) ═════════════════════════════════
    "O que cada um planejou, por onde andou e o que falta." Quatro modos: Hoje (a linha do tempo
    do time + o mapa ao vivo), Semana (a Grade, toda célula abre o dia), Pessoa · dia (a ordem do
