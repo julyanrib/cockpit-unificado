@@ -14987,7 +14987,7 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pv3-quentes p{margin:0;font:500 12px/1.45 var(--gv2-font);color:var(--gv2-mute);}
 .pv3-quentes ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;}
 .pv3-quentes li{display:flex;justify-content:space-between;gap:8px;font:600 12px/1.35 var(--gv2-font);}
-.pv3-quentes li em{font-style:normal;white-space:nowrap;color:var(--pv3-acao-tx);}
+.pv3-quentes li em{font-style:normal;color:var(--pv3-acao-tx);text-align:right;flex:none;max-width:50%;}
 .pv3-quentes li em.is-dim{color:var(--gv2-dim);font-weight:500;}
 .pv3-quentes-bt{min-height:44px;border:0;border-radius:10px;background:var(--gv2-acao);color:#FFFFFF;font:700 13px var(--gv2-font);}
 .pv3-l{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--gv2-line-soft);transition:background .3s;}
@@ -15074,6 +15074,8 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pv3-dia-corpo{flex:1;min-height:0;overflow-y:auto;padding:0 6px 8px;display:flex;flex-direction:column;gap:6px;}
 .pv3-c{position:relative;display:flex;flex-direction:column;gap:3px;padding:7px 8px;border-radius:10px;border:1px solid var(--gv2-line);background:var(--gv2-card);transition:background .45s,border-color .45s,box-shadow .45s,opacity .45s;}
 .pv3-c.is-tracejado{border-style:dashed;}
+.pv3-c.is-abre{cursor:pointer;}
+.pv3-c.is-abre:hover{border-color:var(--gv2-line-btn);}
 .pv3-c.is-proposta{border:1.5px dashed var(--gv2-rota);background:transparent;}
 .pv3-c.is-ficou{opacity:.6;}
 .pv3-c.hl-checkin{background:var(--gv2-ok-soft);border-color:var(--gv2-ok);box-shadow:0 0 0 3px rgba(21,128,61,.18);}
@@ -91182,7 +91184,8 @@ PLV3.blocoFilaHTML = function (D) {
     /* o bloco Quentes, no topo, com o mesmo cálculo das sugestões */
     if (st.filtro !== 'alvo' && st.filtro !== 'cnpj' && st.filtro !== 'recicl') {
       const hotSug = D.semPendentes.filter(function (l) { return l.quente && D.sug.deLead[l.ref]; });
-      const hotSem = D.sug.quentesSem.filter(function (l) { return !st.feitos[l.ref]; });
+      const temDia = D.dias.some(function (d) { return PLV3.aceitaSoltar(d); });
+      const hotSem = temDia ? D.sug.quentesSem.filter(function (l) { return !st.feitos[l.ref]; }) : [];
       const nq = hotSug.length + hotSem.length;
       if (nq) {
         const bairrosSem = hotSem.map(function (l) { return l.bairroNome || D.nomeB(l.bairro); }).filter(function (x, i, a) { return x && a.indexOf(x) === i; });
@@ -91241,7 +91244,8 @@ function pv3LinhaHTML(D, l) {
   }
   if (aberto === 'dec') {
     menu = '<div class="pv3-menu"><small>perdido · motivo</small><div class="pv3-mini">' + PLV3.MOTIVOS.map(function (m, k) { return '<button type="button" data-pv3-acao="perder:' + e(l.ref) + ':' + k + '">' + e(m[0]) + '</button>'; }).join('') + '</div>'
-      + '<small>reciclar · volta em</small><div class="pv3-mini">' + [30, 60, 90].map(function (d) { return '<button type="button" data-pv3-acao="reciclar:' + e(l.ref) + ':' + d + '">' + d + ' d</button>'; }).join('') + '</div></div>';
+      + '<small>reciclar · volta em</small><div class="pv3-mini">' + [30, 60, 90].map(function (d) { return '<button type="button" data-pv3-acao="reciclar:' + e(l.ref) + ':' + d + '">' + d + ' d</button>'; }).join('') + '</div>'
+      + (l.dealId ? '<small>ou olhar antes</small><div class="pv3-mini"><button type="button" data-pv3-acao="ficha:' + e(l.ref) + '">abrir a ficha do negócio</button></div>' : '') + '</div>';
   }
   return '<div class="pv3-l' + (aberto ? ' is-aberta' : st.foco === l.ref ? ' is-foco' : '') + '" draggable="true" data-pv3-arraste="' + e(l.ref) + '">'
     + '<b class="pv3-l-nome pv3-nome">' + e(l.nome) + '</b><span class="pv3-l-sub"><i class="pv3-dot" style="background:' + (l.alvo ? '#94A3B8' : et[1]) + '"></i>' + e(sub) + '</span>'
@@ -91406,7 +91410,9 @@ PLV3.cartaoHTML = function (D, i, c, f) {
       end = '<div class="pv3-c-end">' + PLV3.tagHTML('sem lugar no mapa', 'is-mapa') + '<button type="button" data-pv3-acao="abrirend:' + e(c.ref) + '">pôr o endereço</button></div>';
     } else end = PLV3.tagHTML('sem lugar no mapa', 'is-mapa');
   }
-  return '<div class="' + cls + '"' + (c.ref && !c.fora ? ' data-pv3-cartao="' + e(c.ref) + '"' : '') + '><div class="pv3-c-l1">' + (c.n ? '<i class="pv3-c-ord">' + c.n + '</i>' : '')
+  /* o cartão de negócio abre a ficha do negócio (a mesma do Meu funil), como na v2 */
+  const abre = c.tipoC && !c.fora && c.ref ? ' data-pv3-acao="ficha:' + e(c.ref) + '" role="button" tabindex="0"' : '';
+  return '<div class="' + cls + (abre ? ' is-abre' : '') + '"' + abre + (c.ref && !c.fora ? ' data-pv3-cartao="' + e(c.ref) + '"' : '') + '><div class="pv3-c-l1">' + (c.n ? '<i class="pv3-c-ord">' + c.n + '</i>' : '')
     + '<i class="pv3-dot" style="background:' + (c.fora ? 'var(--gv2-ok-barra)' : et[1]) + '"></i><b class="pv3-c-nome pv3-nome">' + e(c.nome) + '</b></div>'
     + '<span class="pv3-c-sub ' + subCls + '">' + e(sub) + '</span>' + selo + end + '</div>';
 };
@@ -91938,6 +91944,12 @@ PLV3.acao = async function (verbo, arg) {
     return;
   }
   if (verbo === 'abrirend') { st.endAberto = arg; return PLV3.pintar(); }
+  if (verbo === 'ficha') {
+    const dealId = /^[cr]-/.test(arg) ? arg.slice(2) : null;
+    const doFunil = dealId && typeof buscarLeadFunilPorId === 'function' ? buscarLeadFunilPorId(dealId) : null;
+    if (doFunil && typeof abrirFichaLeadFunilDrawer === 'function') { st.menu = null; abrirFichaLeadFunilDrawer(doFunil, null, null); return; }
+    return PLV3.toast('A ficha deste negócio não está na carga desta sessão.', 'atencao');
+  }
   if (verbo === 'gravarend') return PLV3.gravarEndereco(arg);
   if (verbo === 'dardata') return PLV3.darData();
   if (verbo === 'cancelar') { st.prop = null; PLV3.pintar(); return PLV3.soltarEspera(); }
@@ -91962,6 +91974,8 @@ function pv3Ligar(box) {
   box.dataset.pv3Ligado = '1';
   box.addEventListener('click', function (ev) {
     if (!PLV3.aberta()) return;
+    /* digitar o endereço dentro do cartão não abre a ficha do cartão */
+    if (ev.target.closest && ev.target.closest('input,textarea,select')) return;
     const el = ev.target.closest && ev.target.closest('[data-pv3-acao]');
     if (!el || !box.contains(el)) return;
     if (el.getAttribute('aria-disabled') === 'true') {
