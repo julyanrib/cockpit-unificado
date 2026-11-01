@@ -85,6 +85,36 @@ checar('fonte fora: "—" e o nome da fonte', V('fora').semana.pts === '—' && 
 checar('nenhum texto diz "último" ou "pior"', !/último|pior/i.test(JSON.stringify(saida)));
 checar('zero emoji', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(JSON.stringify(saida)));
 
+/* ── a tela: a grade de 12 colunas, os blocos na ordem, a celebração e a volta ao v1 ── */
+const html = DV2.html(V('quarta'));
+const ordem = ['dv2-um', 'A SEMANA', 'MISSÃO DA SEMANA', 'Sequências', 'O mês · seu variável', 'o chefão', 'Sua carreira', 'id="dv2Colecao"', 'Você contra você'].map(t => html.indexOf(t));
+checar('os 9 blocos na ordem do README', ordem.every((x, i) => x > 0 && (i === 0 || x > ordem[i - 1])), JSON.stringify(ordem));
+const spans = Array.from(html.matchAll(/dv2-b dv2-s(\d+)/g)).map(m => m[1]).join(' ');
+checar('os spans da grade: 12 · 5 · 4 · 3 · 7 · 5 · 6 · 6 · 12', spans === '12 5 4 3 7 5 6 6 12', spans);
+checar('missão cumprida: o círculo entra com a escala e a coleção destaca a nova',
+  /dv2-cel-c/.test(DV2.html(V('missao'))) && /dv2-med is-ganha is-nova/.test(DV2.html(V('missao'))));
+checar('a celebração dura 0,6 s e some com "reduzir movimento"',
+  /\.dv2-cel-c\{[^}]*animation:dv2-entra \.6s/.test(tpl) && /@media \(prefers-reduced-motion:reduce\)\{\.dv2-cel-c,\.dv2-toast,\.dv2-med\.is-nova \.dv2-med-c\{animation:none !important;\}\}/.test(tpl));
+checar('alvo de clique ≥ 40 px nos botões da aba', /\.dv2-bt\{min-height:40px/.test(tpl) && /\.dv2-link\{min-height:40px/.test(tpl) && /\.dv2-pil\{min-height:40px/.test(tpl));
+checar('nenhum bloco vazio: com tudo fora, cada bloco diz a fonte', ['placar_da_semana', 'HubSpot', 'rampa_quadro', 'conquistas'].every(f => DV2.html(V('fora')).indexOf(f) > 0));
+checar('a volta ao v1: localStorage desenvolvimento-v1 = 1 desenha o DV antigo',
+  /if \(GV2\.DV2 && !GV2\.DV2\.querV1\(\)\) return GV2\.DV2\.render\(el\);\n    return GV2\.DV\.render\(el\);/.test(tpl) && /localStorage\.getItem\('desenvolvimento-v1'\) === '1'/.test(codigo));
+
+/* ── as entradas ── */
+checar('selo no menu: "1 nova" ao lado de Desenvolvimento, e some quando a coleção grava a vista',
+  /selo\.textContent = n === 1 \? '1 nova' : n \+ ' novas';/.test(codigo) && /marcar_conquistas_vistas/.test(codigo));
+checar('pílula no Hoje do Cockpit: o lugar no topo do Hoje e a pintura depois da Hoje',
+  tpl.indexOf('<span id="dv2PilHoje"></span>') > 0 && tpl.indexOf('GV2.DV2.pintarPilula();') > 0);
+checar('toast ao vivo: o sinal do app chama o DV2, com 420 px no canto e 8 s',
+  tpl.indexOf('GV2.DV2.aoVivo([String(s.tipo)]);') > 0 && /\.dv2-toast\{position:fixed;right:24px;bottom:24px;[^}]*width:420px/.test(tpl) && /setTimeout\(function \(\) \{ if \(el\.parentNode\) el\.remove\(\); \}, 8000\);/.test(codigo));
+checar('a medição: a abertura grava a origem (menu, selo_menu, pílula ou toast)',
+  /supa\.rpc\('registrar_abertura', \{ p_tela: 'desenvolvimento', p_origem: abertura \}\)/.test(codigo));
+const g = DV2.htmlDoGestor(resolver('missao'), F.capitulos);
+checar('Pessoas do gestor: "conquistou desde o último 1:1" com a data e o selo "abriu esta semana"',
+  /Conquistou desde o último 1:1 \(03\/11\)/.test(g) && /Registro na hora \(11\/11\)/.test(g) && /abriu esta semana: não/.test(g), g);
+const g2 = DV2.htmlDoGestor(Object.assign({}, resolver('quarta'), { aberturas: { semana: 2, ultima: '2026-11-10T12:00:00Z' } }), F.capitulos);
+checar('abriu esta semana: sim, com a última abertura', /abriu esta semana: sim/.test(g2) && /última abertura 10\/11/.test(g2));
+
 if (falhas.length) {
   console.log('desenvolvimento v2: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length) + ':');
   falhas.forEach(f => console.log('  · ' + f));
