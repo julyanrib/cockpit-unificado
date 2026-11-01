@@ -209,6 +209,25 @@ const B = ['b:meier', 'b:tijuca', 'b:madureira', 'b:vila isabel', 'b:penha'];
   checar('"mover 3 para…" vai para o dia útil não passado com menos paradas', P.diaComMenos(S0, [0, 2, 9, 1, 4], 2) === 3);
 }
 
+/* ── 8 · a fiação: a v3 é o padrão, a v2 continua atrás da flag, e o ao vivo não mostra mais o aviso nesta aba ── */
+{
+  checar('v3 é o padrão do executivo', P.usar() === true);
+  const lsAntes = global.localStorage;
+  global.localStorage = { getItem: (k) => (k === 'planejamento-v2' ? '1' : null), setItem: () => {} };
+  checar('localStorage["planejamento-v2"] = "1" devolve a tela anterior', P.usar() === false);
+  global.localStorage = lsAntes;
+  const ini2 = tpl.indexOf('async function renderProspeccaoExecutivo()');
+  const corpo = tpl.slice(ini2, tpl.indexOf('\nfunction prosp2Toast', ini2));
+  checar('renderProspeccaoExecutivo desenha a v3 e, sem ela, a tela v2 de sempre', /GV2\.PLV3\.render\(box, meuRep6a\)/.test(corpo) && /box\.innerHTML = renderPlanejamento6a\(meuRep6a\)/.test(corpo) && /pl6Ligar\(box, meuRep6a\)/.test(corpo));
+  const tela = codigo.slice(codigo.indexOf('/* ══ A TELA DA v3'), codigo.indexOf('/* FIM DO BLOCO GV2'));
+  checar('a tela v3 não tem "Enviar o plano ao gestor", editor da palavra da semana nem seletor de hora', tela.length > 1000 && !/Enviar o plano|pl7enviar|ajustar a promessa|data-pl6-acao="hora|horalivre/.test(tela));
+  checar('a tela v3 não tem o bloco grande "Cadência da carteira" (só a linha de chips)', !/blocoHTML|CADÊNCIA DA CARTEIRA/.test(tela) && /chipsCadenciaHTML/.test(tela));
+  checar('o ao vivo entra por dia na v3 e o aviso "dados novos do time" não aparece nesta aba',
+    /GV2\.PLV3\.aberta\(\)\) GV2\.PLV3\.aoVivo\(tipos\)/.test(tpl) && /GV2\.PLV3\.aberta\(\)\) \{ aoVivoAviso\(false\);/.test(tpl));
+  checar('agendar pela v3 passa por pl6AgendarNoSlot (a tarefa no HubSpot antes da grade)', /await pl6AgendarNoSlot\(rep, ref, di, si,/.test(tela));
+  checar('zero emoji na tela v3', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}]/u.test(tela));
+}
+
 if (falhas.length) {
   console.error('planejamento v3: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length) + ':');
   falhas.forEach((f) => console.error('  · ' + f));
