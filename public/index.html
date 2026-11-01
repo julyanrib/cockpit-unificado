@@ -11947,6 +11947,8 @@ function cadenciaMotivosDeSaida() {
 
 const FERIADOS_BR_CACHE = {};
 function feriadosDoAnoBR(y) {
+
+  if (!Number.isFinite(y)) return [];
   if (FERIADOS_BR_CACHE[y]) return FERIADOS_BR_CACHE[y];
   const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
   const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
@@ -18407,7 +18409,7 @@ function pm8Segunda() {
 }
 function pm8DiasUteisRestantesNoMes() {
   const h = new Date();
-  const fim = new Date(h.getFullYear(), h.getMonth() + 1, 0);
+  const fim = new Date(h.getFullYear(), h.getMonth() + 1, 0, 23, 59, 59);
   let n = 0;
   for (let d = new Date(h); d <= fim; d.setDate(d.getDate() + 1)) {
     const w = d.getDay();
@@ -57795,6 +57797,7 @@ GV2.FOCOS = {
 GV2.diasCorridos = function (de, ate) { return Math.round((new Date(ate + 'T12:00:00Z') - new Date(String(de).slice(0, 10) + 'T12:00:00Z')) / 86400000); };
 
 GV2.feriadosDoAno = function (y) {
+  if (!Number.isFinite(y)) return [];
   GV2._fer = GV2._fer || {};
   if (GV2._fer[y]) return GV2._fer[y];
   const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
@@ -59339,9 +59342,15 @@ GV2.DIA_COR = ['#2563EB', '#16A34A', '#F5A524', '#8B5CF6', '#E23B3B'];
 GV2.ACOES = { prosp: 'Visita de prospecção', follow: 'Follow-up', reuniao: 'Reunião', demo: 'Demo', ligar: 'Ligar', cobrar: 'Cobrar pagamento', rel: 'Visita de relacionamento' };
 GV2.rota = { cache: {} };
 GV2.rotaSegunda = function () { return GV2.somaDias(GV2.base.semanaAtual || GV2.segundaDe(GV2.base.agora.iso), 7 * (GV2.estado.rotaSem || 0)); };
+
 GV2.rotaLer = async function (seg, forcar) {
-  const c = GV2.rota.cache[seg];
+  const c = GV2.rota.cache[seg], P = GV2.rota.prom = GV2.rota.prom || {};
+  if (c && c.estado === 'lendo' && P[seg]) return P[seg];
   if (c && !forcar && c.estado !== 'erro') return;
+  const lendo = P[seg] = GV2.rotaLerAgora(seg);
+  try { return await lendo; } finally { if (P[seg] === lendo) delete P[seg]; }
+};
+GV2.rotaLerAgora = async function (seg) {
   GV2.rota.cache[seg] = { estado: 'lendo' };
   const donos = GV2.base.pessoas.map(function (p) { return p.id; });
   const fimSem = GV2.somaDias(seg, 4);
@@ -65142,6 +65151,9 @@ EXH.garantirSemana = function (iso) {
   EXH.lendo[seg] = 1;
   Promise.resolve(DV.com(function () { return GV2.rotaLer(seg, !!(c && c.estado === 'erro')); })).then(function () {
     delete EXH.lendo[seg];
+
+    const ainda = GV2.rota.cache[seg];
+    if (!ainda || ainda.estado === 'lendo') { setTimeout(EXH.pintar, 400); return; }
     EXH.pintar();
     EXH.aoLer.forEach(function (fn) { try { fn(); } catch (e) {   } });
   }, function () { delete EXH.lendo[seg]; });
