@@ -80,6 +80,14 @@ checar('a promessa da semana usa os dias úteis da semana', tpl.indexOf('fechame
 checar('os atalhos de data pulam o feriado', /if \(w === 0 \|\| w === 6 \|\| ehFeriadoBR\(d\)\) continue;/.test(tpl));
 checar('nenhuma conta de "dia útil" do executivo ficou sem o feriado', !/if \(w !== 0 && w !== 6\) n\+\+;/.test(tpl) && !/if \(dow !== 0 && dow !== 6\) n\+\+;/.test(tpl));
 
+/* sem expediente (domingo 01/11/26): nenhum quadro do executivo cobra o plano do dia */
+checar('Planejamento: o quadro Hoje diz "sem expediente" no fim de semana e no feriado', tpl.indexOf("if (!dv5.y && (isWeekend(iso))) return { plano: 'sem expediente'") > -1);
+checar('Desenvolvimento: o cartão Hoje diz "sem expediente", não "sem rota"', tpl.indexOf("GV2.temRua(p) ? GV2.visHoje(p) : GV2.util(b.agora.iso) ? 'sem rota' : 'sem expediente'") > -1);
+checar('Hoje do executivo: plano, meu dia e regras sabem do sem expediente', tpl.indexOf("GV2.util(b.agora.iso) ? 'sem rota' : 'sem expediente';") > -1 && tpl.indexOf("'Sem expediente hoje'") > -1 && tpl.indexOf("t: util ? 'Fechar o dia até 19h' : 'Montar o próximo dia útil'") > -1);
+checar('o resumo copiado para o gestor diz "sem expediente hoje"', tpl.indexOf("GV2.util(b.agora.iso) ? 'sem plano hoje' : 'sem expediente hoje'") > -1);
+checar('o mês do executivo conta o último dia útil (fim às 23:59:59)', tpl.indexOf('new Date(h.getFullYear(), h.getMonth() + 1, 0, 23, 59, 59)') > -1);
+checar('data inválida não é feriado e não lança erro', ctx.ehFeriadoBR('NaN-NaN-NaN') === false && ctx.feriadosDoAnoBR(NaN).length === 0);
+
 if (falhas.length) {
   console.log('FALHOU: ' + falhas.length);
   falhas.forEach(function (f) { console.log('  ✗ ' + f); });
