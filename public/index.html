@@ -55727,7 +55727,7 @@ GV2.excecoesLista = function () {
   });
   if (furaram.length) ex.push({
 
-    t: GV2.pl(furaram.reduce(function (x, p) { return x + p.furou; }, 0), 'visita abaixo do plano', 'visitas abaixo do plano') + ' ontem',
+    t: GV2.pl(furaram.reduce(function (x, p) { return x + p.furou; }, 0), 'visita abaixo do plano', 'visitas abaixo do plano') + ' ' + GV2.ontemDe(),
     s: furaram.map(function (p) { return GV2.prim(p.nome) + ' ' + p.furou; }).join(' · '),
     b: GV2.html.btn({ texto: 'Ver na daily', icone: 'um', acao: 'daily:abrir' })
   });
@@ -55768,7 +55768,7 @@ GV2.render.porPessoa = function () {
   });
   return '<section class="card gv2-porpessoa"><div class="card-cab"><span class="card-titulo">Por pessoa</span><span class="card-sub">quem saiu do trilho primeiro · clique para abrir no 1:1</span></div>'
     + GV2.html.tabela({ colunas: 'minmax(190px,1.5fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.8fr) minmax(0,.9fr) minmax(0,.7fr) 96px',
-      cabecalho: ['Executivo', 'Plano hoje', 'Visitas hoje', 'Ontem', 'Quentes', 'Travados', ''], linhas: linhas, vazio: 'Nenhum executivo no time.' })
+      cabecalho: ['Executivo', 'Plano hoje', 'Visitas hoje', GV2.ontemCurto(), 'Quentes', 'Travados', ''], linhas: linhas, vazio: 'Nenhum executivo no time.' })
     + '</section>';
 };
 
@@ -55869,7 +55869,7 @@ GV2.pautaDe = function (p) {
   const pdT = b.time.funil[0] ? Math.round(b.time.funil[1] / b.time.funil[0] * 100) : null;
   const itens = [];
   itens.push(p.hoje.paradas_plano === 0
-    ? 'Hoje sem rota' + (p.hoje.agenda && p.hoje.agenda.n ? ' (' + GV2.resumoDosCompromissos(p.hoje.agenda) + ')' : '') + '. ' + (b.ontemRot ? 'Ontem' : 'No último dia') + (p.ontem.paradas_plano ? ' provou ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : ' também não teve plano') + '. O que impediu?'
+    ? 'Hoje sem rota' + (p.hoje.agenda && p.hoje.agenda.n ? ' (' + GV2.resumoDosCompromissos(p.hoje.agenda) + ')' : '') + '. ' + (function () { const t = GV2.ontemDe(); return t.charAt(0).toUpperCase() + t.slice(1); })() + (p.ontem.paradas_plano ? ' provou ' + p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : ' também não teve plano') + '. O que impediu?'
     : 'Hoje: ' + GV2.visHoje(p) + (b.foraDaJornada ? ', dia encerrado' : ' até ' + b.horaTxt) + (p.furou > 0 ? '. Ontem furou ' + p.furou + '.' : '.'));
   itens.push(p.travados.length ? GV2.pl(p.travados.length, 'travado', 'travados') + ': ' + p.travados.slice(0, 2).map(function (n) { return n.nome + ' (' + n.dias + 'd em ' + GV2.ETAPAS[n.etapa_idx] + ')'; }).join(', ') + '.' : 'Nenhum negócio travado.');
   if (pd != null && pdT != null) itens.push(pd < pdT ? 'Chega na porta mas não no decisor: ' + pd + '% contra ' + pdT + '% do time.' : 'Porta → decisor em ' + pd + '%, no nível do time (' + pdT + '%).');
@@ -55897,7 +55897,7 @@ GV2.render.dossie = function (p) {
     + GV2.html.btn({ texto: 'Mapa do dia', tipo: 'mapa', icone: 'mapa', acao: 'mapa:' + p.id })
     + GV2.html.btn({ texto: 'Registrar 1:1', tipo: 'prim', tam: 'lg', acao: 'um:registrar:' + p.id }) + '</div>'
     + '<div class="gv2-mini-kpis">'
-    + '<div class="gv2-mini-kpi"><small>Ontem</small><b class="' + (p.furou > 0 ? 't-av' : 't-ok') + '">' + GV2.e(GV2.deDe(p.ontem.visitas_com_prova, p.ontem.paradas_plano)) + '</b><span>visitas com prova</span></div>'
+    + '<div class="gv2-mini-kpi"><small>' + GV2.e(GV2.ontemCurto()) + '</small><b class="' + (p.furou > 0 ? 't-av' : 't-ok') + '">' + GV2.e(GV2.deDe(p.ontem.visitas_com_prova, p.ontem.paradas_plano)) + '</b><span>visitas com prova</span></div>'
     + '<div class="gv2-mini-kpi"><small>Porta → decisor</small><b class="' + (pd != null && pdT != null && pd < pdT ? 't-av' : 't-ok') + '">' + (pd != null ? pd + '%' : '—') + '</b><span>time ' + (pdT != null ? pdT + '%' : '—') + ' · mês</span></div>'
     + '<div class="gv2-mini-kpi"><small>Quentes</small><b>' + p.quentes.length + '</b><span>' + GV2.rs(p.mrrQuentes) + ' · ' + p.quentesSemPasso + ' sem passo</span></div>'
     + '<div class="gv2-mini-kpi"><small>Travados</small><b class="' + (p.travados.length >= 3 ? 't-av' : '') + '">' + p.travados.length + '</b><span>' + GV2.rs(p.mrrTravados) + ' acima da régua</span></div></div>'
@@ -55953,7 +55953,7 @@ GV2.render.propAcomp = function () {
     return '<div class="gv2-v8-prop-b is-' + tom + '"><div class="gv2-v8-prop-cab"><b>' + GV2.e(tit + ' · ' + xs.length) + '</b><span>' + GV2.e(sub) + '</span></div>'
       + (xs.length ? '<div class="gv2-v8-prop-chips">' + xs.map(function (x) { return '<button type="button" class="gv2-v5-pchip" data-gv2="propsel:' + x.i + '"><b class="gv2-ellip">' + GV2.e(x.r.cliente) + '</b><span>' + GV2.e(x.r.executivo + (x.r.mrr ? ' · ' + GV2.rsCheio(x.r.mrr) : '')) + '</span></button>'; }).join('') + '</div>' : '<span class="gv2-v8-prop-vazio">nenhuma</span>') + '</div>';
   };
-  const avisos = '<section class="card gv2-v8-prop">' + bloco('Venceu ontem · ligar hoje', 'venceu no último dia útil', vo, 'mal') + bloco('Esquecidas', 'vencidas há 8 dias ou mais', es, 'av') + '</section>';
+  const avisos = '<section class="card gv2-v8-prop">' + bloco('Venceu ' + GV2.ontemDe() + ' · ligar ' + (GV2.util(b.agora.iso) ? 'hoje' : 'no próximo dia útil'), 'venceu no último dia útil', vo, 'mal') + bloco('Esquecidas', 'vencidas há 8 dias ou mais', es, 'av') + '</section>';
   return '<div class="gv2-prop"><div class="gv2-prop-esq">' + envia + avisos + tabela + '</div>' + dir + '</div>';
 };
 
@@ -55963,7 +55963,7 @@ GV2.render.playbook = function () {
   const rows = b.pessoas.slice().sort(function (x, y) { return (x.playbook.nivel - y.playbook.nivel) || ((y.playbook.dias_parado == null ? 999 : y.playbook.dias_parado) - (x.playbook.dias_parado == null ? 999 : x.playbook.dias_parado)); });
   const n = PB.capitulos.length;
   return GV2.cabHTML('Playbook', 'quem está em qual nível', GV2.html.btn({ texto: 'Abrir o playbook', acao: 'menu:playbook' }))
-    + '<div class="gv2-corpo is-fixo"><div class="gv2-pb"><section class="card" style="display:flex;flex-direction:column;min-height:0;"><div class="card-cab"><span class="card-titulo">O time na trilha</span><span class="card-sub">' + n + ' capítulos · parado = 7 dias sem concluir nada</span></div><div class="gv2-tab-corpo">'
+    + '<div class="gv2-corpo is-fixo"><div class="gv2-pb"><section class="card" style="display:flex;flex-direction:column;min-height:0;"><div class="card-cab"><span class="card-titulo">O time na trilha</span><span class="card-sub">' + n + ' capítulos da trilha do executivo (o nível Liderança fica fora) · parado = 7 dias sem concluir nada</span></div><div class="gv2-tab-corpo">'
     + rows.map(function (p) {
       const nv = p.playbook.nivel, par = p.playbook.parado;
       return '<div class="gv2-pb-lin"><b>' + GV2.e(p.nome) + '</b><div class="gv2-trilha" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))">'
@@ -56250,7 +56250,12 @@ GV2.render.acessos = function () {
   let orfa = '';
   if (A.orfaos && !Array.isArray(A.orfaos)) orfa = '<section class="card gv2-acc-orfa"><div class="card-cab"><span class="card-titulo">Carteira de quem saiu</span></div>' + GV2.html.estado('erro', 'Não li a carteira de quem saiu: ' + A.orfaos.erro) + '</section>';
   else if (A.orfaos && A.orfaos.length && A.contas) {
-    const dest = A.contas.filter(function (c) { return !c.desativado && c.role === 'user' && c.hubspot; });
+
+    const doTimeRua = {};
+    ((GV2.base && GV2.base.pessoas) || []).forEach(function (p) { doTimeRua[String(p.id)] = p.nome; });
+    const dest = A.contas.filter(function (c) { return !c.desativado && c.role === 'user' && c.hubspot && (!GV2.base || doTimeRua[String(c.hubspot)]); })
+      .map(function (c) { return Object.assign({}, c, { nome: doTimeRua[String(c.hubspot)] || c.nome }); })
+      .sort(function (x, y) { return x.nome.localeCompare(y.nome); });
     const tot = A.orfaos.reduce(function (s, o) { return s + Math.max(o.lp, o.pinos); }, 0), totNeg = A.orfaos.reduce(function (s, o) { return s + o.neg; }, 0);
     orfa = '<section class="card gv2-acc-orfa"><div class="card-cab"><span class="card-titulo">Carteira de quem saiu</span><span class="card-sub">'
       + GV2.e(tot + ' para repartir aqui' + (totNeg ? ' · ' + totNeg + ' negócios para trocar de dono no HubSpot' : '')) + '</span></div>'
@@ -56348,6 +56353,14 @@ GV2.naMeta = function (p, ontem) {
 GV2.somaDias = function (iso, n) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 GV2.dow = function (iso) { return new Date(iso + 'T12:00:00Z').getUTCDay(); };
 GV2.segundaDe = function (iso) { const w = GV2.dow(iso); return GV2.somaDias(iso, w === 0 ? -6 : 1 - w); };
+
+GV2.ontemDe = function (diaIso, hojeIso) {
+  const b = GV2.base, d = diaIso || (b && b.ontemIso), h = hojeIso || (b && b.agora && b.agora.iso);
+  if (!d || !h || d === GV2.somaDias(h, -1)) return 'ontem';
+  return (GV2.dow(d) === 0 || GV2.dow(d) === 6 ? 'no ' : 'na ') + GV2.DIAS_LONGOS[GV2.dow(d)] + ' ' + GV2.ddmm(d);
+};
+
+GV2.ontemCurto = function () { const t = GV2.ontemDe(); if (t === 'ontem') return 'Ontem'; const b = GV2.base, d = GV2.DIAS[GV2.dow(b.ontemIso)]; return d.charAt(0).toUpperCase() + d.slice(1) + ' ' + GV2.ddmm(b.ontemIso); };
 GV2.uteisEntre = function (de, ate) { let n = 0, d = de; while (d <= ate) { if (GV2.util(d)) n++; d = GV2.somaDias(d, 1); } return n; };
 GV2.DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 GV2.DIAS_LONGOS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
@@ -56856,17 +56869,25 @@ GV2.montar = async function (so, leituraPronta) {
     ((VM.gestor && VM.gestor.clientes) || []).forEach(function (c) { itens[4].push({ dono: 'casa', nome: c.nome || 'negócio ' + c.id, quando: c.closedate, deal: String(c.id), detalhe: 'venda da casa (' + (VM.gestor.name || 'gestor') + ')' }); });
   }
   const propPM = pmOk ? contaItens(itens[3]) : null;
-  const semPM = pmOk ? contaItens(itens[3].filter(function (x) { return GV2.diaDe(x.quando) >= seg; })) : null;
+
+  const semDeals = {};
+  const marcaSem = function (dono, deal) { if (!dono || !deal) return; const k = (GV2.aliasDeal || {})[deal] || deal; (semDeals[dono] = semDeals[dono] || {})[k] = 1; };
+  if (pmOk) itens[3].forEach(function (x) { if (GV2.diaDe(x.quando) >= seg) marcaSem(String(x.dono), String(x.deal)); });
+  Object.keys(propostaPorDeal).forEach(function (k) { const p = propostaPorDeal[k]; if (p.dia >= seg) marcaSem(String(p.dono), String(k)); });
+  negocios.forEach(function (n) {
+    const em = n.lead && n.lead.entrouNegociacaoEm;
+    if (em && n.etapa_idx >= 4 && GV2.diaDe(em) >= seg && doTime(n.dono)) marcaSem(String(n.dono), String(n.id));
+  });
   const propostasDe = function (dono) {
-    if (pmOk) return { semana: semPM[dono] || 0, mes: propPM[dono] || 0 };
-    let mes = 0, sem = 0;
+    const semana = Object.keys(semDeals[String(dono)] || {}).length;
+    if (pmOk) return { semana: semana, mes: propPM[dono] || 0 };
+    let mes = 0;
     Object.keys(propostaPorDeal).forEach(function (k) {
       const p = propostaPorDeal[k];
       if (p.dono !== dono || p.dia < mesIni) return;
       mes++;
-      if (p.dia >= seg) sem++;
     });
-    return { semana: sem, mes: mes };
+    return { semana: semana, mes: mes };
   };
 
   const pb = typeof playbookDados === 'function' ? playbookDados() : null;
@@ -56979,10 +57000,10 @@ GV2.montar = async function (so, leituraPronta) {
     p.excecao = (p.hoje.paradas_plano === 0 && !fds ? 3 : 0)
       + (p.hoje.paradas_plano > 0 && (p.hoje.visitas_todas || 0) < p.esperado ? 2 : 0)
       + (p.furou > 0 ? 1 : 0);
-    p.motivo = (p.hoje.paradas_plano === 0 && !fds) ? GV2.semRotaHoje(p) + (p.furou ? ' · furou ' + p.furou + ' ontem' : '')
+    p.motivo = (p.hoje.paradas_plano === 0 && !fds) ? GV2.semRotaHoje(p) + (p.furou ? ' · furou ' + p.furou + ' ' + GV2.ontemDe(ontemIso, agora.iso) : '')
       : (p.hoje.paradas_plano > 0 && !(p.hoje.visitas_todas || 0) && agora.min > j.ini) ? (agora.min >= j.fim ? 'nenhuma visita hoje' : 'nenhuma visita até ' + GV2.hm())
       : p.travados.length >= 3 ? GV2.pl(p.travados.length, 'travado', 'travados')
-      : p.furou ? 'furou ' + p.furou + ' ontem' : 'no ritmo';
+      : p.furou ? 'furou ' + p.furou + ' ' + GV2.ontemDe(ontemIso, agora.iso) : 'no ritmo';
   });
 
   GV2.disciplinaMontar(L, pessoas, agora, clientePorIdN, faltas);
@@ -59589,7 +59610,7 @@ GV2.p3Agora = function (p) {
   const kpis = '<div class="gv2-p3-kpis">'
     + '<div class="gv2-p3-kpi"><small>Onde está</small><b class="' + (p.hoje.status === 'sem' ? 't-av' : 't-ok') + '">' + GV2.e(st.rot || 'sem check-in hoje') + '</b><span class="gv2-ellip">' + GV2.e(p.hoje.ultima_atividade || '') + '</span></div>'
     + '<div class="gv2-p3-kpi"><small>Plano de hoje</small><b class="' + (!p.hoje.paradas_plano ? 't-av' : '') + '">' + GV2.e(p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem rota') + '</b><span>' + GV2.e(!p.hoje.paradas_plano && p.hoje.agenda && p.hoje.agenda.n ? GV2.resumoDosCompromissos(p.hoje.agenda) : p.hoje.paradas_plano ? ['com prova', p.hoje.sem_lugar ? GV2.pl(p.hoje.sem_lugar, 'sem lugar no mapa', 'sem lugar no mapa') : null, GV2.base.foraDaJornada ? null : 'esperadas até agora ' + p.esperado].filter(Boolean).join(' · ') : 'nada na Agenda de hoje') + '</span></div>'
-    + '<div class="gv2-p3-kpi"><small>Ontem</small><b class="' + (p.furou ? 't-av' : p.ontem.paradas_plano ? 't-ok' : '') + '">' + GV2.e(p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : '—') + '</b><span>' + GV2.e(p.ontem.paradas_plano ? (p.furou ? 'furou ' + p.furou : 'tudo com prova') : 'sem plano ontem') + '</span></div></div>';
+    + '<div class="gv2-p3-kpi"><small>' + GV2.e(GV2.ontemCurto()) + '</small><b class="' + (p.furou ? 't-av' : p.ontem.paradas_plano ? 't-ok' : '') + '">' + GV2.e(p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : '—') + '</b><span>' + GV2.e(p.ontem.paradas_plano ? (p.furou ? 'furou ' + p.furou : 'tudo com prova') : 'sem plano') + '</span></div></div>';
   if (!c || c.estado === 'lendo') return exc + kpis + '<div class="gv2-esq" style="height:260px"></div>';
   if (c.estado === 'erro') return exc + kpis + GV2.html.estado('erro', 'Não consegui ler a rota da semana: ' + c.erro) + GV2.html.btn({ texto: 'Tentar de novo', acao: 'rota:ler' });
   const todas = GV2.rotaParadas(p, seg, null) || [];
@@ -59638,7 +59659,7 @@ GV2.p3Ritmo = function (p) {
   }).join('');
   return '<div class="gv2-p3-kpis">'
     + '<div class="gv2-p3-kpi"><small>Visitas/dia · 4 semanas</small><div class="gv2-p3-kpi-lin"><b class="' + (z != null && z < p.meta_visitas_dia * 0.9 ? 't-av' : 't-ok') + '">' + (z == null ? '—' : GV2.virg(z) + '/dia') + '</b>' + barras + '</div><span>' + GV2.e('meta ' + p.meta_visitas_dia + (w.length ? ' · ' + w.map(GV2.virg).join(' → ') : '')) + '</span></div>'
-    + '<div class="gv2-p3-kpi"><small>Ontem</small><b class="' + (p.furou ? 't-av' : 't-ok') + '">' + GV2.e(p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : '—') + '</b><span>' + GV2.e(p.ontem.paradas_plano ? (p.furou ? 'furou ' + p.furou + ' · com prova' : 'tudo com prova') : 'sem plano ontem') + '</span></div>'
+    + '<div class="gv2-p3-kpi"><small>' + GV2.e(GV2.ontemCurto()) + '</small><b class="' + (p.furou ? 't-av' : 't-ok') + '">' + GV2.e(p.ontem.paradas_plano ? p.ontem.visitas_com_prova + ' de ' + p.ontem.paradas_plano : '—') + '</b><span>' + GV2.e(p.ontem.paradas_plano ? (p.furou ? 'furou ' + p.furou + ' · com prova' : 'tudo com prova') : 'sem plano') + '</span></div>'
     + (!GV2.promessaEmUso() ? '<div class="gv2-p3-kpi"><small>Promessa de hoje</small><b class="t-dim">—</b><span>' + GV2.e('ninguém do time prometeu hoje · o app pergunta na Agenda até 12h') + '</span></div>' : '<div class="gv2-p3-kpi"><small>Promessa de hoje</small><b class="' + (p.promessa == null ? 't-av' : 't-ok') + '">' + GV2.e(p.promessa === undefined ? '—' : p.promessa == null ? 'não prometeu' : 'prometeu ' + p.promessa) + '</b><span>' + GV2.e(p.promessa === undefined ? 'dailies não respondeu agora' : p.promessa == null ? 'o app pergunta no começo do dia · sem resposta' : (p.promessa ? p.hoje.visitas_com_prova + ' de ' + p.promessa + ' com prova até agora' : 'prometeu zero visitas hoje')) + '</span></div>')
     + '<div class="gv2-p3-kpi"><small>Playbook</small><b>' + GV2.e(p.playbook.nivel > ((GV2.base.playbook && GV2.base.playbook.capitulos) || []).length ? 'trilha completa' : 'Nível ' + p.playbook.nivel) + '</b><span>' + GV2.e(p.playbook.nunca ? 'nunca abriu a trilha' : GV2.pl(p.playbook.dias_parado, 'dia parado', 'dias parado') + ' no nível') + '</span></div></div>'
     + '<div class="gv2-p3-semana">' + celulas + '</div>';
@@ -60001,7 +60022,7 @@ GV2.v4Ordenar = function (b) {
     else if (p.u1 == null) { g = 300; m = 'nenhum 1:1 registrado'; }
     else if (p.u1 > C.CADENCIA_1A1) { g = 290; m = '1:1 há ' + p.u1 + ' dias'; }
     else if (p.uv == null || p.uv > C.LIMITE_CAMPO) { g = 200; m = p.uv == null ? 'nunca foi a campo com você' : 'campo há ' + p.uv + ' dias'; }
-    else if (p.furou) { g = 100; m = 'furou ' + p.furou + ' ontem'; }
+    else if (p.furou) { g = 100; m = 'furou ' + p.furou + ' ' + GV2.ontemDe(); }
     p.v4grav = g; p.v4motivo = m;
   });
   b.ordemPessoas = b.pessoas.slice().sort(function (x, y) { return (y.v4grav - x.v4grav) || x.nome.localeCompare(y.nome); });
@@ -61345,7 +61366,8 @@ GV2.render.v5Hoje = function () {
       const k = a.tipo === 'ligação' ? 'lig' : a.tipo === 'reunião' ? 'reu' : 'tar';
       return '<i class="gv2-v5-tl-ag" style="left:' + GV2.v5X(GV2.minHora(a.hora)) + '" title="' + GV2.e(a.tipo + ' ' + a.hora + ' · ' + a.titulo) + '">' + GV2.v5Ic(k, 10, 3) + '</i>';
     }).join('');
-    const nome = GV2.prim(p.nome) + (p.nome.split(' ')[1] ? ' ' + p.nome.split(' ')[1][0] + '.' : '');
+
+    const pn = String(p.nome || '').trim().split(/\s+/), nome = GV2.prim(p.nome) + (pn.length > 1 ? ' ' + pn[pn.length - 1][0] + '.' : '');
     const sub = d.y ? (d.semHora ? '+' + d.semHora + ' sem hora' : 'com prova') : (d.agenda.n ? 'sem rota · agenda' : 'sem rota');
     return '<button type="button" class="gv2-v5-tl-l is-linha" data-gv2="v5dia:' + p.id + ':' + iso + '" title="' + GV2.e('Abrir o dia de ' + GV2.prim(p.nome)) + '">'
       + '<span class="gv2-v5-tl-nome"><i style="background:' + st.cor + '"></i><b>' + GV2.e(nome) + '</b></span>'
@@ -64073,7 +64095,7 @@ GV2.render.cfTime = function () {
     tab = '<section class="card gv2-cb gv2-cb-time">' + cab('time: ' + GV2.pl(n, 'vendido', 'vendidos') + ', ' + u + ' com uso real hoje' + (n ? ' (' + Math.round(u / n * 100) + '%)' : '') + ' · toque numa linha para ver as vendas')
       + '<div class="gv2-cb-grade">' + th + (linhas || '<p class="gv2-g0-sub gv2-cf-vazio">nenhuma venda nessa janela</p>') + '</div>'
       + '<p class="gv2-rp-pe">' + GV2.e('Ativo = na carteira do CS e com cobrança recebida no ASAAS nos últimos ' + GV2.CF.COBRANCA_DIAS + ' dias. Uso real = comanda em pelo menos ' + GV2.CF.USO_REAL_DIAS + ' dos últimos 30 dias (provisório). A situação é a de hoje: a foto diária dos clientes começou em ' + GV2.ddmm((F.d.fotoDesde || '2026-09-27')) + '. Verde ' + GV2.CF.verde + '% ou mais · âmbar ' + GV2.CF.ambar + ' a ' + (GV2.CF.verde - 1) + '% · vermelho abaixo.'
-        + (semAchar ? ' ' + GV2.pl(semAchar, 'venda não foi achada', 'vendas não foram achadas') + ' no CS pelo CNPJ e conta como não ficou.' : '')) + '</p></section>';
+        + (semAchar ? ' ' + GV2.pl(semAchar, 'venda não foi achada', 'vendas não foram achadas') + ' no CS pelo CNPJ e ' + (semAchar === 1 ? 'conta' : 'contam') + ' como não ficou.' : '')) + '</p></section>';
   }
   return '<div class="gv2-cf">' + tab + GV2.render.cfComissao() + '</div>';
 };
@@ -64555,7 +64577,7 @@ GV2.v5Rende = function () {
     usados[um.id] = 1;
     const w = wDe(um);
     out.push({ k: 'um', rot: '1:1', tom: 'is-acao', tit: '1:1 com ' + GV2.prim(um.nome),
-      t: [um.u1 == null ? 'Primeiro 1:1' : '1:1 há ' + um.u1 + ' dias', um.ontem.paradas_plano ? um.ontem.visitas_com_prova + ' de ' + um.ontem.paradas_plano + ' ontem' : null,
+      t: [um.u1 == null ? 'Primeiro 1:1' : '1:1 há ' + um.u1 + ' dias', um.ontem.paradas_plano ? um.ontem.visitas_com_prova + ' de ' + um.ontem.paradas_plano + ' ' + GV2.ontemDe() : null,
         w.length >= 2 && queda(um) > 0.4 ? 'o ritmo caiu de ' + GV2.virg(w[0]) + ' para ' + GV2.virg(w[w.length - 1]) + ' visitas por dia em ' + w.length + ' semanas completas' : null].filter(Boolean).join(' · '),
       bts: [['Abrir pauta', 'v5gav:um:' + um.id, true], ['Ver ' + GV2.prim(um.nome), 'pessoa:' + um.id]] });
   }
@@ -64575,7 +64597,7 @@ GV2.v5Rende = function () {
   if (cob) {
     usados[cob.id] = 1;
     const dOnt = GV2.v5Dia(cob, b.ontemIso);
-    const col = dOnt.estado === 'ok' && dOnt.jornada && dOnt.jornada.colados ? dOnt.jornada.n + ' portas em ' + dOnt.jornada.min + ' min ontem' : null;
+    const col = dOnt.estado === 'ok' && dOnt.jornada && dOnt.jornada.colados ? dOnt.jornada.n + ' portas em ' + dOnt.jornada.min + ' min ' + GV2.ontemDe() : null;
     out.push({ k: 'cobrar', rot: 'Cobrar', tom: 'is-av', tit: 'Cobrar ' + GV2.prim(cob.nome),
       t: [GV2.pl(cob.disc.nReunioes, 'reunião sem desfecho', 'reuniões sem desfecho') + ' nos últimos ' + GV2.V4_JANELA + ' dias', col].filter(Boolean).join(' · '),
       bts: [['Cobrar', 'v4:cobrardisc:' + cob.id, true], ['Ver ' + GV2.prim(cob.nome), 'pessoa:' + cob.id]] });
@@ -64865,7 +64887,7 @@ GV2.render.raiox = function () {
       : '<p class="gv2-v5-ab-vazio">Nenhum negócio travado nem quente sem passo.</p>') + '</section>';
 
   if (GV2.render.v8MesMeta) return GV2.render.rxCabV5()
-    + '<div class="gv2-corpo gv2-v5 gv2-v4-rx">' + GV2.render.v8MesMeta(kpis)
+    + '<div class="gv2-corpo gv2-v5 gv2-v4-rx">' + GV2.render.v8MesAnterior() + GV2.render.v8MesMeta(kpis)
     + '<div class="gv2-v8-fl2">' + GV2.render.funil() + GV2.render.dinheiro() + '</div>'
     + GV2.render.v8PorPessoa()
 
@@ -66112,8 +66134,10 @@ GV2.v8Mes = function () {
   return { uteis: uteis, passados: passados, frac: passados / uteis, hoje: passados + (GV2.util(iso) ? 1 : 0) };
 };
 
+GV2.v8Comecando = function () { return !!(GV2.base && GV2.base.agora) && GV2.v8Mes().passados === 0; };
+GV2.v8PrimeiroUtil = function () { let d = GV2.base.agora.iso.slice(0, 8) + '01'; while (!GV2.util(d)) d = GV2.somaDias(d, 1); return d; };
 GV2.v8Selo = function (feito, esperado) {
-  if (!esperado) return { k: 'ok', t: 'no ritmo' };
+  if (!esperado) return { k: 'ok', t: GV2.v8Comecando() ? 'mês começando' : 'no ritmo' };
   const r = feito / esperado;
   return r >= 0.9 ? { k: 'ok', t: 'no ritmo' } : r >= 0.6 ? { k: 'av', t: 'abaixo' } : { k: 'mal', t: 'fora do ritmo' };
 };
@@ -66162,9 +66186,13 @@ GV2.v8Ranking = function (pessoas) {
       || (y.R.cli.feito - y.R.cli.esp) - (x.R.cli.feito - x.R.cli.esp) || x.p.nome.localeCompare(y.p.nome);
   });
   const porFechou = l.slice().sort(GV2.v8OrdemFechou);
-  return { melhor: l.length > 1 && porFechou[0].R.cli.feito > 0 ? porFechou[0].p.id : null, pior: l.length > 1 ? porRitmo[porRitmo.length - 1].p.id : null };
+
+  const ult = porRitmo[porRitmo.length - 1];
+  return { melhor: l.length > 1 && porFechou[0].R.cli.feito > 0 ? porFechou[0].p.id : null,
+    pior: l.length > 1 && GV2.v8Selo(ult.R.cli.feito, ult.R.cli.esp).k !== 'ok' ? ult.p.id : null };
 };
 GV2.v8Gargalo = function (R) {
+  if (GV2.v8Comecando()) { const d = GV2.v8PrimeiroUtil(); return { k: 'ok', t: 'O mês começa ' + (d === GV2.base.agora.iso ? 'hoje' : GV2.DIAS_LONGOS[GV2.dow(d)] + ' ' + GV2.ddmm(d)) + ': o esperado conta a partir do primeiro dia útil fechado' }; }
   const rv = R.vis.esp ? R.vis.feito / R.vis.esp : 1, rd = R.dem.esp ? R.dem.feito / R.dem.esp : 1;
   const pv = Math.round(rv * 100), pd = Math.round(rd * 100), dd = GV2.v8Tx(R.f.decisor || 0, R.f.demo || 0);
   if (rv >= 0.9 && rd >= 0.9) return { k: 'ok', t: 'Visitas em ' + pv + '% e demos em ' + pd + '% do esperado: no ritmo, proteger o que está quente' };
@@ -66253,6 +66281,22 @@ GV2.v8Comando = function (cmd, parte) {
   };
 })();
 
+GV2.render.v8MesAnterior = function () {
+  if (!GV2.v8Comecando()) return '';
+  if (GV2.hbLer) GV2.hbLer(false);
+  const H = GV2.hb && GV2.hb.d, A = H && H.time && H.time.anterior;
+  const ant = GV2.somaDias(GV2.base.agora.iso.slice(0, 8) + '01', -1), nome = GV2.MESES[Number(ant.slice(5, 7)) - 1];
+  const cab = '<div class="gv2-v8-mm-cab"><b>' + GV2.e(nome.charAt(0).toUpperCase() + nome.slice(1) + ' fechado') + '</b><span>' + GV2.e('enquanto ' + GV2.base.mesNome + ' não tem dia útil fechado · sem quem está em rampa') + '</span></div>';
+  if (!A) return '<section class="card gv2-v8-mm gv2-v8-ant">' + cab + '<p class="gv2-v5-ab-vazio">' + GV2.e(GV2.hb && GV2.hb.erro ? 'Não li o mês anterior agora (' + GV2.hb.erro + ').' : 'Lendo o mês anterior…') + '</p></section>';
+  const tx = function (a, c) { return c >= 3 ? Math.round(a / c * 100) + '%' : '—'; };
+  const k = function (rot, v, sub) { return '<div class="gv2-v5-kpi is-fixo"><small>' + GV2.e(rot) + '</small><b class="num">' + GV2.e(String(v)) + '</b><span>' + GV2.e(sub) + '</span></div>'; };
+  return '<section class="card gv2-v8-mm gv2-v8-ant">' + cab + '<div class="gv2-v5-kpis is-4">'
+    + k('Visitas com prova', A.p, GV2.pl(A.f, 'ficha', 'fichas') + ' · ' + (H.time.anterior.pessoas || 0) + ' pessoas na rua')
+    + k('Com o dono', tx(A.o, A.f), A.o + ' de ' + A.f + ' fichas')
+    + k('Demos', A.m, tx(A.m, A.p) + ' das visitas com prova')
+    + k('Clientes', A.c, tx(A.c, A.m) + ' das demos · pontos do HubSpot')
+    + '</div></section>';
+};
 GV2.render.v8MesMeta = function (kpisHTML) {
 
   const R = GV2.v8Ritmo(null, GV2.rx ? GV2.rx() : null), G = GV2.v8Gargalo(R);
@@ -67316,6 +67360,7 @@ GV2.v9PassosHTML = function (f, acao, compacto) {
 };
 
 GV2.v9GargaloCurto = function (R) {
+  if (GV2.v8Comecando()) return 'mês começando';
   const rv = R.vis.esp ? R.vis.feito / R.vis.esp : 1, rd = R.dem.esp ? R.dem.feito / R.dem.esp : 1;
   if (rv >= 0.9 && rd >= 0.9) return 'no ritmo';
   if (rd >= 0.9) return 'converte, faltam portas';
@@ -67851,11 +67896,11 @@ GV2.render.terr = function () {
   const hoje = M.hoje;
   const diaLongo = function (iso) { const d = GV2.DIAS_LONGOS[GV2.dow(iso)]; return d.charAt(0).toUpperCase() + d.slice(1); };
   const cargaTxt = M.carga ? GV2.DIAS_LONGOS[GV2.dow(M.carga.dia)] + ' ' + GV2.ddmm(M.carga.dia) + ', ' + GV2.horaDe(M.carga.ultima) : 'nenhuma carga ainda';
-  const sub = diaLongo(hoje) + ' ' + GV2.ddmm(hoje) + ' · ' + GV2.hm() + ' · ' + (!M.carga ? 'nenhuma carga da Casa dos Dados ainda' : M.semCarga ? 'última carga com sucesso: ' + cargaTxt : 'carga de ' + cargaTxt) + ' · próxima: domingo ' + GV2.ddmm(M.proxima);
+  const sub = diaLongo(hoje) + ' ' + GV2.ddmm(hoje) + ' · ' + GV2.hm() + ' · ' + (!M.carga ? 'nenhuma carga da Casa dos Dados ainda' : M.semCarga ? 'última carga com sucesso: ' + cargaTxt : 'carga de ' + cargaTxt) + ' · próxima: domingo ' + GV2.ddmm(M.proxima) + ' às 22h (os leads entram de madrugada)';
   const aviso = M.semCarga ? '<div class="gv2-t10-aviso" role="status"><b>' + GV2.e('A carga de domingo ' + GV2.ddmm(M.ultimaAgendada) + ' não trouxe nenhum recém-aberto.') + '</b><span>'
     + GV2.e('Os números de "Entraram" são da carga de ' + GV2.ddmm(M.carga.dia) + '. Pode ter falhado ou não ter achado CNPJ novo nos bairros; o motivo fica no registro da rodada do robô. Nada a fazer aqui.') + '</span></div>' : '';
 
-  const curto = GV2.DIAS[GV2.dow(hoje)] + ' ' + GV2.ddmm(hoje) + ' · ' + (M.carga ? 'carga ' + GV2.DIAS[GV2.dow(M.carga.dia)] + ' ' + GV2.ddmm(M.carga.dia) : 'sem carga') + ' · próxima dom ' + GV2.ddmm(M.proxima);
+  const curto = GV2.DIAS[GV2.dow(hoje)] + ' ' + GV2.ddmm(hoje) + ' · ' + (M.carga ? 'carga ' + GV2.DIAS[GV2.dow(M.carga.dia)] + ' ' + GV2.ddmm(M.carga.dia) : 'sem carga') + ' · próxima dom ' + GV2.ddmm(M.proxima) + ' 22h';
   return '<header class="gv2-cab gv2-t10-cabt"><div class="gv2-cab-txt"><h1>Território</h1><p><span class="gv2-t10-sl">' + GV2.e(sub) + '</span><span class="gv2-t10-sc">' + GV2.e(curto) + '</span></p></div>' + segPr + '</header>'
     + '<div class="gv2-corpo gv2-t10">' + aviso + GV2.render.t10Kpis(M) + GV2.render.t10Agir(M) + GV2.render.t10Mapa(M) + GV2.render.t10Tabela(M) + GV2.render.t10Contra(M) + GV2.faltaHTML() + '</div>'
     + GV2.render.t10Gav(M) + GV2.render.t10Concorrente();
@@ -67963,7 +68008,7 @@ GV2.render.t10Tabela = function (M) {
   const f = GV2.t10Filtro();
   const nomePr = { rj: 'Rio de Janeiro', sp: 'São Paulo', poa: 'Porto Alegre', vv: 'Vitória/Vila Velha' };
   const prs = ['rj', 'sp', 'poa', 'vv'].filter(function (k) { return (f === 'todas' || k === f) && (M.time.porPr[k] || M.time.sem.some(function (s) { return s.pk === k; })); });
-  const proxima = 'próxima carga dom ' + GV2.ddmm(M.proxima);
+  const proxima = 'próxima carga dom ' + GV2.ddmm(M.proxima) + ' 22h';
   const cab = '<div class="gv2-t10-tr is-cab"><span>Executivo</span><span>Entraram</span><span>Visitados</span><span>Negócio</span><span>Parados</span><span>Vencendo</span><span></span><span></span></div>';
   let corpo = '', mob = '';
   prs.forEach(function (pk) {
@@ -68090,7 +68135,7 @@ GV2.render.t10Gav = function (M) {
       + '<span class="' + (v ? '' : (y.parado || y.vencendo ? 't-av' : 't-mute')) + '">' + GV2.e(vis) + '</span>'
       + '<span>' + etapaPill(y) + '</span><span class="gv2-t10-ga">' + acao + '</span></div>';
   }).join('');
-  const vazio = fil === 'novos' ? 'Nenhum CNPJ novo nos bairros de ' + pn + ' na última carga · próxima carga domingo ' + GV2.ddmm(M.proxima)
+  const vazio = fil === 'novos' ? 'Nenhum CNPJ novo nos bairros de ' + pn + ' na última carga · próxima carga domingo ' + GV2.ddmm(M.proxima) + ' às 22h'
     : fil === 'parados' ? 'Nenhum recém-aberto de ' + pn + ' parado há mais de 14 dias'
     : fil === 'vencendo' ? 'Nada de ' + pn + ' vence nos próximos 14 dias'
     : 'Nenhum recém-aberto de ' + pn + (g.bairro || g.cidade ? ' aqui' : '') + ' nos últimos 90 dias';
