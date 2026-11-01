@@ -1645,6 +1645,82 @@ tabelas.gv2_falta_etapa = [
     GV2.estado.cbGav = null; GV2.estado.cbForm = null; GV2.estado.cbErro = null;
   }
 
+  /* ── A HABILIDADE DO MÊS (handoff "Acelerar Field Sales v2", 3a–3c · 31/10/26): a sugestão é a maior
+     distância para o time, a meta nasce na média do time, o veredito sai de antes, meta e agora. ── */
+  {
+    const hbEra = Object.assign({}, GV2.hb), supaEra = global.supa.from;
+    const sem = function (o) { return Object.assign({ p: 0, f: 0, o: 0, m: 0, c: 0 }, o); };
+    /* outubro: 80 visitas, 80 fichas, 20 com o dono (25%), 16 demos (20%), 4 clientes (25%) */
+    const out = ['2026-10-06', '2026-10-14', '2026-10-21', '2026-10-28'].map(function (d) { return sem({ d: d, p: 20, f: 20, o: 5, m: 4, c: 1 }); });
+    const bia = { pessoa: 'bia', ownerId: '1', nome: 'Bia Souza', emRampa: false, ultimoUmAUm: '2026-10-06',
+      dias: out.concat([sem({ d: '2026-11-03', p: 10, f: 10, o: 3, m: 2 }), sem({ d: '2026-11-10', p: 10, f: 10, o: 4, m: 1, c: 1 }), sem({ d: '2026-11-16', p: 2, f: 2, o: 1 })]),
+      habilidade: { taxa: 'dono', antes: 25, meta: 50, comoTreinar: 'Pedir o dono na primeira frase.', combinadaEm: '2026-11-02', combinadaPor: 'Julyan' }, habilidadeAnterior: null, habilidadeSeguinte: null };
+    const rui = { pessoa: 'rui', ownerId: '2', nome: 'Rui Lima', emRampa: false, ultimoUmAUm: null, dias: out.slice(), habilidade: null, habilidadeAnterior: null, habilidadeSeguinte: null };
+    const leo = { pessoa: 'leo', ownerId: '9', nome: 'Leo Novo', emRampa: true, dias: [], habilidade: null, habilidadeAnterior: null, habilidadeSeguinte: null };
+    const mundo = function (hoje) {
+      return { mes: '2026-11-01', anterior: '2026-10-01', fim: '2026-11-30', ate: hoje, hoje: hoje, gestor: true, ultimoUmAUmTime: '2026-10-14',
+        time: { anterior: { p: 468, f: 393, o: 195, m: 98, c: 40, pessoas: 6 }, atual: { p: 200, f: 180, o: 90, m: 40, c: 15, pessoas: 6 } },
+        pessoas: [bia, rui, leo], lidoEm: '2026-11-16T13:55:00Z' };
+    };
+    const por = function (d) { GV2.hb.d = d; GV2.hb.em = Date.now(); GV2.hb.lendo = false; GV2.hb.erro = null; };
+    por(mundo('2026-11-16'));
+    checar('habilidade · as 4 taxas de outubro e as do time (soma ÷ soma; volume por pessoa e por semana de 5 dias úteis)',
+      GV2.hbDaPessoa(bia, 'dono', 'anterior').v === 25 && GV2.hbDaPessoa(bia, 'demo', 'anterior').v === 20 && GV2.hbDaPessoa(bia, 'fechar', 'anterior').v === 25 && GV2.hbDaPessoa(bia, 'volume', 'anterior').v === 18
+        && GV2.hbDoTime('dono', 'anterior').v === 50 && GV2.hbDoTime('demo', 'anterior').v === 21 && GV2.hbDoTime('fechar', 'anterior').v === 41 && GV2.hbDoTime('volume', 'anterior').v === 18,
+      JSON.stringify(GV2.HB.taxas.map(function (t) { return [GV2.hbDaPessoa(bia, t.k, 'anterior').v, GV2.hbDoTime(t.k, 'anterior').v]; })));
+    checar('habilidade · a sugestão é a maior distância para o time (sair com o dono: 25% contra 50%)', GV2.hbSugestao(bia, 'anterior') === 'dono');
+    const ana = Object.assign({}, rui, { pessoa: 'ana', dias: out.map(function (d) { return Object.assign({}, d, { o: 15, m: 6, c: 4 }); }) });
+    const sa = GV2.hbSugestaoInfo(ana, 'anterior');
+    checar('habilidade · quem está acima do time em tudo recebe a taxa mais perto do time (volume, empatado)', sa && sa.k === 'volume' && sa.dist === 0, JSON.stringify(sa));
+    const ss = GV2.hbSemanas(bia, 'dono', 'anterior');
+    checar('habilidade · outubro semana a semana, cortado nas bordas do mês',
+      ss.map(function (s) { return s.rot; }).join() === '01 a 02/10,05 a 09/10,12 a 16/10,19 a 23/10,26 a 30/10' && ss[1].val.v === 25 && ss[0].val.v === null, JSON.stringify(ss.map(function (s) { return [s.rot, s.val.v]; })));
+    const H = { meta: 50, antes: 25 };
+    checar('habilidade · veredito: bateu a meta = melhorou; passou do antes = subiu, não bateu; senão, não melhorou',
+      GV2.hbVeredito(H, 50).k === 'melhorou' && GV2.hbVeredito(H, 36).k === 'subiu' && GV2.hbVeredito(H, 25).k === 'nao_melhorou' && GV2.hbVeredito(H, null) === null);
+    GV2.estado.hbForm = null; GV2.estado.hbEditar = null;
+    const esc = GV2.render.hbPessoa(GV2.base.porId['2']);
+    checar('habilidade · 3a: sem habilidade, a escolha com a sugestão marcada, a meta na média do time e o alerta do 1:1',
+      /Habilidade de novembro/.test(esc) && /sugerida · maior distância/.test(esc) && /50% · a média do time em outubro/.test(esc) && /Combinar no 1:1/.test(esc)
+        && /Último 1:1 de Rui: nenhum\. Do time: 14\/10\. A habilidade só vale se for combinada no 1:1\./.test(esc) && /Sair com o dono · outubro/.test(esc), esc.slice(0, 300));
+    const res = GV2.render.hbPessoa(GV2.base.porId['1']);
+    checar('habilidade · 3a combinada: antes 25%, meta 50% e agora 36% (âmbar: subiu, não bateu), semana a semana de novembro',
+      /Sair com o dono/.test(res) && /combinada em 02\/11 · treino: Pedir o dono na primeira frase\./.test(res) && />25%</.test(res) && />50%</.test(res) && /class="num t-av">36%</.test(res) && /<b>02 a 06\/11<\/b>/.test(res) && /<b>16\/11<\/b>/.test(res), res.slice(0, 300));
+    checar('habilidade · quem está em rampa não tem o cartão', GV2.render.hbPessoa({ id: '9', nome: 'Leo Novo' }) === '');
+    const pi = GV2.hbPautaItem(GV2.base.porId['1']), pr = GV2.hbPautaItem(GV2.base.porId['2']);
+    checar('habilidade · 3b: a linha da pauta com agora, meta e antes; sem habilidade, pede para escolher; a linha entra no TOPO',
+      pi && pi.rot === 'Habilidade do mês' && /sair com o dono · agora 36% de 50% \(antes 25%\)/.test(pi.t) && pr && /Ainda sem a habilidade de novembro: escolher juntos \(sugerida: sair com o dono\)/.test(pr.t)
+        && /const it = GV2\.hbPautaItem\(p\); if \(it\) itens\.unshift\(it\);/.test(codigo), JSON.stringify([pi, pr]));
+    checar('habilidade · 3c fica fora do meio do mês', GV2.render.hbTime() === '');
+    const g = [];
+    GV2.hbGrupos(g, GV2.base, function (p, s, a) { return { n: p.nome, s: s, a: a }; });
+    checar('habilidade · "Quem precisa de você": passou do dia 5 sem habilidade (quem está em rampa não entra)',
+      g.length === 1 && g[0].k === 'hbdef' && g[0].chips.length === 1 && g[0].chips[0].s === 'sem habilidade de novembro' && g[0].chips[0].a === 'v8pagina:2', JSON.stringify(g));
+    por(mundo('2026-11-26'));
+    const fim = GV2.render.hbTime();
+    checar('habilidade · 3c na última semana: o veredito, "Mudar o plano", "Definir para dezembro" e a rampa fora',
+      /Novembro até 26\/11 · 0 de 1 bateu a meta/.test(fim) && /subiu, não bateu/.test(fim) && /data-gv2="hb:fim:bia:plano">Mudar o plano/.test(fim)
+        && /data-gv2="hb:fim:rui:definir">Definir para dezembro/.test(fim) && /na rampa · não entra/.test(fim), fim.slice(0, 400));
+    const gravou = [];
+    global.supa.from = function (tab) { return {
+      upsert: function (row, o) { gravou.push({ tab: tab, row: row, o: o }); return Promise.resolve({ error: null }); },
+      update: function (row) { return { eq: function (k1, v1) { return { eq: function (k2, v2) { gravou.push({ tab: tab, upd: row, onde: [v1, v2] }); return Promise.resolve({ error: null }); } }; } }; } }; };
+    GV2.hbComando('hb', ['hb', 'fim', 'bia', 'plano']);
+    const dr = GV2.render.hbGav();
+    checar('habilidade · 3c "Mudar o plano": o drawer começa na mesma habilidade, com o veredito do mês',
+      GV2.estado.hbGav && GV2.estado.hbGav.veredito === 'subiu' && GV2.estado.hbForm.taxa === 'dono' && /Mudar o plano/.test(dr) && /Combinar para dezembro/.test(dr) && /aria-checked="true" class="gv2-rp-radio is-on" data-gv2="hb:taxa:bia:2026-12-01:dono"/.test(dr), dr.slice(0, 300));
+    const mundoFim = GV2.hb.d;
+    await GV2.hbCombinar('bia', '2026-12-01');
+    checar('habilidade · combinar grava dezembro (antes = novembro, meta = média do time) e o veredito de novembro, sem HubSpot',
+      gravou.length === 2 && gravou[0].tab === 'habilidades_mes' && gravou[0].row.mes === '2026-12-01' && gravou[0].row.taxa === 'dono' && gravou[0].row.antes === 36 && gravou[0].row.meta === 50
+        && gravou[0].o.onConflict === 'pessoa,mes' && gravou[1].upd.veredito === 'subiu' && gravou[1].upd.veredito_valor === 36 && gravou[1].onde.join() === 'bia,2026-11-01' && !GV2.estado.hbGav, JSON.stringify(gravou));
+    por(mundoFim);
+    checar('habilidade · nenhuma escrita no HubSpot no módulo', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.HB = {'), codigo.indexOf('GV2.hbComando = function'))));
+    global.supa.from = supaEra;
+    Object.assign(GV2.hb, hbEra);
+    GV2.estado.hbGav = null; GV2.estado.hbForm = null; GV2.estado.hbErro = null; GV2.estado.hbEditar = null;
+  }
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
