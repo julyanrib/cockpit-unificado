@@ -1721,6 +1721,101 @@ tabelas.gv2_falta_etapa = [
     GV2.estado.hbGav = null; GV2.estado.hbForm = null; GV2.estado.hbErro = null; GV2.estado.hbEditar = null;
   }
 
+  /* ── RECONHECIMENTO E DISPUTA (handoff "Acelerar Field Sales v2", 4a–4b · 01/11/26): por praça, uma por
+     vez, até 2 semanas, o traço é onde a praça começou, o selo só com a auditoria da sexta. ── */
+  {
+    const rcEra = Object.assign({}, GV2.rc), supaEra = global.supa.from, rcLerEra = GV2.rcLer;
+    const dd = function (d, v, nh) { return { d: d, v: v, p: v, cp: v, nh: nh, f: v, o: 0, m: 0 }; };
+    const pessoas = [
+      { pessoa: 'ana', ownerId: '1', nome: 'Ana Lima', emRampa: false, dias: [dd('2026-11-02', 20, 8), dd('2026-11-10', 10, 6), dd('2026-11-12', 10, 8)] },
+      { pessoa: 'bia', ownerId: '2', nome: 'Bia Souza', emRampa: false, dias: [dd('2026-11-03', 10, 5), dd('2026-11-11', 10, 5)] },
+      { pessoa: 'caio', ownerId: '3', nome: 'Caio', emRampa: false, dias: [dd('2026-11-04', 10, 2), dd('2026-11-10', 10, 3)] },
+      { pessoa: 'leo', ownerId: '1', nome: 'Leo Novo', emRampa: true, dias: [dd('2026-11-10', 50, 50)] }
+    ];
+    const disputa = { id: 'd1', nome: 'Ficha antes da próxima porta', taxa: 'naHora', times: 'praca', inicio: '2026-11-09', fim: '2026-11-20' };
+    const por = function (hoje, aud) {
+      GV2.rc.d = { hoje: hoje, de: '2026-10-01', disputas: [disputa], auditorias: aud || [], pessoas: pessoas, lidoEm: hoje + 'T15:00:00Z' };
+      GV2.rc.em = Date.now(); GV2.rc.lendo = false; GV2.rc.erro = null;
+    };
+    por('2026-11-12');
+    const praca3 = GV2.base.porId['3'] && GV2.base.porId['3'].praca;
+    const L = GV2.rcPlacar(disputa), vit = L.find(function (l) { return l.praca === 'Vitória'; }), rio = L.find(function (l) { return l.praca === praca3; });
+    checar('disputa · placar por praça: o valor da disputa, onde começou (14 dias antes) e o último dia; quem está em rampa fica fora',
+      vit && vit.n === 2 && vit.v === 63 && vit.ini === 43 && vit.hoje === 80 && rio && rio.v === 30 && rio.ini === 20, JSON.stringify(L));
+    checar('disputa · lidera quem mais subiu desde o começo (Vitória +20 contra +10)', vit.lidera === true && rio.lidera === false);
+    const c1 = GV2.render.rcDisputa();
+    checar('disputa · 4a: nome, período, faltam dias úteis, traço do começo e a primeira auditoria na sexta',
+      /Disputa da vez · 09\/11 a 20\/11/.test(c1) && /Ficha antes da próxima porta/.test(c1) && /faltam 6 dias úteis/.test(c1) && /começou em 43%/.test(c1)
+        && /is-ok">lidera/.test(c1) && /A primeira auditoria é na sexta 13\/11/.test(c1), c1.slice(0, 400));
+    por('2026-11-14');
+    const c2 = GV2.render.rcDisputa();
+    checar('disputa · sem a auditoria da sexta, "Não auditado" e o botão para registrar',
+      /Não auditado: a sexta 13\/11 ainda não foi conferida/.test(c2) && /data-gv2="rc:auditar:2026-11-09">Registrar a auditoria/.test(c2), c2.slice(0, 300));
+    por('2026-11-14', [{ segunda: '2026-11-09', em: '2026-11-13T20:00:00Z', por: 'Julyan', nota: '3 fichas corrigidas' }]);
+    const c3 = GV2.render.rcDisputa();
+    checar('disputa · com a auditoria, o selo "Auditado na sexta"', /Auditado na sexta 13\/11 · 13\/11 \d\d:00 · 3 fichas corrigidas/.test(c3) && !/Registrar a auditoria/.test(c3), c3.slice(0, 300));
+    por('2026-11-12');
+    checar('disputa · 4b: uma por vez, até 2 semanas, nada no passado',
+      /Uma por vez/.test(GV2.rcValidar({ nome: 'Outra', taxa: 'dono', inicio: '2026-11-16', fim: '2026-11-27' }) || '')
+        && /Até 2 semanas/.test(GV2.rcValidar({ nome: 'Outra', taxa: 'dono', inicio: '2026-11-23', fim: '2026-12-09' }) || '')
+        && /passado/.test(GV2.rcValidar({ nome: 'Outra', taxa: 'dono', inicio: '2026-11-02', fim: '2026-11-06' }) || '')
+        && GV2.rcValidar({ nome: 'Outra', taxa: 'dono', inicio: '2026-11-23', fim: '2026-12-04' }) === null);
+    const P = GV2.rcNovaPadrao();
+    checar('disputa · a nova começa na segunda depois da atual e dura 2 semanas', P.inicio === '2026-11-23' && P.fim === '2026-12-04', JSON.stringify(P));
+    GV2.estado.rcGav = { t: 'nova' }; GV2.estado.rcForm = { nome: 'Sair com o dono' };
+    const dr = GV2.render.rcGav();
+    checar('disputa · 4b: o drawer com a regra "uma por vez", o comportamento, os times por praça e as regras',
+      /a atual termina sex 20\/11/.test(dr) && /Ficha na hora · fichas em até 15 min ÷ visitas/.test(dr) && /Por praça · /.test(dr) && /nunca individual/.test(dr) && /Agendar disputa/.test(dr), dr.slice(0, 300));
+    const gravou = [];
+    global.supa.from = function (tab) { return { insert: function (row) { gravou.push({ tab: tab, row: row }); return Promise.resolve({ error: null }); },
+      upsert: function (row, o) { gravou.push({ tab: tab, row: row, o: o }); return Promise.resolve({ error: null }); } }; };
+    GV2.rcLer = function () {};
+    await GV2.rcAgendar();
+    checar('disputa · agendar grava a disputa por praça com as datas, sem HubSpot',
+      gravou.length === 1 && gravou[0].tab === 'disputas' && gravou[0].row.taxa === 'naHora' && gravou[0].row.inicio === '2026-11-23' && gravou[0].row.fim === '2026-12-04' && gravou[0].row.times === 'praca' && !GV2.estado.rcGav, JSON.stringify(gravou));
+    gravou.length = 0;
+    GV2.estado.rcForm = { nota: '3 fichas corrigidas' };
+    await GV2.rcAuditou('2026-11-09');
+    checar('auditoria · registrar grava a semana, quem e o que foi corrigido', gravou.length === 1 && gravou[0].tab === 'auditorias_semana' && gravou[0].row.segunda === '2026-11-09' && gravou[0].row.nota === '3 fichas corrigidas' && gravou[0].o.onConflict === 'segunda', JSON.stringify(gravou));
+    /* previsão honesta: demo sem chance dita entra com a conversão do mês anterior */
+    GV2.rc.pv = { mes: '2026-11-01', anterior: '2026-10-01', hoje: '2026-11-12', convAnterior: 40, lidoEm: '2026-11-12T15:00:00Z',
+      time: { demos: 10, ditas: 4, somaDita: 240, fecharam: 3 },
+      pessoas: [{ ownerId: '1', emRampa: false, demos: 6, ditas: 4, somaDita: 240, fecharam: 2 }, { ownerId: '3', emRampa: false, demos: 4, ditas: 0, somaDita: 0, fecharam: 1 }] };
+    GV2.rc.pvAnt = null;
+    const pv = GV2.render.rcPrevisao();
+    checar('previsão · 4a: o time disse 48% (4 ditas + 6 com 40%), fechou 30%, 18 pts; a praça mais perto',
+      /O time disse 48%\. Fechou 30%\./.test(pv) && />18 pts</.test(pv) && /4 de 10 demos com a chance dita; as outras entram com 40%/.test(pv)
+        && /disse 53% · fechou 33%/.test(pv) && /disse 40% · fechou 25%/.test(pv) && /15 pts<\/b><span class="gv2-rp-chip is-ok">mais perto/.test(pv), pv.slice(0, 400));
+    GV2.rc.pv.time = { demos: 2, ditas: 0, somaDita: 0, fecharam: 0 };
+    GV2.rc.pvAnt = { mes: '2026-10-01', anterior: '2026-09-01', hoje: '2026-11-12', convAnterior: 43, time: { demos: 96, ditas: 0, somaDita: 0, fecharam: 39 }, pessoas: [] };
+    const pv2 = GV2.render.rcPrevisao();
+    checar('previsão · com menos de 5 demos no mês, mostra o mês anterior fechado e avisa que ninguém disse a chance',
+      /Previsão honesta · outubro fechado/.test(pv2) && /Ninguém disse a chance ainda: as 96 demos entram com a conversão do time em setembro \(43%\)/.test(pv2), pv2.slice(0, 400));
+    /* reconhecimento da sexta: um destaque por combinado */
+    const pc = function (id, ownerId, nome, o) { return Object.assign({ pessoa: id, ownerId: ownerId, nome: nome,
+      visitas: { visitas: 20, provadas: 18, comPasso: 18, naHora: 18, divergencias: [] }, fichas: { donoAusente: 5, voltaMarcada: 4 },
+      vespera: { dias: 5, planejados: 5, semPlano: [] }, rituais: { umAUm: 1, ultimoUmAUm: '2026-11-03', fechoDias: [{ dia: '2026-11-03', fechou: true }], marcados: [] },
+      aceite: null, ocorrencias: [] }, o); };
+    const seg = GV2.rcSemanaRec();
+    GV2.rc.cb[seg] = { d: { segunda: seg, sexta: GV2.somaDias(seg, 4), ate: GV2.somaDias(seg, 4), pessoas: [
+      pc('ana', '1', 'Ana Lima', { visitas: { visitas: 20, provadas: 20, comPasso: 18, naHora: 19, divergencias: [] } }),
+      pc('bia', '2', 'Bia Souza', { vespera: { dias: 5, planejados: 3, semPlano: [] }, visitas: { visitas: 20, provadas: 18, comPasso: 18, naHora: 18, divergencias: [{ dia: seg }] } })] } };
+    const D = GV2.rcDestaques(GV2.rc.cb[seg].d);
+    checar('reconhecimento · um destaque por combinado: o melhor (empate fica junto), quem não teve divergência, rota na véspera',
+      D.length === 7 && D[0].quem === 'Ana' && D[0].s === '20 de 20 visitas com prova' && /Ana e Bia/.test(D[1].quem) && D[4].quem === '1 de 2' && D[5].quem === '1 pessoa', JSON.stringify(D));
+    const rec = GV2.render.rcReconhecer();
+    checar('reconhecimento · 4a: "Apresentar" abre o modo apresentação na tela nova; "Levar para a daily"; sem auditoria, avisa',
+      /Um destaque por combinado/.test(rec) && /data-gv2="ap:abrir:4">Apresentar/.test(rec) && /Levar para a daily/.test(rec) && /não auditado/.test(rec), rec.slice(0, 300));
+    checar('reconhecimento · o modo apresentação ganha a 5ª tela, no fim (as 4 de antes não mudam)',
+      GV2.V8AP_N === 5 && /Reconhecimento da semana/.test(GV2.v8apReconhecer()) && /const telas = \[GV2\.v8apMes, GV2\.v8apPlacar, GV2\.v8apFunil, GV2\.v8apPlanejar, GV2\.v8apReconhecer\];/.test(codigo));
+    checar('reconhecimento · o texto da daily leva cada destaque', /A porta é provada: Ana \(20 de 20 visitas com prova\)/.test(GV2.rcTextoDaily(seg, D)));
+    checar('reconhecimento · nenhuma escrita no HubSpot no módulo', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.RC = {'), codigo.indexOf('GV2.rcComando = function'))));
+    global.supa.from = supaEra;
+    GV2.rcLer = rcLerEra;
+    Object.assign(GV2.rc, rcEra);
+    GV2.estado.rcGav = null; GV2.estado.rcForm = null; GV2.estado.rcErro = null;
+  }
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
