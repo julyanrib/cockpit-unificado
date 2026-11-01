@@ -11253,6 +11253,7 @@ async function hidratarSessao(email) {
     }
 
     Object.assign(DATA, corpo.dados);
+    if (typeof repsSemMetaInventada === 'function') repsSemMetaInventada();
     sessaoAtual = corpo.sessao;
 
     if (typeof repForaDoTimeCosturar === 'function') repForaDoTimeCosturar();
@@ -11807,6 +11808,7 @@ async function farolBuscarEAplicar(pedido) {
 function farolAplicar(dados) {
 
   Object.assign(DATA, dados);
+  if (typeof repsSemMetaInventada === 'function') repsSemMetaInventada();
 
   if (typeof carregarAgendaDoApp === 'function') {
     carregarAgendaDoApp().then(function () { if (typeof aoVivoRepintar === 'function') aoVivoRepintar(); });
@@ -22985,6 +22987,12 @@ async function tl5Alternar(tipo, alvoOwnerId, titulo, detalhe, chaveDaTela, ritu
 const TM2_ESTADO = { filtro: null, sel: null, etapa: null, deal: null, toast: null };
 
 let TM10_TQ = null;
+
+function repsSemMetaInventada() {
+  (Array.isArray(DATA.reps) ? DATA.reps : []).forEach(function (r) {
+    if (r && r.patamarMeta == null && r.metaMrr == null && r.metaReceita == null) { r.metaMensal = 0; r.patamarMeta = 'sem meta'; }
+  });
+}
 
 function repForaDoTimeCosturar() {
   if (!sessaoAtual || sessaoAtual.role === 'manager' || !sessaoAtual.ownerId || !Array.isArray(DATA.reps)) return;
@@ -61908,7 +61916,7 @@ GV2.v5Grupos = function () {
   if (ns.length) g.push({ k: 'naosaiu', l: 'Ainda não saiu', sev: 3, info: true, curta: 'antes da janela habitual', regra: 'antes da janela habitual (4 últimas semanas)',
     chips: ns.map(function (p) { return chip(p, GV2.v5Janela(p)); }) });
   GV2.v10Grupos(g, b, chip);
-  if (GV2.rpGrupos) GV2.rpGrupos(g, b, chip);
+
   if (GV2.hbGrupos) GV2.hbGrupos(g, b, chip);
   return { grupos: g, sit: sit };
 };
@@ -63953,12 +63961,11 @@ GV2.render.ldPessoa = function (p) {
   const x = GV2.ldDe(p.id);
   if (!x || x.emRampa) return '';
   const as = x.afilhados || [];
-  const pad = '<section class="card gv2-cb"><div class="gv2-cb-cab"><div><b>Padrinho de</b><span>da Rampa</span></div></div>'
+  const pad = '<section class="card gv2-cb"><div class="gv2-cb-cab"><div><b>Padrinho de</b><span>os novatos que acompanha</span></div></div>'
     + (as.length ? as.map(function (a) {
       const e = GV2.ldAfilhado(a);
       return '<div class="gv2-rp-pede"><div><b>' + GV2.e(a.nome) + '</b><small>' + GV2.e(e.s) + '</small></div><span class="gv2-rp-chip ' + e.chip[1] + '">' + GV2.e(e.chip[0]) + '</span></div>';
-    }).join('') : '<p class="gv2-g0-sub">' + GV2.e(GV2.prim(x.nome) + ' ainda não é padrinho de ninguém. O padrinho se escolhe ao colocar a pessoa na Rampa.') + '</p>')
-    + '<div class="gv2-hb-pe"><button type="button" class="gv2-v5-btn" data-gv2="aba:rampa">Abrir a Rampa</button></div>'
+    }).join('') : '<p class="gv2-g0-sub">' + GV2.e(GV2.prim(x.nome) + ' ainda não é padrinho de ninguém.') + '</p>')
     + GV2.g0Rod('rampa_fases', L.d.lidoEm) + '</section>';
   const C = GV2.ldCriterios(x);
   const lid = '<section class="card gv2-cb"><div class="gv2-cb-cab"><div><b>Rumo a líder de praça</b><span>critérios publicados no Playbook, os mesmos para todo mundo</span></div><b class="num">' + C.n + ' de 4</b></div>'
@@ -64018,16 +64025,16 @@ GV2.render.ldGav = function () {
   if (!pad) return '';
   const sem = GV2.rpPessoas().filter(function (x) { return !x.padrinho && x.pessoa !== pad.pessoa; });
   const erro = GV2.estado.ldErro ? '<p class="gv2-rp-erro" role="alert">' + GV2.e(GV2.estado.ldErro) + '</p>' : '';
-  const corpo = !GV2.rp.d ? '<p class="gv2-g0-sub">lendo a Rampa…</p>'
-    : sem.length ? '<div class="gv2-rp-box"><small class="gv2-rp-kick">Na Rampa sem padrinho</small>' + sem.map(function (x) {
+  const corpo = !GV2.rp.d ? '<p class="gv2-g0-sub">lendo os novatos…</p>'
+    : sem.length ? '<div class="gv2-rp-box"><small class="gv2-rp-kick">Novatos sem padrinho</small>' + sem.map(function (x) {
       return '<div class="gv2-rp-pede"><div><b>' + GV2.e(x.nome) + '</b><small>' + GV2.e('turma ' + GV2.ddmm(x.turma) + ' · dia ' + Math.max(1, x.dia)) + '</small></div>'
         + '<button type="button" class="gv2-v5-btn" data-gv2="ld:padrinho:' + pad.pessoa + ':' + x.pessoa + '">' + GV2.e('Indicar ' + GV2.prim(pad.nome)) + '</button></div>';
     }).join('') + '</div>'
-      : '<div class="gv2-cb-sug">Ninguém na Rampa está sem padrinho. Ao colocar a próxima turma na Rampa, escolha o padrinho no mesmo formulário.</div>';
+      : '<div class="gv2-cb-sug">Todo novato tem padrinho.</div>';
   return '<div class="gv2-rxg-veu gv2-rp-veu" data-gv2="ld:fechar"></div><aside class="gv2-rxg gv2-rp-gav" role="dialog" aria-label="Indicar padrinho">'
     + '<header class="gv2-rxg-cab"><div><small class="gv2-rp-kick">Pessoas · próximo líder</small><b>Indicar padrinho</b><span>' + GV2.e(GV2.prim(pad.nome) + ' · cumpre ' + GV2.ldCriterios(pad).n + ' de 4') + '</span></div><button type="button" class="gv2-rxg-x" data-gv2="ld:fechar" aria-label="Fechar">×</button></header>'
     + '<div class="gv2-rxg-corpo">' + corpo + erro + '</div>'
-    + '<footer class="gv2-rp-gpe"><button type="button" class="gv2-v5-btn" data-gv2="ld:fechar">Fechar</button><button type="button" class="gv2-v5-btn" data-gv2="ld:rampa">Abrir a Rampa</button></footer></aside>';
+    + '<footer class="gv2-rp-gpe"><button type="button" class="gv2-v5-btn" data-gv2="ld:fechar">Fechar</button></footer></aside>';
 };
 GV2.ldIndicar = async function (padrinho, afilhado) {
   const pad = GV2.ldPessoas().find(function (x) { return x.pessoa === padrinho; });
@@ -64050,7 +64057,6 @@ GV2.ldComando = function (cmd, parte) {
   if (a === 'indicar') { GV2.estado.ldGav = { padrinho: parte[2] }; GV2.estado.ldErro = null; GV2.rpLer(false); GV2.pintar(); return true; }
   if (a === 'padrinho') { GV2.ldIndicar(parte[2], parte[3]); return true; }
   if (a === 'fechar') { GV2.estado.ldGav = null; GV2.estado.ldErro = null; GV2.pintar(); return true; }
-  if (a === 'rampa') { GV2.estado.ldGav = null; GV2.estado.ldErro = null; GV2.ir('rampa'); return true; }
   return false;
 };
 (function () {
@@ -64837,7 +64843,6 @@ GV2.ABAS = [
   ['terr', 'Território', 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 16a4 4 0 100-8 4 4 0 000 8zM12 12h.01'],
   ['pessoas', 'Pessoas', 'M9 11a4 4 0 100-8 4 4 0 000 8zM2 21a7 7 0 0114 0M17 11a3 3 0 100-6M22 21a6 6 0 00-5-6'],
 
-  ['rampa', 'Rampa', 'M4 20h4v-4h4v-4h4V8h4V4', 'novo'],
   ['propostas', 'Propostas', 'M6 3h9l5 5v13H6zM14 3v6h6M9 13h6M9 17h4'],
   ['playbook', 'Playbook', 'M2 5h6a4 4 0 014 4v12a3 3 0 00-3-3H2zM22 5h-6a4 4 0 00-4 4v12a3 3 0 013-3h7z']
 ];
