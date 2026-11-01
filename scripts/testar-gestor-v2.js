@@ -1993,6 +1993,26 @@ tabelas.gv2_falta_etapa = [
     checar('auditoria · a semana de propostas soma quem entrou em Negociação desde a segunda, mesmo no mês anterior', /entrouNegociacaoEm[\s\S]{0,120}>= seg && doTime\(n\.dono\)\) marcaSem/.test(codigo));
   }
 
+  /* ── O LAÇO QUE CONGELAVA A HOJE DO EXECUTIVO (01/11/26): pedir uma semana que outra parte da tela
+     já está lendo devolvia uma promessa resolvida na hora; a Hoje repintava e pedia de novo, num laço
+     de microtarefas sem fim. Quem chega no meio tem que esperar a MESMA leitura. ── */
+  await (async function () {
+    const cacheEra = GV2.rota.cache, promEra = GV2.rota.prom, agoraEra = GV2.rotaLerAgora;
+    let leituras = 0, soltar;
+    GV2.rota.cache = {}; GV2.rota.prom = {};
+    GV2.rotaLerAgora = function (seg) { leituras++; GV2.rota.cache[seg] = { estado: 'lendo' }; return new Promise(function (r) { soltar = function () { GV2.rota.cache[seg] = { estado: 'ok', itens: [], visitas: [] }; r(); }; }); };
+    const p1 = GV2.rotaLer('2026-11-02');
+    const p2 = GV2.rotaLer('2026-11-02');
+    let p2Voltou = false;
+    p2.then(function () { p2Voltou = true; });
+    await new Promise(function (r) { setTimeout(r, 0); });
+    checar('rota · quem pede a semana que já está sendo lida espera a mesma leitura (não volta na hora)', leituras === 1 && !p2Voltou, JSON.stringify({ leituras: leituras, p2Voltou: p2Voltou }));
+    soltar(); await p1; await p2;
+    checar('rota · quando a leitura chega, os dois recebem a semana pronta', GV2.rota.cache['2026-11-02'].estado === 'ok' && !GV2.rota.prom['2026-11-02']);
+    checar('rota · a Hoje do executivo repinta numa tarefa nova se a semana ainda não chegou (nunca em cadeia de microtarefas)', /if \(!ainda \|\| ainda\.estado === 'lendo'\) \{ setTimeout\(EXH\.pintar, 400\); return; \}/.test(codigo));
+    GV2.rota.cache = cacheEra; GV2.rota.prom = promEra; GV2.rotaLerAgora = agoraEra;
+  })();
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
