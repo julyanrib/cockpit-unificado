@@ -1870,6 +1870,46 @@ tabelas.gv2_falta_etapa = [
     GV2.estado.ldGav = null; GV2.estado.ldErro = null;
   }
 
+  /* ── O CLIENTE QUE FICA (handoff "Acelerar Field Sales v2", 6a · 01/11/26): quem vendeu e quem ficou,
+     cruzado pelo CNPJ; ativo = pagando há até 35 dias; uso real = comanda em 20 de 30 dias; comissão
+     em duas partes desligada pela chave. ── */
+  {
+    const cfEra = Object.assign({}, GV2.cf), dataEra = global.DATA.clienteQueFica, cfLerEra = GV2.cfLer;
+    const ven = function (id, owner, cnpj, fechou) { return { id: id, nome: 'Venda ' + id, ownerId: owner, fechou: fechou || '2026-08-10', cnpj: cnpj, mrr: 300 }; };
+    global.DATA.clienteQueFica = { de: '2026-05-05', ate: '2026-09-02', dias: 60, lidoEm: '2026-11-01T10:00:00Z', vendas: [
+      ven('a1', '1', '111'), ven('a2', '1', '112'), ven('a3', '1', '113'), ven('a4', '1', '114'),
+      ven('b1', '2', '211'), ven('b2', '2', '212'), ven('b3', '2', null),
+      ven('x1', '999', '911') ] };
+    const cs = function (id, sit, cob, dias, etapa) { return { id: id, achou: true, situacao: sit, etapa: etapa || 'Saudável', ultimaCobranca: cob, diasComanda: dias }; };
+    GV2.cf.d = { hoje: '2026-11-01', fotoDesde: '2026-09-27', lidoEm: '2026-11-01T10:05:00Z', vendas: [
+      cs('a1', 'ativo', '2026-10-20', 25), cs('a2', 'ativo', '2026-10-28', 22), cs('a3', 'em_risco', '2026-10-10', 21), cs('a4', 'ativo', '2026-10-15', 9),
+      cs('b1', 'ex', '2026-08-13', 0, 'Churn'), cs('b2', 'ativo', '2026-08-31', 26), { id: 'b3', achou: false },
+      cs('x1', 'ativo', '2026-10-30', 30)] };
+    GV2.cf.em = Date.now(); GV2.cf.lendo = false; GV2.cf.erro = null;
+    GV2.cf.chave = global.DATA.clienteQueFica.lidoEm + ':' + global.DATA.clienteQueFica.vendas.length;
+    GV2.cfLer = function () {};
+    const L = GV2.cfLinhas(), por = {};
+    L.forEach(function (l) { por[l.v.id] = l; });
+    checar('cliente que fica · ativo = na carteira e cobrança há até 35 dias; uso real = comanda em 20 de 30',
+      por.a1.ativo && por.a1.uso && por.a3.uso && por.a4.ativo && !por.a4.uso && !por.b1.ativo && !por.b2.ativo && !por.b3.achou && !por.b3.ativo, JSON.stringify(L.map(function (l) { return [l.v.id, l.ativo, l.uso]; })));
+    const G = GV2.cfGrupos(L);
+    checar('cliente que fica · por executivo, com quem saiu do time numa linha só no fim',
+      G.length === 3 && G[0].o === '1' && G[0].n === 4 && G[0].ativos === 4 && G[0].uso === 3 && G[0].pct === 75 && G[1].o === '2' && G[1].pct === 0 && G[2].nome === 'Quem saiu do time' && G[2].pct === 100, JSON.stringify(G.map(function (g) { return [g.o, g.n, g.ativos, g.uso, g.pct]; })));
+    checar('cliente que fica · o sinal: 75% fica, 50 a 74% atenção, abaixo de 50% não fica',
+      GV2.cfSinal(75).t === 'fica' && GV2.cfSinal(74).t === 'atenção' && GV2.cfSinal(50).k === 'av' && GV2.cfSinal(49).t === 'não fica');
+    GV2.estado.cfAberto = '2';
+    const h = GV2.render.cfTime();
+    checar('cliente que fica · 6a: o cartão com a janela de vendas, o total do time, as vendas de cada um ao tocar e a regra escrita',
+      /O cliente que fica · vendas de 05\/05 a 02\/09/.test(h) && /time: 8 vendidos, 4 com uso real hoje \(50%\)/.test(h) && /data-gv2="cf:abrir:2" aria-expanded="true"/.test(h)
+        && /saiu · Churn/.test(h) && /última cobrança 31\/08/.test(h) && /venda sem CNPJ no HubSpot/.test(h) && /1 venda não foi achada no CS pelo CNPJ/.test(h) && /comanda em pelo menos 20 dos últimos 30 dias/.test(h), h.slice(0, 400));
+    checar('cliente que fica · a comissão em duas partes fica desligada, sem valor nenhum',
+      GV2.CF.COMISSAO_DUAS_PARTES === false && /Aguarda a diretoria/.test(h) && /Só aparece quando a diretoria aprovar a regra\. Até lá, sem valores\./.test(h) && /disabled aria-disabled="true">Desligado/.test(h) && !/R\$/.test(GV2.render.cfComissao()));
+    global.DATA.clienteQueFica = null;
+    checar('cliente que fica · sem as vendas do robô, o cartão não aparece', GV2.render.cfTime() === '');
+    checar('cliente que fica · nenhuma escrita no HubSpot nem no ASAAS no módulo', !/hubapi|asaas\.com|tarefaNoNegocio|cobrarNegocio\(|\.insert\(|\.update\(|\.upsert\(/.test(codigo.slice(codigo.indexOf('GV2.CF = {'), codigo.indexOf('GV2.cfComando = function'))));
+    global.DATA.clienteQueFica = dataEra; GV2.cfLer = cfLerEra; Object.assign(GV2.cf, cfEra); GV2.estado.cfAberto = null;
+  }
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));
