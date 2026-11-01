@@ -62745,7 +62745,8 @@ GV2.CB = {
   versao: '2026-10-31',
   itens: [
     { n: 1, t: 'A porta é provada', s: 'check-in com GPS ou foto', fonte: 'visitas com prova' },
-    { n: 2, t: 'Próximo passo e data', s: 'toda visita termina com um', fonte: 'fichas_de_rua' },
+
+    { n: 2, t: 'Próximo passo e data', s: 'a data marcada é cumprida', fonte: 'fichas + app + HubSpot' },
     { n: 3, t: 'Ficha na hora', s: 'até 15 min depois do check-in', fonte: 'fichas_de_rua' },
     { n: 4, t: 'Visita com o dono', s: 'se não estava, volta marcada', fonte: 'fichas_de_rua' },
     { n: 5, t: 'Registro verdadeiro', s: 'sem divergência na auditoria', fonte: 'auditoria das visitas' },
@@ -62797,9 +62798,14 @@ GV2.cbMedir = function (x) {
   const A = Number(f.donoAusente) || 0, B = Number(f.voltaMarcada) || 0;
   const div = v.divergencias || [];
   const R = GV2.cbRituais(x);
+
+  const ps = x.passos || null, J = ps ? Number(ps.julgados) || 0 : 0, sc = ps ? Number(ps.semComoSaber) || 0 : 0;
+  const passo = !ps ? porta('comPasso', 'com próximo passo e data')
+    : !J ? { val: '—', como: sc ? GV2.pl(sc, 'passo', 'passos') + ' sem como saber pelo HubSpot' : 'nenhum passo venceu ainda na semana', pct: null }
+    : { val: GV2.cbPct(Number(ps.cumpridos) || 0, J) + '%', como: (Number(ps.cumpridos) || 0) + ' de ' + GV2.pl(J, 'passo cumprido', 'passos cumpridos') + ' até o dia seguinte' + (sc ? ' · ' + sc + ' sem como saber' : ''), pct: GV2.cbPct(Number(ps.cumpridos) || 0, J) };
   const out = [
     porta('provadas', 'visitas com prova'),
-    porta('comPasso', 'com próximo passo e data'),
+    passo,
     porta('naHora', 'fichas em até ' + GV2.CB.FICHA_NA_HORA_MIN + ' min'),
     !V && !A ? { val: '—', como: 'sem fichas na semana', pct: null }
       : !A ? { val: '100%', como: 'dono em todas as portas', pct: 100 }
@@ -63464,11 +63470,13 @@ GV2.RC = {
   PREVISAO_MIN_DEMOS: 5,
 
   DESTAQUE_MIN_VISITAS: 10,
+
+  DESTAQUE_MIN_PASSOS: 5,
   DESTAQUE_MIN_AUSENTE: 3,
   DESTAQUE_MIN_RITUAIS: 3,
   taxas: [
     { k: 'provada', t: 'A porta é provada', como: 'visitas com prova ÷ visitas', n: 'p', d: 'v' },
-    { k: 'passo', t: 'Próximo passo e data', como: 'visitas com próximo passo ÷ visitas', n: 'cp', d: 'v' },
+    { k: 'passo', t: 'Próximo passo e data', como: 'passos cumpridos até o dia seguinte ÷ passos que venceram', n: 'pc', d: 'pv' },
     { k: 'naHora', t: 'Ficha na hora', como: 'fichas em até 15 min ÷ visitas', n: 'nh', d: 'v' },
     { k: 'dono', t: 'Sair com o dono', como: 'conversa com o dono ÷ fichas', n: 'o', d: 'f' },
     { k: 'demo', t: 'Virar demo', como: 'demos ÷ visitas com prova', n: 'm', d: 'p' },
@@ -63498,12 +63506,11 @@ GV2.rcLer = function (forcar) {
 };
 GV2.rcHoje = function () { return (GV2.rc.d && GV2.rc.d.hoje) || GV2.base.agora.iso; };
 GV2.rcTaxaDef = function (k) { return GV2.RC.taxas.find(function (t) { return t.k === k; }) || GV2.RC.taxas[0]; };
-GV2.rcUteis = function (de, ate) { let n = 0, d = de; while (d <= ate) { const w = GV2.dow(d); if (w > 0 && w < 6) n++; d = GV2.somaDias(d, 1); } return n; };
+GV2.rcUteis = function (de, ate) { let n = 0, d = de; while (d <= ate) { if (GV2.util(d)) n++; d = GV2.somaDias(d, 1); } return n; };
 
 GV2.rcPracas = function (lista) {
   const out = {};
   (lista || []).forEach(function (x) {
-    if (x.emRampa) return;
     const p = GV2.base.porId[String(x.ownerId)];
     if (!p) return;
     const pr = String(p.praca || '').trim();
@@ -63513,7 +63520,7 @@ GV2.rcPracas = function (lista) {
   return Object.keys(out).sort().map(function (k) { return { praca: k, ps: out[k] }; });
 };
 GV2.rcSoma = function (ps, de, ate) {
-  const s = { v: 0, p: 0, cp: 0, nh: 0, f: 0, o: 0, m: 0 };
+  const s = { v: 0, p: 0, cp: 0, nh: 0, f: 0, o: 0, m: 0, pv: 0, pc: 0 };
   ps.forEach(function (x) { (x.dias || []).forEach(function (y) { if (y.d >= de && y.d <= ate) Object.keys(s).forEach(function (k) { s[k] += Number(y[k]) || 0; }); }); });
   return s;
 };
@@ -63665,8 +63672,11 @@ GV2.rcDestaques = function (C) {
   };
   const out = [];
   [0, 1, 2].forEach(function (i) {
-    const b = melhor(M.filter(function (y) { return (Number(y.x.visitas && y.x.visitas.visitas) || 0) >= GV2.RC.DESTAQUE_MIN_VISITAS; }), function (y) { return y.m[i].pct; });
-    out.push(b ? { n: i + 1, quem: GV2.rcNomes(b.quem.map(function (y) { return y.x; })), s: b.quem.length === 1 ? b.quem[0].m[i].como : b.max + '% das visitas' } : null);
+    const base = i === 1
+      ? function (y) { return y.x.passos ? (Number(y.x.passos.julgados) || 0) >= GV2.RC.DESTAQUE_MIN_PASSOS : (Number(y.x.visitas && y.x.visitas.visitas) || 0) >= GV2.RC.DESTAQUE_MIN_VISITAS; }
+      : function (y) { return (Number(y.x.visitas && y.x.visitas.visitas) || 0) >= GV2.RC.DESTAQUE_MIN_VISITAS; };
+    const b = melhor(M.filter(base), function (y) { return y.m[i].pct; });
+    out.push(b ? { n: i + 1, quem: GV2.rcNomes(b.quem.map(function (y) { return y.x; })), s: b.quem.length === 1 ? b.quem[0].m[i].como : b.max + (i === 1 ? '% dos passos cumpridos' : '% das visitas') } : null);
   });
   const b4 = melhor(M.filter(function (y) { return (Number(y.x.fichas && y.x.fichas.donoAusente) || 0) >= GV2.RC.DESTAQUE_MIN_AUSENTE; }), function (y) { return y.m[3].pct; });
   out.push(b4 ? { n: 4, quem: GV2.rcNomes(b4.quem.map(function (y) { return y.x; })), s: b4.max + '% das ausências com volta marcada' } : null);
