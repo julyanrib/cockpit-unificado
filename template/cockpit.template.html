@@ -84984,14 +84984,17 @@ GV2.cfLinhas = function () {
 };
 GV2.cfSinal = function (pct) { return pct == null ? { k: '', t: 'sem venda' } : pct >= GV2.CF.verde ? { k: 'ok', t: 'fica' } : pct >= GV2.CF.ambar ? { k: 'av', t: 'atenção' } : { k: 'erro', t: 'não fica' }; };
 GV2.cfGrupos = function (L) {
-  const g = {}, fora = [];
+  const g = {}, fora = [], meu = [];
+  /* a venda do gestor não é de quem saiu: linha própria (o dono logado) */
+  const eu = typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.ownerId ? String(sessaoAtual.ownerId) : null;
   L.forEach(function (l) {
     const o = l.v.ownerId && GV2.base.porId[String(l.v.ownerId)] ? String(l.v.ownerId) : null;
-    if (o) (g[o] = g[o] || []).push(l); else fora.push(l);
+    if (o) (g[o] = g[o] || []).push(l); else if (eu && String(l.v.ownerId) === eu) meu.push(l); else fora.push(l);
   });
   const conta = function (ls) { const n = ls.length, a = ls.filter(function (l) { return l.ativo; }).length, u = ls.filter(function (l) { return l.uso; }).length; return { n: n, ativos: a, uso: u, pct: n ? Math.round(u / n * 100) : null, ls: ls }; };
   const out = Object.keys(g).map(function (o) { return Object.assign({ o: o, nome: GV2.nomeDe(o) }, conta(g[o])); })
     .sort(function (a, b) { return (b.pct == null ? -1 : b.pct) - (a.pct == null ? -1 : a.pct) || b.n - a.n; });
+  if (meu.length) out.push(Object.assign({ o: 'eu', nome: 'Você (gestor)' }, conta(meu)));
   if (fora.length) out.push(Object.assign({ o: 'fora', nome: 'Quem saiu do time' }, conta(fora)));
   return out;
 };
@@ -85023,7 +85026,7 @@ GV2.render.cfTime = function () {
         return '<div class="gv2-rp-pede"><div><b>' + GV2.e(l.v.nome) + '</b><small>' + GV2.e('vendeu ' + GV2.ddmm(l.v.fechou || '') + (g.o === 'fora' ? ' · ' + GV2.nomeDe(l.v.ownerId) : '')) + '</small></div><span class="gv2-rp-chip' + (e.k ? ' is-' + e.k : '') + '">' + GV2.e(e.t) + '</span></div>';
       }).join('') + '</div>' : '';
       return '<button type="button" class="gv2-cf-gl' + (s.k === 'erro' ? ' is-erro' : '') + (ab ? ' is-aberto' : '') + '" data-gv2="cf:abrir:' + GV2.e(g.o) + '" aria-expanded="' + ab + '">'
-        + '<b class="gv2-cb-nome">' + GV2.e(g.o === 'fora' ? g.nome : GV2.prim(g.nome)) + '</b><b class="num">' + g.n + '</b><b class="num t-dim">' + g.ativos + '</b><b class="num">' + g.uso + '</b>'
+        + '<b class="gv2-cb-nome">' + GV2.e(g.o === 'fora' || g.o === 'eu' ? g.nome : GV2.prim(g.nome)) + '</b><b class="num">' + g.n + '</b><b class="num t-dim">' + g.ativos + '</b><b class="num">' + g.uso + '</b>'
         + '<b class="num' + (s.k ? ' t-' + s.k : '') + '">' + (g.pct == null ? '—' : g.pct + '%') + '</b><span><span class="gv2-rp-chip' + (s.k ? ' is-' + s.k : '') + '">' + GV2.e(s.t) + '</span></span></button>' + det;
     }).join('');
     tab = '<section class="card gv2-cb gv2-cb-time">' + cab('time: ' + GV2.pl(n, 'vendido', 'vendidos') + ', ' + u + ' com uso real hoje' + (n ? ' (' + Math.round(u / n * 100) + '%)' : '') + ' · toque numa linha para ver as vendas')
