@@ -692,7 +692,8 @@ tabelas.gv2_falta_etapa = [
     const nav = GV2.navHTML();
     const rots = (nav.match(/<span class="gv2-nav-rot">[^<]+</g) || []).map(function (x) { return x.replace('<span class="gv2-nav-rot">', '').replace('<', ''); });
     /* 31/10/26: a Rampa entra logo abaixo de Pessoas (handoff "Acelerar Field Sales v2", 1a); o resto do menu não muda */
-    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Rampa · Propostas · Playbook (sem Raio X nem Prospecção)', rots.slice(0, 8).join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Rampa · Propostas · Playbook' && rots.slice(8).join(' · ') === 'Prova dos números · Acessos · Ver como executivo' && nav.indexOf('>Do diretor<') > 0, rots.join(' · '));
+    /* a Rampa saiu do menu (Julyan, 01/11/26) */
+    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X, Prospecção nem Rampa)', rots.slice(0, 7).join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook' && rots.slice(7).join(' · ') === 'Prova dos números · Acessos · Ver como executivo' && nav.indexOf('>Do diretor<') > 0, rots.join(' · '));
     checar('rolagem: corpo v5 e gaveta não deixam o cartão encolher (Por pessoa e "Para puxar" sumiam, 09/10/26)',
       tpl.indexOf('.gv2-corpo.gv2-v5 > *{flex-shrink:0;}') > 0 && tpl.indexOf('.gv2-rxg-corpo > *{flex-shrink:0;}') > 0);
     checar('mapa em tela cheia: todo mapa v5 ganha o botão e o mapa da Pessoa · dia reenquadra quando a caixa muda (09/10/26)',
@@ -1857,7 +1858,7 @@ tabelas.gv2_falta_etapa = [
     const pag = GV2.render.ldPessoa(GV2.base.porId['1']);
     checar('líder · 5a: "Padrinho de" com os afilhados e "Rumo a líder de praça" com 3 de 4 e o chip de cada critério',
       /Padrinho de/.test(pag) && /Igor Santana/.test(pag) && /is-ok">formado/.test(pag) && /is-av">aprovação atrasada/.test(pag)
-        && /Rumo a líder de praça/.test(pag) && />3 de 4</.test(pag) && /falta 1 mês/.test(pag) && /data-gv2="aba:rampa">Abrir a Rampa/.test(pag), pag.slice(0, 300));
+        && /Rumo a líder de praça/.test(pag) && />3 de 4</.test(pag) && /falta 1 mês/.test(pag) && !/aba:rampa/.test(pag) /* a aba Rampa saiu (01/11/26) */, pag.slice(0, 300));
     checar('líder · quem está em rampa não tem os cartões', GV2.render.ldPessoa({ id: '9' }) === '' || !/Leo/.test(GV2.render.ldPessoa({ id: '9' })));
     const tab = GV2.render.ldTime();
     checar('líder · 5b: a tabela dos plenos (a rampa fora), "time 38%", e o padrinho natural: quem cumpre mais e não tem afilhado em curso',
@@ -2050,6 +2051,13 @@ tabelas.gv2_falta_etapa = [
     checar('rua da semana · feriado aparece como feriado e fica fora da meta', /return '<span class="gv2-sem-cel is-sem">feriado<\/span>'/.test(codigo) && /p\.meta_visitas_dia \* dias\.filter\(function \(d\) \{ return GV2\.util\(d\.iso\); \}\)\.length/.test(codigo));
     checar('time · a legenda das metas sai do ranking, não do "8 e 2" escrito à mão', /metaPorPat/.test(tpl) && !/2 para quem está em rampa/.test(tpl));
     checar('rua da semana do gestor · semana fechada diz "ficaram faltando"', /\(aberta \? 'faltam ' : 'ficaram faltando '\) \+ \(meta - feito - falta\)/.test(codigo) && /const aberta = b\.semana\.some\(function \(d\) \{ return GV2\.util\(d\.iso\) && d\.iso >= b\.agora\.iso; \}\);/.test(codigo));
+    {
+      const m = tpl.match(/function repsSemMetaInventada\(\) \{[\s\S]*?\n\}/);
+      const sb = { DATA: { reps: [{ name: 'Gestor', metaMensal: 10, patamarMeta: null, metaMrr: null, metaReceita: null }, { name: 'Pleno', metaMensal: 8, patamarMeta: 'pleno', metaMrr: 3000, metaReceita: 9000 }, { name: 'Fora', metaMensal: 0, patamarMeta: 'sem meta', metaMrr: 0, metaReceita: 0 }] } };
+      if (m) require('vm').runInNewContext(m[0] + '; repsSemMetaInventada();', sb);
+      checar('dados do servidor · a linha sem patamar nem meta de dinheiro vira "sem meta", as outras ficam como vieram', !!m && sb.DATA.reps[0].metaMensal === 0 && sb.DATA.reps[0].patamarMeta === 'sem meta' && sb.DATA.reps[1].metaMensal === 8 && sb.DATA.reps[2].metaMensal === 0, JSON.stringify(sb.DATA.reps));
+      checar('dados do servidor · a correção roda no login e no farol', (tpl.match(/Object\.assign\(DATA, (corpo\.dados|dados)\);\n\s*if \(typeof repsSemMetaInventada === 'function'\) repsSemMetaInventada\(\);/g) || []).length === 2);
+    }
     checar('ver como executivo · quem está fora do time fica sem meta, não com 10', tpl.indexOf("fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta'") > -1 && tpl.indexOf('fechadosNoMes: 0, metaMensal: 10,') < 0);
   }
 
