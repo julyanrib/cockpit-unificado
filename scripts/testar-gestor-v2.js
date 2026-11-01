@@ -1895,6 +1895,11 @@ tabelas.gv2_falta_etapa = [
     const G = GV2.cfGrupos(L);
     checar('cliente que fica · por executivo, com quem saiu do time numa linha só no fim',
       G.length === 3 && G[0].o === '1' && G[0].n === 4 && G[0].ativos === 4 && G[0].uso === 3 && G[0].pct === 75 && G[1].o === '2' && G[1].pct === 0 && G[2].nome === 'Quem saiu do time' && G[2].pct === 100, JSON.stringify(G.map(function (g) { return [g.o, g.n, g.ativos, g.uso, g.pct]; })));
+    const sessEra = global.sessaoAtual;
+    global.sessaoAtual = Object.assign({}, sessEra || {}, { ownerId: '999' });
+    const G2 = GV2.cfGrupos(L);
+    global.sessaoAtual = sessEra;
+    checar('cliente que fica · a venda do gestor logado tem linha própria, não vai para quem saiu', G2[2].o === 'eu' && G2[2].nome === 'Você (gestor)' && G2.length === 3, JSON.stringify(G2.map(function (g) { return g.o; })));
     checar('cliente que fica · o sinal: 75% fica, 50 a 74% atenção, abaixo de 50% não fica',
       GV2.cfSinal(75).t === 'fica' && GV2.cfSinal(74).t === 'atenção' && GV2.cfSinal(50).k === 'av' && GV2.cfSinal(49).t === 'não fica');
     GV2.estado.cfAberto = '2';
