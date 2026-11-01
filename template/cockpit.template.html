@@ -15075,6 +15075,11 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pv3-c{position:relative;display:flex;flex-direction:column;gap:3px;padding:7px 8px;border-radius:10px;border:1px solid var(--gv2-line);background:var(--gv2-card);transition:background .45s,border-color .45s,box-shadow .45s,opacity .45s;}
 .pv3-c.is-tracejado{border-style:dashed;}
 .pv3-c.is-abre{cursor:pointer;}
+.pv3-c-x{position:absolute;top:0;right:0;width:40px;height:40px;border:0;border-radius:10px;background:transparent;color:var(--gv2-faint);font:600 15px/1 var(--gv2-font);}
+.pv3-c-x:hover{color:var(--gv2-ink);background:var(--gv2-hov);}
+.pv3-c .pv3-c-l1{padding-right:22px;}
+.pv3-busca{padding:0 12px 8px;flex:none;}
+.pv3-busca input{width:100%;min-height:40px;padding:0 10px;border-radius:10px;border:1px solid var(--gv2-line-btn);background:var(--gv2-card);color:var(--gv2-ink);font:500 12.5px var(--gv2-font);}
 .pv3-c.is-abre:hover{border-color:var(--gv2-line-btn);}
 .pv3-c.is-proposta{border:1.5px dashed var(--gv2-rota);background:transparent;}
 .pv3-c.is-ficou{opacity:.6;}
@@ -90925,7 +90930,7 @@ PLV3.st = {
   filtro: 'sem', maisAberto: false, menu: null, canal: 'ligar', cadAberta: false, prop: null, filaMin: false,
   feitos: {}, sumidos: {}, linhas: {}, bOpen: null, mantidos: {}, comoAberto: null, reporDe: null, endAberto: null, endTexto: {},
   foco: null, arrastando: null, sobre: null, espera: [], flash: {}, fantasmas: {}, salvo: null, n0: null, tirados: {}, reposto: {},
-  ocupado: false, bAuto: {}
+  ocupado: false, bAuto: {}, q: ''
 };
 PLV3.rep = null;
 PLV3.box = null;
@@ -91045,6 +91050,13 @@ PLV3.dados = function (rep) {
   const alvos = todos.filter(function (l) { return l.tipo === 'n' && !naGrade[l.id]; })
     .sort(function (x, y) { return pl6Prioridade(y) - pl6Prioridade(x); })
     .map(function (l) { return { ref: l.id, nome: l.nome, etapaIdx: 0, dias: null, quente: false, alvo: true, bairro: l.regiao, bairroNome: l.regiaoNome || nomeB(l.regiao), semEnd: !!l.semEndereco, cnpj: PL7.diasCnpj(l) }; });
+  /* os propósitos da v2 que não são "sem próximo passo" continuam alcançáveis no "mais" da fila: cobrar (Ag. Pagamento)
+     e relacionamento (a base e os clientes em queda). Linhas de negócio de verdade: Pôr num dia, Ligar em e Decidir valem */
+  const deNegocio = function (l, marca) { return Object.assign({ ref: l.id, dealId: l.dealId, nome: l.nome, etapaIdx: PLV3.idxDoLead(l), dias: l.dias, quente: false,
+    bairro: l.regiao, bairroNome: l.regiaoNome || nomeB(l.regiao), semEnd: !!l.semEndereco }, marca); };
+  const cobrar = todos.filter(function (l) { return l.tipo === 'c' && String(l.stageId) === String(PL7.AG_PGTO) && !naGradeFutura[l.id]; }).map(function (l) { return deNegocio(l, { cobrar: true }); });
+  const relac = todos.filter(function (l) { return (l.base || l.emQueda) && !naGradeFutura[l.id]; }).map(function (l) { return deNegocio(l, { relac: true, queda: !!l.emQueda }); });
+  cobrar.concat(relac).forEach(function (r) { if (!st.linhas[r.ref] || !st.linhas[r.ref].n) st.linhas[r.ref] = r; });
   const recicl = todos.filter(function (l) { return l.reciclagem && !naGradeFutura[l.id]; })
     .map(function (l) { return { ref: l.id, dealId: l.dealId, nome: l.nome, etapaIdx: 0, dias: l.dias, quente: false, recicl: true, bairro: l.regiao, bairroNome: l.regiaoNome || nomeB(l.regiao), semEnd: !!l.semEndereco }; });
 
@@ -91093,7 +91105,7 @@ PLV3.dados = function (rep) {
   const virou = pl6SegundaDaSemana() !== GV2.segundaDe(hojeIso);
   return { rep: rep, segunda: segunda, hojeIso: hojeIso, agoraMin: agoraMin, antesDas10: antesDas10, dias: dias, regioes: regioes, nomeB: nomeB,
     todos: todos, porId: porId, cartoes: cartoes, temBase: temBase, baseErro: DV && DV.estado ? DV.estado.erro : null, p: p, b: b,
-    semL: semL, semPendentes: semPendentes, contador: contador, alvos: alvos, recicl: recicl,
+    semL: semL, semPendentes: semPendentes, contador: contador, alvos: alvos, recicl: recicl, cobrar: cobrar, relac: relac,
     meta: meta, metaFase: metaFase, media: media, mediaBase: mediaBase, metaSem: metaSem,
     bSel: bSel, bDia: bDia, bRota: bRota, contPlan: contPlan, cont: cont, sug: sug, topo: topo, ramp: ramp, virou: virou };
 };
@@ -91152,8 +91164,21 @@ PLV3.chipsCadenciaHTML = function (D) {
 };
 
 /* ── a fila ── */
+PLV3.MAIS = ['venc', 'cnpj', 'recicl', 'cobrar', 'relac'];
 PLV3.linhasDoFiltro = function (D) {
   const f = PLV3.st.filtro;
+  D.recicl.forEach(function (r) { if (!PLV3.st.linhas[r.ref]) PLV3.st.linhas[r.ref] = r; });
+  /* achar pelo nome procura em TODAS as listas (a lição da v2: o recorte da tela não pode recortar a procura) */
+  const q = PLV3.chave(PLV3.st.q);
+  if (q) {
+    const vistos = {};
+    return D.semL.concat(D.cobrar, D.relac, D.recicl, D.alvos).filter(function (l) {
+      if (vistos[l.ref] || PLV3.chave(l.nome).indexOf(q) < 0 && PLV3.chave(l.bairroNome).indexOf(q) < 0) return false;
+      vistos[l.ref] = 1; return true;
+    });
+  }
+  if (f === 'cobrar') return D.cobrar;
+  if (f === 'relac') return D.relac;
   if (f === 'alvo') return D.alvos;
   if (f === 'cnpj') return D.alvos.filter(function (a) { return a.cnpj != null && a.cnpj <= 90; });
   if (f === 'recicl') return D.recicl;
@@ -91161,6 +91186,7 @@ PLV3.linhasDoFiltro = function (D) {
   if (f === 'venc') return D.semL.filter(function (l) { return l.venc || l.ficou; });
   return D.semL;
 };
+PLV3.chave = function (t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };
 PLV3.blocoFilaHTML = function (D) {
   const st = PLV3.st, e = GV2.e;
   if (st.filaMin) {
@@ -91168,14 +91194,16 @@ PLV3.blocoFilaHTML = function (D) {
     return '<aside class="pv3-fila"><div class="pv3-trilho"><button type="button" class="pv3-recolher" data-pv3-acao="fila" aria-label="abrir a fila">›</button><b class="' + (n ? '' : 'is-ok') + '">' + (n == null ? '—' : n) + '</b></div></aside>';
   }
   if (st.prop) return PLV3.revisaoHTML(D);
-  const tit = { alvo: 'Contas-alvo', quentes: 'Quentes sem próximo passo', cnpj: 'CNPJ novo · 90 d', recicl: 'Reciclagem', venc: 'Follow-up vencido' }[st.filtro] || 'Sem próximo passo';
+  const tit = st.q ? 'Procurando "' + st.q + '"' : ({ alvo: 'Contas-alvo', quentes: 'Quentes sem próximo passo', cnpj: 'CNPJ novo · 90 d', recicl: 'Reciclagem', venc: 'Follow-up vencido', cobrar: 'Ag. Pagamento · cobrar', relac: 'Relacionamento · clientes' }[st.filtro] || 'Sem próximo passo');
   const F = function (k, rot, n) { const on = st.filtro === k; return '<button type="button" class="pv3-f' + (on ? ' is-on' : '') + '" data-pv3-acao="filtro:' + k + '" aria-pressed="' + on + '">' + e(rot) + (n === '' ? '' : ' <b>' + n + '</b>') + '</button>'; };
-  const maisOn = ['venc', 'cnpj', 'recicl'].indexOf(st.filtro) >= 0;
+  const maisOn = PLV3.MAIS.indexOf(st.filtro) >= 0;
   const filtros = '<div class="pv3-filtros">' + F('sem', 'Sem passo', D.semPendentes.length) + F('quentes', 'Quentes', D.semPendentes.filter(function (l) { return l.quente; }).length)
     + F('alvo', 'Contas-alvo', D.alvos.length)
     + '<button type="button" class="pv3-f' + (maisOn ? ' is-on' : '') + '" data-pv3-acao="mais" aria-expanded="' + st.maisAberto + '">mais ▾</button></div>'
     + (st.maisAberto ? '<div class="pv3-mais">' + F('venc', 'follow-up vencido', D.semPendentes.filter(function (l) { return l.venc || l.ficou; }).length)
-      + F('cnpj', 'CNPJ novo · 90 d', D.alvos.filter(function (a) { return a.cnpj != null && a.cnpj <= 90; }).length) + F('recicl', 'Reciclagem', D.recicl.length) + '</div>' : '');
+      + F('cnpj', 'CNPJ novo · 90 d', D.alvos.filter(function (a) { return a.cnpj != null && a.cnpj <= 90; }).length) + F('recicl', 'Reciclagem', D.recicl.length)
+      + F('cobrar', 'Ag. Pagamento', D.cobrar.length) + F('relac', 'Relacionamento', D.relac.length) + '</div>' : '')
+    + (st.maisAberto || st.q ? '<div class="pv3-busca"><input type="search" data-pv3-busca="1" placeholder="achar conta pelo nome" value="' + e(st.q || '') + '" autocomplete="off" aria-label="achar conta pelo nome"></div>' : '');
   let corpo = '';
   if (!D.temBase && ['sem', 'quentes', 'venc'].indexOf(st.filtro) >= 0) {
     corpo = '<div class="pv3-vazio">' + e(D.baseErro ? 'O funil do HubSpot não respondeu agora: a fila mostra "—" até voltar. ' + D.baseErro : 'Lendo o seu funil do HubSpot…') + '</div>';
@@ -91227,6 +91255,8 @@ function pv3LinhaHTML(D, l) {
   if (l.semEnd) selos.push(PLV3.tagHTML('sem lugar no mapa', 'is-mapa'));
   if (l.alvo) selos.push(PLV3.tagHTML(l.cnpj != null && l.cnpj <= 90 ? 'CNPJ novo · ' + l.cnpj + ' d' : 'conta-alvo', 'is-chip'));
   if (l.recicl) selos.push(PLV3.tagHTML('reciclagem', 'is-chip'));
+  if (l.cobrar) selos.push(PLV3.tagHTML('cobrar · com o financeiro', 'is-chip'));
+  if (l.relac) selos.push(PLV3.tagHTML(l.queda ? 'cliente em queda' : 'cliente · relacionamento', l.queda ? 'is-av' : 'is-chip'));
   const sub = l.alvo ? 'Contas-alvo' + (l.bairroNome ? ' · ' + l.bairroNome : '')
     : l.recicl ? 'Reciclagem' + (l.dias != null ? ' · ' + l.dias + ' d parado' : '') + (l.bairroNome ? ' · ' + l.bairroNome : '')
     : et[0] + (l.dias != null ? ' · ' + l.dias + ' d na etapa' : '') + (l.bairroNome ? ' · ' + l.bairroNome : '');
@@ -91412,9 +91442,10 @@ PLV3.cartaoHTML = function (D, i, c, f) {
   }
   /* o cartão de negócio abre a ficha do negócio (a mesma do Meu funil), como na v2 */
   const abre = c.tipoC && !c.fora && c.ref ? ' data-pv3-acao="ficha:' + e(c.ref) + '" role="button" tabindex="0"' : '';
+  const tirar = !c.fora && !c.feita && !d.passou && c.si != null ? '<button type="button" class="pv3-c-x" data-pv3-acao="tirar:' + i + ':' + c.si + '" aria-label="' + e('tirar ' + c.nome + ' do dia') + '">×</button>' : '';
   return '<div class="' + cls + (abre ? ' is-abre' : '') + '"' + abre + (c.ref && !c.fora ? ' data-pv3-cartao="' + e(c.ref) + '"' : '') + '><div class="pv3-c-l1">' + (c.n ? '<i class="pv3-c-ord">' + c.n + '</i>' : '')
     + '<i class="pv3-dot" style="background:' + (c.fora ? 'var(--gv2-ok-barra)' : et[1]) + '"></i><b class="pv3-c-nome pv3-nome">' + e(c.nome) + '</b></div>'
-    + '<span class="pv3-c-sub ' + subCls + '">' + e(sub) + '</span>' + selo + end + '</div>';
+    + '<span class="pv3-c-sub ' + subCls + '">' + e(sub) + '</span>' + selo + end + tirar + '</div>';
 };
 /* o painel do bairro do dia: 290 px por cima das colunas (seg a qua à esquerda da coluna, qui e sex à direita) */
 PLV3.bairroPopHTML = function (D) {
@@ -91910,7 +91941,7 @@ PLV3.acao = async function (verbo, arg) {
   }
   if (verbo === 'cadencia') { st.cadAberta = !st.cadAberta; return PLV3.pintar(); }
   if (verbo === 'fila') { st.filaMin = !st.filaMin; return PLV3.pintar(); }
-  if (verbo === 'filtro') { st.filtro = arg || 'sem'; st.menu = null; st.maisAberto = ['venc', 'cnpj', 'recicl'].indexOf(st.filtro) >= 0 ? st.maisAberto : false; st.filaMin = false; PLV3.pintar(); return PLV3.soltarEspera(); }
+  if (verbo === 'filtro') { st.filtro = arg || 'sem'; st.menu = null; st.maisAberto = PLV3.MAIS.indexOf(st.filtro) >= 0 ? st.maisAberto : false; st.q = ''; st.filaMin = false; PLV3.pintar(); return PLV3.soltarEspera(); }
   if (verbo === 'mais') { st.maisAberto = !st.maisAberto; return PLV3.pintarFila(); }
   if (verbo === 'menu') {
     const tipo = arg.slice(ult + 1), r0 = arg.slice(0, ult);
@@ -91944,6 +91975,14 @@ PLV3.acao = async function (verbo, arg) {
     return;
   }
   if (verbo === 'abrirend') { st.endAberto = arg; return PLV3.pintar(); }
+  if (verbo === 'tirar') {
+    const pt = arg.split(':'), di = Number(pt[0]), si = Number(pt[1]);
+    const g = pl6GradeDoPlano();
+    if (!g[di] || g[di][si] == null) return PLV3.pintar();
+    g[di][si] = null;
+    if (await PLV3.mutar({ grade: g })) { PLV3.salvo(); PLV3.toast('Saiu do dia e voltou para a fila · se a visita já estava marcada no HubSpot, desmarque na Agenda'); }
+    return PLV3.pintar();
+  }
   if (verbo === 'ficha') {
     const dealId = /^[cr]-/.test(arg) ? arg.slice(2) : null;
     const doFunil = dealId && typeof buscarLeadFunilPorId === 'function' ? buscarLeadFunilPorId(dealId) : null;
@@ -91991,6 +92030,17 @@ function pv3Ligar(box) {
   });
   box.addEventListener('input', function (ev) {
     const t = ev.target;
+    if (t && t.getAttribute && t.getAttribute('data-pv3-busca')) {
+      PLV3.st.q = t.value;
+      clearTimeout(PLV3.tBusca);
+      PLV3.tBusca = setTimeout(function () {
+        const pos = t.selectionStart;
+        PLV3.pintarFila();
+        const n = PLV3.box && PLV3.box.querySelector('[data-pv3-busca]');
+        if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (er) { /* campo search sem seleção */ } }
+      }, 180);
+      return;
+    }
     if (t && t.getAttribute && t.getAttribute('data-pv3-end')) PLV3.st.endTexto[t.getAttribute('data-pv3-end')] = t.value;
   });
   box.addEventListener('dragstart', function (ev) {
