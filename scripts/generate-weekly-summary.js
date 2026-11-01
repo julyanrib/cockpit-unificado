@@ -192,7 +192,8 @@ function montarRepsContext() {
     etapaDominanteContagem: dominant ? dominant[1] : 0,
     ganhosSemana: r.ganhosSemana || 0,
     fechadosNoMes: r.fechadosNoMes || 0,
-    metaMensal: r.metaMensal || 10,
+    // meta 0 = fora da planilha do mês: o `|| 10` dava a quem não tem meta uma meta de 10 (01/11/26)
+    metaMensal: Number(r.metaMensal) || 0,
     leadsTravados: r.leadsTravados || 0
   };
   });
@@ -463,7 +464,7 @@ Dados da semana atual (${raw.janela.atual}) dele(a):
 - Negócios em aberto: ${rc.open}
 - Etapa onde mais negócios estão concentrados: ${rc.etapaDominante || 'sem dado suficiente'} (${rc.etapaDominanteContagem} negócios)
 - Ganhos fechados essa semana: ${rc.ganhosSemana || 0}${detalheGanhos.length ? ' (' + detalheGanhos.map(g => g.nome).join(', ') + ')' : ''}
-- Fechados no mês corrente: ${rc.fechadosNoMes || 0} de meta ${rc.metaMensal || 10}
+- Fechados no mês corrente: ${rc.fechadosNoMes || 0}${rc.metaMensal ? ` de meta ${rc.metaMensal}` : " (sem meta na planilha do mês)"}
 - Leads com SLA estourado: ${rc.leadsTravados || 0}
 ${explicacaoGap}
 ${blocoAnterior}
