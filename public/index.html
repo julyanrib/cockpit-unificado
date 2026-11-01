@@ -8949,6 +8949,26 @@ button.gv2-cf-gl{cursor:pointer;} button.gv2-cf-gl:hover{background:var(--gv2-ho
 .gv2-cf-com .t-dim{color:var(--gv2-faint);font:700 14px/1.3 var(--gv2-font);}
 .gv2-cf-aviso{padding:12px 14px;border-radius:10px;background:var(--gv2-chip);color:var(--gv2-dim);font:600 13px/1.45 var(--gv2-font);}
 @media (max-width:1240px){.gv2-cf{grid-template-columns:minmax(0,1fr);}}
+
+.gv2-ex{margin-top:var(--gv2-gap);}
+.gv2-ex-cab small{max-width:220px;text-align:right;}
+.gv2-ex-l{display:grid;grid-template-columns:minmax(200px,1.6fr) minmax(150px,1fr) 90px 112px minmax(220px,1.5fr);gap:12px;align-items:start;width:100%;min-width:820px;min-height:64px;padding:12px 16px;border:0;border-top:1px solid var(--gv2-line);background:none;color:inherit;font:inherit;text-align:left;box-sizing:border-box;}
+button.gv2-ex-l{cursor:pointer;} button.gv2-ex-l:hover{background:var(--gv2-hov);}
+.gv2-ex-l.is-th{min-height:40px;align-items:center;padding-block:10px;background:var(--gv2-sub);font:700 11.5px/1.25 var(--gv2-font);text-transform:uppercase;letter-spacing:.04em;color:var(--gv2-mute);}
+.gv2-ex-l.is-av{box-shadow:inset 3px 0 0 var(--gv2-av-barra);}
+.gv2-ex-h{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.gv2-ex-h b{font:700 14px/1.35 var(--gv2-font);color:var(--gv2-ink);}
+.gv2-ex-h small{font:500 13px/1.4 var(--gv2-font);color:var(--gv2-dim);}
+.gv2-ex-i{font:500 13px/1.4 var(--gv2-font);color:var(--gv2-ink);}
+.gv2-ex-d,.gv2-ex-p{font:700 13.5px/1.35 var(--gv2-font);}
+.gv2-ex-p{font-variant-numeric:tabular-nums;}
+.gv2-ex-l .t-dim{color:var(--gv2-faint);}
+.gv2-ex-r{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0;font:500 13px/1.4 var(--gv2-font);color:var(--gv2-dim);}
+.gv2-ex-r .gv2-v5-btn.is-linha{width:auto;}
+.gv2-ex-pe{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--gv2-line);font:500 13px/1.45 var(--gv2-font);color:var(--gv2-dim);}
+.gv2-ex-pe .gv2-v5-btn{flex:none;}
+.gv2-ex-ver{display:flex;flex-wrap:wrap;gap:8px;}
+@media (max-width:640px){.gv2-ex-pe{flex-direction:column;align-items:flex-start;}}
 .gv2-acc-orfa{grid-column:1 / -1;display:flex;flex-direction:column;}
 .gv2-acc-orfa-lin{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:10px 18px;border-top:1px solid var(--gv2-line);}
 .gv2-acc-orfa-lin small{white-space:normal;}
@@ -57532,6 +57552,7 @@ GV2.clique = function (ev) {
   if (GV2.rcComando && GV2.rcComando(cmd, parte)) return;
   if (GV2.ldComando && GV2.ldComando(cmd, parte)) return;
   if (GV2.cfComando && GV2.cfComando(cmd, parte)) return;
+  if (GV2.exComando && GV2.exComando(cmd, parte)) return;
   if (GV2.v5PessoasComando && GV2.v5PessoasComando(cmd, parte)) return;
   if (GV2.v5TerrComando && GV2.v5TerrComando(cmd, parte)) return;
   if (GV2.rotaComando && GV2.rotaComando(cmd, parte)) return;
@@ -64073,6 +64094,201 @@ GV2.cfComando = function (cmd, parte) {
   return false;
 };
 
+GV2.EX = {
+  CACHE_MS: 300000,
+
+  MIN_N: 3,
+  DIAS_PADRAO: 28,
+  MAX_DIAS: 90,
+  ebook: [
+    { medida: 'horario_dono', hipotese: 'Horário do dono', pergunta: 'visitar entre 14h30 e 17h encontra mais o dono?', indicador: 'conversa com o dono ÷ visitas' },
+    { medida: 'recem_aberto', hipotese: 'Recém-aberto primeiro', pergunta: 'casa com até 30 dias de CNPJ vira mais demo?', indicador: 'demos ÷ visitas' },
+    { medida: 'followup_48h', hipotese: 'Follow-up de 48 h', pergunta: 'demo com retorno no prazo fecha mais?', indicador: 'clientes ÷ demos' }
+  ],
+  vereditos: [
+    { k: 'regra', t: 'Vira regra no Playbook', chip: 'virou regra', c: 'ok' },
+    { k: 'descarta', t: 'Descarta', chip: 'descartado', c: '' },
+    { k: 'repete', t: 'Repete com mais amostra', chip: 'repetir', c: 'av' }
+  ]
+};
+GV2.ex = { d: null, lendo: false, erro: null, em: 0 };
+GV2.exLer = function (forcar) {
+  const X = GV2.ex;
+  if (X.lendo || (!forcar && X.em && Date.now() - X.em < GV2.EX.CACHE_MS)) return;
+  if (typeof supa === 'undefined' || !supa) { X.erro = 'sem conexão com o banco'; X.em = Date.now(); return; }
+  X.lendo = true;
+  Promise.resolve().then(function () { return supa.rpc('experimentos_quadro'); }).then(function (r) {
+    X.lendo = false; X.em = Date.now();
+    if (r && (r.error || (r.data && r.data.erro))) { X.erro = (r.error && r.error.message) || r.data.erro; X.d = null; }
+    else { X.erro = null; X.d = (r && r.data) || { lista: [] }; }
+    if (GV2.estado.aba === 'raiox') GV2.pintar();
+  }, function (e) { X.lendo = false; X.em = Date.now(); X.erro = (e && e.message) || 'erro'; if (GV2.estado.aba === 'raiox') GV2.pintar(); });
+};
+GV2.exHoje = function () { return (GV2.ex.d && GV2.ex.d.hoje) || GV2.base.agora.iso; };
+GV2.exAchar = function (id) { return ((GV2.ex.d && GV2.ex.d.lista) || []).filter(function (x) { return String(x.id) === String(id); })[0] || null; };
+GV2.exEbook = function (medida) { return GV2.EX.ebook.filter(function (s) { return s.medida === medida; })[0] || null; };
+
+GV2.exSituacao = function (x) {
+  const hoje = GV2.exHoje();
+  if (x.veredito) { const v = GV2.EX.vereditos.filter(function (y) { return y.k === x.veredito; })[0]; return { k: 'fim', chip: v ? v.chip : x.veredito, c: v ? v.c : '' }; }
+  if (!x.inicio || x.inicio > hoje) return { k: 'plan', chip: 'planejado', c: '' };
+  if (x.fim >= hoje) return { k: 'curso', chip: 'em curso', c: 'cur' };
+  return { k: 'escrever', chip: 'escrever o resultado', c: 'av' };
+};
+GV2.exPct = function (o) { return o && o.n >= GV2.EX.MIN_N ? Math.round(o.x / o.n * 100) + '%' : '—'; };
+
+GV2.exParcial = function (x) {
+  const P = x.parcial;
+  if (!P || !P.a || !P.b) return '';
+  const a = P.a, b = P.b, pre = P.ate < x.fim ? 'parcial: ' : 'medido: ';
+  if (x.medida === 'horario_dono') return pre + GV2.exPct(a) + ' das 14h30 às 17h, ' + GV2.exPct(b) + ' no resto do dia · ' + GV2.pl(a.n + b.n, 'visita', 'visitas');
+  if (x.medida === 'recem_aberto') return pre + GV2.exPct(a) + ' nos recém-abertos (' + GV2.pl(a.n, 'visita', 'visitas') + '), ' + GV2.exPct(b) + ' nos outros (' + b.n + ')';
+  if (x.medida === 'followup_48h') return pre + GV2.exPct(a) + ' das demos do período viraram cliente (' + GV2.pl(a.n, 'demo', 'demos') + '), ' + GV2.exPct(b) + ' antes (' + b.n + ')';
+  return '';
+};
+GV2.render.exFunil = function () {
+  GV2.exLer(false);
+  const X = GV2.ex;
+  const cab = '<div class="gv2-cb-cab gv2-ex-cab"><div><b>Experimentos do time</b><span>' + GV2.e('3 da lista do ebook · um de cada vez por indicador') + '</span></div><small>' + GV2.e('fichas de rua + HubSpot' + (X.d && X.d.lidoEm ? ' · ' + GV2.ddmm(X.d.hoje || GV2.base.agora.iso) + ' ' + GV2.horaDe(X.d.lidoEm) : '')) + '</small></div>';
+  if (X.erro && !X.d) return '<section class="card gv2-cb gv2-ex">' + cab + GV2.html.estado('erro', 'Não li os experimentos agora (' + X.erro + ').') + '</section>';
+  if (!X.d) return '<div class="gv2-esq" style="height:260px"></div>';
+  const ordem = { escrever: 0, curso: 1, plan: 2, fim: 3 };
+  const lista = (X.d.lista || []).map(function (x) { return { x: x, s: GV2.exSituacao(x) }; })
+    .sort(function (a, b) { return ordem[a.s.k] - ordem[b.s.k] || String(a.x.inicio || '9').localeCompare(String(b.x.inicio || '9')); });
+  const tem = {};
+  lista.forEach(function (l) { tem[l.x.medida] = true; });
+  const sug = GV2.EX.ebook.filter(function (s) { return !tem[s.medida]; });
+  const hip = function (h, p) { return '<span class="gv2-ex-h"><b>' + GV2.e(h) + '</b>' + (p ? '<small>' + GV2.e(p) + '</small>' : '') + '</span>'; };
+  const th = '<div class="gv2-ex-l is-th"><span>Hipótese</span><span>Indicador</span><span>Dono</span><span>Período</span><span>Resultado</span></div>';
+  const linhas = lista.map(function (l) {
+    const x = l.x, s = l.s, txt = x.veredito ? (x.resultado || '') : GV2.exParcial(x);
+    return '<button type="button" class="gv2-ex-l' + (s.k === 'escrever' ? ' is-av' : '') + '" data-gv2="ex:abrir:' + GV2.e(x.id) + '">'
+      + hip(x.hipotese, x.pergunta) + '<span class="gv2-ex-i">' + GV2.e(x.indicador) + '</span>'
+      + '<b class="gv2-ex-d">' + GV2.e(x.dono ? GV2.prim(GV2.nomeDe(x.dono)) : 'o time') + '</b>'
+      + '<b class="gv2-ex-p num">' + GV2.e(x.inicio ? GV2.ddmm(x.inicio) + ' a ' + GV2.ddmm(x.fim) : 'sem data') + '</b>'
+      + '<span class="gv2-ex-r"><span>' + GV2.e(txt || '—') + '</span><span class="gv2-rp-chip' + (s.c ? ' is-' + s.c : '') + '">' + GV2.e(s.chip) + '</span></span></button>';
+  }).join('') + sug.map(function (s) {
+    return '<div class="gv2-ex-l is-sug">' + hip(s.hipotese, s.pergunta) + '<span class="gv2-ex-i">' + GV2.e(s.indicador) + '</span>'
+      + '<b class="gv2-ex-d t-dim">—</b><b class="gv2-ex-p t-dim">—</b>'
+      + '<span class="gv2-ex-r"><span class="gv2-rp-chip">sugestão do ebook</span><button type="button" class="gv2-v5-btn is-linha" data-gv2="ex:planejar:' + s.medida + '">Planejar</button></span></div>';
+  }).join('');
+  return '<section class="card gv2-cb gv2-cb-time gv2-ex">' + cab
+    + '<div class="gv2-cb-grade">' + th + (linhas || '<p class="gv2-g0-sub gv2-cf-vazio">nenhum experimento</p>') + '</div>'
+    + '<div class="gv2-ex-pe"><span>' + GV2.e('No fim, uma de três: vira regra no Playbook, descarta, ou repete com mais amostra.') + '</span><button type="button" class="gv2-v5-btn" data-gv2="ex:novo">Novo experimento</button></div>'
+    + '</section>' + GV2.render.exGav();
+};
+GV2.exForm = function (chave, valor) { GV2.estado.exForm = GV2.estado.exForm || {}; GV2.estado.exForm[chave] = valor; };
+
+GV2.exFormAtual = function () {
+  const g = GV2.estado.exGav || {}, x = g.id ? GV2.exAchar(g.id) : null, hoje = GV2.exHoje();
+  const base = x ? { medida: x.medida, hipotese: x.hipotese, pergunta: x.pergunta || '', indicador: x.indicador, dono: x.dono || '', inicio: x.inicio || '', fim: x.fim || '', veredito: x.veredito || '', resultado: x.resultado || '' }
+    : Object.assign({ medida: 'livre', hipotese: '', pergunta: '', indicador: '', dono: '', inicio: hoje, fim: GV2.somaDias(hoje, GV2.EX.DIAS_PADRAO - 1), veredito: '', resultado: '' }, g.medida ? GV2.exEbook(g.medida) : {});
+  const F = Object.assign(base, GV2.estado.exForm || {});
+  const eb = GV2.exEbook(F.medida);
+  if (eb) F.indicador = eb.indicador;
+  return { x: x, F: F };
+};
+GV2.render.exGav = function () {
+  const g = GV2.estado.exGav;
+  if (!g) return '';
+  const A = GV2.exFormAtual(), x = A.x, F = A.F;
+  if (g.id && !x) return '';
+  const s = x ? GV2.exSituacao(x) : null;
+  const erro = GV2.estado.exErro ? '<p class="gv2-rp-erro" role="alert">' + GV2.e(GV2.estado.exErro) + '</p>' : '';
+  const eb = GV2.exEbook(F.medida);
+  const pessoas = (GV2.base.pessoas || []).map(function (p) { return '<option value="' + GV2.e(p.id) + '"' + (String(F.dono) === String(p.id) ? ' selected' : '') + '>' + GV2.e(GV2.nomeDe(p.id)) + '</option>'; }).join('');
+  const dias = F.inicio && F.fim && F.fim >= F.inicio ? Math.round((Date.parse(F.fim) - Date.parse(F.inicio)) / 86400000) + 1 : 0;
+  const plano = '<div class="gv2-rp-box">'
+    + GV2.rpCampo('exHip', 'Hipótese', '<input id="exHip" class="gv2-v6-in" maxlength="60" data-gv2-comp="exHip" placeholder="Ex.: Ligar antes da visita" value="' + GV2.e(F.hipotese) + '" oninput="GV2.exForm(\'hipotese\',this.value)">')
+    + GV2.rpCampo('exPerg', 'A pergunta', '<input id="exPerg" class="gv2-v6-in" maxlength="90" data-gv2-comp="exPerg" placeholder="Ex.: quem liga antes encontra mais o dono?" value="' + GV2.e(F.pergunta) + '" oninput="GV2.exForm(\'pergunta\',this.value)">')
+    + (x ? GV2.rpCampo('exMed', 'Indicador', '<input id="exMed" class="gv2-v6-in" disabled value="' + GV2.e(F.indicador + (eb ? ' · medido pelo cockpit' : '')) + '">')
+      : GV2.rpCampo('exMed', 'Como medir', '<select id="exMed" class="gv2-v6-in" data-gv2-comp="exMed" onchange="GV2.exForm(\'medida\',this.value);GV2.pintar()">'
+        + GV2.EX.ebook.map(function (e) { return '<option value="' + e.medida + '"' + (F.medida === e.medida ? ' selected' : '') + '>' + GV2.e(e.indicador + ' · ' + e.hipotese.toLowerCase()) + '</option>'; }).join('')
+        + '<option value="livre"' + (F.medida === 'livre' ? ' selected' : '') + '>Outra taxa do funil · o resultado é só o que você escrever</option></select>')
+        + (eb ? '' : GV2.rpCampo('exInd', 'Indicador', '<input id="exInd" class="gv2-v6-in" maxlength="60" data-gv2-comp="exInd" placeholder="Ex.: demos ÷ conversas com o dono" value="' + GV2.e(F.indicador) + '" oninput="GV2.exForm(\'indicador\',this.value)">')))
+    + GV2.rpCampo('exDono', 'Dono', '<select id="exDono" class="gv2-v6-in" data-gv2-comp="exDono" onchange="GV2.exForm(\'dono\',this.value)"><option value="">O time inteiro</option>' + pessoas + '</select>')
+    + '<div class="gv2-rc-datas">' + GV2.rpCampo('exIni', 'Início', '<input id="exIni" type="date" class="gv2-v6-in" data-gv2-comp="exIni" value="' + GV2.e(F.inicio) + '" onchange="GV2.exForm(\'inicio\',this.value);GV2.pintar()">')
+    + GV2.rpCampo('exFim', 'Fim', '<input id="exFim" type="date" class="gv2-v6-in" data-gv2-comp="exFim" min="' + GV2.e(F.inicio) + '" value="' + GV2.e(F.fim) + '" onchange="GV2.exForm(\'fim\',this.value);GV2.pintar()">') + '</div>'
+    + '<small class="gv2-rp-cp-dica">' + GV2.e(dias ? GV2.pl(dias, 'dia', 'dias') + ' · até ' + GV2.EX.MAX_DIAS + ' · um de cada vez por indicador' : 'sem data fica planejado · até ' + GV2.EX.MAX_DIAS + ' dias') + '</small></div>';
+  const parcial = x && !x.veredito ? GV2.exParcial(x) : '';
+  const fecho = x && s.k !== 'plan' ? '<div class="gv2-rp-box"><small class="gv2-rp-kick">' + GV2.e(s.k === 'fim' ? 'O resultado' : 'Escrever o resultado') + '</small>'
+    + (parcial ? '<div class="gv2-rp-pede"><div><b>' + GV2.e(parcial) + '</b><small>' + GV2.e(x.medida === 'horario_dono' || x.medida === 'recem_aberto' ? 'visita = uma casa num dia, pelas fichas de rua' + (x.dono ? ' de ' + GV2.prim(GV2.nomeDe(x.dono)) : ' do time') : 'demo e contrato pelos pontos do HubSpot; antes = o mesmo tanto de dias antes do início') + '</small></div></div>' : '')
+    + '<div class="gv2-ex-ver" role="radiogroup" aria-label="Veredito">' + GV2.EX.vereditos.map(function (v) {
+      return '<button type="button" role="radio" aria-checked="' + (F.veredito === v.k) + '" class="gv2-v5-btn' + (F.veredito === v.k ? ' is-prim' : '') + '" data-gv2="ex:veredito:' + v.k + '">' + GV2.e(v.t) + '</button>';
+    }).join('') + '</div>'
+    + GV2.rpCampo('exRes', 'O que aprendemos', '<textarea id="exRes" class="gv2-v6-in is-area" rows="3" maxlength="240" data-gv2-comp="exRes" placeholder="Ex.: 49% das 14h30 às 17h contra 31% antes; vira regra da rota" oninput="GV2.exForm(\'resultado\',this.value)">' + GV2.e(F.resultado) + '</textarea>')
+    + '<div class="gv2-hb-pe"><button type="button" class="gv2-v5-btn is-prim" data-gv2="ex:concluir">' + (s.k === 'fim' ? 'Corrigir o resultado' : 'Registrar o resultado') + '</button></div></div>' : '';
+  const conf = x && GV2.estado.exConf === 'cancelar:' + x.id;
+  const pe = '<footer class="gv2-rp-gpe">'
+    + (x && !x.veredito ? '<button type="button" class="gv2-v5-btn' + (conf ? ' is-erro' : '') + '" data-gv2="ex:cancelar:' + GV2.e(x.id) + '">' + (conf ? 'Confirmar: tirar da lista' : 'Tirar da lista') + '</button>' : '')
+    + '<button type="button" class="gv2-v5-btn" data-gv2="ex:fechar">Fechar</button><button type="button" class="gv2-v5-btn is-prim" data-gv2="ex:salvar">' + (x ? 'Salvar o plano' : 'Planejar') + '</button></footer>';
+  return '<div class="gv2-rxg-veu gv2-rp-veu" data-gv2="ex:fechar"></div><aside class="gv2-rxg gv2-rp-gav" role="dialog" aria-label="Experimento">'
+    + '<header class="gv2-rxg-cab"><div><small class="gv2-rp-kick">Funil · experimento</small><b>' + GV2.e(x ? x.hipotese : 'Novo experimento') + '</b><span>' + GV2.e(x ? s.chip + (x.inicio ? ' · ' + GV2.ddmm(x.inicio) + ' a ' + GV2.ddmm(x.fim) : '') : 'um de cada vez por indicador') + '</span></div><button type="button" class="gv2-rxg-x" data-gv2="ex:fechar" aria-label="Fechar">×</button></header>'
+    + '<div class="gv2-rxg-corpo">' + fecho + plano + erro + '</div>' + pe + '</aside>';
+};
+GV2.exValidar = function (F) {
+  if (String(F.hipotese || '').trim().length < 3) return 'Dê um nome à hipótese.';
+  if (String(F.indicador || '').trim().length < 3) return 'Diga qual taxa do funil mede o experimento.';
+  if (!!F.inicio !== !!F.fim) return 'Preencha o início e o fim, ou deixe os dois em branco.';
+  if (F.inicio && F.fim < F.inicio) return 'O fim vem depois do início.';
+  if (F.inicio && (Date.parse(F.fim) - Date.parse(F.inicio)) / 86400000 > GV2.EX.MAX_DIAS) return 'Até ' + GV2.EX.MAX_DIAS + ' dias.';
+  return null;
+};
+GV2.exGravar = async function (promessa, ok) {
+  GV2.estado.exErro = 'Gravando…'; GV2.pintar();
+  const r = await Promise.resolve().then(function () { return promessa(); }).then(function (y) { return y; }, function (e) { return { error: e }; });
+  if (r && r.error) {
+    const c = r.error.code;
+    const m = c === '23P01' ? 'Um de cada vez: já existe um experimento desse indicador nessas datas.' : c === '23514' ? 'Período de até ' + GV2.EX.MAX_DIAS + ' dias, com o fim depois do início.' : 'Não gravou: ' + (r.error.message || r.error);
+    GV2.estado.exErro = m; GV2.toast(m, 'erro'); GV2.pintar(); return false;
+  }
+  GV2.estado.exErro = null; GV2.estado.exConf = null; GV2.estado.exGav = null; GV2.estado.exForm = null;
+  if (ok) GV2.toast(ok);
+  GV2.exLer(true);
+  GV2.pintar();
+  return true;
+};
+GV2.exSalvar = function () {
+  const A = GV2.exFormAtual(), x = A.x, F = A.F;
+  const e = GV2.exValidar(F);
+  if (e) { GV2.estado.exErro = e; return GV2.pintar(); }
+  const linha = { hipotese: String(F.hipotese).trim(), pergunta: String(F.pergunta || '').trim() || null, indicador: String(F.indicador).trim(), dono: F.dono || null, inicio: F.inicio || null, fim: F.fim || null };
+  if (x) return GV2.exGravar(function () { return supa.from('experimentos').update(linha).eq('id', x.id); }, 'Experimento salvo ✓');
+  return GV2.exGravar(function () { return supa.from('experimentos').insert(Object.assign({ medida: F.medida, criado_por: GV2.rpQuemSou() }, linha)); }, '"' + linha.hipotese + '" planejado ✓');
+};
+GV2.exConcluir = function () {
+  const A = GV2.exFormAtual(), x = A.x, F = A.F;
+  if (!x) return;
+  if (!F.veredito) { GV2.estado.exErro = 'Escolha uma de três: vira regra, descarta ou repete.'; return GV2.pintar(); }
+  if (String(F.resultado || '').trim().length < 3) { GV2.estado.exErro = 'Escreva o que o experimento mostrou.'; return GV2.pintar(); }
+  return GV2.exGravar(function () {
+    return supa.from('experimentos').update({ veredito: F.veredito, resultado: String(F.resultado).trim(), concluido_em: new Date().toISOString(), concluido_por: GV2.rpQuemSou() }).eq('id', x.id);
+  }, 'Resultado de "' + x.hipotese + '" registrado ✓');
+};
+GV2.exCancelar = function (id) {
+  if (GV2.estado.exConf !== 'cancelar:' + id) { GV2.estado.exConf = 'cancelar:' + id; return GV2.pintar(); }
+  return GV2.exGravar(function () { return supa.from('experimentos').update({ cancelado_em: new Date().toISOString() }).eq('id', id); }, 'Experimento tirado da lista ✓');
+};
+GV2.exFechar = function () { GV2.estado.exGav = null; GV2.estado.exForm = null; GV2.estado.exErro = null; GV2.estado.exConf = null; };
+GV2.exComando = function (cmd, parte) {
+  if (cmd !== 'ex') return false;
+  const a = parte[1];
+  if (a === 'ler') { GV2.exLer(true); return true; }
+  if (a === 'abrir') { GV2.exFechar(); GV2.estado.exGav = { id: parte[2] }; GV2.pintar(); return true; }
+  if (a === 'planejar') { GV2.exFechar(); GV2.estado.exGav = { medida: parte[2] }; GV2.pintar(); return true; }
+  if (a === 'novo') { GV2.exFechar(); GV2.estado.exGav = {}; GV2.pintar(); return true; }
+  if (a === 'fechar') { GV2.exFechar(); GV2.pintar(); return true; }
+  if (a === 'veredito') { GV2.exForm('veredito', parte[2]); GV2.estado.exErro = null; GV2.pintar(); return true; }
+  if (a === 'salvar') { GV2.exSalvar(); return true; }
+  if (a === 'concluir') { GV2.exConcluir(); return true; }
+  if (a === 'cancelar') { GV2.exCancelar(parte[2]); return true; }
+  return false;
+};
+(function () {
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && GV2.estado.exGav) { GV2.exFechar(); GV2.pintar(); } });
+})();
+
 GV2.render.time = function () {
   const b = GV2.base, t = b.time;
   GV2.v5Semana(b.agora.iso);
@@ -64654,12 +64870,12 @@ GV2.render.raiox = function () {
     + GV2.render.v8PorPessoa()
 
     + '<div class="gv2-v9-fl4">' + negs.replace('<b>Negócios para puxar</b>', '<b>4 · Negócios para puxar</b>') + '<div class="gv2-v8-fl5">' + GV2.render.ciclo() + GV2.render.perdas() + '</div></div>'
-    + GV2.render.g0Funil() + GV2.faltaHTML() + '</div>';
+    + GV2.render.g0Funil() + (GV2.render.exFunil ? GV2.render.exFunil() : '') + GV2.faltaHTML() + '</div>';
   return GV2.render.rxCabV5()
     + '<div class="gv2-corpo gv2-v5 gv2-v4-rx">' + kpis
     + '<div class="gv2-v4-rx-l1">' + GV2.render.funil() + GV2.render.funilPorPessoa() + '</div>'
     + '<div class="gv2-v4-rx-l2">' + GV2.render.dinheiro() + GV2.render.ciclo() + GV2.render.perdas() + '</div>'
-    + negs + GV2.render.g0Funil() + GV2.faltaHTML() + '</div>';
+    + negs + GV2.render.g0Funil() + (GV2.render.exFunil ? GV2.render.exFunil() : '') + GV2.faltaHTML() + '</div>';
 };
 
 GV2.render.rxCabV5 = function () {
