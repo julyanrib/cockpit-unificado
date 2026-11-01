@@ -1089,7 +1089,7 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
   checar('e ela distingue meta zero de campo ausente',
     tela.indexOf("return v != null && v !== '' ? Number(v) : 10;") > -1);
   checar('as tres metas atravessam o montar-dados sem virar undefined',
-    montar.indexOf('metaMensal: h.metaMensal != null ? h.metaMensal : 10,') > -1
+    montar.indexOf('metaMensal: h.metaMensal != null ? h.metaMensal : 0,') > -1 /* 01/11/26: fora do robô = sem meta, não 10 */
       && montar.indexOf('metaMrr: h.metaMrr != null') > -1
       && montar.indexOf('metaReceita: r.metaReceita,') > -1);
 

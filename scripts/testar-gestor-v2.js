@@ -2037,6 +2037,20 @@ tabelas.gv2_falta_etapa = [
     GV2.rota.cache = cacheEra; GV2.rota.prom = promEra; GV2.rotaLerAgora = agoraEra;
   })();
 
+  /* ── AUDITORIA DE ENTREGA (01/11/26): a semana do executivo não conta feriado e diz quando já fechou ── */
+  {
+    const EXH = GV2.EXH;
+    const dias = ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'];
+    const pS = { meta_visitas_dia: 6, semana: dias.map(function (iso) { return { iso: iso, todas: 4, passado: true }; }) };
+    const s1 = EXH.semana(pS, { semana: dias.map(function (iso) { return { iso: iso }; }), agora: { iso: '2026-11-04' } });
+    checar('semana do executivo · Finados (02/11) não tem meta: 6 × 4 = 24', s1.meta === 24 && s1.aberta === true, JSON.stringify(s1));
+    const fds = ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30'];
+    const s2 = EXH.semana({ meta_visitas_dia: 6, semana: fds.map(function (iso) { return { iso: iso, todas: 0, passado: true }; }) }, { semana: fds.map(function (iso) { return { iso: iso }; }), agora: { iso: '2026-11-01' } });
+    checar('semana do executivo · no domingo a semana fechou: o que falta "ficou faltando"', s2.meta === 30 && s2.aberta === false && /sem\.aberta \? 'faltam ' \+ sem\.faltam : 'ficaram faltando '/.test(codigo), JSON.stringify(s2));
+    checar('rua da semana · feriado aparece como feriado e fica fora da meta', /return '<span class="gv2-sem-cel is-sem">feriado<\/span>'/.test(codigo) && /p\.meta_visitas_dia \* dias\.filter\(function \(d\) \{ return GV2\.util\(d\.iso\); \}\)\.length/.test(codigo));
+    checar('time · a legenda das metas sai do ranking, não do "8 e 2" escrito à mão', /metaPorPat/.test(tpl) && !/2 para quem está em rampa/.test(tpl));
+  }
+
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
     falhas.forEach(f => console.log('  ✗ ' + f));

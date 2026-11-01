@@ -210,7 +210,7 @@ function montarDadosCompletos() {
 
   const reps = ownerIds.map(ownerId => {
     const n = narrativas.reps[ownerId];
-    const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0, ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 10, metaMrr: null, metaReceita: null, patamarMeta: null, visitasHubspotHoje: 0, avancosHubspotHoje: 0, propostasHubspotHoje: 0, fechamentosHubspotHoje: 0 };
+    const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0, ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 0, metaMrr: null, metaReceita: null, patamarMeta: null, visitasHubspotHoje: 0, avancosHubspotHoje: 0, propostasHubspotHoje: 0, fechamentosHubspotHoje: 0 };
 
     return {
       ownerId,
@@ -249,8 +249,10 @@ function montarDadosCompletos() {
             duas metas novas.
          2. `|| 10` TRANSFORMA ZERO EM DEZ. A Amanda saiu da planilha e tem meta 0; a
             tela mostrava 10 para ela, que e exatamente o numero que este trabalho veio
-            tirar. Zero e falsy, e `|| ` nao distingue "nao tem meta" de "meta zero". */
-      metaMensal: h.metaMensal != null ? h.metaMensal : 10,
+            tirar. Zero e falsy, e `|| ` nao distingue "nao tem meta" de "meta zero".
+         3. QUEM NAO ESTA NO ROBO (o gestor, que nao e executivo) TAMBEM E "SEM META", NAO 10:
+            o "Ver como executivo" do Julyan mostrava "0 de 10" (auditoria 01/11/26). */
+      metaMensal: h.metaMensal != null ? h.metaMensal : 0,
       metaMrr: h.metaMrr != null ? h.metaMrr : null,
       metaReceita: h.metaReceita != null ? h.metaReceita : null,
       patamarMeta: h.patamarMeta || null,
