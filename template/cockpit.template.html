@@ -40203,6 +40203,8 @@ function pl6ResumoApp(iso) {
   const dv5 = GV2.EXH.diaDoPlano(iso, pl6RepintarDepoisDoApp);
   const r = GV2.EXH.resumoDoDia(dv5);
   if (!r) return null;
+  /* fim de semana e feriado sem nada planejado: "sem expediente", não "Plano 0 de 0" (auditoria 01/11/26) */
+  if (!dv5.y && (isWeekend(iso))) return { plano: 'sem expediente', visitas: r.visitas, visitasLonga: dv5.provadas + (dv5.provadas === 1 ? ' visita com prova' : ' visitas com prova'), x: dv5.x, y: dv5.y, fora: r.fora };
   return { plano: r.plano, visitas: r.visitas, visitasLonga: dv5.provadas + ' de ' + pl6MetaVisitasDia() + ' visitas com prova', x: dv5.x, y: dv5.y, fora: r.fora };
 }
 
@@ -81913,7 +81915,7 @@ DV.cartoesV3 = function (p, b, r, d) {
   const num = function (v) { return String(v); };
   num.contagem = true; // séries de contagem: a semana em andamento não "piora"
   return '<div class="dv-c5s">'
-    + card('Hoje', fora ? '—' : GV2.temRua(p) ? GV2.visHoje(p) : 'sem rota', fora ? 'o plano não respondeu' : p.hoje.paradas_plano ? 'do plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem plano hoje', DV.tendHTML(t.plano, pct, 'plano cumprido'), fora ? 't-dim' : '')
+    + card('Hoje', fora ? '—' : GV2.temRua(p) ? GV2.visHoje(p) : GV2.util(b.agora.iso) ? 'sem rota' : 'sem expediente', fora ? 'o plano não respondeu' : p.hoje.paradas_plano ? 'do plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : GV2.util(b.agora.iso) ? 'sem plano hoje' : 'fim de semana ou feriado', DV.tendHTML(t.plano, pct, 'plano cumprido'), fora ? 't-dim' : '')
     + card('Semana', fora ? '—' : feitoSem + ' de ' + metaSem, fora ? 'o plano não respondeu' : 'visitas com prova · ' + (metaSem - feitoSem > 0 ? 'faltam ' + (metaSem - feitoSem) : 'meta batida'), DV.tendHTML(t.semana, num, 'visitas com prova'), fora ? 't-dim' : '')
     + card('Mês', r.meta ? r.fechados + ' de ' + r.meta : String(r.fechados || 0), 'clientes' + (r.proxima != null ? ' · a próxima vale +' + GV2.rsCheio(r.proxima) : ''), DV.tendHTML(t.ganhos, num, 'ganhos por semana'), r.meta && r.fechados >= r.meta ? 't-ok' : '')
     + card('Porta → decisor', [f.portas, f.decisor, f.demo, f.proposta, f.fechado].map(function (x) { return x == null ? '—' : String(x); }).join(' → '), 'portas · decisor · demo · proposta · fechado', DV.tendHTML(t.decisor, pct, 'decisor por porta'))
@@ -85366,14 +85368,16 @@ GV2.render.time = function () {
   const janelas = b.pessoas.map(function (p) { return p.janela && p.janela.min != null ? p.janela.min : null; }).filter(function (x) { return x != null; }).sort(function (x, y) { return x - y; });
   const comeca = janelas.length ? janelas[Math.floor(janelas.length / 2)] : null;
   const cedo = !fonte && !(t.visitasTodas || 0) && comeca != null && b.agora.min < comeca;
+  /* fim de semana e feriado: sem meta hoje; o número que conta é o do último dia útil (auditoria 01/11/26) */
+  const semExp = !GV2.util(b.agora.iso);
   const K = GV2.v9Kpi;
   const visI = 'check-in com GPS a até 200 m do pino (foto só quando o GPS não confirma) · x de y = TODOS os pontos de contato do dia (visitas com prova, do plano ou não, repetidas incluídas) ÷ meta do time (6 por pessoa) · repetida = restaurante que a pessoa já visitou nesta semana'
     + (fonte ? '' : ' · do plano: ' + t.visitas + ' de ' + t.paradas + ' paradas' + (t.visitasTodas > t.visitas ? ' · ' + (t.visitasTodas - t.visitas) + ' fora do plano' : ''));
   const kpis = '<div class="gv2-v5-kpis">'
-    + K({ rot: 'Visitas com prova', def: visI, acao: 'ir:rua:hoje', num: fonte ? '—' : (t.visitasTodas || 0) + ' de ' + t.meta, unid: fonte ? '' : 'da meta',
-      cmp: fonte ? 'plano sem resposta (' + fonte + ')' : cedo ? b.ontemRot + ' ' + oT.v + ' de ' + oT.y + ' · a rua começa ~' + GV2.hhmm(comeca) : (t.repetidas ? t.repetidas + (t.repetidas === 1 ? ' repetida' : ' repetidas') + ' · ' : '') + 'do plano ' + t.visitas + ' de ' + t.paradas + ((t.visitasTodas || 0) > t.visitas ? ' · ' + ((t.visitasTodas || 0) - t.visitas) + ' fora' : '') + ' · ' + b.ontemRot + ' ' + oT.v + ' de ' + oT.y })
+    + K({ rot: 'Visitas com prova', def: visI, acao: 'ir:rua:hoje', num: fonte ? '—' : semExp ? String(t.visitasTodas || 0) : (t.visitasTodas || 0) + ' de ' + t.meta, unid: fonte ? '' : semExp ? 'hoje · sem expediente' : 'da meta',
+      cmp: fonte ? 'plano sem resposta (' + fonte + ')' : semExp ? b.ontemRot + ' ' + oT.v + ' de ' + oT.y : cedo ? b.ontemRot + ' ' + oT.v + ' de ' + oT.y + ' · a rua começa ~' + GV2.hhmm(comeca) : (t.repetidas ? t.repetidas + (t.repetidas === 1 ? ' repetida' : ' repetidas') + ' · ' : '') + 'do plano ' + t.visitas + ' de ' + t.paradas + ((t.visitasTodas || 0) > t.visitas ? ' · ' + ((t.visitasTodas || 0) - t.visitas) + ' fora' : '') + ' · ' + b.ontemRot + ' ' + oT.v + ' de ' + oT.y })
     + K({ rot: 'Planos de hoje', def: 'quem montou o plano do dia no app (pelo menos uma parada) · sem rota = nenhuma parada hoje' + (comAgenda ? ' · ' + comAgenda + ' sem rota com agenda no HubSpot' : '') + (rampa ? ' · ' + rampa + ' em rampagem (fora da conta)' : ''), acao: 'rxg:plano',
-      num: fonte ? '—' : naRua.filter(function (p) { return p.hoje.paradas_plano > 0; }).length + ' de ' + naRua.length, /* o mesmo conjunto em cima e embaixo (podia dar "6 de 5") */ unid: fonte ? '' : 'com plano', cmp: fonte ? fonte + ' não respondeu' : GV2.pl(t.paradas, 'parada', 'paradas') + ' · ' + (semRota ? semRota + ' sem rota' : 'ninguém sem rota') })
+      num: fonte ? '—' : naRua.filter(function (p) { return p.hoje.paradas_plano > 0; }).length + ' de ' + naRua.length, /* o mesmo conjunto em cima e embaixo (podia dar "6 de 5") */ unid: fonte ? '' : 'com plano', cmp: fonte ? fonte + ' não respondeu' : semExp ? 'sem expediente hoje · ' + GV2.pl(t.paradas, 'parada', 'paradas') : GV2.pl(t.paradas, 'parada', 'paradas') + ' · ' + (semRota ? semRota + ' sem rota' : 'ninguém sem rota') })
     + K({ rot: 'Quentes', def: 'negócio em Negociação ou Ag. Pagamento · sem próximo passo = sem tarefa ou reunião futura no HubSpot e fora do Planejamento', acao: 'ir:raiox:quentes',
       num: String(t.quentes), unid: t.quentes === 1 ? 'negócio' : 'negócios', cmp: t.quentesSemPasso + ' sem próximo passo', cmpTom: t.quentesSemPasso ? 't-av' : '' })
     + K({ rot: 'Travados', def: 'negócio que passou do prazo da etapa (a régua do playbook)' + (mrrTravNeg ? ' · ' + GV2.rsCheio(mrrTravNeg) + ' parados em Negociação' : ''), acao: 'ir:raiox:travados',
@@ -86528,7 +86532,7 @@ EXH.resumoTexto = function () {
   if (DV && DV.estado.p) {
     DV.com(function () {
       const p = DV.estado.p, b = DV.estado.base, sem = EXH.semana(p, b), d = p.disc || {};
-      linhas.push([(p.hoje.paradas_plano ? 'Plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem plano hoje'),
+      linhas.push([(p.hoje.paradas_plano ? 'Plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : GV2.util(b.agora.iso) ? 'sem plano hoje' : 'sem expediente hoje'),
         (p.hoje.visitas_todas || 0) + ' de ' + p.meta_visitas_dia + ' visitas com prova', 'semana ' + sem.feito + ' de ' + sem.meta,
         GV2.pl(p.travados.length, 'travado', 'travados'), d.nReunioes != null ? GV2.pl(d.nReunioes, 'reunião sem desfecho', 'reuniões sem desfecho') : null].filter(Boolean).join(' · '));
     });
