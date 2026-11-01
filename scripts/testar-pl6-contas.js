@@ -391,7 +391,7 @@ console.log('');
      visitas. Nos dias que já começaram o cabeçalho é "Plano x de y · Visitas x de 6", da mesma
      conta do gestor (pl6ResumoApp); no futuro, "N paradas". O teto de vagas continua proibido. */
   checar('o cabeçalho do dia é Plano e Visitas (o mesmo do gestor) e, no futuro, N paradas — nunca contra as vagas',
-    dadosCod.indexOf("cnt: n === 0 ? 'vazio' : (n === 1 ? '1 parada' : n + ' paradas'),") > -1
+    dadosCod.indexOf("cnt: n === 0 ? (d.feriado ? 'feriado' : 'vazio') : (n === 1 ? '1 parada' : n + ' paradas'),") > -1
       && dadosCod.indexOf('resumoApp: d.iso <= hojeISOPl6 ? pl6ResumoApp(d.iso) : null') > -1
       && dadosCod.indexOf("' + PL6_SLOTS") < 0,
     'o design v3 manda Plano x de y · Visitas x de 6; o teto de vagas não é denominador');
