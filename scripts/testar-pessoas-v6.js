@@ -117,7 +117,10 @@ const ctx = {
   isoDate: function (d) { return new Date(d).toISOString().slice(0, 10); }
 };
 vm.createContext(ctx);
+/* o calendário de feriados que a régua passou a usar (auditoria 01/11/26) */
+vm.runInContext('const FERIADOS_BR_CACHE = {};', ctx);
 [
+  'feriadosDoAnoBR', 'ehFeriadoBR', 'isoLocalBR',
   'cadenciaConfig', 'cadenciaMinimoToques', 'cadenciaDoLead', 'cadenciaMotivosDeSaida', 'cadDiaBRT', 'cadEhUtil', 'cadSomarUteis', 'cadUteisEntre', 'estadoDaCadencia',
   'pv6Abertos', 'pv6AbaixoDoPiso', 'pv6Piso', 'pv6PassosDa', 'pv6Cadencia', 'pv6UmAUmDoMes',
   'pv6Combinados', 'pv6ListaDoCard', 'pv6Funil', 'pv6Pct', 'pv6CorDoPace', 'pv6DataCurta'

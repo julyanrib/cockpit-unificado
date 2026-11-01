@@ -115,7 +115,7 @@ checar('e a palavra "registrados" não volta para a tira',
   'o design v3 proíbe "registrados" e "esperando" na tela');
 checar('dia futuro mostra quantos tem, e dia vazio diz que está livre',
   /marca = String\(its\.length\); cor = 'var\(--ink\)';/.test(codigo)
-    && /marca = passado \? '—' : 'livre';/.test(codigo),
+    && /marca = dd\.feriado \? 'feriado' : passado \? '—' : 'livre';/.test(codigo),
   '"0" num dia que já passou lê como falha; "—" lê como o que é, nada planejado');
 checar('e o cabeçalho só mostra a hora quando o dia é hoje',
   /diaAbaHoje: !!\(dias\[diaAba\] && dias\[diaAba\]\.iso === hojeISOPl6\)/.test(codigo)
