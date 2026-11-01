@@ -2069,7 +2069,7 @@ tabelas.gv2_falta_etapa = [
       checar('planejamento · a regra "todo dia com 6+" não conta o feriado', rg.filter(function (x) { return x.n === 4; })[0].ok === true, JSON.stringify(rg[3]));
       checar('planejamento · feriado sem sugestão, sugestão sem conta repetida entre dias, topo conta o que a grade mostra',
         /\|\| d\.feriado \|\| !pl6SugRegioes\.length\) return null;/.test(tpl) && /const pl6SugUsadas = new Set\(\);/.test(tpl) && /escolhidas\.forEach\(function \(l\) \{ pl6SugUsadas\.add\(l\.id\); \}\);/.test(tpl)
-          && /const agendadas = grade\.reduce\(function \(s, col\) \{\s*return s \+ pl6ItensDoDia\(col, porId\)/.test(tpl) && /feriado · sem meta/.test(tpl));
+          && /const agendadas = grade\.reduce\(function \(s, col\) \{\s*return s \+ pl6ItensDoDia\(col, porId\)/.test(tpl) && /feriado · sem meta/.test(tpl) && tpl.indexOf("vazioRot: d.feriado ? 'feriado — ninguém é cobrado de rua neste dia'") > -1);
     }
     checar('ver como executivo · quem está fora do time fica sem meta, não com 10', tpl.indexOf("fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta'") > -1 && tpl.indexOf('fechadosNoMes: 0, metaMensal: 10,') < 0);
   }
