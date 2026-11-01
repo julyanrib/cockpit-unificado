@@ -1666,8 +1666,8 @@ tabelas.gv2_falta_etapa = [
     const por = function (d) { GV2.hb.d = d; GV2.hb.em = Date.now(); GV2.hb.lendo = false; GV2.hb.erro = null; };
     por(mundo('2026-11-16'));
     checar('habilidade · as 4 taxas de outubro e as do time (soma ÷ soma; volume por pessoa e por semana de 5 dias úteis)',
-      GV2.hbDaPessoa(bia, 'dono', 'anterior').v === 25 && GV2.hbDaPessoa(bia, 'demo', 'anterior').v === 20 && GV2.hbDaPessoa(bia, 'fechar', 'anterior').v === 25 && GV2.hbDaPessoa(bia, 'volume', 'anterior').v === 18
-        && GV2.hbDoTime('dono', 'anterior').v === 50 && GV2.hbDoTime('demo', 'anterior').v === 21 && GV2.hbDoTime('fechar', 'anterior').v === 41 && GV2.hbDoTime('volume', 'anterior').v === 18,
+      GV2.hbDaPessoa(bia, 'dono', 'anterior').v === 25 && GV2.hbDaPessoa(bia, 'demo', 'anterior').v === 20 && GV2.hbDaPessoa(bia, 'fechar', 'anterior').v === 25 && GV2.hbDaPessoa(bia, 'volume', 'anterior').v === 19
+        && GV2.hbDoTime('dono', 'anterior').v === 50 && GV2.hbDoTime('demo', 'anterior').v === 21 && GV2.hbDoTime('fechar', 'anterior').v === 41 && GV2.hbDoTime('volume', 'anterior').v === 19 /* 01/11/26: outubro tem 21 dias úteis (12/10 é feriado), não 22 */,
       JSON.stringify(GV2.HB.taxas.map(function (t) { return [GV2.hbDaPessoa(bia, t.k, 'anterior').v, GV2.hbDoTime(t.k, 'anterior').v]; })));
     checar('habilidade · a sugestão é a maior distância para o time (sair com o dono: 25% contra 50%)', GV2.hbSugestao(bia, 'anterior') === 'dono');
     const ana = Object.assign({}, rui, { pessoa: 'ana', dias: out.map(function (d) { return Object.assign({}, d, { o: 15, m: 6, c: 4 }); }) });
@@ -1846,8 +1846,9 @@ tabelas.gv2_falta_etapa = [
     GV2.rp.em = Date.now(); GV2.rp.lendo = false; GV2.rpLer = function () {};
     const ana = GV2.ld.d.pessoas[0], bia = GV2.ld.d.pessoas[1], caio = GV2.ld.d.pessoas[2];
     const R = GV2.ldRitmo(ana);
-    checar('líder · 3 meses no ritmo: 6 visitas com prova por dia útil nos 3 meses fechados (outubro em 5,5 falta)',
-      R.n === 2 && !R.ok && R.sub === 'outubro ficou em 5,5 visitas/dia' && R.chip === 'falta 1 mês' && GV2.ldRitmo(bia).ok === true, JSON.stringify(R));
+    /* 01/11/26: o dia útil não conta feriado; outubro (12/10) tem 21 dias, e a mesma fixture dá 5,7 em vez de 5,5 */
+    checar('líder · 3 meses no ritmo: 6 visitas com prova por dia útil nos 3 meses fechados (outubro em 5,7 falta)',
+      R.n === 2 && !R.ok && R.sub === 'outubro ficou em 5,7 visitas/dia' && R.chip === 'falta 1 mês' && GV2.ldRitmo(bia).ok === true, JSON.stringify(R));
     checar('líder · demo vira cliente contra o time (soma ÷ soma, sem a rampa); com menos de 10 demos, amostra pequena',
       GV2.ldConvTime() === 38 && GV2.ldConv(ana).ok && GV2.ldConv(ana).val === '40%' && !GV2.ldConv(bia).ok && GV2.ldConv(caio).pequena === true, JSON.stringify([GV2.ldConvTime(), GV2.ldConv(ana), GV2.ldConv(caio)]));
     checar('líder · registro: ocorrência do combinado 5 ou de registro falso tira o critério', GV2.ldRegistro(ana).ok && !GV2.ldRegistro(bia).ok && GV2.ldRegistro(bia).chip === 'em análise');
@@ -2071,6 +2072,10 @@ tabelas.gv2_falta_etapa = [
         /\|\| d\.feriado \|\| !pl6SugRegioes\.length\) return null;/.test(tpl) && /const pl6SugUsadas = new Set\(\);/.test(tpl) && /escolhidas\.forEach\(function \(l\) \{ pl6SugUsadas\.add\(l\.id\); \}\);/.test(tpl)
           && /const agendadas = grade\.reduce\(function \(s, col\) \{\s*return s \+ pl6ItensDoDia\(col, porId\)/.test(tpl) && /feriado · sem meta/.test(tpl) && tpl.indexOf("vazioRot: d.feriado ? 'feriado — ninguém é cobrado de rua neste dia'") > -1);
     }
+    /* números iguais no app e no Cockpit (auditoria 01/11/26) */
+    checar('habilidade · novembro/26 tem 19 dias úteis (Finados e Consciência Negra fora), como o uteis() do app', GV2.hbUteis('2026-11-01', '2026-11-30') === 19, String(GV2.hbUteis('2026-11-01', '2026-11-30')));
+    checar('sem próximo passo · o card do executivo mostra a mesma quebra da aba Tarefas do app (vencido + nunca marcado)',
+      /venc \+ ' com passo vencido \+ ' \+ \(sp - venc\) \+ ' nunca '/.test(codigo));
     checar('ver como executivo · quem está fora do time fica sem meta, não com 10', tpl.indexOf("fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta'") > -1 && tpl.indexOf('fechadosNoMes: 0, metaMensal: 10,') < 0);
   }
 
