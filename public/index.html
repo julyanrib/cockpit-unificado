@@ -24167,14 +24167,23 @@ function tm10CaudaHTML(d) {
       +   (r.travados ? r.travados + (r.travados === 1 ? ' travado' : ' travados') : '—') + '</span>'
       + '</button>';
   }).join('');
+
+  const metaPorPat = {};
+  d.ranking.forEach(function (r) {
+    if (!r.meta) return;
+    const k = r.patamar === 'rampa' ? 'quem está em rampa' : (r.patamar === 'pleno' || !r.patamar ? 'os plenos' : String(r.patamar));
+    (metaPorPat[k] = metaPorPat[k] || []).indexOf(r.meta) < 0 && metaPorPat[k].push(r.meta);
+  });
+  const metasTxt = Object.keys(metaPorPat).map(function (k) {
+    return metaPorPat[k].sort(function (a, b) { return b - a; }).join(' ou ') + ' para ' + k; }).join(', ');
   const bloco8 = '<div style="background:var(--creme);border:1px solid var(--line);border-radius:12px;padding:14px 18px;">'
     + '<span style="font:900 10px \'Poppins\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
     +   'color:var(--muted2);">8 · Quem puxa, quem atrasa <span style="font-weight:700;letter-spacing:0;'
     +   'text-transform:none;">· clique → o dossiê da pessoa</span></span>'
     + '<div style="display:flex;flex-direction:column;gap:2px;margin-top:8px;">' + rankHTML + '</div>'
     + '<span style="display:block;font:700 9.5px/1.5 \'Poppins\',sans-serif;color:var(--muted2);margin-top:8px;">'
-    +   'barra e X/META = clientes que chegaram a GANHO no mês sobre a meta dele (8 para os'
-    +   ' plenos, 2 para quem está em rampa) · as duas colunas de R$ são MRR e receita'
+    +   'barra e X/META = clientes que chegaram a GANHO no mês sobre a meta dele'
+    +   (metasTxt ? ' (' + esc(metasTxt) + ')' : '') + ' · as duas colunas de R$ são MRR e receita'
     +   ' feitos sobre as metas dele — receita é o valor total do plano, MRR é a'
     +   ' mensalidade · tq/lead = toques por negócio na janela de ' + d.janelaToques
     +   ' dias · travados = régua da etapa estourada · "—" = sem meta na planilha do mês</span></div>';
@@ -55864,6 +55873,8 @@ GV2.render.ruaSemana = function () {
     });
     function celula(d) {
       if (d.passado || d.hoje) tot += d.hoje && !b.foraDaJornada ? Math.max(d.planejadas, d.provadas) : d.provadas; else tot += d.planejadas;
+
+      if (!GV2.util(d.iso) && !d.planejadas && !d.provadas) return '<span class="gv2-sem-cel is-sem">feriado</span>';
       const tl = d.semLugar ? ' title="' + GV2.pl(d.semLugar, 'item sem lugar no mapa: o negócio não tem endereço no HubSpot', 'itens sem lugar no mapa: os negócios não têm endereço no HubSpot') + '"' : '';
       if (d.hoje) return d.planejadas ? '<span class="gv2-sem-cel is-and num"' + tl + '>' + d.provadas + ' de ' + d.planejadas + '</span>' : '<span class="gv2-sem-cel is-sem">' + GV2.e(p.hoje.agenda && p.hoje.agenda.n ? 'sem rota · ' + p.hoje.agenda.n + ' na agenda' : 'sem plano') + '</span>';
       if (d.passado) {
@@ -55873,7 +55884,7 @@ GV2.render.ruaSemana = function () {
       return d.planejadas ? '<span class="gv2-sem-cel is-plan num"' + tl + '>' + d.planejadas + ' planej.' + (d.semLugar ? ' · ' + d.semLugar + ' s/ lugar' : '') + '</span>' : '<span class="gv2-sem-cel is-sem">sem plano</span>';
     }
     return { acao: 'pessoa:' + p.id, celulas: ['<b class="gv2-ellip">' + GV2.e(p.nome) + '</b>'].concat(cels).concat([
-      '<b class="num" title="provadas nos dias que passaram + o plano dos que faltam, contra a meta da semana">' + tot + ' de ' + p.meta_visitas_dia * dias.length + '</b>'
+      '<b class="num" title="provadas nos dias que passaram + o plano dos que faltam, contra a meta da semana">' + tot + ' de ' + p.meta_visitas_dia * dias.filter(function (d) { return GV2.util(d.iso); }).length + '</b>'
     ].concat(prom ? [
 
       '<b class="' + (p.promessa == null ? 't-dim' : 't-ok') + '" title="' + (p.promessa === undefined ? 'dailies não respondeu agora' : '') + '">' + GV2.e(p.promessa === undefined ? '—' : p.promessa === null ? 'não prometeu' : 'prometeu ' + p.promessa) + '</b>'
@@ -65266,9 +65277,11 @@ EXH.fonteForaHTML = function (b) {
 };
 
 EXH.semana = function (p, b) {
-  const meta = p.meta_visitas_dia * b.semana.length;
+  const uteis = b.semana.filter(function (x) { return GV2.util(x.iso); });
+  const meta = p.meta_visitas_dia * uteis.length;
   const feito = p.semana.reduce(function (a, x) { return a + (x.passado || x.hoje ? (x.todas || 0) : 0); }, 0);
-  return { meta: meta, feito: feito, faltam: Math.max(0, meta - feito) };
+  const aberta = uteis.some(function (x) { return x.iso >= b.agora.iso; });
+  return { meta: meta, feito: feito, faltam: Math.max(0, meta - feito), aberta: aberta };
 };
 EXH.cartoesHTML = function (p, b, m) {
   const fora = !!b.planoErro;
@@ -65286,7 +65299,7 @@ EXH.cartoesHTML = function (p, b, m) {
   return '<div class="exh-blo-cab"><h2>O que o seu gestor vê de você</h2><span>os mesmos 5 números da Pessoas dele · mesma fonte, mesma hora</span></div>'
     + '<div class="exh-nums">'
     + card('Plano hoje', planoV, planoL, 'das suas visitas com prova no app', m === 'noite' ? 'aba:viewAgenda' : 'rolar:exhDia', fora ? 't-dim' : '')
-    + card('Semana', fora ? '—' : sem.feito + ' de ' + sem.meta, fora ? 'o plano não respondeu' : 'visitas com prova · ' + (sem.faltam ? 'faltam ' + sem.faltam : 'meta batida'), 'das suas visitas com prova no app', 'aba:viewAgenda', fora ? 't-dim' : (sem.faltam ? '' : 't-ok'))
+    + card('Semana', fora ? '—' : sem.feito + ' de ' + sem.meta, fora ? 'o plano não respondeu' : 'visitas com prova · ' + (!sem.faltam ? 'meta batida' : sem.aberta ? 'faltam ' + sem.faltam : 'ficaram faltando ' + sem.faltam), 'das suas visitas com prova no app', 'aba:viewAgenda', fora ? 't-dim' : (sem.faltam ? '' : 't-ok'))
     + card('Mês', mesV, mesL, 'dos negócios ganhos', 'aba:viewMeuFunil', r.meta && r.fechados >= r.meta ? 't-ok' : '')
     + card('Porta → decisor', porta, 'portas · decisor · demo · proposta · fechado', 'portas do app · passos e vendas do HubSpot', 'aba:viewMeuFunil')
     + card('Sem desfecho', d.nReunioes == null ? '—' : String(d.nReunioes), d.nReunioes == null ? 'as reuniões não responderam' : (d.nReunioes === 1 ? 'reunião' : 'reuniões'), 'das reuniões que passaram', 'aba:viewPDIs:dvDisc', d.nReunioes ? 't-av' : '')
@@ -65378,7 +65391,7 @@ EXH.prontoHTML = function (p, b) {
   const sug = typeof pm8Sugestao === 'function' ? pm8Sugestao() : null;
   const pal = pr || sug;
   const ontemFeito = p.semana.filter(function (x) { return x.passado; }).reduce(function (a, x) { return a + (x.todas || 0); }, 0);
-  const restam = p.semana.filter(function (x) { return x.hoje || x.futuro || (!x.passado && !x.hoje); }).map(function (x) { return GV2.DIAS[GV2.dow(x.iso)]; });
+  const restam = p.semana.filter(function (x) { return !x.passado && GV2.util(x.iso); }).map(function (x) { return GV2.DIAS[GV2.dow(x.iso)]; });
   const dh = EXH.dia(p, b.agora.iso);
   const prim = dh.estado === 'ok' ? dh.itens.filter(function (x) { return x.horaMin != null; }).sort(function (a, c) { return a.horaMin - c.horaMin; })[0] : null;
   const ontem = EXH.anteriorUtil(b.agora.iso);
