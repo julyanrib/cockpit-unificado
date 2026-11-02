@@ -85,6 +85,15 @@ checar('fonte fora: "—" e o nome da fonte', V('fora').semana.pts === '—' && 
 checar('nenhum texto diz "último" ou "pior"', !/último|pior/i.test(JSON.stringify(saida)));
 checar('zero emoji', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(JSON.stringify(saida)));
 
+/* auditoria 02/11/26 · G7: sem meta no mês, a escada não diz "meta 0" nem "Faltam 0 vendas para a meta" */
+{
+  const q0 = resolver('quarta');
+  const qSem = Object.assign({}, q0, { variavel: Object.assign({}, q0.variavel, { meta: 0, vendas: 40 }) });
+  const E = DV2.escadaDoVariavel(qSem);
+  checar('auditoria 02/11 · G7: escada sem meta diz "sem meta", nunca "meta 0" nem "Faltam 0"',
+    /^sem meta/.test(E.meta) && !/Faltam 0/.test(E.sub) && !/meta 0/.test(JSON.stringify(E)), JSON.stringify({ meta: E.meta, sub: E.sub }));
+}
+
 /* ── a tela: a grade de 12 colunas, os blocos na ordem, a celebração e a volta ao v1 ── */
 const html = DV2.html(V('quarta'));
 const ordem = ['dv2-um', 'A SEMANA', 'MISSÃO DA SEMANA', 'Sequências', 'O mês · seu variável', 'o chefão', 'Sua carreira', 'id="dv2Colecao"', 'Você contra você'].map(t => html.indexOf(t));

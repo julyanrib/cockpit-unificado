@@ -169,12 +169,13 @@ tabelas.gv2_falta_etapa = [
   checar('provável = fechados + Ag. Pagamento + 60% de Negociação (v4)', bia.provavel === 2 && ana.provavel === 1 && caio.provavel === 1, 'bia ' + bia.provavel + ' ana ' + ana.provavel + ' caio ' + caio.provavel);
   /* ── v4 (Pessoas e Raio X, 07/10/26): os testes de aceite 1–4 e 8 do prompt ── */
   checar('v4 · 1: o provável do Time é a soma das Pessoas e o KPI Mês mostra o mesmo número',
-    b.time.provavel === ana.provavel + bia.provavel + caio.provavel && GV2.render.kpisTime()[4].unidade === 'provável ' + b.time.provavel, 'time ' + b.time.provavel);
+    /* 02/11/26: o KPI Mês é o da Hoje (GV2.kpisHoje); o render.kpisTime do Time v4 saiu como código morto */
+    b.time.provavel === ana.provavel + bia.provavel + caio.provavel && GV2.kpisHoje(b).provavel === b.time.provavel, 'time ' + b.time.provavel);
   checar('v4 · 3: negócio repetido (mesmo dono, mesmo nome) conta uma vez, na etapa mais avançada, com rep e as outras etapas',
     b.negocios.filter(n => n.nome === 'Na').length === 1 && b.negocios.find(n => n.nome === 'Na').etapa_idx === 4 && b.negocios.find(n => n.nome === 'Na').rep === 2 && /Visita/.test(b.negocios.find(n => n.nome === 'Na').outros.join()),
     b.negocios.map(n => n.nome + ':' + n.etapa_idx).join());
   const agp = b.negocios.find(n => n.id === 'c');
-  checar('v4 · 4: Ag. Pagamento nunca é travado, sem passo nem "a puxar", mesmo estourando a régua', agp && agp.agPag && !agp.travado && !agp.semPasso && !agp.puxar);
+  checar('v4 · 4: Ag. Pagamento nunca é travado, sem passo nem "a puxar", mesmo estourando a régua', agp && agp.agPag && !agp.travado && GV2.semProximoPasso([agp]).length === 0 && !agp.puxar);
   GV2.estado.filtro = 'quentes';
   const negQ = GV2.render.negocios();
   checar('v4 · 4: na lista do Raio X o Ag. Pagamento aparece "com o financeiro" e sem Cobrar', /com o financeiro/.test(negQ) && negQ.indexOf('cobrar:neg:c"') < 0);
@@ -250,7 +251,6 @@ tabelas.gv2_falta_etapa = [
     GV2.base.pessoas.forEach(function (p) {
       DV.estado.p = p; DV.estado.fizEm = {};
       const h = DV.com(function () { return DV.html(p); });
-      const g = GV2.p3Resumo(p);
       /* v3 (09/10/26, ws.zip): os 5 cartões do topo são os da Pessoas v5 do gestor (GV2.render.v5Pessoa),
          mesma base. Porta → decisor: o gestor mostra a %, o executivo a escada; a % sai da escada. */
       const dv = nums(h, /class="dv-c5"><small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g);
@@ -288,8 +288,9 @@ tabelas.gv2_falta_etapa = [
     const paths = (h.match(/<path d="[^"]+"/g) || []).slice(0, 7);
     return h.indexOf('assets/takeat-t-oficial.png') > 0 && h.indexOf('>t<') < 0 && paths.length === 7 && new Set(paths).size === 7 && /aria-current="page"/.test(h);
   })());
-  checar('sem lugar no mapa: o item do plano que o app não põe na rota chega ao gestor e aparece na grade', GV2.base.porId['2'].semana[4].semLugar === 2 && GV2.render.ruaSemana().indexOf('2 s/ lugar') > 0, JSON.stringify(GV2.base.porId['2'].semana[4]));
-  checar('promessa: com alguém prometendo aparece; ninguém prometeu hoje, some das linhas (não vira 7 x não prometeu)', (function () { const ps = GV2.base.pessoas, antes = ps.map(function (p) { return p.promessa; }); const com = GV2.v4Promessa(ana); ps.forEach(function (p) { p.promessa = null; }); const sem = GV2.v4Promessa(ana); ps.forEach(function (p, i) { p.promessa = antes[i]; }); return com === 'não prometeu' && sem === ''; })());
+  /* 02/11/26: a grade da Rua v4 (render.ruaSemana) e a linha de promessa (v4Promessa) saíram como código
+     morto; fica a prova do dado, que a Rua v5 lê */
+  checar('sem lugar no mapa: o item do plano que o app não põe na rota chega ao gestor', GV2.base.porId['2'].semana[4].semLugar === 2, JSON.stringify(GV2.base.porId['2'].semana[4]));
   checar('roteiro: quente e travado primeiro (o mais perto do dinheiro antes), com o motivo certo', rt[0].n.id === 'a' && /pedir a decisão juntos/.test(rt[0].motivo) && rt[1].n.id === 'd' && rt[1].motivo.indexOf('régua 4) · ir junto no decisor') >= 0 && rt[0].hora === '09:00' && rt.slice(2).every(function (r) { return !r.n.quente && !r.n.travado; }), rt.map(r => r.hora + ' ' + r.n.id + ' ' + r.motivo).join(' | '));
   checar('combinar agora: sem plano pede o plano; travado pede data; quente pede decisão no negócio', (function () { const c = GV2.combinarAgora(ana); return c[0].regra === 'plano_diario' && c[1].regra === 'travados_com_data' && c[2].regra === 'decisao_em_negocio' && c[2].alvo.negocio_id === 'a'; })());
   checar('a rotação proposta é uma praça por semana, a mais urgente primeiro', (function () { const r = GV2.propostaRotacao(false); return r.length === 5 && r[0].inicio === '2026-10-05' && r[1].inicio === '2026-10-12'; })());
@@ -322,6 +323,66 @@ tabelas.gv2_falta_etapa = [
   b.time.visitas -= 1;
   console.error = errOrig;
   checar('a Prova acusa um total que não é a soma das pessoas', acusou);
+  /* 02/11/26 (auditoria): a Prova prova os KPIs que a Hoje MOSTRA (visitasTodas, planos sem rampa,
+     sem próximo passo pela regra canônica), não o render.kpisTime do Time v4 */
+  {
+    console.error = () => {};
+    b.time.visitasTodas += 1;
+    const acusouTodas = GV2.testes.prova().some(e => /visitas da Hoje/.test(e));
+    b.time.visitasTodas -= 1;
+    console.error = errOrig;
+    const K = GV2.kpisHoje(b), pv = GV2.render.prova();
+    const linhaTopo = pv.slice(pv.indexOf('Hoje (topo)'));
+    checar('auditoria 02/11 · G4: a Prova acusa quando o KPI de visitas da Hoje (visitasTodas) não é a soma das pessoas', acusouTodas);
+    checar('auditoria 02/11 · G4/G3: a Prova tem a coluna "Sem próx. passo" e a linha do topo traz o número de GV2.semProximoPasso',
+      pv.indexOf('Sem próx. passo') > 0 && K.semProximoPasso === GV2.semProximoPasso(b.negocios).length && linhaTopo.indexOf('>' + K.semProximoPasso + '<') > 0 && pv.indexOf('Time e Raio X') < 0, String(K.semProximoPasso));
+    checar('auditoria 02/11 · G4: a Hoje lê os mesmos KPIs (GV2.kpisHoje) que a Prova prova', /const KH = GV2\.kpisHoje\(b\);/.test(codigo) && /KH\.planos \+ ' de ' \+ KH\.naRua/.test(codigo));
+    /* G1: a conferência automática aparece dentro do GV2 */
+    const antSync = DATA.syncStatus;
+    DATA.syncStatus = { conferencia: { em: '2026-10-06T12:30:00Z', itens: [{ texto: 'fechados: HubSpot 5, cockpit 4' }] } };
+    const nav = GV2.navHTML(), pv2 = GV2.render.prova();
+    DATA.syncStatus = antSync;
+    checar('auditoria 02/11 · G1: a divergência da conferência aparece no menu do GV2 e na Prova',
+      /1 divergência na conferência das 09:30 — ver/.test(nav) && /data-gv2="menu:prova"[^>]*>1 divergência/.test(nav.replace(/title="[^"]*"/g, '')) && pv2.indexOf('fechados: HubSpot 5, cockpit 4') > 0, nav.slice(nav.indexOf('gv2-nav-pe'), nav.indexOf('gv2-nav-pe') + 300));
+    checar('auditoria 02/11 · G1: com gv2-on, as views antigas (dentro de main.app-main) somem de verdade',
+      /body\.gv2-on #appRoot \.app-main > \.view\{display:none !important;\}/.test(tpl) && !/body\.gv2-on #appRoot > \.view/.test(tpl));
+    /* G12: sem ownerId na sessão, "Ver como executivo" some */
+    const antS = global.sessaoAtual;
+    global.sessaoAtual = { role: 'manager', nome: 'Gestor' };
+    const navSem = GV2.navHTML();
+    global.sessaoAtual = antS;
+    checar('auditoria 02/11 · G12: "Ver como executivo" some sem ownerId na sessão', navSem.indexOf('menu:executivo') < 0 && GV2.navHTML().indexOf('menu:executivo') > 0);
+    /* G3: "sem próximo passo" por pessoa é GV2.semProximoPasso; o que é só dos quentes diz "quentes sem passo" */
+    const pp = GV2.render.v8PorPessoa();
+    const spAna = GV2.semProximoPasso(ana.negocios).length;
+    checar('auditoria 02/11 · G3: Funil › Por pessoa tem a coluna "Sem próx. passo" com o número da regra canônica',
+      pp.indexOf('<span>Sem próx. passo</span>') > 0 && new RegExp('data-gv2="v8neg:sempasso:1"[^>]*><span><b class="num[^"]*">' + spAna + '</b>').test(pp), String(spAna));
+    const rx = GV2.render.raiox();
+    checar('auditoria 02/11 · G3: "Negócios para puxar" diz "em Negociação sem passo", não "sem próximo passo (no prazo"',
+      /em Negociação sem passo \(no prazo/.test(rx) && !/sem próximo passo \(no prazo/.test(rx));
+    const pes = GV2.render.v5Pessoa(ana), hj = GV2.render.time();
+    checar('auditoria 02/11 · G3: os cartões de Quentes (Pessoas e Hoje) dizem "quentes sem passo" e não chamam isso de "sem próximo passo"',
+      !/[0-9]+ sem próximo passo<\/span>/.test(pes) && /sem próximo passo no funil/.test(pes) && /quentes? sem passo/.test(hj) && !/>[0-9]+ sem próximo passo</.test(hj));
+    /* G6: o mini do Por pessoa mostra o esperado E a meta; esperado 0 é "mês começando", não "0 de 0" */
+    const rOrig = GV2.v8Ritmo;
+    GV2.v8Ritmo = function (p, b2) { const R = rOrig(p, b2); if (p && R) { R.cli = Object.assign({}, R.cli, { feito: 0, esp: 0, meta: 8 }); } return R; };
+    const pp0 = GV2.render.v8PorPessoa();
+    GV2.v8Ritmo = rOrig;
+    checar('auditoria 02/11 · G6: com esperado 0, o Por pessoa diz "mês começando · meta 8" e nunca "0 de 0"',
+      /mês começando · meta 8/.test(pp0) && !/<\/b> de 0</.test(pp0));
+    /* G7: sem meta é "sem meta" — nada de "N de 0", da meta 8 do "|| 8" nem do MRR de reserva 1500/3000 */
+    const metaEra = ana.meta_clientes_mes;
+    ana.meta_clientes_mes = 0;
+    const pesSem = GV2.render.v5Pessoa(ana).replace(/<[^>]+>/g, ' '), m7 = GV2.v7Meta(ana, 5), mrr0 = GV2.v8dMrr(ana);
+    ana.meta_clientes_mes = metaEra;
+    checar('auditoria 02/11 · G7: meta 0 → "sem meta" na Pessoas (nunca "de 0"), v7Meta sem a meta 8 inventada, MRR sem a reserva 1500/3000',
+      /sem meta/.test(pesSem) && !/[0-9] de 0([^0-9,]|$)/.test(pesSem) && m7.vendas === null && m7.demos === null && mrr0.meta === null && GV2.deMeta(3, 0) === '3 · sem meta' && GV2.deMeta(3, 8) === '3 de 8',
+      JSON.stringify({ m7: m7, mrr: mrr0 }));
+    /* G8: a proposta vencida volta em dias ÚTEIS (régua 7, 9 dias úteis → 2 dias úteis antes de ter 06/10 = sex 02/10, não dom 04/10) */
+    const pB = b.propostas.lista.find(x => x.deal === 'b');
+    checar('auditoria 02/11 · G8: o "vale até" da vencida conta para trás em dias úteis (sex 02/10, não dom 04/10)', pB && pB.valeAteRot === '02/10', JSON.stringify(pB && { st: pB.status, ate: pB.valeAteRot }));
+    checar('auditoria 02/11 · G7: o rodapé da Semana não fixa mais "pleno 8 · rampa 4"', tpl.indexOf('pleno 8 · rampa 4') < 0);
+  }
   checar('cada aba desenha sem erro', ['time', 'raiox', 'rua', 'pessoas', 'propostas', 'playbook', 'prova'].every(a => {
     try { GV2.estado.aba = a; return typeof GV2.render[a]() === 'string'; } catch (e) { falhas.push('aba ' + a + ': ' + e.message); return false; }
   }));
@@ -341,7 +402,6 @@ tabelas.gv2_falta_etapa = [
   checar('a Prova segue limpa com uma praça escolhida', GV2.testes.prova().length === 0, GV2.testes.ultimo.join());
   GV2.estado.prf = 'todas';
   checar('filtro "Sem sistema ou dor": Demo em diante sem um dos dois', GV2.filtroNegocios('semarma').map(n => n.id).join() === 'a', GV2.filtroNegocios('semarma').map(n => n.id).join());
-  checar('rodapé do dinheiro: o maior MRR em jogo é contra a Saipos', (GV2.maiorMrrContra(b) || {}).s === 'Saipos' && GV2.maiorMrrContra(b).v === 500);
   GV2.estado.filtro = 'todos'; GV2.estado.aba = 'raiox'; GV2.estado.rxm = 'funil';
   const rxf = GV2.render.raiox();
   /* v5: a tabela de Negócios (Sistema, filtros, Cobrar) vive na gaveta "Ver todos os negócios" */
@@ -388,13 +448,9 @@ tabelas.gv2_falta_etapa = [
   let pf = '';
   try { pf = GV2.render.pessoas(); } catch (e) { falhas.push('Pessoas › Funil: ' + e.message); }
   const ana1 = GV2.base.porId['1'];
-  const fp1 = GV2.render.funilPessoa(ana1);
-  checar('Pessoas › Funil em barras: o funil do mês e as etapas clicáveis, sem negócio aberto até escolher', /Funil do mês/.test(pf) && /data-gv2="fpetapa:4"/.test(pf) && !/data-gv2="ficha:/.test(fp1));
+  /* 02/11/26: o render.funilPessoa (dossiê v2) saiu como código morto; o funil da pessoa é o da gaveta */
+  checar('Pessoas › Funil em barras: o funil do mês e as etapas clicáveis', /Funil do mês/.test(pf) && /data-gv2="fpetapa:4"/.test(pf));
   checar('Pessoas v3 › Funil: "Para puxar" com Cobrar em cada linha e Cobrar os N (travado d, quente a sem passo)', /Para puxar · travados e quentes sem passo · 2/.test(pf) && /data-gv2="cobrar:neg:d"/.test(pf) && /data-gv2="cobrar:neg:a"/.test(pf) && /data-gv2="p3:cobrartodos:1"/.test(pf));
-  GV2.estado.fpEtapa = 4;
-  const pf2 = GV2.render.funilPessoa(ana1);
-  checar('Pessoas › Funil: clicar numa etapa lista só os negócios dela, da pessoa', /data-gv2="ficha:a"/.test(pf2) && !/data-gv2="ficha:d"/.test(pf2) && !/data-gv2="ficha:b"/.test(pf2));
-  GV2.estado.fpEtapa = null;
   /* v5: a pauta completa, os combinados e o Registrar abrem na gaveta do 1:1 */
   GV2.estado.v5Gav = { t: 'um', id: '1' };
   const um = GV2.render.pessoas();
@@ -478,11 +534,9 @@ tabelas.gv2_falta_etapa = [
   }
   /* D5 (08/10/26): a célula da Grade abre o dia da pessoa em Rua › Rotas */
   {
+    /* 02/11/26: a Grade v4 (render.ruaSemana) saiu como código morto; o comando ruadia segue */
     GV2.estado.rua = 'semana';
-    const gs = GV2.render.ruaSemana();
     const iso0 = GV2.base.semana[0].iso;
-    checar('D5: cada célula da Grade é botão para o dia da pessoa', gs.indexOf('data-gv2="ruadia:1:' + iso0 + '"') > 0
-      && (gs.match(/data-gv2="ruadia:/g) || []).length === GV2.base.ordem.length * GV2.base.semana.length);
     const pintarD5 = GV2.pintar; GV2.pintar = function () {};
     GV2.rotaComando('ruadia', ['ruadia', '2', iso0]);
     GV2.pintar = pintarD5;
@@ -711,7 +765,8 @@ tabelas.gv2_falta_etapa = [
           && fsx.readFileSync(px.join(__dirname, '..', 'api', 'hubspot-webhook.js'), 'utf8').indexOf("req.query.acao === 'atualizar'") > 0 && fsx.readdirSync(px.join(__dirname, '..', 'api')).filter(function (f) { return /\.js$/.test(f); }).length <= 12);
     }
     checar('executivo · Meu funil: o R$ dos sem próximo passo usa a lista do movimento (não x.semPasso) e Ag. Pagamento vazio não manda puxar munição (09/10/26)',
-      tpl.indexOf('const mrrSemPasso = itens.filter(function (x) { return !(x.est && x.est.passo); })') > 0 && tpl.indexOf('return x.semPasso; })') < 0
+      /* 02/11/26: a lista do movimento virou fn2SemPasso, e o R$ lê movimentos[0].itens */
+      tpl.indexOf('const mrrSemPasso = ((movimentos[0] && movimentos[0].itens) || [])') > 0 && tpl.indexOf('const semPasso = fn2SemPasso(itens);') > 0
         && tpl.indexOf("col.pagto ? 'Os negócios que aceitarem a proposta em Negociação chegam aqui.'") > 0);
     GV2.estado.menu = true;
     const navMenu = GV2.navHTML();
@@ -724,17 +779,8 @@ tabelas.gv2_falta_etapa = [
     const fpp = GV2.render.funilPorPessoa();
     const algumMenor = GV2.base.pessoas.some(function (p) { return p.funil_mes.portas > 0 && p.funil_mes.portas < 3 && p.funil_mes.decisor > 0; });
     checar('v5 · Funil por pessoa: a taxa só aparece com 3 ou mais no passo anterior (senão "—", nunca 400%)', !/>[0-9]{3,}%</.test(fpp) && /a taxa só aparece com 3 ou mais/.test(fpp) && (!algumMenor || /<small>—<\/small>/.test(fpp)));
-    /* Território: o Abastecer com a regra C8 (estoque ÷ contas que saíram por semana) */
-    const g = global, ant = { R: g.RT7_ESTADO, E: g.rt7Estoque, O: g.rt7Orfao };
-    const ids = GV2.base.pessoas.map(function (p) { return p.id; });
-    const E = {}; E[ids[0]] = { contas: 30, consumo: 36, semanas: 30 / 36 }; E[ids[1]] = { contas: 40, consumo: 30, semanas: 40 / 30 }; E[ids[2]] = { contas: 50, consumo: null, semanas: null };
-    g.RT7_ESTADO = { carregou: true, leads: [{ id: 'x', status: 'pendente', responsavel_owner_id: ids[0], bairro: 'Tijuca', created_at: '2026-10-07T12:00:00Z' }] };
-    g.rt7Estoque = function (id) { return E[id] || { contas: 80, consumo: 20, semanas: 4 }; };
-    g.rt7Orfao = function () { return { paradas: 722, cidades: ['Vitória/ES'] }; };
-    const ab = GV2.render.v5Abastecer();
-    const k0 = GV2.v5Estoque(GV2.base.pessoas[0]).k, k1 = GV2.v5Estoque(GV2.base.pessoas[1]).k, k2 = GV2.v5Estoque(GV2.base.pessoas[2]).k;
-    g.RT7_ESTADO = ant.R; g.rt7Estoque = ant.E; g.rt7Orfao = ant.O;
-    checar('v5 · C8: < 1 semana = sem estoque (Importar), < 1,5 = acompanhar, sem consumo = "consumo não medido"', k0 === 'sem' && k1 === 'acomp' && k2 === 'nao' && /data-gv2="v5rt7:imp:/.test(ab), [k0, k1, k2].join());
+    /* 02/11/26: o Abastecer do Território v5/v9 (v5Abastecer, v5Estoque) saiu como código morto — o
+       Território v10 (t10) não o usa */
     /* a leitura da praça repinta o Território quando termina (só repintava o Raio X › Praça) */
     {
       const pg = GV2.pxGlobal, cm = GV2.camada, pt = GV2.pintar, cacheVv = GV2.px.cache.vv;
@@ -747,7 +793,7 @@ tabelas.gv2_falta_etapa = [
       GV2.pxGlobal = pg; GV2.camada = cm; GV2.pintar = pt; GV2.px.cache.vv = cacheVv;
       checar('v5 · Território: a leitura da praça termina e repinta a aba (senão fica no esqueleto)', pintou >= 2, String(pintou));
     }
-    checar('v5 · Território: fila de aprovação por dono, território sem dono com o número, e sem jargão', /Fila de aprovação/.test(ab) && /data-gv2="v5rt7:fila:/.test(ab) && /Território sem dono · 722 contas/.test(ab) && !/torneira|munição|backlog/i.test(ab + GV2.render.terr()));
+    checar('v5 · Território: sem jargão', !/torneira|munição|backlog/i.test(GV2.render.terr()));
   }
   /* D1 e D2 (08/10/26): só dá para medir no Google de verdade; aqui, que as travas estão no lugar */
   {
@@ -1056,20 +1102,15 @@ tabelas.gv2_falta_etapa = [
     const fora = P.filter(function (x) { return x.tipo === 'fora'; });
     checar('v9 Decidir: conta de quem saiu entra uma vez por grafia de cidade, e só a que ainda pode mudar (na_rota fica)',
       fora.length === 1 && fora[0].n === 2 && fora[0].titulo === 'Nova Iguaçu/RJ', JSON.stringify(fora.map(function (x) { return [x.n, x.titulo]; })));
+    /* 02/11/26: a gaveta da v9 (render.v9Gav e as v9Gav*) saiu como código morto — nenhuma tela a
+       desenhava desde o Território v2; o motor de escrita (aprovar, desfazer, dar dono) segue medido */
     GV2.v9Comando('v9g', ['v9g', 'contas', ids[0]]);
-    let gav = GV2.render.v9Gav();
-    checar('v9 Contas: abre na pessoa com o total e o rodapé; marcar conta muda o número do Aprovar',
-      /Contas de [^<]* · 2</.test(gav) && /Aprovar selecionadas \(0\)/.test(gav));
     GV2.v9Comando('v9marcar', ['v9marcar', 'a1']);
     GV2.v9Comando('v9conf', ['v9conf', 'aprovar']);
-    gav = GV2.render.v9Gav();
-    checar('v9 Contas: Aprovar pede confirmação na gaveta (sem confirm do navegador) dizendo o dia (padrão: a segunda)', /Pôr 1 conta no plano de [^<]* em seg 19\/10\?/.test(gav) && /data-gv2="v9dia:sem"|data-gv2="v9dia:municao"/.test(gav) && /data-gv2="v9aprovar"/.test(gav));
     await GV2.v9Aprovar();
     const a1 = g.RT7_ESTADO.leads.find(function (l) { return l.id === 'a1'; });
     checar('v9 Contas: aprovar grava status na rota + data_rota da segunda + dono, e só a marcada',
       pedidos.length === 1 && pedidos[0].c.status === 'na_rota' && pedidos[0].c.data_rota === '2026-10-19' && pedidos[0].c.responsavel_owner_id === ids[0] && pedidos[0].ids.join() === 'a1' && a1.status === 'na_rota', JSON.stringify(pedidos));
-    gav = GV2.render.v9Gav();
-    checar('v9 Contas: depois de aprovar, a faixa verde com o dia e o Desfazer', /1 aprovada · no plano de [^<]* em seg 19\/10/.test(gav) && /data-gv2="v9desfazer:0"/.test(gav));
     await GV2.v9Desfazer(0);
     {
       const dias = GV2.v9Dias();
@@ -1088,13 +1129,10 @@ tabelas.gv2_falta_etapa = [
     GV2.v9Comando('v9g', ['v9g', 'dono']);
     const kFora = fora[0].k;
     GV2.v9Comando('v9conf', ['v9conf', 'dar', kFora, ids[1]]);
-    gav = GV2.render.v9Gav();
-    checar('v9 Decidir dono: dar dono pede confirmação no bloco', /Dar 2 contas para/.test(gav) && gav.indexOf('data-gv2="v9dar:' + kFora + ':' + ids[1] + '"') > 0);
     await GV2.v9Dar(kFora, ids[1]);
     const P2 = GV2.v9Pendencias();
-    gav = GV2.render.v9Gav();
-    checar('v9 Decidir dono: grava o dono nas contas, o bloco fica verde e o número de sem dono cai',
-      pedidos[2] && pedidos[2].c.responsavel_owner_id === ids[1] && !P2.some(function (x) { return x.tipo === 'fora'; }) && /dono decidido/.test(gav) && GV2.v9SemDono(P2) === 1, JSON.stringify(pedidos[2]));
+    checar('v9 Decidir dono: grava o dono nas contas e a pendência de quem saiu some',
+      pedidos[2] && pedidos[2].c.responsavel_owner_id === ids[1] && !P2.some(function (x) { return x.tipo === 'fora'; }), JSON.stringify(pedidos[2]));
     let pedidosAntes = pedidos.length;
     g.supa = { from: function () { return { update: function () { return { in: function () { return { select: async function () { return { data: [], error: null }; } }; } }; } }; } };
     GV2.v9Comando('v9g', ['v9g', 'contas', ids[0]]);
@@ -1102,15 +1140,8 @@ tabelas.gv2_falta_etapa = [
     await GV2.v9Aprovar();
     checar('v9 Contas: banco que devolve 0 linhas é "nada foi gravado", nunca ✓', /Nada foi gravado/.test(GV2.estado.v9g.erro || '') && !GV2.estado.v9g.ok);
     g.RT7_FONTES = [{ id: 'casa_dos_dados', rot: 'Casa dos Dados', ativa: true }, { id: 'google_places', rot: 'Google Places', ativa: false, porque: 'x' }, { id: 'tripadvisor', rot: 'TripAdvisor', ativa: false, porque: 'y' }];
-    GV2.v9Comando('v9g', ['v9g', 'imp', ids[0]]);
-    gav = GV2.render.v9Gav();
-    checar('v9 Importar: fontes indisponíveis dizem o porquê e o Disparar desliga sem cidade',
-      /sem cobrança no Google/.test(gav) && /termos de uso/.test(gav) && (/data-gv2="v9disparar" disabled/.test(gav) || /data-gv2="v9cid:/.test(gav)));
     GV2.estado.aba = 'time'; try { GV2.visitar('rotas'); } catch (e) { /* a antiga não existe aqui: conta como não ter vindo para o Território */ }
     checar('v9: "Rotas & Prospecção" não abre mais: visitar rotas cai no Território', GV2.estado.aba === 'terr');
-    const fab = b.pessoas[2]; const fase0 = fab.fase; fab.fase = 'Preparação';
-    const abR = GV2.v9Abastecer(); fab.fase = fase0;
-    checar('v9 Abastecer: quem está em rampagem não é cobrado por consumo (selo próprio, no fim)', abR[abR.length - 1].id === fab.id && abR[abR.length - 1].e.k === 'rampa');
     g.RT7_ESTADO = ant.R; g.rt7Ativos = ant.A; g.rt7FilaDoExec = ant.F; g.rt7Score = ant.S; g.rt7Marcado = ant.M; g.rt7ProximaSegunda = ant.P; g.rt7Estoque = ant.E; g.rt7Registrar = ant.G; g.rt7Carteira = ant.C; g.supa = ant.supa;
     GV2.pintar = ant.pintar; GV2.ir = ant.ir; GV2.estado.aba = ant.aba; GV2.estado.v9g = null; GV2.estado.v9feito = null; GV2.estado.v9conf = null;
   }
@@ -1175,7 +1206,8 @@ tabelas.gv2_falta_etapa = [
     const rotasOrig = tabelas.rotas_da_semana;
     tabelas.rotas_da_semana = [];
     const b0 = await GV2.montar();
-    const semPasso = [].concat.apply([], b0.pessoas.map(p => p.negocios || [])).filter(n => n.semPasso && !n.agPag);
+    /* 02/11/26: o campo n.semPasso saiu (auditoria); a regra é GV2.semProximoPasso */
+    const semPasso = GV2.semProximoPasso([].concat.apply([], b0.pessoas.map(p => p.negocios || [])));
     const hojeIso = b0.agora.iso;
     const futuro = semPasso[0], passado = semPasso[1];
     tabelas.rotas_da_semana = [
@@ -1186,9 +1218,10 @@ tabelas.gv2_falta_etapa = [
     const achar = (b, id) => [].concat.apply([], b.pessoas.map(p => p.negocios || [])).find(n => n.id === id);
     const f1 = futuro && achar(b1, futuro.id), p1 = passado && achar(b1, passado.id);
     checar('no plano = próximo passo: o quente planejado para depois de amanhã sai de "sem próximo passo"',
-      semPasso.length >= 2 && f1 && !f1.semPasso && /^no plano · /.test(f1.proximo_passo || '') && !f1.puxar === !f1.travado,
-      JSON.stringify([semPasso.length, f1 && f1.semPasso, f1 && f1.proximo_passo]));
-    checar('no plano = próximo passo: plano que já passou não conta', p1 && p1.semPasso && !p1.proximo_passo, JSON.stringify([p1 && p1.semPasso, p1 && p1.proximo_passo]));
+      semPasso.length >= 2 && f1 && GV2.semProximoPasso([f1]).length === 0 && /^no plano · /.test(f1.proximo_passo || '') && !f1.puxar === !f1.travado,
+      JSON.stringify([semPasso.length, f1 && f1.proximo_passo]));
+    checar('no plano = próximo passo: plano que já passou não conta', p1 && GV2.semProximoPasso([p1]).length === 1 && !p1.proximo_passo, JSON.stringify([p1 && p1.proximo_passo]));
+    checar('auditoria 02/11 · G3: o campo morto n.semPasso saiu da base', !('semPasso' in f1));
     checar('no plano = próximo passo: a carga lê também a semana que vem',
       codigo.indexOf("rotaProx: supa.rpc('rotas_da_semana', { p_segunda: GV2.somaDias(seg, 7)") > 0);
     tabelas.rotas_da_semana = rotasOrig;
@@ -1526,25 +1559,14 @@ tabelas.gv2_falta_etapa = [
       D.data === '2026-10-28' && D.vencida && GV2.rpD45(fabio).data === '2026-11-18' && !GV2.rpD45(fabio).vencida, JSON.stringify(D));
     checar('rampa · "estende" marca nova data e pede outra decisão nela',
       (function () { const y = pes('y', { decisao: { decisao: 'estende', novaData: '2026-11-13', plano: 'semana 1: 5 por dia' } }); const d = GV2.rpD45(y); return d.pendente && d.data === '2026-11-13' && !d.vencida; })());
-    checar('rampa · prospecção antes da S4 aprovada é alerta (nunca trava); depois da S4 não',
-      GV2.rpProsp(diego) && !GV2.rpProsp(leandro) && GV2.rpDiasTxt(['2026-10-28', '2026-10-27']) === '27 e 28/10' && GV2.rpDiasTxt(['2026-10-30', '2026-11-02']) === '30/10 e 02/11');
+    /* 02/11/26: o quadro da Rampa (render.rampa, rpQuadro, rpLinha, rpCelula, rpGav*, rpGrupos,
+       rpSemanaItens, rpProsp) saiu como código morto — a aba saiu do menu em 01/11; fica o que o
+       padrinho e o cadastro usam (rpLer, rpPessoas, rpFase, rpD45, rpComando, gravar) */
+    checar('rampa · os dias de prospecção por extenso',
+      GV2.rpDiasTxt(['2026-10-28', '2026-10-27']) === '27 e 28/10' && GV2.rpDiasTxt(['2026-10-30', '2026-11-02']) === '30/10 e 02/11');
     checar('rampa · a rua aprova com 6 por dia por 2 semanas seguidas (semanas inteiras)',
       GV2.rpRuaOk({ medido: { semanas: [sem('a', 30), sem('b', 31)] } }) && !GV2.rpRuaOk({ medido: { semanas: [sem('a', 29), sem('b', 31)] } })
         && !GV2.rpRuaOk({ medido: { semanas: [sem('a', 30), sem('b', 18, 3)] } }) && GV2.rpVisitasDia(leandro) === 4.2);
-    GV2.estado.rpTurma = '2026-10-05';
-    const html = GV2.render.rampa();
-    checar('rampa · o quadro tem as turmas com contagem, a célula vencida com "Aprovar fase" e o alerta de prospecção com o padrinho',
-      /Turma 05\/10<span class="num">3<\/span>/.test(html) && /Turma 14\/09<span class="num">1<\/span>/.test(html)
-        && /Venceu 25\/10 sem aprovar/.test(html) && /data-gv2="rp:aprovar:camila:s23">Aprovar fase/.test(html)
-        && /3 visitas de prospecção em 27 e 28\/10, antes da S4 aprovada/.test(html) && /Estendida até 06\/11/.test(html)
-        && /A partir de 04\/11/.test(html) && /Em curso · até 03\/11/.test(html), html.slice(0, 300));
-    const g = [];
-    GV2.rpGrupos(g, GV2.base, function (p, s, a) { return { n: p.nome, s: s, a: a }; });
-    checar('rampa · "Quem precisa de você": fase vencida e dia 45 sem decisão',
-      g.map(function (x) { return x.k; }).join() === 'rpfase,rpd45' && g[0].chips[0].s === 'S2–3 venceu 25/10' && g[1].chips[0].s === 'venceu 28/10', JSON.stringify(g.map(function (x) { return x.chips; })));
-    const it = GV2.rpSemanaItens('2026-10-26');
-    checar('rampa · a semana do gestor ganha "Aprovações da rampa" e "Dia 45 decidido"',
-      it.length === 2 && it[0].t === 'Aprovações da rampa' && it[0].feito === 1 && it[0].total === 2 && it[1].t === 'Dia 45 decidido' && it[1].total === 1, JSON.stringify(it));
     /* gravar: aprovar exige evidência; sem bater a meta pede motivo; nada vai para o HubSpot */
     const gravou = [];
     global.supa.from = function (tab) { return { upsert: function (row, o) { gravou.push({ tab: tab, row: row, o: o }); return Promise.resolve({ error: null }); },
@@ -1573,7 +1595,7 @@ tabelas.gv2_falta_etapa = [
     checar('rampa · "estende com plano" grava a decisão com nova data de 15 dias e o plano',
       gravou.length === 1 && gravou[0].tab === 'rampa_decisao_d45' && gravou[0].row.decisao === 'estende' && gravou[0].row.nova_data === '2026-11-15' && /Semana 1/.test(gravou[0].row.plano), JSON.stringify(gravou[0]));
     await new Promise(function (r) { setTimeout(r, 5); });
-    checar('rampa · nenhuma escrita no HubSpot no módulo', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.RP = {'), codigo.indexOf('GV2.rpSemanaItens = function'))));
+    checar('rampa · nenhuma escrita no HubSpot no módulo', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.RP = {'), codigo.indexOf('GV2.CB = {'))));
     global.supa.from = supaEra;
     Object.assign(GV2.rp, rpEra);
     GV2.estado.rpGav = null; GV2.estado.rpForm = null; GV2.estado.rpErro = null;
@@ -1603,6 +1625,20 @@ tabelas.gv2_falta_etapa = [
     checar('combinados · rituais: daily e simulação só o que foi marcado; 1:1 e fecho da fonte',
       R.daily.feito === 2 && R.daily.total === 2 && R.sim.feito === 1 && R.sim.total === 2 && R.um.feito === 0 && R.fecho.total === 1 && R.feito === 3 && R.total === 6, JSON.stringify(R));
     checar('combinados · divergência na auditoria é vermelho na hora', GV2.cbMedir(rui)[4].k === 'erro' && GV2.cbMedir(rui)[4].curto === '1');
+    /* G5 (auditoria 02/11/26): na segunda, com o último 1:1 há 4 dias, o 1:1 ainda não é devido (fora da
+       conta, nada de "não houve"); na sexta (último dia útil) é. Feriado não entra nos rituais. */
+    {
+      const hojeEra = GV2.cb.d.hoje, ateEra = GV2.cb.d.ate;
+      GV2.cb.d.hoje = '2026-10-26'; GV2.cb.d.ate = '2026-10-26';
+      const cedo = pessoa('cedo', '1', { rituais: { umAUm: 0, ultimoUmAUm: '2026-10-22', fechoDias: [], marcados: [{ dia: '2026-10-26', ritual: 'daily', presente: true }] } });
+      const Rc = GV2.cbRituais(cedo), hc = GV2.render.cbRituais(cedo);
+      GV2.cb.d.hoje = hojeEra; GV2.cb.d.ate = ateEra;
+      const fer = pessoa('fer', '1', { rituais: { umAUm: 1, ultimoUmAUm: '2026-10-28', fechoDias: [{ dia: '2026-11-02', fechou: false }], marcados: [{ dia: '2026-11-02', ritual: 'daily', presente: false }] } });
+      const Rf = GV2.cbRituais(fer);
+      checar('auditoria 02/11 · G5: na segunda o 1:1 não é cobrado (fora da conta, "até sex 30/10"), e feriado não conta daily nem fecho',
+        Rc.um.total === 0 && !Rc.um.devido && Rc.total === 1 && hc.indexOf('não houve') < 0 && hc.indexOf('até sex 30/10') > 0 && Rf.daily.total === 0 && Rf.fecho.total === 0,
+        JSON.stringify({ um: Rc.um, tot: Rc.total, fd: Rf.daily, ff: Rf.fecho }));
+    }
     checar('combinados · o degrau sai do histórico do MESMO combinado; registro falso vai direto ao 3',
       GV2.cbDegrau(bia, 3, false) === 2 && GV2.cbDegrau(bia, 4, false) === 1 && GV2.cbDegrau(bia, 4, true) === 3
         && GV2.cbDegrau(pessoa('z', '3', { ocorrencias: [{ combinado: 3, degrau: 2, dia: '2026-10-20' }] }), 3, false) === 3
@@ -2049,7 +2085,8 @@ tabelas.gv2_falta_etapa = [
     const fds = ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30'];
     const s2 = EXH.semana({ meta_visitas_dia: 6, semana: fds.map(function (iso) { return { iso: iso, todas: 0, passado: true }; }) }, { semana: fds.map(function (iso) { return { iso: iso }; }), agora: { iso: '2026-11-01' } });
     checar('semana do executivo · no domingo a semana fechou: o que falta "ficou faltando"', s2.meta === 30 && s2.aberta === false && /sem\.aberta \? 'faltam ' \+ sem\.faltam : 'ficaram faltando '/.test(codigo), JSON.stringify(s2));
-    checar('rua da semana · feriado aparece como feriado e fica fora da meta', /return '<span class="gv2-sem-cel is-sem">feriado<\/span>'/.test(codigo) && /p\.meta_visitas_dia \* dias\.filter\(function \(d\) \{ return GV2\.util\(d\.iso\); \}\)\.length/.test(codigo));
+    /* 02/11/26: a Grade v4 (render.ruaSemana) saiu como código morto; a Rua v5 (render.v5Semana) é a que mostra a semana */
+    checar('rua da semana · feriado aparece como feriado e fica fora da meta', /s = d\.todas \? 'feriado · fez ' \+ d\.todas : 'feriado · não conta'/.test(codigo) && /const uteis = b\.semana\.filter\(function \(d\) \{ return GV2\.util\(d\.iso\); \}\)\.length;/.test(codigo));
     checar('time · a legenda das metas sai do ranking, não do "8 e 2" escrito à mão', /metaPorPat/.test(tpl) && !/2 para quem está em rampa/.test(tpl));
     checar('rua da semana do gestor · semana fechada diz "ficaram faltando"', /\(aberta \? 'faltam ' : 'ficaram faltando '\) \+ \(meta - feito - falta\)/.test(codigo) && /const aberta = b\.semana\.some\(function \(d\) \{ return GV2\.util\(d\.iso\) && d\.iso >= b\.agora\.iso; \}\);/.test(codigo));
     {
@@ -2078,6 +2115,88 @@ tabelas.gv2_falta_etapa = [
       /venc \+ ' com passo vencido \+ ' \+ \(sp - venc\) \+ ' nunca '/.test(codigo));
     checar('ver como executivo · quem está fora do time fica sem meta, não com 10', tpl.indexOf("fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta'") > -1 && tpl.indexOf('fechadosNoMes: 0, metaMensal: 10,') < 0);
   }
+  /* G9 (auditoria 02/11/26): o "sem próx. passo" do Meu funil do executivo é a regra canônica —
+     Ag. Pagamento fora e o mesmo restaurante em duas etapas conta uma vez (no mais avançado);
+     "ganho + onboarding" conta as etapas laterais, não os itens de venda (dava 0 sempre) */
+  {
+    const i0 = tpl.indexOf('const FN2_AG_PAGAMENTO');
+    const i1 = tpl.indexOf('/* ── OS TRÊS MOVIMENTOS', i0);
+    const fonte = i0 > 0 && i1 > i0 ? tpl.slice(i0, i1) : '';
+    let fn = null;
+    try {
+      fn = new Function('GV2', 'FN2_ETAPA_PERDIDO', 'FN2_ETAPAS_ABERTAS', fonte + '\nreturn fn2SemPasso;')(GV2, '1396006164',
+        ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'].map(id => ({ id })));
+    } catch (e) { fn = null; }
+    const it = (id, stageId, nome, passo, dias) => ({ lead: { id, name: nome, ownerId: '1' }, stageId, dias: dias || 1, est: { passo } });
+    const lista = [
+      it('1', '1395880469', 'Bar do Zé', false), it('2', '1395880471', 'Restaurante Bar do Zé', false), /* repetido: fica o de Demo */
+      it('3', '1395880473', 'Casa Paga', false), /* Ag. Pagamento: fora */
+      it('4', '1396005401', 'Cantina', true), it('5', '1395880469', 'Pizzaria Nova', false)
+    ];
+    const sp = fn ? fn(lista).map(x => x.lead.id).sort().join() : 'sem função';
+    checar('auditoria 02/11 · G9: Meu funil · sem próx. passo tira Ag. Pagamento e conta o repetido uma vez (no mais avançado)', sp === '2,5', sp);
+    checar('auditoria 02/11 · G9: Meu funil · "ganho + onboarding" conta as etapas laterais e o Playbook usa a mesma regra',
+      /const nGanho = colGanho \? laterais\.filter/.test(tpl) && /laterais\.filter\(function \(x\) \{ return String\(x\.stageId\) === String\(FN3_ETAPA_ONBOARDING\)/.test(tpl) && tpl.indexOf('const sem = new Set(typeof fn2SemPasso === \'function\'') > 0);
+  }
+  /* G12 (auditoria 02/11/26): plural de "saiu do funil", uma régua só de "muitos travados", e o Território
+     não chama de "viraram negócio" quem só tem negócio */
+  checar('auditoria 02/11 · G12: "2 saíram do funil" (plural) e "1 saiu do funil"', codigo.indexOf("sairam + (sairam > 1 ? ' saíram do funil' : ' saiu do funil')") > 0);
+  checar('auditoria 02/11 · G12: "muitos travados" é GV2.MUITOS_TRAVADOS em todo lugar (nada de 3, 4, 5 ou 10 soltos)',
+    GV2.MUITOS_TRAVADOS === 4 && (codigo.match(/travados(\.length|\s*\|\|\s*\[\]\)\.length) >= GV2\.MUITOS_TRAVADOS/g) || []).length >= 6 && !/travados(\.length|\s*\|\|\s*\[\]\)\.length) >= (4|5|10)\b/.test(codigo));
+  checar('auditoria 02/11 · G12: Território diz "Com negócio" (tem negócio, antes ou depois da visita), não "Viraram negócio"', codigo.indexOf("r: 'Com negócio'") > 0 && codigo.indexOf("r: 'Viraram negócio'") < 0);
+  /* G2 (auditoria 02/11/26): no feriado o plano do dia é o REAL (o "fds ? 0" zerava e a Hoje
+     discordava da Rua); quem tem plano e não saiu não vira exceção nem "nenhuma visita" */
+  await (async function () {
+    const utilOrig = GV2.util;
+    GV2.util = function (iso) { return iso !== HOJE && utilOrig(iso); };
+    const bF = await GV2.montar();
+    GV2.util = utilOrig;
+    const biaF = bF.porId['2'];
+    checar('auditoria 02/11 · G2: no feriado o plano de hoje é o real (6 paradas), sem exceção de "plano sem visita" e sem "nenhuma visita"',
+      biaF.hoje.paradas_plano === 6 && bF.time.paradas === GV2.base.time.paradas && (biaF.excecao & 2) === 0 && !/nenhuma visita/.test(biaF.motivo), JSON.stringify({ pl: biaF.hoje.paradas_plano, exc: biaF.excecao, m: biaF.motivo }));
+  })();
+  /* G13 (02/11/26, aprovado pelo dono): a carteira do gestor entra como "você" — contada como a de um
+     executivo, mas fora de b.pessoas, da meta, do ranking e do "Quem precisa de você" */
+  await (async function () {
+    const antes = { base: GV2.base, gav: DATA.funilDoGestor };
+    DATA.funilDoGestor = {
+      '1395880472': [lead('g1', '99', 2, 700, false, false), lead('g2', '99', 12, 300, true, true)],
+      '1395880469': [lead('g3', '99', 1, 0, false, false)],
+      '1395880473': [lead('g4', '99', 9, 100, true, false)]
+    };
+    const bV = await GV2.montar();
+    GV2.base = bV;
+    const V = bV.voce;
+    const semVoce = antes.base;
+    const eo = console.error; console.error = () => {};
+    const provaV = GV2.testes.prova();
+    console.error = eo;
+    const hj = GV2.render.time(), pv = GV2.render.prova(), pp = GV2.render.v8PorPessoa();
+    const grupos = JSON.stringify(GV2.v5Grupos().grupos);
+    GV2.base = antes.base; DATA.funilDoGestor = antes.gav;
+    checar('auditoria 02/11 · G13: a carteira do gestor vira b.voce (quentes 3 com Ag. Pag., travado 1, sem próximo passo 2 = g1 e g3)',
+      !!V && V.quentes.length === 3 && V.travados.length === 1 && V.semProximoPasso === 2 && V.quentesSemPasso === 1, JSON.stringify(V && { q: V.quentes.length, t: V.travados.length, sp: V.semProximoPasso, qsp: V.quentesSemPasso }));
+    checar('auditoria 02/11 · G13: "você" fica FORA de b.pessoas, dos totais do time, da meta e do "Quem precisa de você"',
+      !bV.pessoas.some(p => p.id === '99') && bV.time.quentes === semVoce.time.quentes && bV.time.travados === semVoce.time.travados && bV.time.metaMes === semVoce.time.metaMes && !bV.negocios.some(n => n.dono === '99') && grupos.indexOf('"99"') < 0 && provaV.length === 0, provaV.join(' · '));
+    checar('auditoria 02/11 · G13: a Hoje mostra "+ você N" ao lado do time, a Prova e o Por pessoa têm a linha "Você" à parte',
+      /\+ você 3/.test(hj) && /\+ você 1/.test(hj) && pv.indexOf('Você (fora do time · não soma no topo)') > 0 && pp.indexOf('sua carteira · fora da meta do time') > 0);
+  })();
+  /* G11 (auditoria 02/11/26): a pintura que lança no boot vira estado de erro com "Tentar de novo"
+     (antes ficava no esqueleto). Por último: o await deixa as leituras pendentes resolverem. */
+  await (async function () {
+    const antB = GV2.base, antP = GV2.pintar, antM = GV2.montar, antR = GV2.raiz, antOk = GV2.telaOk;
+    const raiz = { innerHTML: '' };
+    GV2.base = null; GV2.telaOk = false;
+    GV2.raiz = function () { return raiz; };
+    GV2.montar = async function () { return antB; };
+    GV2.pintar = function () { throw new Error('pintura quebrou'); };
+    const eo = console.error; console.error = () => {};
+    try { await GV2.carregar(); } catch (e) { /* o carregar não pode lançar */ }
+    console.error = eo;
+    checar('auditoria 02/11 · G11: se a pintura lança no boot, a tela mostra o erro com "Tentar de novo" (não fica no esqueleto)',
+      /Tentar de novo/.test(raiz.innerHTML) && /pintura quebrou/.test(raiz.innerHTML), raiz.innerHTML.slice(0, 200));
+    GV2.base = antB; GV2.pintar = antP; GV2.montar = antM; GV2.raiz = antR; GV2.telaOk = antOk;
+  })();
 
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);

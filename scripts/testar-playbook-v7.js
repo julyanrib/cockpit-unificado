@@ -346,8 +346,11 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
   /* 7. O NÚMERO VIVO NÃO PODE SER CHUTE: o resumo do capítulo cita "os seus N sem próximo
      passo", e esse N vem da mesma conta do Meu Funil. Eu tinha lido um campo `.semPasso`
      que não existe — pb7EstadoDoFunil devolve uma LISTA — e a tela teria dito "undefined". */
-  checar('o resumo conta os sem passo a partir da lista real do funil',
-    template.indexOf("estado.filter(function (x) { return !x.passo; }).length") > -1);
+  /* 02/11/26 (auditoria): a lista ganhou o campo semPasso (a regra do Meu funil, fn2SemPasso: Ag.
+     Pagamento fora, repetido uma vez), e o resumo conta por ele */
+  checar('o resumo conta os sem passo a partir da lista real do funil, pela regra do Meu funil',
+    template.indexOf("estado.filter(function (x) { return x.semPasso; }).length") > -1
+    && template.indexOf('semPasso: sem.has(x),') > -1 && template.indexOf("estado.filter(function (x) { return !x.passo; }).length") < 0);
 })();
 
 /* ══ PLAYBOOK v9 — A LEITURA E O QUIZ DO CAPÍTULO (04/09/26) ════════════════════════════

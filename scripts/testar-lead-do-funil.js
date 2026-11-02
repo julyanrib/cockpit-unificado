@@ -46,7 +46,10 @@ const codigo = [
   trecho('const SLA_DAYS = {\n', '};\n'),
   trecho("const FIELD_SALES_STAGE_PROPS = ['origem_do_lead',", "'reuniao_agendada', 'description'];\n"),
   funcao('function estadoDaRegua(dias, stageId, proximaAtividadeRaw) {'),
-  funcao('function diasUteisEntre(startMs, endMs) {'),
+  /* 02/11/26 (auditoria): diasUteisEntre MUDOU de propósito (feriado nacional fora, dia cortado em
+     America/Sao_Paulo). O código antigo recebe a função nova, para o resto do card seguir provado
+     idêntico; a conta de dia útil tem a prova própria lá embaixo. */
+  'const diasUteisEntre = this.__diasUteisNovo;',
   funcao('function daysInCurrentStage(properties) {'),
   funcao('function coordenadaValida(valor) {'),
   funcao('function comTemperatura(lead, stageIdExplicito) {'),
@@ -67,7 +70,7 @@ const codigo = [
   'this.mapearAntigo = mapearAntigo; this.mapearPerdidoAntigo = mapearPerdidoAntigo; this.mapearGanhoAntigo = mapearGanhoAntigo; this.mapearOnboardingAntigo = mapearOnboardingAntigo; this.SLA_DAYS_ANTIGO = SLA_DAYS; this.estadoDaRegua = estadoDaRegua;'
 ].join('\n');
 
-const caixa = { temperaturaDoNegocio, CONFIG_TEMPERATURA, Date, Math, Object, String, Number, isFinite, isNaN, parseFloat, console };
+const caixa = { temperaturaDoNegocio, CONFIG_TEMPERATURA, Date, Math, Object, String, Number, isFinite, isNaN, parseFloat, console, __diasUteisNovo: LEAD.diasUteisEntre };
 vm.createContext(caixa);
 vm.runInContext(codigo, caixa);
 
@@ -152,8 +155,7 @@ Object.entries(porEtapa).forEach(([stageId, deals]) => {
 }
 
 // as funções soltas também, com os casos de borda
-[['diasUteisEntre', [Date.now() - 9 * 86400000, Date.now()]], ['diasUteisEntre', [Date.now(), Date.now() - 1]],
- ['coordenadaValida', ['0']], ['coordenadaValida', [' -20.5 ']], ['coordenadaValida', [null]], ['coordenadaValida', ['x']],
+[['coordenadaValida', ['0']], ['coordenadaValida', [' -20.5 ']], ['coordenadaValida', [null]], ['coordenadaValida', ['x']],
  ['estadoDaRegua', [9, S.negociacao, futuro(3)]], ['estadoDaRegua', [9, S.negociacao, dia(3)]], ['estadoDaRegua', [2, S.agPagamento, null]], ['estadoDaRegua', [3, 'etapa-sem-regua', null]]]
   .forEach(([nome, args]) => {
     const a = JSON.stringify(caixa[nome] ? caixa[nome](...args) : vm.runInContext(nome, caixa)(...args));
@@ -161,6 +163,23 @@ Object.entries(porEtapa).forEach(([stageId, deals]) => {
     if (a !== b) { falhas++; console.log('FALHA ' + nome + '(' + JSON.stringify(args) + '): ' + a + ' ≠ ' + b); }
     else console.log('OK    ' + nome + '(' + JSON.stringify(args).slice(0, 60) + ')');
   });
+
+// DIA ÚTIL = O DO COCKPIT (auditoria 02/11/26): feriado nacional fora e o dia de Brasília
+{
+  const ms = (s) => Date.parse(s);
+  const casos = [
+    ['sex 30/10 → ter 03/11: sábado, domingo e Finados fora = 1', ms('2026-10-30T12:00:00-03:00'), ms('2026-11-03T12:00:00-03:00'), 1],
+    ['qua 28/10 → qui 29/10 às 22h30 de Brasília (sexta em UTC) = 1, não 2', ms('2026-10-28T12:00:00-03:00'), ms('2026-10-29T22:30:00-03:00'), 1],
+    ['Carnaval 2027 (08 e 09/02) fora: sex 05/02 → qua 10/02 = 1', ms('2027-02-05T12:00:00-03:00'), ms('2027-02-10T12:00:00-03:00'), 1],
+    ['Consciência Negra (20/11) fora: qui 19/11 → seg 23/11 = 1', ms('2026-11-19T12:00:00-03:00'), ms('2026-11-23T12:00:00-03:00'), 1],
+    ['ordem invertida = 0', ms('2026-11-03T12:00:00-03:00'), ms('2026-11-02T12:00:00-03:00'), 0]
+  ];
+  casos.forEach(([nome, a, b, esp]) => {
+    const r = LEAD.diasUteisEntre(a, b);
+    if (r !== esp) { falhas++; console.log('FALHA dia útil · ' + nome + ': deu ' + r); }
+    else console.log('OK    dia útil · ' + nome);
+  });
+}
 
 // A FRONTEIRA DE CADA RÉGUA: exatamente na régua e um dia acima, com e sem data
 // combinada. Sem isto, mudar a régua de 7 para 8 passava (os exemplos acima ficam longe

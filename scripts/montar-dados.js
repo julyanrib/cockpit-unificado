@@ -662,6 +662,12 @@ function filtrarParaPapel(dados, usuario) {
     /* a gaveta de quem está fora do time não desce para o gestor: ele vê o time */
     if (!dados || !dados.funilForaDoTime) return dados;
     const { funilForaDoTime, ...semGaveta } = dados;
+    /* A CARTEIRA DO PRÓPRIO GESTOR (02/11/26, auditoria): o dono pediu que os negócios dele entrem
+       nos números do Cockpit do gestor, como uma linha "você" — fora da meta do time, do ranking e
+       de qualquer cobrança. Desce SÓ a gaveta do ownerId de quem está logado, em funilDoGestor
+       (com a etapa no lead, como na visão de executivo); funilLeads continua sendo só o time. */
+    const meuId = usuario && usuario.ownerId ? String(usuario.ownerId) : null;
+    if (meuId && funilForaDoTime[meuId]) semGaveta.funilDoGestor = comEtapaNoLead(funilForaDoTime[meuId]);
     return semGaveta;
   }
 
