@@ -10162,6 +10162,12 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .v5-papel{height:30px;padding:0 10px;border-radius:15px;border:1px solid var(--line2);display:inline-flex;align-items:center;
     gap:6px;font:600 11px var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--fg);flex:none;white-space:nowrap;box-sizing:border-box;}
   .v5-papel:empty{display:none;}
+  /* "Ver como executivo": no lugar da pílula, a saída — o botão secundário do gestor (.gv2-v5-btn), 40 px */
+  .v5-papel.is-voltar{height:auto;padding:0;border:0;border-radius:0;letter-spacing:0;text-transform:none;}
+  .v5-voltar-gestor{height:40px;padding:0 14px 0 10px;border-radius:10px;border:1px solid var(--line2);background:transparent;color:var(--fg);
+    display:inline-flex;align-items:center;gap:6px;font:700 12.5px var(--font-body);cursor:pointer;white-space:nowrap;box-sizing:border-box;}
+  .v5-voltar-gestor:hover{background:var(--chip);}
+  .v5-voltar-gestor:focus-visible{outline:2px solid var(--acao);outline-offset:2px;}
   .v5-busca{flex:1 1 240px;min-width:0;max-width:520px;position:relative;order:5;}
   .v5-busca-campo{height:44px;border-radius:var(--r-input);background:var(--input);border:1px solid var(--line);display:flex;align-items:center;
     gap:8px;padding:0 12px;color:var(--dim);box-sizing:border-box;cursor:text;}
@@ -15964,7 +15970,8 @@ async function hidratarSessao(email) {
       /* as leituras do gestor saem junto com a carga, com o time guardado da última visita (17/10/26) */
       try {
         if (data.session.user) window.__gv2PreEmail = data.session.user.email;
-        if (typeof GV2 !== 'undefined' && GV2.preler && data.session.user && !GV2.preLeitura) GV2.preler(data.session.user.email);
+        /* no "Ver como executivo" a tela do gestor não abre: ler o time agora seria carga à toa */
+        if (typeof GV2 !== 'undefined' && GV2.preler && data.session.user && !GV2.preLeitura && !v5VisaoExecutivo()) GV2.preler(data.session.user.email);
       } catch (e) {}
       const resp = await prazoDoLogin(
         fetch(v5EnderecoDosDados(), { headers: { Authorization: 'Bearer ' + token } }),
@@ -31652,6 +31659,16 @@ document.addEventListener('keydown', ev => {
 // Em função nomeada (não mais solto no top-level) porque no shell protegido isso roda
 // DUAS vezes: no carregamento (com o DATA-casca vazio, atrás do login) e de novo na
 // hidratação pós-login (reidratarPosLogin), quando os dados reais chegam do api/dados.
+/* A linha de cima do executivo: só de quando é o dado. Recebe o carimbo pronto do robô
+   ("DD/MM/AAAA às HH:MM") e devolve "HubSpot atualizado hoje às 16:34" ou "… em 01/11 às
+   19:02". Sem carimbo, diz que ainda não carregou — nunca inventa hora. */
+function linhaDeFrescorDoExecutivo(fmt, agora) {
+  const m = String(fmt || '').match(/(\d{2})\/(\d{2})\/(\d{4})\s*às\s*(\d{2}):(\d{2})/);
+  if (!m) return fmt ? 'HubSpot atualizado em ' + fmt : 'HubSpot ainda sem atualização carregada';
+  const hojeBr = new Date((agora || Date.now()) - 3 * 3600000).toISOString().slice(0, 10);
+  const dia = m[3] + '-' + m[2] + '-' + m[1];
+  return 'HubSpot atualizado ' + (dia === hojeBr ? 'hoje' : 'em ' + m[1] + '/' + m[2]) + ' às ' + m[4] + ':' + m[5];
+}
 function preencherCabecalhoRodape() {
   /* CORREÇÃO (28/08/26) — a contagem misturava duas coleções diferentes.
      Era: emPreparacao vindo de DATA.usuarios (13 registros: 11 reps + 2 gestores) e
@@ -31715,6 +31732,17 @@ function preencherCabecalhoRodape() {
     return txt;
   }
   const updatedEl = document.getElementById('updatedLine');
+  /* O EXECUTIVO VÊ SÓ A HORA (02/11/26). "Time ativo: 10 executivos · Meta de novembro: 52
+     clientes" é leitura de gestor — o executivo não gere o time, e a meta do TIME no topo da tela
+     dele competia com a meta DELE, que a Hoje já mostra. A ele fica o que serve: de quando é o
+     dado. A conferência automática e o rodapé de fonte também são do gestor. Vale igual para o
+     gestor no "Ver como executivo" (a sessão chega com role 'rep'). */
+  const soExecutivo = typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.role !== 'manager';
+  if (soExecutivo) {
+    updatedEl.textContent = linhaDeFrescorDoExecutivo(DATA.hubspotUpdatedAtFmt);
+    const velha = document.getElementById('confNumerosLista');
+    if (velha) velha.remove();
+  } else {
   updatedEl.textContent =
     `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${ativos} executivos${emPreparacao ? ` · ${emPreparacao} em preparação` : ''}${metaNaLinha()}`;
   /* A CONFERÊNCIA AUTOMÁTICA (scripts/conferir-numeros.js, a cada rodada do robô): o resultado vai na
@@ -31742,6 +31770,7 @@ function preencherCabecalhoRodape() {
     updatedEl.insertAdjacentElement('afterend', lista);
     botao.addEventListener('click', function () { lista.hidden = !lista.hidden; });
   }());
+  }
 
   // Rodapé da sidebar — mesma data/hora que já vem pronta em DATA.hubspotUpdatedAtFmt
   // ("DD/MM/AAAA às HH:MM"), só reformatada mais curta pra caber no rodapé estreito.
@@ -31757,10 +31786,14 @@ function preencherCabecalhoRodape() {
     cockpitBannerEl.innerHTML = DATA.banner || '';
     cockpitBannerEl.hidden = !cockpitBannerEl.textContent.trim();
   }
-  document.getElementById('footerText').textContent = DATA.footerText;
+  /* o rodapé de fonte ("pipeline 916011864 … Leads críticos = …") é nota de quem audita o
+     número; na tela do executivo ele não diz nada que a linha de cima já não diga */
+  const rodapeEl = document.getElementById('footerText');
+  rodapeEl.textContent = soExecutivo ? '' : DATA.footerText;
+  rodapeEl.hidden = soExecutivo;
   // Correção v3 1.4: se o Supabase não estiver configurado, o aviso de infra aparece
   // UMA vez, discreto, aqui no rodapé — os empty states das seções falam só de conteúdo.
-  if (!DATA.supabase) {
+  if (!DATA.supabase && !soExecutivo) {
     const f = document.getElementById('footerText');
     f.textContent = (f.textContent ? f.textContent + ' · ' : '') + 'Recursos de login/histórico indisponíveis nesta build.';
   }
@@ -36702,7 +36735,7 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
     hora ? { hora: String(hora) } : {}, { p: 'follow' });
 
   const r = await pl6Gravar(rep, { grade: grade }, semanaDaTarefa);
-  if (r.error) return { erro: r.error.message || 'o Supabase recusou' };
+  if (r.error) return { erro: r.error.message || 'o servidor recusou' };
   /* A FRASE DIZ O QUE ENTROU NO BANCO. Antes ela caía na faixa quando não havia hora
      escolhida, e anunciava um horário que o slot não guardava. */
   return { ok: true, dia: dias[di].rot, data: dias[di].data,
@@ -39755,7 +39788,7 @@ async function pl6CriarLead(rep, campos) {
 
 async function pl6Carregar(rep, segundaPedida) {
   pl6Plano = null;
-  if (!DATA.supabase || !supa) return { ok: false, motivo: 'sem Supabase nesta sessão' };
+  if (!DATA.supabase || !supa) return { ok: false, motivo: 'sem conexão com o servidor nesta sessão' };
   const segunda = segundaPedida || pl6SegundaEmFoco();
   const { data, error } = await supa.from('planos_semanais').select('*')
     .eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).limit(1);
@@ -39900,7 +39933,7 @@ function pl6CarimbarQuem(grade, fresca, rep) {
 }
 
 async function pl6Gravar(rep, campos, segundaPedida) {
-  if (!DATA.supabase || !supa) return { error: new Error('Sem Supabase nesta sessão.') };
+  if (!DATA.supabase || !supa) return { error: new Error('Sem conexão com o servidor nesta sessão.') };
   const segunda = segundaPedida || pl6SegundaEmFoco();
   /* a base é a grade lida DESTA semana; plano de outra semana em memória não serve de base */
   const mesmaSemana = !!(pl6Plano && String(pl6Plano.data_segunda) === String(segunda));
@@ -42369,7 +42402,7 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
     if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
     return mutar({ grade: g }, l.nome + ' · agendado ' + dias[di].rot + ' ' + dias[di].data + ' ' + hora
       + (selo ? ' — ' + selo : '')
-      + ' — tarefa no HubSpot ✓ · slot no Supabase ✓');
+      + ' — tarefa no HubSpot ✓ · salvo no plano ✓');
 }
 
 /* ══ AS TRÊS REFERÊNCIAS QUE A TELA CARREGA ══════════════════════════════════════════
@@ -42425,7 +42458,7 @@ function pl6GravarRegiaoDigitada(rep, di, texto, mutar) {
     if (!antes) return;
     const novas = atual.slice(); novas[di] = null;
     const dias0 = pl6Dias(pl6SegundaEmFoco());
-    return mutar({ regioes: novas }, dias0[di].rot + ' · sem região de ataque · Supabase');
+    return mutar({ regioes: novas }, dias0[di].rot + ' · sem região de ataque · salvo');
   }
   const chaveDigitada = pl6ChaveBairro(t);
   const doMapa = regioes.find(r => pl6ChaveBairro(r.nome) === chaveDigitada);
@@ -42435,7 +42468,7 @@ function pl6GravarRegiaoDigitada(rep, di, texto, mutar) {
   const dias0 = pl6Dias(pl6SegundaEmFoco());
   const rot = doMapa ? doMapa.nome : pl6RotuloBairro(chaveDigitada);
   return mutar({ regioes: novas }, dias0[di].rot + ' · região de ataque agora é ' + rot
-    + (doMapa ? ' — sugestões recalculadas' : ' — do jeito que você escreveu') + ' · Supabase');
+    + (doMapa ? ' — sugestões recalculadas' : ' — do jeito que você escreveu') + ' · salvo');
 }
 
 /* ══ A FIAÇÃO DA PRANCHA FINAL ═══════════════════════════════════════════════════════
@@ -42860,7 +42893,7 @@ function pl6Ligar(box, rep) {
       pl6UI.rotaPicker = null;
       const dias = pl6Dias(pl6SegundaEmFoco());
       return mutar({ regioes: novas },
-        dias[di].rot + ' · região de ataque agora é ' + nome + ' — sugestões recalculadas · Supabase');
+        dias[di].rot + ' · região de ataque agora é ' + nome + ' — sugestões recalculadas · salvo');
     }
 
     /* ── pl6Remover ── */
@@ -42928,7 +42961,7 @@ function pl6Ligar(box, rep) {
             modal.remove();
             const g3 = pl6GradeDoPlano();
             g3[di][si] = null;
-            await mutar({ grade: g3 }, esc(nascido.nome) + ' saiu do plano · Supabase —'
+            await mutar({ grade: g3 }, esc(nascido.nome) + ' saiu do plano · salvo —'
               + ' o negócio continua no funil, em Prospecção');
           });
         }
@@ -42942,14 +42975,14 @@ function pl6Ligar(box, rep) {
          lendo; e o executivo desmarca de verdade na Agenda, que e onde o cliente foi
          avisado. O ✕ devolve a conta para a lista — nao desmarca a visita. */
       const msg = pl6SlotBloqueado(era)
-        ? dias[di].rot + (pl6SlotHora(era, si) ? ' ' + pl6SlotHora(era, si) : '') + ' desbloqueado · Supabase'
+        ? dias[di].rot + (pl6SlotHora(era, si) ? ' ' + pl6SlotHora(era, si) : '') + ' desbloqueado · salvo'
         : pl6SlotRua(era)
         /* A HORA SÓ ENTRA NA FRASE SE ELE A DEFINIU. Sem isto o toast sairia
            "ter  — prospecção de rua saiu do plano", com dois espaços onde havia um
            relógio inventado. */
         ? dias[di].rot + (pl6SlotHora(era, si) ? ' ' + pl6SlotHora(era, si) : '')
-          + ' — prospecção de rua saiu do plano · Supabase'
-        : 'saiu da semana e voltou para a lista · Supabase — se a visita já estava marcada no HubSpot, desmarque na Agenda';
+          + ' — prospecção de rua saiu do plano · salvo'
+        : 'saiu da semana e voltou para a lista · salvo — se a visita já estava marcada no HubSpot, desmarque na Agenda';
       return mutar({ grade: g }, msg);
     }
 
@@ -43505,7 +43538,7 @@ function pl6Ligar(box, rep) {
             + (remarcando
               ? (mesmoDia ? ' · tarefa do HubSpot remarcada'
                 : ' · tarefa criada no dia novo; a do dia antigo continua lá — feche na Agenda')
-              : ' · Supabase — a tarefa no HubSpot ficou na data antiga; ajuste na Agenda se já tinha sido marcada'));
+              : ' · salvo — a tarefa no HubSpot ficou na data antiga; ajuste na Agenda se já tinha sido marcada'));
         }
         const destino = primeiraVaga(di);
         if (destino < 0) {
@@ -43533,9 +43566,9 @@ function pl6Ligar(box, rep) {
           s.sel = null; s.diaAtivo = null;
           return mutar({ grade: g }, dias0[di].rot + ' ' + hora + ' · '
             + (bl.id === PL6_RUA
-              ? 'prospecção de rua no plano ✓ Supabase — sem tarefa no CRM (não há negócio);'
+              ? 'prospecção de rua no plano ✓ salvo — sem tarefa no CRM (não há negócio);'
                 + ' registre as contas visitadas no Expogo'
-              : 'visita de relacionamento no plano ✓ Supabase — cliente da base, sem negócio'
+              : 'visita de relacionamento no plano ✓ salvo — cliente da base, sem negócio'
                 + ' novo no CRM; o que prova a visita é o check-in do Expogo'));
         }
         const idSel = s.sel.lead.id;
@@ -43630,7 +43663,7 @@ async function renderProspeccaoExecutivo() {
      protecao migrou; ela nao desapareceu. */
   if (!DATA.supabase || !supa) {
     box.innerHTML = '<div class="empty-state">O planejamento da semana precisa da sua sessão '
-      + 'do Supabase para gravar. Entre novamente e a tela volta.</div>';
+      + 'ativa para gravar. Entre novamente e a tela volta.</div>';
     return;
   }
   const meuRep6a = (DATA.reps || []).find(x => String(x.ownerId) === String(sessaoAtual.ownerId));
@@ -44536,7 +44569,7 @@ function agendaAbrirDetalhe(id) {
     const divSync = document.createElement('div');
     divSync.id = 'agDetSync';
     divSync.style.cssText = 'margin-top:14px;padding:10px 14px;border-radius:var(--r-md);background:var(--amber-soft);color:var(--amber-ink,var(--amber));font-size:11px;font-weight:700;';
-    divSync.textContent = 'Sincronizando com o HubSpot — este compromisso foi marcado agora nesta sessão; ainda não veio confirmado no próximo snapshot automático.';
+    divSync.textContent = 'Sincronizando com o HubSpot — este compromisso foi marcado agora nesta sessão; ainda não veio confirmado na próxima atualização automática.';
     document.getElementById('agDetDl').insertAdjacentElement('afterend', divSync);
   }
   const a = document.getElementById('agDetA');
@@ -49920,7 +49953,7 @@ async function geocodificarLocalAtuacao(texto, viesLat, viesLng) {
 }
 
 async function salvarPlanoDoDia(ownerId, dataISO, campos) {
-  if (!DATA.supabase || !supa) return { error: { message: 'Supabase indisponível' } };
+  if (!DATA.supabase || !supa) return { error: { message: 'sem conexão com o servidor' } };
   const existente = planoDiaCache || {};
 
   // Só geocodifica de novo se o texto do local mudou — autosave dispara a cada
@@ -54675,7 +54708,7 @@ const D7_TRAVA_MIN = PROMESSA_TRAVA_MINUTOS;
    duplica: encontra o `c-<id>`, remove e recoloca no mesmo lugar. O que esta casca faz é
    só traduzir as recusas dela para o formato que a fila do "Hoje" usa no rótulo. */
 async function h8AgendarNaSemana(rep, leadId, dataISO) {
-  if (!DATA.supabase || !supa) return { ok: false, motivo: 'esta sessão está sem Supabase' };
+  if (!DATA.supabase || !supa) return { ok: false, motivo: 'sem conexão com o servidor nesta sessão' };
   if (!rep || rep.ownerId == null) return { ok: false, motivo: 'sem dono na sessão' };
   if (typeof espelharPassoNoPlanoSemanal !== 'function') {
     return { ok: false, motivo: 'o espelho do plano não carregou nesta aba' };
@@ -54954,7 +54987,7 @@ async function g14Registrar(base, ownerId, extra, detalhe) {
   const chaveTela = g14Chave(base, ownerId, extra);
   const tipoBanco = 'g14_' + base + (extra ? ':' + extra : '');
   if (!DATA.supabase || !supa) {
-    return { error: new Error('Sem Supabase nesta sessão — nada foi gravado.') };
+    return { error: new Error('Sem conexão com o servidor nesta sessão — nada foi gravado.') };
   }
   const desfazendo = !!g14Feitos[chaveTela];
   if (desfazendo) {
@@ -61654,7 +61687,20 @@ function v5PintarConta() {
   badge.innerHTML = '<button type="button" class="v5-avatar" id="perfilAvatarBadge" aria-haspopup="dialog" aria-expanded="false" '
     + 'aria-controls="v5Menu" title="Conta, tema e Modo TV">'
     + (foto ? '<img src="' + foto + '" alt="">' : esc(v5Iniciais(nome))) + '</button>';
-  if (papel) papel.textContent = sessaoAtual.role === 'manager' ? 'Gestor' : (sessaoAtual.visaoDeGestor ? 'Visão de executivo' : 'Executivo');
+  /* VER COMO EXECUTIVO (02/11/26): o gestor nesse modo vê a tela do executivo IGUAL, e o único
+     acréscimo é a saída. A pílula do papel vira o botão "Voltar ao gestor" (40 px, o mesmo
+     desenho do botão secundário do cockpit do gestor), em vez de uma etiqueta que só diz
+     "visão de executivo" e obriga a abrir o menu do avatar para sair. */
+  if (papel) {
+    papel.classList.toggle('is-voltar', !!sessaoAtual.visaoDeGestor);
+    if (sessaoAtual.visaoDeGestor) {
+      papel.innerHTML = '<button type="button" class="v5-voltar-gestor" data-v5-menu="visao-gestor" title="Sair da visão de executivo e voltar ao cockpit do gestor">'
+        + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>'
+        + 'Voltar ao gestor</button>';
+    } else {
+      papel.textContent = sessaoAtual.role === 'manager' ? 'Gestor' : 'Executivo';
+    }
+  }
   document.getElementById('perfilAvatarBadge').addEventListener('click', (ev) => { ev.stopPropagation(); v5AlternarMenu(); });
 }
 
@@ -61685,7 +61731,7 @@ function v5PintarMenu() {
     + '</div>'
     + '<button type="button" class="v5-menu-bt" data-v5-menu="tv">' + v5Icone('tv', 17) + (tvLigada ? 'Sair do Modo TV' : 'Modo TV') + '</button>'
     + (sessaoAtual.visaoDeGestor
-      ? '<button type="button" class="v5-menu-bt" data-v5-menu="visao-gestor">' + v5Icone('pessoa', 17) + 'Voltar para a visão de gestor</button>'
+      ? '<button type="button" class="v5-menu-bt" data-v5-menu="visao-gestor">' + v5Icone('pessoa', 17) + 'Voltar ao gestor</button>'
       : sessaoAtual.role === 'manager' && sessaoAtual.ownerId
         ? '<button type="button" class="v5-menu-bt" data-v5-menu="visao-executivo">' + v5Icone('pessoa', 17) + 'Ver como executivo (meu funil)</button>' : '')
     + '<button type="button" class="v5-menu-bt" data-v5-menu="perfil">' + v5Icone('pessoa', 17) + 'Meu perfil e foto</button>'
@@ -92923,7 +92969,7 @@ GV2.pv2Comando = function (cmd, parte) {
 })();
 /* FIM DO BLOCO GV2 (17/10/26): o login pode ter chegado antes deste script carregar; ele deixa
    o e-mail anotado e as leituras do gestor saem agora, com tudo do GV2 já definido. */
-if (typeof window !== 'undefined' && window.__gv2PreEmail && GV2.preler && !GV2.preLeitura) { try { GV2.preler(window.__gv2PreEmail); } catch (e) {} }
+if (typeof window !== 'undefined' && window.__gv2PreEmail && GV2.preler && !GV2.preLeitura && !(typeof v5VisaoExecutivo === 'function' && v5VisaoExecutivo())) { try { GV2.preler(window.__gv2PreEmail); } catch (e) {} }
 
 GV2.instalar();
 </script><!-- /gv2-js -->
