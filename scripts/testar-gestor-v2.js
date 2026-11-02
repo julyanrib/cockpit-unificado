@@ -755,7 +755,7 @@ tabelas.gv2_falta_etapa = [
     const rots = (nav.match(/<span class="gv2-nav-rot">[^<]+</g) || []).map(function (x) { return x.replace('<span class="gv2-nav-rot">', '').replace('<', ''); });
     /* 31/10/26: a Rampa entra logo abaixo de Pessoas (handoff "Acelerar Field Sales v2", 1a); o resto do menu não muda */
     /* a Rampa saiu do menu (Julyan, 01/11/26) */
-    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X, Prospecção nem Rampa)', rots.slice(0, 7).join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook' && rots.slice(7).join(' · ') === 'Prova dos números · Acessos · Ver como executivo' && nav.indexOf('>Do diretor<') > 0, rots.join(' · '));
+    checar('v5 · menu: Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook (sem Raio X, Prospecção nem Rampa); atalhos TakeatOS e HubSpot em outra aba', rots.slice(0, 7).join(' · ') === 'Hoje · Rua · Funil · Território · Pessoas · Propostas · Playbook' && rots.slice(7).join(' · ') === 'Prova dos números · Acessos · Ver como executivo · TakeatOS · HubSpot' && nav.indexOf('>Do diretor<') > 0 && nav.indexOf('href="https://takeatos.vercel.app" target="_blank"') > 0, rots.join(' · '));
     checar('rolagem: corpo v5 e gaveta não deixam o cartão encolher (Por pessoa e "Para puxar" sumiam, 09/10/26)',
       tpl.indexOf('.gv2-corpo.gv2-v5 > *{flex-shrink:0;}') > 0 && tpl.indexOf('.gv2-rxg-corpo > *{flex-shrink:0;}') > 0);
     checar('mapa em tela cheia: todo mapa v5 ganha o botão e o mapa da Pessoa · dia reenquadra quando a caixa muda (09/10/26)',
