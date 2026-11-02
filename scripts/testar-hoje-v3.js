@@ -126,6 +126,11 @@ checar('o Hoje v3 é o padrão e localStorage[\'hoje-v2\'] = \'1\' devolve o ant
   rmp.indexOf('GV2.HJ3.usar()') > 0 && rmp.indexOf('GV2.HJ3.usar()') < rmp.indexOf('const metaMensal') && /localStorage\.getItem\('hoje-v2'\) === '1'/.test(codigo));
 checar('a medição grava hoje_cockpit / aberto em aberturas_de_tela', /p_tela: 'hoje_cockpit', p_origem: 'menu', p_acao: 'aberto'/.test(codigo));
 checar('as linhas do meio são as do Planejamento v3 (pv3LinhaHTML) e o clique vai para PLV3.acao', /GV2\.PLV3\.linhaHTML\(D, l\)/.test(codigo) && /GV2\.PLV3\.acao\(/.test(codigo));
+/* na segunda (ou depois de feriado), o fecho lido é o do último dia útil, e a linha diz o dia */
+const segunda = Object.assign({}, resolver(Object.keys(F.estados)[0]), { hoje: '2026-11-09', fechoDia: '2026-11-06', fechouOntem: true });
+const terca = Object.assign({}, segunda, { hoje: '2026-11-10', fechoDia: '2026-11-09' });
+checar('o placar diz "Fechou o dia sex 06/11" na segunda e "ontem" na terça',
+  HJ3.diaDoExecutivo(segunda).cockpit.placar.linhas[2].v === 'Fechou o dia sex 06/11: sim' && HJ3.diaDoExecutivo(terca).cockpit.placar.linhas[2].v === 'Fechou o dia ontem: sim');
 
 if (falhas.length) {
   console.log('\nFALHAS (' + falhas.length + '):');
