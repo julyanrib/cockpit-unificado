@@ -89398,6 +89398,7 @@ GV2.t3SemServidor = function (r) {
   const t = String((e.code || '') + ' ' + (e.message || ''));
   return /42P01|42883|PGRST20[0-9]|does not exist|Could not find/i.test(t);
 };
+GV2.T3_AVANCO = ['Conversa com decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Enviado Onboarding', 'Ganho'];
 GV2.t3Ler = function (forcar) {
   const S = GV2.t3;
   if (S.lendo) return S.lendo;
@@ -89456,6 +89457,10 @@ GV2.t3Modelo = function (M) {
     (Array.isArray(p.grade) ? p.grade : []).forEach(function (dia) { (Array.isArray(dia) ? dia : []).forEach(function (v) { const lid = GV2.t3LeadDoSlot(v); if (lid) noPlano[lid] = (noPlano[lid] || []).concat([String(p.owner_id) + '|' + String(p.data_segunda)]); }); });
   });
   const temNegocio = function (l) { const c = cliDoLead[String(l.id)]; return !!(String(l.hubspot_deal_id || '').trim() || (c && String(c.id_hubspot || '').trim())); };
+  /* A CONVERSÃO É PASSAR DA VISITA (02/11/26): o Cheguei já cria o negócio, então "dos visitados, quantos têm
+     negócio" dava 100% em todo mundo. Converte quem chegou à Conversa com decisor ou adiante — a mesma régua no
+     programa e na carteira. */
+  const avancou = function (c) { return !!c && GV2.T3_AVANCO.indexOf(String(c.etapa || '')) > -1; };
 
   /* 1 · o funil do programa e por executivo (a MESMA passada: a paridade é por construção e o teste prova) */
   const fun = { ent: 0, atr: 0, rota: 0, vis: 0, neg: 0, visNeg: 0 };
@@ -89479,7 +89484,7 @@ GV2.t3Modelo = function (M) {
     if (vis) { fun.vis++; r.vis++; }
     if (neg) { fun.neg++; r.neg++; }
     /* a conversão compara o que foi visitado: dos visitados, quantos têm negócio (nunca passa de 100%) */
-    if (vis && neg) { fun.visNeg++; r.visNeg++; }
+    if (vis && avancou(cliDoLead[id])) { fun.visNeg++; r.visNeg++; }
   });
   /* a carteira, para comparar: as outras contas-alvo dele (pino de munição que não é recém-aberto),
      visitadas com prova nos 30 dias; quantas têm negócio. A mesma régua do programa. */
@@ -89495,7 +89500,7 @@ GV2.t3Modelo = function (M) {
     if (vistoCart[k]) return;
     vistoCart[k] = true;
     r.cartV++;
-    if (String(c.id_hubspot || '').trim()) r.cartN++;
+    if (avancou(c)) r.cartN++;
   });
 
   /* 2 · as sugestões da semana do plano: vivas (até sexta), confirmadas (na grade ou com negócio) */
@@ -89708,7 +89713,7 @@ GV2.render.t3Carga = function (M, M3) {
   const resto = chegam - capT;
   const nota = 'Com ' + carga + ' por pessoa, o time recebe ' + capT + ' por semana no plano. '
     + (resto > 0 ? 'Os outros ≈ ' + resto + ' seguem na lista de cada um, sem entrar no plano, até haver vaga. ' : 'A carga cobre o que chega: sobra vaga no plano. ')
-    + 'Conversão do programa até aqui: ' + GV2.pl(M3.fun.visNeg, 'negócio', 'negócios') + ' de ' + M3.fun.vis + ' visitados.';
+    + 'Conversão do programa até aqui: ' + M3.fun.visNeg + ' de ' + M3.fun.vis + ' visitados passaram da visita (decisor ou adiante).';
   const sel = '<div class="gv2-t3-sel"><span>Recém-abertos por executivo, por semana</span><div class="gv2-t3-num">'
     + '<button type="button" class="gv2-t3-nb" data-gv2="t3carga:menos" aria-label="diminuir a carga"' + (carga <= GV2.T3.MIN ? ' disabled' : '') + '>−</button>'
     + '<b class="num" aria-live="polite">' + carga + '</b>'
@@ -89870,7 +89875,7 @@ GV2.render.t3Tabela = function (M, M3, carga) {
   const cab = '<div class="gv2-t3-tr is-cab"><span>Executivo</span><span>Atribuídos</span><span>Na rota</span><span>Visitados</span><span>Negócios</span><span>Conversão · programa × carteira</span></div>';
   return '<section class="card gv2-t10-card gv2-t3-tab" id="t3-tab"><div class="gv2-t10-cab is-wrap"><div class="gv2-t10-tit"><b>Por executivo · 30 dias</b>' + seg + '</div><span class="gv2-t10-cs">conversão do programa contra a da carteira: o programa se paga?</span></div>'
     + '<div class="gv2-t3-rola">' + cab + rs.map(function (r) { return linha(r, false); }).join('') + (rs.length ? linha(tot, true) : '<div class="gv2-t10-vazio"><b>Nenhum executivo com território nesta praça</b></div>') + '</div>'
-    + '<div class="gv2-t10-pe"><span>visitados = com prova no pino · negócios = tem negócio no HubSpot · conversão = dos visitados, quantos têm negócio · carteira = as outras contas-alvo dele visitadas com prova nos 30 dias (barra = programa, traço = carteira)</span></div></section>';
+    + '<div class="gv2-t10-pe"><span>visitados = com prova no pino · negócios = tem negócio no HubSpot · conversão = dos visitados, quantos passaram da visita (Conversa com decisor ou adiante) · carteira = as outras contas-alvo dele visitadas com prova nos 30 dias (barra = programa, traço = carteira)</span></div></section>';
 };
 
 /* ══ AS AÇÕES DA v3 ══ todas criam sugestão ou mexem no recém-aberto; nenhuma toca a grade */
