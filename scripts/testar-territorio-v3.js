@@ -84,7 +84,7 @@ global.RT7_ESTADO = { carregou: true, cargas: [], leads: [
   L('x1', '1', 'Taquara', 'Rio de Janeiro', null, '2026-09-01T13:00:00Z', { fonte: 'outscraper', data_abertura: null })
 ] };
 const clientes = [['ca1', 'a1', 'D1'], ['ca5', 'a5'], ['cb1', 'b1', 'D2'], ['cv3', 'v3'], ['cx1', 'x1', 'D9']]
-  .map(([id, lead, deal]) => ({ id, lead_prospeccao_id: lead, id_hubspot: deal || null, etapa: null, status: 'lead' }));
+  .map(([id, lead, deal]) => ({ id, lead_prospeccao_id: lead, id_hubspot: deal || null, etapa: deal ? 'Conversa com decisor' : null, status: 'lead' }));
 const V = (cid, dono, dia, extra) => Object.assign({ client_id: cid, owner_id: dono, dia, visited_at: dia + 'T15:00:00Z', provada: true }, extra || {});
 const visitas = [V('ca1', '1', '2026-10-22'), V('ca5', '1', '2026-10-23', { provada: false }), V('cb1', '2', '2026-10-27'), V('cv3', '2', '2026-10-20'), V('cx1', '1', '2026-10-28'),
   V('k-meier', '2', '2026-10-29')];
@@ -169,8 +169,14 @@ global.supa = {
   }
   GV2.estado.t10pr = null;
   checar('praça RJ: entraram 10 (Vila Velha fora), atribuídos 8', (() => { GV2.estado.t10pr = 'rj'; const x = GV2.t3Modelo(GV2.t10Modelo()).fun; GV2.estado.t10pr = null; return x.ent === 10 && x.atr === 8; })());
-  checar('a conversão do programa é dos visitados (nunca passa de 100%): negócio sem visita não entra', Object.keys(M3.porEx).every(id => M3.porEx[id].visNeg <= M3.porEx[id].vis) && M3.fun.visNeg === 2);
-  checar('a carteira: as outras contas-alvo visitadas com prova (Ana 1 de 1 com negócio)', M3.porEx['1'].cartV === 1 && M3.porEx['1'].cartN === 1, JSON.stringify(M3.porEx['1']));
+  checar('a conversão do programa é dos visitados que passaram da visita (decisor ou adiante; nunca passa de 100%)', Object.keys(M3.porEx).every(id => M3.porEx[id].visNeg <= M3.porEx[id].vis) && M3.fun.visNeg === 2);
+  checar('a carteira: as outras contas-alvo visitadas com prova (Ana 1 de 1 passou da visita)', M3.porEx['1'].cartV === 1 && M3.porEx['1'].cartN === 1, JSON.stringify(M3.porEx['1']));
+  /* o Cheguei cria o negócio na etapa Visita: isso não é conversão (antes dava 100% em todo mundo) */
+  const etapasAntes = Object.keys(GV2.t10.cli).map(k => [k, GV2.t10.cli[k].etapa]);
+  Object.keys(GV2.t10.cli).forEach(k => { if (GV2.t10.cli[k].etapa) GV2.t10.cli[k].etapa = 'Visita'; });
+  const M3v = GV2.t3Modelo(M);
+  etapasAntes.forEach(([k, e]) => { GV2.t10.cli[k].etapa = e; });
+  checar('negócio ainda na Visita não conta como conversão (programa e carteira em 0)', M3v.fun.visNeg === 0 && M3v.porEx['1'].cartN === 0, JSON.stringify({ p: M3v.fun.visNeg, c: M3v.porEx['1'].cartN }));
 
   /* ── 3 · as sugestões e a carga ── */
   checar('a sugestão viva da semana conta (Ana +1); a da semana passada venceu e voltou ao motor', M3.porEx['1'].sug === 1 && M3.jaSug.a4 && !M3.jaSug.a3, JSON.stringify({ sug: M3.porEx['1'].sug, ja: M3.jaSug }));
