@@ -92540,7 +92540,9 @@ GV2.pv2RampaHTML = function (p, x) {
         const v = F['n_' + it.k] != null ? F['n_' + it.k] : (GV2.rpValor(x, f, it) == null ? '' : GV2.rpValor(x, f, it));
         return '<label class="pv2-num"><span>' + GV2.e(it.rot) + '</span><input type="number" min="0" inputmode="numeric" class="pv2-in" data-gv2-comp="pv2rp' + it.k + '" value="' + GV2.e(v) + '" oninput="GV2.rpForm(\'n_' + it.k + '\',this.value)"></label>';
       }).join('');
-      const ev = '<small class="pv2-dim">evidência</small><div class="pv2-ops">' + EV.map(function (t, k) { const on = F.evTipo === t; return '<button type="button" class="pv2-op' + (on ? ' is-on' : '') + '" data-gv2="pv2:ev:' + k + '" aria-pressed="' + on + '">' + GV2.e(t) + '</button>'; }).join('') + '</div>';
+      const ev = '<small class="pv2-dim">evidência</small><div class="pv2-ops">' + EV.map(function (t, k) { const on = F.evTipo === t; return '<button type="button" class="pv2-op' + (on ? ' is-on' : '') + '" data-gv2="pv2:ev:' + k + '" aria-pressed="' + on + '">' + GV2.e(t) + '</button>'; }).join('') + '</div>'
+        /* "Outra" pede o detalhe (rpAprovar recusa sem ele: "Diga qual é a evidência."; revisão de 02/11/26) */
+        + (F.evTipo === 'Outra' ? '<label class="pv2-num is-largo"><span>qual é a evidência</span><input type="text" class="pv2-in" data-gv2-comp="pv2rpevdet" value="' + GV2.e(F.evDet || '') + '" oninput="GV2.rpForm(\'evDet\',this.value)"></label>' : '');
       const prox = GV2.RP.fases[i + 1], proxT = prox ? (FZ[i + 1] ? FZ[i + 1].curto : prox.curto) : null;
       det = '<ul class="pv2-crit">' + crit + '</ul>' + (manuais ? '<div class="pv2-nums">' + manuais + '</div>' : '') + ev
         + '<label class="pv2-num is-largo"><span>motivo (se aprovar fora do prazo ou sem bater a meta)</span><textarea rows="2" class="pv2-in" data-gv2-comp="pv2rpmot" oninput="GV2.rpForm(\'motivo\',this.value)">' + GV2.e(F.motivo || '') + '</textarea></label>'
@@ -92801,7 +92803,9 @@ GV2.pv2MarcarIda = async function (id) {
   try {
     const r = await supa.rpc('marcar_ida_do_gestor', { p_owner: String(id), p_dia: dia, p_turno: 'manha', p_bairro: bairro, p_praca: p.praca || null });
     if (r && r.error) {
-      const faltaFuncao = /marcar_ida_do_gestor|PGRST202|function/i.test(String(r.error.message || '') + ' ' + String(r.error.code || ''));
+      /* só "a função não existe" (PGRST202 / 42883) cai na gravação direta; recusa de permissão ou de
+         validação do servidor vira erro na tela (revisão de 02/11/26) */
+      const faltaFuncao = ['PGRST202', '42883'].indexOf(String(r.error.code || '')) >= 0;
       if (!faltaFuncao) throw r.error;
       const seg = GV2.segundaDe(dia);
       const ja = (GV2.base.idas || []).find(function (i) { return i.inicio === seg && i.praca === p.praca; });
@@ -92837,7 +92841,15 @@ GV2.pv2ComoFoi = async function (id) {
     const { data, error } = await supa.from('um_a_um').insert(linha).select().single();
     if (error) throw error;
     b.cru.umAUm.unshift(data || Object.assign({ created_at: new Date().toISOString() }, linha));
-    if (ida) await supa.from('gestor_idas_campo').update({ status: 'feita', atualizado_em: new Date().toISOString() }).eq('id', ida.id);
+    /* a ida vira feita só quando TODOS dela já têm devolutiva de campo desde o início da semana (a mesma
+       regra de enviarDevolutiva) — senão o "como foi" de um fechava a ida dos outros (revisão de 02/11/26) */
+    if (ida) {
+      const todos = (ida.owner_ids || []).every(function (oid) { return b.cru.umAUm.some(function (x) { return String(x.owner_id) === String(oid) && x.canal === 'campo' && String(x.data) >= ida.inicio; }); });
+      if (todos) {
+        const u = await supa.from('gestor_idas_campo').update({ status: 'feita', atualizado_em: new Date().toISOString() }).eq('id', ida.id);
+        if (u && u.error) console.warn('[pv2] ida feita:', u.error.message);
+      }
+    }
     await GV2.recado(p, 'Da ida a campo: a rua foi ' + cf[0] + ', o que mais pesa é ' + cf[1] + '. Combinado: ' + comb + '.');
     GV2.estado.pv2Ok[id] = Object.assign({}, GV2.estado.pv2Ok[id], { cf: true });
     GV2.pessoasMontar(b);
@@ -92850,6 +92862,9 @@ GV2.pv2ComoFoi = async function (id) {
 GV2.pv2Abrir = function (id, origem, modo) {
   if (!GV2.base || !GV2.base.porId[id]) return;
   GV2.estado.pv2Pan = id; GV2.estado.pessoa = id; GV2.estado.v5Gav = null;
+  /* o formulário da rampa é de UMA pessoa: abrir outra começa vazio (antes, as contagens e a evidência
+     de um novato iam para a aprovação do próximo; revisão de 02/11/26) */
+  GV2.estado.rpForm = null; GV2.estado.rpErro = null; GV2.estado.pv2D45 = null;
   /* sem modo pedido, a coluna da esquerda volta ao que a pessoa precisa (rampa, campo ou 1:1) */
   if (modo) GV2.estado.pv2Modo[id] = modo; else delete GV2.estado.pv2Modo[id];
   GV2.pv2Medir('pessoa:' + id, origem || 'placa');
