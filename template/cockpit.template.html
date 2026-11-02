@@ -91142,6 +91142,10 @@ HJ3.missaoTexto = function (m) { return !m ? null : m.cumprida ? 'missão cumpri
 HJ3.diaDoExecutivo = function (e) {
   const pl = HJ3.pl, juntar = HJ3.juntar;
   const c = HJ3.contar(e.paradas);
+  /* o "X de 6 com prova" é a meta de visita do DIA (02/11/26, igual ao hojeV3.ts do app): as paradas
+     provadas do plano + as visitas provadas fora dele (dv5.fora); a contagem do plano, c, fica como era */
+  const foraComProva = Math.max(0, Number(e.foraComProva) || 0);
+  const comProvaDia = c.comProva + foraComProva;
   const plano = e.paradas;
   const prox = c.proxima >= 0 && plano ? plano[c.proxima] : null;
   const f = HJ3.faltam(e.placar);
@@ -91152,8 +91156,8 @@ HJ3.diaDoExecutivo = function (e) {
   };
   let pilula;
   if (!expediente) pilula = { n: '—', tom: 'mute', l1: (e.feriado ? 'Feriado' : 'Fim de semana') + ' · sem expediente', l2: 'nada é cobrado hoje · a sequência não apaga' };
-  else if (!c.portas) pilula = { n: '0', tom: 'mute', l1: juntar(['0 de ' + e.meta + ' com prova', plano == null ? 'plano —' : pl(c.total, 'parada', 'paradas') + ' hoje']), l2: juntar([HJ3.seqTexto(e.sequencia), HJ3.missaoTexto(e.missao)]) || 'o 1º check-in com prova abre o placar' };
-  else pilula = { n: String(c.comProva), tom: c.comProva >= e.meta ? 'ok' : 'acao', l1: juntar([c.comProva + ' de ' + e.meta + ' com prova', c.semProva ? c.semProva + ' sem prova' : null, e.placar ? e.placar.pts + ' pts na semana' : null]), l2: juntar([f.curto, HJ3.seqTexto(e.sequencia)]) || 'cada visita com prova soma 3 pts' };
+  else if (!c.portas && !foraComProva) pilula = { n: '0', tom: 'mute', l1: juntar(['0 de ' + e.meta + ' com prova', plano == null ? 'plano —' : pl(c.total, 'parada', 'paradas') + ' hoje']), l2: juntar([HJ3.seqTexto(e.sequencia), HJ3.missaoTexto(e.missao)]) || 'o 1º check-in com prova abre o placar' };
+  else pilula = { n: String(comProvaDia), tom: comProvaDia >= e.meta ? 'ok' : 'acao', l1: juntar([comProvaDia + ' de ' + e.meta + ' com prova', c.semProva ? c.semProva + ' sem prova' : null, e.placar ? e.placar.pts + ' pts na semana' : null]), l2: juntar([f.curto, HJ3.seqTexto(e.sequencia)]) || 'cada visita com prova soma 3 pts' };
   const porta = !expediente || !prox ? null : {
     kicker: 'PRÓXIMA PORTA · ' + (c.proxima + 1) + ' DE ' + c.total,
     nome: prox.nome,
@@ -91220,7 +91224,7 @@ HJ3.diaDoExecutivo = function (e) {
     : { titulo: 'Feche o dia: ' + portas + ' · todas com próximo passo', texto: juntar(['1 toque', HJ3.seqTexto(e.sequencia)]) };
   const ckPlano = {
     kicker: 'PLANO DE HOJE',
-    contagem: c.comProva + ' de ' + e.meta + ' com prova',
+    contagem: comProvaDia + ' de ' + e.meta + ' com prova',
     titulo: plano == null ? 'O plano não respondeu' : prox ? 'Próxima porta: ' + prox.nome + (prox.hora ? ' · ≈ ' + prox.hora : '') : c.total ? 'Dia feito · ' + c.comProva + ' com prova' : 'Nada no plano de hoje',
     sub: juntar([HJ3.diaCurto(e.hoje), e.bairro, plano == null ? 'plano —' : pl(c.total, 'parada', 'paradas')]),
     linhas: (plano || []).map(function (p, i) {
