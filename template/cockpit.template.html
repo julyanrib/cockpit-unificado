@@ -85111,13 +85111,29 @@ GV2.cbSemanaTxt = function () { const d = GV2.cb.d || {}; return d.segunda ? GV2
 GV2.cbTom = function (pct) { return pct == null ? 'nd' : pct >= GV2.CB.verde ? 'ok' : pct >= GV2.CB.ambar ? 'av' : 'erro'; };
 GV2.cbPct = function (a, b) { return b ? Math.round(a / b * 100) : null; };
 /* os rituais da semana: 1:1 e fecho têm fonte; daily e simulação, só o que o gestor marcou */
+/* 02/11/26 (auditoria): (1) só dia ÚTIL entra (GV2.util — feriado não é daily nem fecho faltado);
+   (2) o 1:1 era "total: 1" fixo e dava "não houve"/quebrado já na segunda. Agora só é DEVIDO a partir
+   do último dia útil da semana, ou 7 dias depois do último 1:1; antes disso fica fora da conta. */
+GV2.cbUltimoUtilDaSemana = function (segunda) {
+  let d = GV2.somaDias(segunda, 4);
+  for (let i = 0; i < 5 && !GV2.util(d); i++) d = GV2.somaDias(d, -1);
+  return d;
+};
+GV2.cbUmDevido = function (ultimo, hoje, segunda) {
+  if (!hoje) return true;
+  if (segunda && hoje >= GV2.cbUltimoUtilDaSemana(segunda)) return true;
+  return !!ultimo && hoje >= GV2.somaDias(String(ultimo).slice(0, 10), 7);
+};
 GV2.cbRituais = function (x) {
-  const r = x.rituais || {}, m = r.marcados || [];
+  const r = x.rituais || {}, m = (r.marcados || []).filter(function (y) { return !y.dia || GV2.util(y.dia); });
   const conta = function (rit) { const ms = m.filter(function (y) { return y.ritual === rit; }); return { feito: ms.filter(function (y) { return y.presente; }).length, total: ms.length, ms: ms }; };
   const daily = conta('daily'), sim = conta('simulacao');
-  const fd = r.fechoDias || [];
+  const fd = (r.fechoDias || []).filter(function (y) { return !y.dia || GV2.util(y.dia); });
   const fecho = { feito: fd.filter(function (y) { return y.fechou; }).length, total: fd.length, falta: fd.filter(function (y) { return !y.fechou; }).map(function (y) { return y.dia; }) };
-  const um = { feito: Number(r.umAUm) > 0 ? 1 : 0, total: 1, ultimo: r.ultimoUmAUm || null };
+  const d = GV2.cb.d || {};
+  const feitoUm = Number(r.umAUm) > 0 ? 1 : 0;
+  const devido = feitoUm > 0 || GV2.cbUmDevido(r.ultimoUmAUm || null, GV2.base ? GV2.cbHoje() : null, d.segunda || null);
+  const um = { feito: feitoUm, total: devido ? 1 : 0, devido: devido, ultimo: r.ultimoUmAUm || null, venceEm: d.segunda ? GV2.cbUltimoUtilDaSemana(d.segunda) : null };
   return { daily: daily, sim: sim, fecho: fecho, um: um, feito: daily.feito + sim.feito + fecho.feito + um.feito, total: daily.total + sim.total + fecho.total + um.total };
 };
 /* as 7 medidas da semana: o valor, o "como mede" e o tom do semáforo */
@@ -85195,7 +85211,8 @@ GV2.render.cbAceite = function (x) {
 GV2.render.cbRituais = function (x) {
   const R = GV2.cbRituais(x), d = GV2.cb.d || {}, hoje = GV2.cbHoje();
   const dias = [];
-  for (let i = 0; i < 5; i++) { const iso = GV2.somaDias(d.segunda, i); if (iso <= (d.ate || hoje)) dias.push(iso); }
+  /* só dia útil (02/11/26, auditoria): feriado não ganha chip de daily nem de simulação */
+  for (let i = 0; i < 5; i++) { const iso = GV2.somaDias(d.segunda, i); if (iso <= (d.ate || hoje) && GV2.util(iso)) dias.push(iso); }
   const chips = function (rit, quais) {
     return '<span class="gv2-cb-dias">' + quais.map(function (iso) {
       const m = (x.rituais.marcados || []).find(function (y) { return y.dia === iso && y.ritual === rit; });
@@ -85210,7 +85227,7 @@ GV2.render.cbRituais = function (x) {
   return '<section class="card gv2-cb"><div class="gv2-cb-cab"><div><b>Rituais da semana</b></div>' + num(R.feito, R.total) + '</div>'
     + lin('Daily', R.daily.total < dias.length ? 'marque quem estava · ' + GV2.pl(dias.length - R.daily.total, 'dia sem marcar', 'dias sem marcar') : 'marcado por você', num(R.daily.feito, R.daily.total), chips('daily', dias))
     + lin('Simulação seg, qua e sex', R.sim.ms.filter(function (y) { return !y.presente; }).map(function (y) { return 'faltou ' + GV2.rpDataLonga(y.dia); }).join(' · ') || 'marcado por você', num(R.sim.feito, R.sim.total), chips('simulacao', simDias))
-    + lin('1:1', R.um.ultimo ? 'último registrado: ' + GV2.ddmm(R.um.ultimo) : 'nenhum registrado', R.um.feito ? '<b class="num t-ok">feito</b>' : '<b class="num t-erro">não houve</b>')
+    + lin('1:1', R.um.ultimo ? 'último registrado: ' + GV2.ddmm(R.um.ultimo) : 'nenhum registrado', R.um.feito ? '<b class="num t-ok">feito</b>' : R.um.devido ? '<b class="num t-erro">não houve</b>' : '<b class="num t-dim">' + GV2.e(R.um.venceEm ? 'até ' + GV2.DIAS[GV2.dow(R.um.venceEm)] + ' ' + GV2.ddmm(R.um.venceEm) : 'ainda não') + '</b>')
     + lin('Fecho do dia', R.fecho.falta.length ? R.fecho.falta.map(function (iso) { return GV2.rpDataLonga(iso) + ' sem fecho'; }).join(' · ') : R.fecho.total ? 'fechou todos' : 'conta desde 30/10', num(R.fecho.feito, R.fecho.total))
     + '<p class="gv2-g0-rod">rituais_presenca + um_a_um + fecho_do_dia</p></section>';
 };

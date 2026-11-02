@@ -1653,6 +1653,20 @@ tabelas.gv2_falta_etapa = [
     checar('combinados · rituais: daily e simulação só o que foi marcado; 1:1 e fecho da fonte',
       R.daily.feito === 2 && R.daily.total === 2 && R.sim.feito === 1 && R.sim.total === 2 && R.um.feito === 0 && R.fecho.total === 1 && R.feito === 3 && R.total === 6, JSON.stringify(R));
     checar('combinados · divergência na auditoria é vermelho na hora', GV2.cbMedir(rui)[4].k === 'erro' && GV2.cbMedir(rui)[4].curto === '1');
+    /* G5 (auditoria 02/11/26): na segunda, com o último 1:1 há 4 dias, o 1:1 ainda não é devido (fora da
+       conta, nada de "não houve"); na sexta (último dia útil) é. Feriado não entra nos rituais. */
+    {
+      const hojeEra = GV2.cb.d.hoje, ateEra = GV2.cb.d.ate;
+      GV2.cb.d.hoje = '2026-10-26'; GV2.cb.d.ate = '2026-10-26';
+      const cedo = pessoa('cedo', '1', { rituais: { umAUm: 0, ultimoUmAUm: '2026-10-22', fechoDias: [], marcados: [{ dia: '2026-10-26', ritual: 'daily', presente: true }] } });
+      const Rc = GV2.cbRituais(cedo), hc = GV2.render.cbRituais(cedo);
+      GV2.cb.d.hoje = hojeEra; GV2.cb.d.ate = ateEra;
+      const fer = pessoa('fer', '1', { rituais: { umAUm: 1, ultimoUmAUm: '2026-10-28', fechoDias: [{ dia: '2026-11-02', fechou: false }], marcados: [{ dia: '2026-11-02', ritual: 'daily', presente: false }] } });
+      const Rf = GV2.cbRituais(fer);
+      checar('auditoria 02/11 · G5: na segunda o 1:1 não é cobrado (fora da conta, "até sex 30/10"), e feriado não conta daily nem fecho',
+        Rc.um.total === 0 && !Rc.um.devido && Rc.total === 1 && hc.indexOf('não houve') < 0 && hc.indexOf('até sex 30/10') > 0 && Rf.daily.total === 0 && Rf.fecho.total === 0,
+        JSON.stringify({ um: Rc.um, tot: Rc.total, fd: Rf.daily, ff: Rf.fecho }));
+    }
     checar('combinados · o degrau sai do histórico do MESMO combinado; registro falso vai direto ao 3',
       GV2.cbDegrau(bia, 3, false) === 2 && GV2.cbDegrau(bia, 4, false) === 1 && GV2.cbDegrau(bia, 4, true) === 3
         && GV2.cbDegrau(pessoa('z', '3', { ocorrencias: [{ combinado: 3, degrau: 2, dia: '2026-10-20' }] }), 3, false) === 3
