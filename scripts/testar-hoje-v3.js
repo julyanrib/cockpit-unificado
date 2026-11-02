@@ -104,6 +104,29 @@ checar('fonte fora é "—", nunca 0', V('planoFora').cockpit.placar.pts === '�
 checar('nenhum texto diz "último" ou "pior"', !/último|pior/i.test(JSON.stringify(saida)));
 checar('zero emoji', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(JSON.stringify(saida)));
 
+/* ── a tela: 3 blocos no lugar dos 5 números, das 5 regras, da fila e do "Pronto pra rua?" ── */
+const html = HJ3.html();
+checar('o Hoje v3 tem as 3 colunas na ordem: plano · sem próximo passo · placar',
+  html.indexOf('id="hj3Plano"') > 0 && html.indexOf('id="hj3Plano"') < html.indexOf('id="hj3Sem"') && html.indexOf('id="hj3Sem"') < html.indexOf('id="hj3Placar"'));
+checar('o selo "o mesmo dia do app · ao vivo"', html.indexOf('o mesmo dia do app · ao vivo') > 0);
+checar('saíram: os 5 números, as 5 regras, a fila e o "Pronto pra rua?"', !/exh4Regras|exhTopo|exhFilaCheia|Pronto pra rua|O que o seu gestor vê/.test(html));
+const plano = HJ3.planoHTML(V('meioDia').cockpit.plano);
+checar('o plano: a próxima porta, as paradas com a marca e "abrir no app"',
+  /Próxima porta: Pizzaria Cerqueira/.test(plano) && (plano.match(/class="hj3-p[ "]/g) || []).length === 7 && /hj3-m is-ok/.test(plano) && /hj3-m is-av/.test(plano) && /data-exh="mapa"/.test(plano));
+const placar = HJ3.placarHTML(V('meioDia').cockpit.placar);
+checar('o placar: pontos, "faltam", sequência, missão e o fecho de ontem', /Faltam 10 pts para passar Marco/.test(placar) && /Na rua há 5 dias/.test(placar) && /Missão 1 de 2/.test(placar) && /Fechou o dia ontem: sim/.test(placar));
+global.GV2 = GV2;
+const semZero = HJ3.semHTML(V('zerada').cockpit.sem);
+checar('fila zerada: "Todo lead com próximo passo." em verde', /Todo lead com próximo passo\./.test(semZero) && /hj3-zero/.test(semZero));
+const sem = HJ3.semHTML(V('meioDia').cockpit.sem);
+checar('sem a semana do Planejamento carregada, a coluna avisa e manda ao Planejamento (não quebra)', /hj3-lista/.test(sem) && /data-exh="aba:viewAgenda"/.test(sem));
+/* o renderMeuPainel desvia para o Hoje v3 antes de montar o anterior, e a chave local devolve o anterior */
+const rmp = tpl.slice(tpl.indexOf('async function renderMeuPainel()'), tpl.indexOf('async function renderMeuPainel()') + 40000);
+checar('o Hoje v3 é o padrão e localStorage[\'hoje-v2\'] = \'1\' devolve o anterior',
+  rmp.indexOf('GV2.HJ3.usar()') > 0 && rmp.indexOf('GV2.HJ3.usar()') < rmp.indexOf('const metaMensal') && /localStorage\.getItem\('hoje-v2'\) === '1'/.test(codigo));
+checar('a medição grava hoje_cockpit / aberto em aberturas_de_tela', /p_tela: 'hoje_cockpit', p_origem: 'menu', p_acao: 'aberto'/.test(codigo));
+checar('as linhas do meio são as do Planejamento v3 (pv3LinhaHTML) e o clique vai para PLV3.acao', /GV2\.PLV3\.linhaHTML\(D, l\)/.test(codigo) && /GV2\.PLV3\.acao\(/.test(codigo));
+
 if (falhas.length) {
   console.log('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.log('  ✗ ' + f));
