@@ -202,6 +202,9 @@ const B = ['b:meier', 'b:tijuca', 'b:madureira', 'b:vila isabel', 'b:penha'];
   const m = P.metaDaSemana(6, S1, 8, 2, 3);
   checar('meta da semana: 30 visitas e (8 − 2) ÷ 3 semanas = 2 fechamentos', m.visitas === 30 && m.fechamentos === 2, JSON.stringify(m));
   checar('meta do mês desconhecida: fechamentos null (a tela diz "—")', P.metaDaSemana(6, S1, null, 0, 3).fechamentos === null);
+  /* auditoria 02/11/26 · G7: meta 0 é "sem meta", não "0 fechamentos" */
+  const m0 = P.metaDaSemana(6, S1, 0, 0, 3);
+  checar('auditoria 02/11 · G7: meta do mês 0 → sem meta (fechamentos null, semMeta), nunca "0 fechamentos"', m0.fechamentos === null && m0.semMeta === true, JSON.stringify(m0));
   checar('semanas que faltam: a de 09/11 tem 09, 16, 23 e 30/11 = 4', P.semanasQueFaltam('2026-11-09') === 4 && P.semanasQueFaltam('2026-11-30') === 1);
   const S0 = semana(['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'], 2, { 0: 'Finados' });
   const t = P.topo(S0, [[{ feita: true }], [{ feita: true }, {}], [], [{}, {}, {}], [{}]]);

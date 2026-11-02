@@ -75511,8 +75511,10 @@ function sm5QuentesHTML(d) {
     +   'De onde vêm os números: comparativo e detalhes por pessoa do robô semanal (semana '
     +   'civil seg–sex, sem Conta Alvo, ganhos por closedate)'
     +   (d && d.iaVelha ? '' : ' · leitura e roteiros gerados por IA na mesma rodada')
-    +   ' · metas por patamar (pleno 8 · rampa 4) da planilha de '
-    +   'metas · travados = SLA estourado no snapshot do dia.</div>'
+    /* 02/11/26 (auditoria): as metas por patamar eram texto fixo (8 e 4) e mentia no mês em que a meta mudou;
+       a meta de cada um vem do data/metas.json do mês, e o rodapé só diz de onde */
+    +   ' · metas de cada pessoa do data/metas.json do mês'
+    +   ' · travados = SLA estourado no snapshot do dia.</div>'
     + '</div>';
 }
 
@@ -82794,6 +82796,8 @@ DV2.escadaDoVariavel = function (q) {
     const seguinte = faixas.find(function (f) { return Number(f.de) > nx; });
     sub = v === 0 ? DV2.Cap(mes) + ' começou. A escada sobe a cada contrato fechado no HubSpot.'
       : seguinte && (!meta || Number(seguinte.de) <= meta) ? 'Faltam ' + DV2.pl(Number(seguinte.de) - v, 'venda', 'vendas') + ' para a faixa de +' + DV2.reais(seguinte.porCliente) + ' por venda.'
+      /* 02/11/26 (auditoria): sem meta no mês, "Faltam 0 vendas para a meta" mentia — é "sem meta" */
+      : !meta ? 'Sem meta de vendas neste mês: cada venda segue valendo pela escada.'
       : 'Faltam ' + DV2.pl(Math.max(0, meta - v), 'venda', 'vendas') + ' para a meta.';
   }
   /* um degrau por venda até a meta (ou até as vendas, se passou), agrupado por faixa */
@@ -82810,7 +82814,7 @@ DV2.escadaDoVariavel = function (q) {
   return {
     fora: false, fonte: null, titulo: titulo, sub: sub, faixas: grupos,
     rodape: (v ? DV2.reais(DV2.totalDe(faixas, v)) + ' em ' + mes + ' até aqui' : mes + ' começou') + ' · comissionamento.json',
-    meta: 'meta ' + meta + (q.pessoa.fase === 'novato' ? ' · novato' : ''), proximaVale: vale
+    meta: (meta > 0 ? 'meta ' + meta : 'sem meta') + (q.pessoa.fase === 'novato' ? ' · novato' : ''), proximaVale: vale
   };
 };
 
@@ -86811,8 +86815,8 @@ GV2.render.time = function () {
     + K({ rot: 'Travados', def: 'negócio que passou do prazo da etapa (a régua do playbook)' + (mrrTravNeg ? ' · ' + GV2.rsCheio(mrrTravNeg) + ' parados em Negociação' : ''), acao: 'ir:raiox:travados',
       num: String(t.travados), tom: t.travados ? 't-av' : '', unid: t.travados === 1 ? 'negócio' : 'negócios', cmp: 'passaram do prazo da etapa' })
     + (RT ? K({ rot: 'Mês', selo: RT.cli.selo, def: 'cliente = negócio que chegou a Ganho / Enviado Onboarding no mês (Ag. Pagamento ainda não) · esperado = meta × dias úteis passados · provável = fechados + Ag. Pagamento + 60% da Negociação', acao: 'rxg:mes',
-        num: t.fechados + ' de ' + t.metaMes, unid: 'clientes', tom: 't-' + RT.cli.selo.k, barra: { pct: RT.cli.pct, tick: RT.cli.tick, k: RT.cli.selo.k }, cmp: 'esperado ' + GV2.v8Num(RT.cli.esp) + ' · provável ' + t.provavel })
-      : K({ rot: 'Mês', def: 'clientes do mês contra a meta', acao: 'rxg:mes', num: t.fechados + ' de ' + t.metaMes, unid: 'clientes', cmp: 'provável ' + t.provavel }))
+        num: GV2.deMeta(t.fechados, t.metaMes), unid: 'clientes', tom: 't-' + RT.cli.selo.k, barra: { pct: RT.cli.pct, tick: RT.cli.tick, k: RT.cli.selo.k }, cmp: 'esperado ' + GV2.v8Num(RT.cli.esp) + ' · provável ' + t.provavel })
+      : K({ rot: 'Mês', def: 'clientes do mês contra a meta', acao: 'rxg:mes', num: GV2.deMeta(t.fechados, t.metaMes), unid: 'clientes', cmp: 'provável ' + t.provavel }))
     + '</div>';
   const aviso = fonte ? '<div class="gv2-v5-fonte"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 17h.01M10.3 3.9 2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg><span><b>Não li o Planejamento agora</b> · ' + GV2.e(fonte + ' não respondeu às ' + b.horaTxt + '. Plano e paradas aparecem como "—"; visitas, jornada e agenda continuam.') + '</span><button type="button" class="gv2-v5-btn" data-gv2="v5recarregar">Tentar de novo</button></div>' : '';
   const gAcao = G.grupos.filter(function (g) { return !g.info; }), gInfo = G.grupos.filter(function (g) { return g.info; });
@@ -86880,7 +86884,7 @@ GV2.render.v5PorPessoa = function (sit) {
     else acao = '<button type="button" class="gv2-v5-btn is-linha" data-gv2="' + abre + '">Ver o dia</button>';
     const x = (fonte ? '—' : (p.hoje.visitas_todas || 0)) + ' de ' + (GV2.V8_VISITAS_DIA || p.meta_visitas_dia);
     const tag = p.id === melhor ? ' is-melhor' : p.id === pior ? ' is-pior' : '';
-    const mes = R ? '<button type="button" class="gv2-v5-pp-c gv2-v8-ppmes is-' + R.cli.selo.k + '" data-gv2="v8neg:mes:' + p.id + '" title="' + GV2.e('clientes do mês · esperado ' + GV2.v8Num(R.cli.esp) + ' até hoje') + '"><b class="num">' + R.cli.feito + ' de ' + R.cli.meta + '</b><span class="gv2-v8-trilha"><em style="width:' + R.cli.pct.toFixed(1) + '%"></em><u style="left:' + R.cli.tick.toFixed(1) + '%"></u></span></button>' : '<span class="gv2-v5-pp-c">—</span>';
+    const mes = R ? '<button type="button" class="gv2-v5-pp-c gv2-v8-ppmes is-' + R.cli.selo.k + '" data-gv2="v8neg:mes:' + p.id + '" title="' + GV2.e('clientes do mês · esperado ' + GV2.v8Num(R.cli.esp) + ' até hoje') + '"><b class="num">' + GV2.e(GV2.deMeta(R.cli.feito, R.cli.meta)) + '</b><span class="gv2-v8-trilha"><em style="width:' + R.cli.pct.toFixed(1) + '%"></em><u style="left:' + R.cli.tick.toFixed(1) + '%"></u></span></button>' : '<span class="gv2-v5-pp-c">—</span>';
     const xS = fonte ? 'sem resposta' : (p.hoje.fora ? '+' + p.hoje.fora + ' ' + GV2.foraTxt(p.id) : 'com prova') + GV2.repHoje(p);
     const r = p.hoje.repetidas || 0;
     const xCurto = fonte ? 'sem resposta' : p.hoje.fora ? '+' + p.hoje.fora + (GV2.ruaPlanejada(p.id) ? ' na rua' : ' fora') : r ? GV2.pl(r, 'repetida', 'repetidas') : 'com prova';
@@ -87143,7 +87147,7 @@ GV2.render.v5Pessoa = function (p) {
   const resumo = !R ? resumoAntigo : '<div class="gv2-v5-ress">'
     + res('Hoje', GV2.temRua(p) ? GV2.visHoje(p) : GV2.emRampa && GV2.emRampa(p) ? 'rampagem' : 'sem rota', p.hoje.paradas_plano ? 'do plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : (p.hoje.agenda && p.hoje.agenda.n ? GV2.pl(p.hoje.agenda.n, 'item', 'itens') + ' na agenda' : 'nenhuma parada'), 'v5dia:' + p.id + ':' + b.agora.iso)
     + res('Semana', feitoSem + ' de ' + metaSem, 'visitas com prova', 'v5rua:semana')
-    + res('Mês', R.cli.feito + ' de ' + R.cli.meta, 'clientes · esperado ' + GV2.v8Num(R.cli.esp), 'v8neg:mes:' + p.id, 't-' + R.cli.selo.k)
+    + res('Mês', GV2.deMeta(R.cli.feito, R.cli.meta), R.cli.meta ? 'clientes · esperado ' + GV2.v8Num(R.cli.esp) : 'clientes', 'v8neg:mes:' + p.id, 't-' + R.cli.selo.k)
     /* 02/11/26 (auditoria): o número é dos quentes; "sem próximo passo" é o do funil inteiro (GV2.semProximoPasso) */
     + res('Quentes', String(p.quentes.length), (p.quentesSemPasso ? GV2.pl(p.quentesSemPasso, 'quente sem passo', 'quentes sem passo') : GV2.pl(p.quentes.length, 'negócio', 'negócios')) + ' · ' + GV2.semProximoPasso(p.negocios).length + ' sem próximo passo no funil', 'v8neg:quentes:' + p.id, p.quentesSemPasso ? 't-av' : '')
     + res('Travados', String(p.travados.length), 'passaram do prazo da etapa', 'v8neg:travados:' + p.id, p.travados.length >= 4 ? 't-av' : '')
@@ -88555,16 +88559,19 @@ GV2.v7Meta = function (p, nDias) {
   const iso = GV2.base.agora.iso, ini = iso.slice(0, 8) + '01';
   const fim = GV2.somaDias(GV2.somaDias(ini, 40).slice(0, 8) + '01', -1);
   const uteisMes = Math.max(1, GV2.uteisEntre(ini, fim));
-  const metaMes = Number(p && p.meta_clientes_mes) || 8;
+  /* 02/11/26 (auditoria): sem meta de clientes no mês, demos e vendas da semana são null ("sem meta"),
+     não a meta de 8 inventada pelo "|| 8" */
+  const metaMes = Number(p && p.meta_clientes_mes) || 0;
   return { visitas: (Number(p && p.meta_visitas_dia) || 6) * nDias,
-    demos: Math.max(1, Math.round(metaMes / 0.4 * nDias / uteisMes)),
-    vendas: Math.max(1, Math.round(metaMes * nDias / uteisMes)) };
+    demos: metaMes ? Math.max(1, Math.round(metaMes / 0.4 * nDias / uteisMes)) : null,
+    vendas: metaMes ? Math.max(1, Math.round(metaMes * nDias / uteisMes)) : null };
 };
 /* verde: bateu visitas e demos · vermelho: menos de 80% das visitas ou de 60% das demos (24 e 3 numa
-   semana cheia, o mesmo semáforo do guia do funil) · âmbar: o resto */
+   semana cheia, o mesmo semáforo do guia do funil) · âmbar: o resto · sem meta de demo, só as visitas */
 GV2.v7Ritmo = function (vis, demos, m) {
-  if (vis >= m.visitas && demos >= m.demos) return { cls: 'is-ok', txt: 'no ritmo' };
-  if (vis < m.visitas * 0.8 || demos < m.demos * 0.6) return { cls: 'is-mal', txt: 'fora do ritmo' };
+  const semMeta = m.demos == null;
+  if (vis >= m.visitas && (semMeta || demos >= m.demos)) return { cls: 'is-ok', txt: 'no ritmo' };
+  if (vis < m.visitas * 0.8 || (!semMeta && demos < m.demos * 0.6)) return { cls: 'is-mal', txt: 'fora do ritmo' };
   return { cls: 'is-at', txt: 'atenção' };
 };
 /* o plano feito na semana: x de y somando os dias úteis (a mesma conta da Grade) */
@@ -88618,9 +88625,9 @@ GV2.render.v7Passada = function () {
     const pl = GV2.v7Plano(p, dias);
     const mrr = mrrDe(l);
     /* bateu as duas metas que pagam (demo e venda): é o que o gestor reconhece, mesmo com visita abaixo */
-    const r = ausente ? { cls: 'is-at', txt: 'fora do placar' } : l.vendas >= m.vendas && l.reunioes >= m.demos ? { cls: 'is-ok', txt: 'bateu vendas e demos' } : GV2.v7Ritmo(l.visitas, l.reunioes, m);
+    const r = ausente ? { cls: 'is-at', txt: 'fora do placar' } : m.vendas != null && l.vendas >= m.vendas && l.reunioes >= m.demos ? { cls: 'is-ok', txt: 'bateu vendas e demos' } : GV2.v7Ritmo(l.visitas, l.reunioes, m);
     if (ausente) { tot.ausentes = (tot.ausentes || 0) + 1; return { p: p, l: l, m: m, pl: pl, mrr: 0, r: r }; }
-    tot.vis += l.visitas; tot.dem += l.reunioes; tot.ven += l.vendas; tot.mrr += mrr; tot.mv += m.visitas; tot.md += m.demos; tot.mven += m.vendas;
+    tot.vis += l.visitas; tot.dem += l.reunioes; tot.ven += l.vendas; tot.mrr += mrr; tot.mv += m.visitas; tot.md += m.demos || 0; tot.mven += m.vendas || 0;
     if (pl) { tot.px += pl.x; tot.py += pl.y; } else tot.planoOk = false;
     return { p: p, l: l, m: m, pl: pl, mrr: mrr, r: r };
   });
@@ -88629,7 +88636,7 @@ GV2.render.v7Passada = function () {
   /* melhor da semana = mais pontos no placar; mais atrasado = menos pontos (a régua do bônus) */
   const porPts = linhas.filter(function (x) { return !x.l.ausente; }).sort(function (x, y) { return (Number(y.l.pontos) || 0) - (Number(x.l.pontos) || 0) || x.p.nome.localeCompare(y.p.nome); });
   const melhor = porPts.length > 1 ? porPts[0].p.id : null, pior = porPts.length > 1 ? porPts[porPts.length - 1].p.id : null;
-  const cel = function (v, meta, aus) { if (aus) return '<span class="num"><small>—</small></span>'; return '<span class="num' + (v >= meta ? ' t-ok' : '') + '">' + v + '<small> / ' + meta + '</small></span>'; };
+  const cel = function (v, meta, aus) { if (aus) return '<span class="num"><small>—</small></span>'; if (meta == null) return '<span class="num">' + v + '<small> · sem meta</small></span>'; return '<span class="num' + (v >= meta ? ' t-ok' : '') + '">' + v + '<small> / ' + meta + '</small></span>'; };
   const lin = function (x) {
     const tag = x.p.id === melhor ? ' is-melhor' : x.p.id === pior ? ' is-pior' : '';
     const pts = x.l.ausente ? 'não veio no placar' : (Number(x.l.pontos) || 0) + ' pts';
@@ -88759,6 +88766,9 @@ GV2.v8Ritmo = function (p, base) {
     dem: Object.assign(linha('Demos', f.demo || 0, metaCli / 0.4), { extra: GV2.v8DemoAntes(pessoas) }),
     cli: linha('Clientes', f.fechado || 0, metaCli) };
 };
+/* "N de 0" NÃO EXISTE (02/11/26, auditoria): sem meta no mês, o texto é "N · sem meta" — "de 0"
+   parecia meta zero cumprida. Toda contagem "x de meta" do gestor passa por aqui. */
+GV2.deMeta = function (feito, meta) { return Number(meta) > 0 ? feito + ' de ' + GV2.v8Num(meta) : feito + ' · sem meta'; };
 /* DEMO DE ANTES (15/10/26, Julyan: "demo está 2 e lá tem 4"): o card conta a demo do MÊS (negócio
    que entrou em Demo/Proposta neste mês); a coluna do HubSpot mostra todo mundo parado lá, inclusive
    quem entrou em setembro. Os dois números na tela, para não parecer erro. */
@@ -88831,7 +88841,7 @@ GV2.v8GavPessoa = function (id) {
   const tiles = '<div class="gv2-v8-tiles">'
     + tile('Hoje', xdy, (p.hoje.paradas_plano ? 'do plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem parada no plano') + GV2.repHoje(p), 'v5dia:' + p.id + ':' + hojeIso, p.hoje.paradas_plano ? '' : 'is-mal')
     + tile('Semana', feitoSem + ' de ' + metaSem, 'visitas com prova · ' + GV2.pl(uteisSem, 'dia útil', 'dias úteis'), 'v5rua:semana')
-    + tile('Mês', R.cli.feito + ' de ' + R.cli.meta, 'clientes · esperado ' + GV2.v8Num(R.cli.esp), 'v8neg:mes:' + p.id, 'is-' + mesSelo.k)
+    + tile('Mês', GV2.deMeta(R.cli.feito, R.cli.meta), R.cli.meta ? 'clientes · esperado ' + GV2.v8Num(R.cli.esp) : 'clientes', 'v8neg:mes:' + p.id, 'is-' + mesSelo.k)
     /* 02/11/26 (auditoria): o número embaixo é dos quentes — "quentes sem passo"; o funil inteiro sem próximo passo vai junto */
     + tile('Quentes', String(p.quentes.length), GV2.pl(p.quentesSemPasso, 'quente sem passo', 'quentes sem passo') + ' · ' + GV2.semProximoPasso(p.negocios).length + ' sem próximo passo no funil', 'v8neg:quentes:' + p.id)
     + tile('Travados', String(p.travados.length), 'passaram do prazo da etapa', 'v8neg:travados:' + p.id, p.travados.length >= 10 ? 'is-av' : '')
@@ -89059,7 +89069,9 @@ GV2.v8dMrr = function (p) {
   const v = (vm || { porRep: [] }).porRep;
   const r = v.find(function (x) { return String(x.ownerId) === p.id; });
   const rep = typeof DATA !== 'undefined' && Array.isArray(DATA.reps) ? DATA.reps.find(function (x) { return String(x.ownerId) === p.id; }) : null;
-  const meta = rep && Number(rep.metaMrr) ? Number(rep.metaMrr) : (Number(p.meta_clientes_mes) >= 8 ? 3000 : 1500);
+  /* 02/11/26 (auditoria): sem metaMrr no metas.json do mês, a meta é null ("sem meta"); a reserva
+     de 1500/3000 inventava uma meta que ninguém deu */
+  const meta = rep && Number(rep.metaMrr) ? Number(rep.metaMrr) : null;
   return { feito: !vm ? null : r ? Number(r.mrrTotal) || 0 : 0, meta: meta };
 };
 /* o compromisso do último registro de daily antes de hoje */
@@ -89153,10 +89165,12 @@ GV2.render.daily = function () {
   const pd = GV2.v8Tx(R.f.portas || 0, R.f.decisor || 0), pdT = GV2.v8Tx(Rt.f.portas || 0, Rt.f.decisor || 0);
   const dd = GV2.v8Tx(R.f.decisor || 0, R.f.demo || 0), ddT = GV2.v8Tx(Rt.f.decisor || 0, Rt.f.demo || 0);
   const c1 = '<section class="card gv2-v8d-c"><h3>1 · O mês</h3>'
-    + '<div class="gv2-v8d-duas">' + GV2.v8dBarra('Clientes', R.cli.feito, R.cli.meta, R.cli.esp, [R.cli.feito + ' de ' + R.cli.meta, 'esperado ' + GV2.v8Num(R.cli.esp)], 'v8neg:mes:' + p.id)
+    + '<div class="gv2-v8d-duas">' + GV2.v8dBarra('Clientes', R.cli.feito, R.cli.meta, R.cli.esp, [GV2.deMeta(R.cli.feito, R.cli.meta), R.cli.meta ? 'esperado ' + GV2.v8Num(R.cli.esp) : 'sem meta no mês'], 'v8neg:mes:' + p.id)
     + (mrr.feito == null
-      ? '<div class="gv2-v8-bar gv2-v8d-bar"><div class="gv2-v8-bar-c"><small>MRR do mês</small><i>não medido</i></div><div class="gv2-v8-bar-n"><b class="num">—</b><span>' + GV2.e('de ' + GV2.v6Reais(mrr.meta) + ' · as vendas deste mês não vieram') + '</span></div></div>'
-      : GV2.v8dBarra('MRR do mês', mrr.feito, mrr.meta, mrr.meta * M.frac, [GV2.v6Reais(mrr.feito), 'de ' + GV2.v6Reais(mrr.meta)], '')) + '</div>'
+      ? '<div class="gv2-v8-bar gv2-v8d-bar"><div class="gv2-v8-bar-c"><small>MRR do mês</small><i>não medido</i></div><div class="gv2-v8-bar-n"><b class="num">—</b><span>' + GV2.e((mrr.meta == null ? 'sem meta' : 'de ' + GV2.v6Reais(mrr.meta)) + ' · as vendas deste mês não vieram') + '</span></div></div>'
+      : mrr.meta == null
+        ? '<div class="gv2-v8-bar gv2-v8d-bar"><div class="gv2-v8-bar-c"><small>MRR do mês</small><i>sem meta</i></div><div class="gv2-v8-bar-n"><b class="num">' + GV2.e(GV2.v6Reais(mrr.feito)) + '</b><span>sem meta de MRR no mês</span></div></div>'
+        : GV2.v8dBarra('MRR do mês', mrr.feito, mrr.meta, mrr.meta * M.frac, [GV2.v6Reais(mrr.feito), 'de ' + GV2.v6Reais(mrr.meta)], '')) + '</div>'
     + '<h3>2 · Onde o funil trava</h3>'
     + GV2.v9dFunilCurto(p, R, Rt)
     + '<div class="gv2-v9-pilulas"><span>porta → decisor <b class="' + GV2.v9dTom(pd, pdT) + '">' + pd + '</b> · time ' + pdT + '</span><span>decisor → demo <b class="' + GV2.v9dTom(dd, ddT) + '">' + dd + '</b> · time ' + ddT + '</span></div>'
@@ -91890,9 +91904,11 @@ PLV3.metaDaSemana = function (metaDia, dias, metaMes, fechadosMes, semanasRestan
   const uteis = (dias || []).filter(function (d) { return d && !d.feriado; }).length;
   const md = Number(metaDia) || PLV3.META_PADRAO;
   const mm = metaMes == null || metaMes === '' ? null : Number(metaMes);
-  const fech = mm == null || !isFinite(mm) ? null
+  /* 02/11/26 (auditoria): meta do mês 0 é "sem meta", não "0 fechamentos" na semana */
+  const semMeta = mm != null && isFinite(mm) && mm <= 0;
+  const fech = mm == null || !isFinite(mm) || semMeta ? null
     : Math.max(0, Math.ceil(Math.max(0, mm - (Number(fechadosMes) || 0)) / Math.max(1, Number(semanasRestantes) || 1)));
-  return { visitas: md * uteis, uteis: uteis, metaDia: md, fechamentos: fech };
+  return { visitas: md * uteis, uteis: uteis, metaDia: md, fechamentos: fech, semMeta: semMeta };
 };
 
 /* ── 4 · o bairro do dia ──
@@ -92244,7 +92260,7 @@ PLV3.faixaHTML = function (D) {
     ? '<b>—</b><span>sem próximo passo</span><em>' + e(D.baseErro ? 'funil do HubSpot fora' : 'lendo o funil do HubSpot') + '</em>'
     : '<b class="' + (n ? '' : 'is-ok') + '">' + n + '</b><span>sem próximo passo</span><em>→ 0</em>';
   const ms = D.metaSem;
-  const metaT = 'semana: ' + ms.visitas + ' visitas com prova · ' + (ms.fechamentos == null ? '— fechamentos (meta do mês fora)' : GV2.pl(ms.fechamentos, 'fechamento', 'fechamentos'));
+  const metaT = 'semana: ' + ms.visitas + ' visitas com prova · ' + (ms.semMeta ? 'sem meta de fechamentos no mês' : ms.fechamentos == null ? '— fechamentos (meta do mês fora)' : GV2.pl(ms.fechamentos, 'fechamento', 'fechamentos'));
   const t = D.topo;
   const gradeT = 'na grade ' + t.naGrade + ' · ' + t.cobertos + ' de ' + t.uteis + ' dias cobertos' + (t.feitas ? ' · ' + t.feitas + ' feitas' : '');
   const pend = D.semPendentes.length;

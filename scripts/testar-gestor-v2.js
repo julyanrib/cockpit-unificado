@@ -369,6 +369,15 @@ tabelas.gv2_falta_etapa = [
     GV2.v8Ritmo = rOrig;
     checar('auditoria 02/11 · G6: com esperado 0, o Por pessoa diz "mês começando · meta 8" e nunca "0 de 0"',
       /mês começando · meta 8/.test(pp0) && !/<\/b> de 0</.test(pp0));
+    /* G7: sem meta é "sem meta" — nada de "N de 0", da meta 8 do "|| 8" nem do MRR de reserva 1500/3000 */
+    const metaEra = ana.meta_clientes_mes;
+    ana.meta_clientes_mes = 0;
+    const pesSem = GV2.render.v5Pessoa(ana).replace(/<[^>]+>/g, ' '), m7 = GV2.v7Meta(ana, 5), mrr0 = GV2.v8dMrr(ana);
+    ana.meta_clientes_mes = metaEra;
+    checar('auditoria 02/11 · G7: meta 0 → "sem meta" na Pessoas (nunca "de 0"), v7Meta sem a meta 8 inventada, MRR sem a reserva 1500/3000',
+      /sem meta/.test(pesSem) && !/[0-9] de 0([^0-9,]|$)/.test(pesSem) && m7.vendas === null && m7.demos === null && mrr0.meta === null && GV2.deMeta(3, 0) === '3 · sem meta' && GV2.deMeta(3, 8) === '3 de 8',
+      JSON.stringify({ m7: m7, mrr: mrr0 }));
+    checar('auditoria 02/11 · G7: o rodapé da Semana não fixa mais "pleno 8 · rampa 4"', tpl.indexOf('pleno 8 · rampa 4') < 0);
   }
   checar('cada aba desenha sem erro', ['time', 'raiox', 'rua', 'pessoas', 'propostas', 'playbook', 'prova'].every(a => {
     try { GV2.estado.aba = a; return typeof GV2.render[a]() === 'string'; } catch (e) { falhas.push('aba ' + a + ': ' + e.message); return false; }
