@@ -83269,7 +83269,9 @@ DV2.html = function (vm) {
     + '<div class="dv2-caixa is-rota">' + e(S.proximo) + '</div>'
     + '<div class="dv2-chips">' + S.regra.map(function (r) { return '<span><b>' + e(r.v) + '</b> ' + e(r.t) + '</span>'; }).join('') + '</div><p class="dv2-n">' + e(S.nota) + '</p>'
     /* o ranking completo fica na Disputa da semana, no Hoje (regra 3): aqui só o pódio e o próximo a passar */
-    + (!S.fora && vm.cab.selos[0].t === 'Pleno' ? '<button type="button" class="dv2-bt" data-dv2="disputa">a disputa completa</button>' : '') + '</section>';
+    /* 02/11/26 (auditoria): saiu o botão da disputa da semana inteira — levava ao Hoje antigo, que o Hoje v3
+       substituiu e não mostra a disputa; o pódio e o "faltam" deste bloco são a disputa da semana */
+    + '</section>';
   /* 3 · a missão */
   const M = vm.missao;
   const missao = '<section class="dv2-b dv2-s4 dv2-mis' + (M.cumprida ? ' is-feita' : '') + '" id="dv2Missao"><div class="dv2-k ' + (M.cumprida ? 'is-ok' : 'is-acao') + '">' + e(M.kicker) + '<small>' + e(M.prazo) + '</small></div>'
@@ -83432,7 +83434,6 @@ DV2.clique = function (ev) {
   if (a[0] === 'um') { DV2.estado.umAberto = !DV2.estado.umAberto; return DV2.pintar(); }
   if (a[0] === 'colecao') { const c = document.getElementById('dv2Colecao'); if (c && c.scrollIntoView) c.scrollIntoView({ behavior: DV2.reduzir() ? 'auto' : 'smooth', block: 'start' }); return; }
   if (a[0] === 'quiz' && typeof activateTab === 'function') activateTab('viewPlaybook');
-  if (a[0] === 'disputa' && typeof activateTab === 'function') activateTab('viewMeuPainel');
 };
 DV2.instalar = function () {
   if (DV2.instalado || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
@@ -93328,6 +93329,11 @@ HJ3.contar = function (paradas) {
 /* "Faltam N" = os pontos de quem está logo acima − os seus + 1, do placar da semana (a conta da semana do Desenvolvimento v2) */
 HJ3.faltam = function (placar) {
   if (!placar) return { n: null, curto: null, longo: null };
+  /* 02/11/26 (auditoria): todo mundo com 0 é "a semana começou", como no DV2 (semanaDoBonus) — antes
+     o 1º com 0 pts lia "você lidera a semana" e o 2º, "faltam 1 para passar" quem também tinha 0 */
+  if (placar.pos != null && !(Number(placar.pts) > 0) && (placar.pos === 1 || !placar.acima || !(Number(placar.acima.pts) > 0))) {
+    return { n: null, curto: 'a semana começou', longo: 'A semana começou: todo mundo com 0. A 1ª visita com prova de hoje já põe você no placar.' };
+  }
   if (placar.pos === 1) return { n: 0, curto: 'você lidera a semana', longo: 'Você lidera a semana.' };
   if (!placar.acima || placar.pos == null) return { n: null, curto: null, longo: placar.pts ? null : 'O 1º check-in com prova põe você no placar.' };
   const n = placar.acima.pts - placar.pts + 1;
@@ -93456,6 +93462,34 @@ HJ3.diaDoExecutivo = function (e) {
   return { expediente: expediente, feriado: feriado, contagem: c, pilula: pilula, porta: porta, folha: folha, fecho: fecho, checkout: checkout,
     push08: push08, push18: push18, cockpit: { plano: ckPlano, sem: ckSem, placar: ckPlacar } };
 };
+/* O ACABAMENTO DO COCKPIT (02/11/26, auditoria). Mora FORA de diaDoExecutivo de propósito: a saída
+   dela é a fixture de paridade com o app (scripts/fixtures/hoje-v3/esperado.json, os mesmos bytes de
+   src/utils/hojeV3.esperado.json lá) e o app ainda não tem estas regras. Quando o hojeV3.ts do app as
+   tiver, elas descem para diaDoExecutivo e a esperada é regerada dos dois lados no mesmo dia:
+     · a visita com prova FORA do plano (dv5.fora, a prospecção de rua) soma no "com prova" — a mesma
+       conta das visitas_todas do gestor; antes o bloco dizia "2 de 6" para quem fez 6 com prova;
+     · sem expediente, o bloco não cobra "0 de 6 com prova" nem aponta "Próxima porta": diz que a meta
+       não conta hoje e mostra o plano, se houver;
+     · textos: "missão da semana do Desenvolvimento" (a aba se chama assim no Cockpit), sem o "os 5
+       números do gestor…" e sem o jargão "o mesmo componente… / o mesmo número do app". */
+HJ3.ajustarCockpit = function (vm, e) {
+  if (!vm || !vm.cockpit) return vm;
+  const c = vm.contagem, P = vm.cockpit.plano, pl = HJ3.pl, juntar = HJ3.juntar;
+  const fora = Math.max(0, Number(e && e.foraComProva) || 0);
+  const comProva = c.comProva + fora;
+  if (!vm.expediente) {
+    P.contagem = juntar([comProva ? comProva + ' com prova' : null, 'sem expediente · a meta não conta hoje']);
+    if (e && e.paradas != null) P.titulo = (e.feriado ? 'Feriado · ' + e.feriado : 'Fim de semana') + (c.total ? ' · ' + pl(c.total, 'parada', 'paradas') + ' no plano' : '');
+    P.linhas.forEach(function (l) { l.proxima = false; });
+  } else {
+    P.contagem = comProva + ' de ' + e.meta + ' com prova' + (fora ? ' · ' + fora + ' fora do plano' : '');
+    if (e && e.paradas != null && c.proxima < 0 && c.total) P.titulo = 'Dia feito · ' + comProva + ' com prova';
+  }
+  vm.cockpit.sem.sub = 'negócio aberto sem nada marcado de hoje em diante · dê uma data a cada um';
+  vm.cockpit.placar.linhas.forEach(function (l) { if (l.t === 'a missão da semana do Meu desempenho') l.t = 'a missão da semana do Desenvolvimento'; });
+  vm.cockpit.placar.rodape = 'ponto só nasce de prova';
+  return vm;
+};
 /* os toasts pós-visita (o app os mostra; moram aqui para a paridade dos textos) */
 HJ3.toastCheguei = function (o) {
   if (!o.comProva) return { titulo: 'Check-in sem prova · fora do raio', texto: 'não conta ponto · tire uma foto da fachada para provar', tom: 'av' };
@@ -93489,7 +93523,7 @@ HJ3.ICA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v6M12 17h.0
 HJ3.html = function () {
   return '<div class="gv2-tokens hj3" id="hj3Raiz">'
     + '<div class="hj3-titulo"><div><h1>Hoje</h1><p id="hj3Sub">o plano, o que falta e o placar</p></div>'
-    + '<span class="hj3-vivo"><i></i>o mesmo dia do app · ao vivo</span></div>'
+    + '<span class="hj3-vivo"><i></i>atualiza sozinho</span></div>'
     + '<div id="hj3Feriado"></div>'
     + '<div class="hj3-grade"><section class="hj3-col" id="hj3Plano"><div class="hj3-lendo">Lendo o plano de hoje com a mesma fonte do app…</div></section>'
     + '<section class="hj3-col" id="hj3Sem"></section><section class="hj3-col" id="hj3Placar"></section></div></div>';
@@ -93568,6 +93602,8 @@ HJ3.entrada = function (p, b) {
     hoje: hoje, agora: GV2.hhmm(a.min), feriado: util ? null : (GV2.PLV3.nomeFeriado(hoje) || null), util: util,
     nome: String(p.nome || '').trim().split(/\s+/)[0] || null, meta: p.meta_visitas_dia || 6, bairro: bairro,
     paradas: paradas, vencemHoje: vencemHoje,
+    /* a visita com prova fora do plano (dv5.fora): soma no "com prova" (02/11/26, auditoria) */
+    foraComProva: dia.estado === 'ok' ? (dia.fora || []).length : 0,
     semPasso: GV2.semProximoPasso(meus, EXH4.estado.marcados).length, topSemPasso: [],
     placar: S ? { pts: S.pts, pos: S.pos, acima: S.acima ? { nome: S.acima.nome, pts: S.acima.pts } : null } : null,
     sequencia: Q ? Q.rua.atual : null, missao: M ? { n: M.n, alvo: M.alvo, cumprida: !!M.cumpridaEm } : null,
@@ -93583,16 +93619,24 @@ HJ3.pintar = function () {
     if (s && s.erro) set('hj3Plano', '<div class="hj3-lendo">' + e(s.erro === 'fora' ? 'Você não está no time ativo do Field Sales nesta carga.' : 'Não consegui montar o seu dia agora: ' + s.erro + '.') + '</div><button type="button" class="hj3-bt" data-exh="recarregar">Tentar de novo</button>');
     return;
   }
-  let vm = null, ent = null;
-  DV.com(function () { ent = HJ3.entrada(s.p, s.base); vm = HJ3.diaDoExecutivo(ent); });
-  if (!vm) return;
-  const a = EXH.agora() || s.base.agora;
-  const sub = document.getElementById('hj3Sub');
-  if (sub) sub.textContent = HJ3.juntar([HJ3.diaCurto(ent.hoje), GV2.hhmm(a.min), ent.bairro, 'o plano, o que falta e o placar']);
-  set('hj3Feriado', vm.feriado ? '<div class="hj3-feriado"><b>' + e(vm.feriado.titulo) + '</b><span>' + e(vm.feriado.texto) + '</span></div>' : '');
-  set('hj3Plano', HJ3.planoHTML(vm.cockpit.plano));
-  set('hj3Sem', HJ3.semHTML(vm.cockpit.sem));
-  set('hj3Placar', HJ3.placarHTML(vm.cockpit.placar));
+  /* 02/11/26 (auditoria): sem try/catch, um erro na montagem deixava a tela em "Lendo o plano…" para
+     sempre. Agora vira o estado de erro com "Tentar de novo" (o mesmo data-exh="recarregar" de cima). */
+  try {
+    let vm = null, ent = null;
+    DV.com(function () { ent = HJ3.entrada(s.p, s.base); vm = HJ3.ajustarCockpit(HJ3.diaDoExecutivo(ent), ent); });
+    if (!vm) return;
+    const a = EXH.agora() || s.base.agora;
+    const sub = document.getElementById('hj3Sub');
+    if (sub) sub.textContent = HJ3.juntar([HJ3.diaCurto(ent.hoje), GV2.hhmm(a.min), ent.bairro, 'o plano, o que falta e o placar']);
+    set('hj3Feriado', vm.feriado ? '<div class="hj3-feriado"><b>' + e(vm.feriado.titulo) + '</b><span>' + e(vm.feriado.texto) + '</span></div>' : '');
+    set('hj3Plano', HJ3.planoHTML(vm.cockpit.plano));
+    set('hj3Sem', HJ3.semHTML(vm.cockpit.sem));
+    set('hj3Placar', HJ3.placarHTML(vm.cockpit.placar));
+  } catch (er) {
+    console.error('[hoje v3] pintar', er);
+    set('hj3Plano', '<div class="hj3-lendo">' + e('Não consegui montar o seu dia agora: ' + ((er && er.message) || 'erro') + '.') + '</div><button type="button" class="hj3-bt" data-exh="recarregar">Tentar de novo</button>');
+    set('hj3Sem', ''); set('hj3Placar', '');
+  }
 };
 HJ3.planoHTML = function (P) {
   const e = GV2.e;

@@ -108,7 +108,29 @@ checar('zero emoji', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(JSON.string
 const html = HJ3.html();
 checar('o Hoje v3 tem as 3 colunas na ordem: plano · sem próximo passo · placar',
   html.indexOf('id="hj3Plano"') > 0 && html.indexOf('id="hj3Plano"') < html.indexOf('id="hj3Sem"') && html.indexOf('id="hj3Sem"') < html.indexOf('id="hj3Placar"'));
-checar('o selo "o mesmo dia do app · ao vivo"', html.indexOf('o mesmo dia do app · ao vivo') > 0);
+/* 02/11/26 (auditoria): "o mesmo dia do app · ao vivo" era jargão de quem fez a tela; o selo diz o que importa */
+checar('o selo do ao vivo diz "atualiza sozinho" (sem o jargão "o mesmo dia do app")', html.indexOf('atualiza sozinho') > 0 && html.indexOf('o mesmo dia do app') < 0);
+/* ── auditoria 02/11/26 · G10: o acabamento do Cockpit (HJ3.ajustarCockpit), fora da paridade ── */
+{
+  const aj = n => HJ3.ajustarCockpit(HJ3.diaDoExecutivo(resolver(n)), resolver(n));
+  const fer = aj('feriado').cockpit.plano;
+  checar('auditoria 02/11 · G10: sem expediente, o plano não cobra "0 de 6 com prova" nem aponta "Próxima porta", e mostra o plano',
+    fer.contagem === 'sem expediente · a meta não conta hoje' && !/Próxima porta/.test(fer.titulo) && /Feriado · Consciência Negra · 7 paradas no plano/.test(fer.titulo) && fer.linhas.length === 7 && !fer.linhas.some(l => l.proxima), JSON.stringify({ c: fer.contagem, t: fer.titulo }));
+  const eFora = Object.assign({}, resolver('meioDia'), { foraComProva: 3 });
+  const pf = HJ3.ajustarCockpit(HJ3.diaDoExecutivo(eFora), eFora).cockpit.plano;
+  checar('auditoria 02/11 · G10: a visita com prova fora do plano soma no "com prova" (4 do plano + 3 fora = 7 de 6)', pf.contagem === '7 de 6 com prova · 3 fora do plano', pf.contagem);
+  const md = aj('meioDia').cockpit;
+  checar('auditoria 02/11 · G10: textos do Cockpit — missão do Desenvolvimento, sem "os 5 números do gestor" e sem "o mesmo componente"',
+    md.placar.linhas[1].t === 'a missão da semana do Desenvolvimento' && md.placar.rodape === 'ponto só nasce de prova' && !/o mesmo componente|o mesmo número do app/.test(md.sem.sub), JSON.stringify([md.placar.linhas[1].t, md.placar.rodape, md.sem.sub]));
+  checar('auditoria 02/11 · G10: o pintar do Cockpit passa pelo acabamento',
+    codigo.indexOf('vm = HJ3.ajustarCockpit(HJ3.diaDoExecutivo(ent), ent);') > 0);
+  const f2 = HJ3.faltam({ pts: 0, pos: 2, acima: { nome: 'Marco Teste', pts: 0 } }), f1 = HJ3.faltam({ pts: 0, pos: 1, acima: null });
+  checar('auditoria 02/11 · G10: todo mundo com 0 é "a semana começou" (como no DV2), nunca "faltam 1" nem "você lidera"',
+    f2.curto === 'a semana começou' && f1.curto === 'a semana começou' && /A semana começou: todo mundo com 0/.test(f2.longo) && HJ3.faltam({ pts: 37, pos: 3, acima: { nome: 'Marco', pts: 46 } }).n === 10, JSON.stringify([f1, f2]));
+  const corpoPintar = codigo.slice(codigo.indexOf('HJ3.pintar = function'), codigo.indexOf('HJ3.planoHTML = function'));
+  checar('auditoria 02/11 · G10: HJ3.pintar tem try/catch e o erro vira "Tentar de novo"', /try \{/.test(corpoPintar) && /catch \(er\)/.test(corpoPintar) && /Tentar de novo/.test(corpoPintar.slice(corpoPintar.indexOf('catch (er)'))));
+  checar('auditoria 02/11 · G10: o Desenvolvimento não manda mais à "disputa completa" do Hoje antigo', codigo.indexOf('a disputa completa') < 0 && codigo.indexOf("a[0] === 'disputa'") < 0);
+}
 checar('saíram: os 5 números, as 5 regras, a fila e o "Pronto pra rua?"', !/exh4Regras|exhTopo|exhFilaCheia|Pronto pra rua|O que o seu gestor vê/.test(html));
 const plano = HJ3.planoHTML(V('meioDia').cockpit.plano);
 checar('o plano: a próxima porta, as paradas com a marca e "abrir no app"',
