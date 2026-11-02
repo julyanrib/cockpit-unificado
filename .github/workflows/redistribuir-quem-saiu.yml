@@ -1,0 +1,40 @@
+name: Carteira de quem saiu segue o território
+
+# Decisão do dono (02/11/26): quando alguém é desativado em equipe_cockpit, os leads 'atribuido' e
+# 'na_rota' dele em leads_prospeccao vão para quem o território dos leads novos manda hoje (a mesma
+# lib/territorios.js); sem destino, ficam 'pendente' e sem dono. Lead com negócio no HubSpot fica de fora.
+# Toda a regra mora em api/importar-leads.js (ação redistribuir_de_quem_saiu); aqui só se chama a rota,
+# como o backfill da Casa dos Dados. Rodar à mão com "seco" mostra o plano sem gravar.
+
+on:
+  schedule:
+    # todo dia às 06:20 de Brasília (09:20 UTC): antes da folha da manhã e da expiração dos recém-abertos
+    - cron: '20 9 * * *'
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "seco = só mostrar quantos vão de quem para quem; aplicar = gravar"
+        required: false
+        default: "seco"
+
+permissions:
+  contents: read
+
+jobs:
+  redistribuir:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Repassar a carteira de quem saiu
+        env:
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          COCKPIT_URL: https://mxyjvijclhlxrlafqcrz.supabase.co/functions/v1/cockpit-robo
+        # no agendamento grava; à mão, só grava quem escolher "aplicar"
+        run: node scripts/redistribuir-leads-de-quem-saiu.js ${{ (github.event_name == 'schedule' || github.event.inputs.modo == 'aplicar') && '--aplicar' || '--seco' }}
