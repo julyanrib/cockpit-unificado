@@ -2108,6 +2108,17 @@ tabelas.gv2_falta_etapa = [
       /venc \+ ' com passo vencido \+ ' \+ \(sp - venc\) \+ ' nunca '/.test(codigo));
     checar('ver como executivo · quem está fora do time fica sem meta, não com 10', tpl.indexOf("fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta'") > -1 && tpl.indexOf('fechadosNoMes: 0, metaMensal: 10,') < 0);
   }
+  /* G2 (auditoria 02/11/26): no feriado o plano do dia é o REAL (o "fds ? 0" zerava e a Hoje
+     discordava da Rua); quem tem plano e não saiu não vira exceção nem "nenhuma visita" */
+  await (async function () {
+    const utilOrig = GV2.util;
+    GV2.util = function (iso) { return iso !== HOJE && utilOrig(iso); };
+    const bF = await GV2.montar();
+    GV2.util = utilOrig;
+    const biaF = bF.porId['2'];
+    checar('auditoria 02/11 · G2: no feriado o plano de hoje é o real (6 paradas), sem exceção de "plano sem visita" e sem "nenhuma visita"',
+      biaF.hoje.paradas_plano === 6 && bF.time.paradas === GV2.base.time.paradas && (biaF.excecao & 2) === 0 && !/nenhuma visita/.test(biaF.motivo), JSON.stringify({ pl: biaF.hoje.paradas_plano, exc: biaF.excecao, m: biaF.motivo }));
+  })();
   /* G11 (auditoria 02/11/26): a pintura que lança no boot vira estado de erro com "Tentar de novo"
      (antes ficava no esqueleto). Por último: o await deixa as leituras pendentes resolverem. */
   await (async function () {

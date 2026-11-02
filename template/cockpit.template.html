@@ -78133,7 +78133,10 @@ GV2.montar = async function (so, leituraPronta) {
       fase: ramp && ramp.label ? ramp.label : 'fase não definida',
       meta_visitas_dia: meta,
       meta_clientes_mes: typeof metaClientesDoRep === 'function' ? metaClientesDoRep(r) : (r.metaMensal || 0),
-      hoje: { paradas_plano: fds ? 0 : (Number(dHoje.planejadas) || 0), visitas_com_prova: Number(dHoje.feitasDoPlano) || 0, visitas_todas: Number(dHoje.provadas) || 0, repetidas: repMedido ? (repHoje[id] || 0) : null, fora: Math.max(0, (Number(dHoje.provadas) || 0) - (Number(dHoje.feitasDoPlano) || 0)), feitas: Number(dHoje.feitas) || 0, agenda: GV2.compromissosDoDia(id, agora.iso), sem_lugar: fds ? 0 : (Number(dHoje.semLugar) || 0),
+      /* 02/11/26 (auditoria): feriado e fim de semana mostram o plano REAL. O "fds ? 0" zerava as
+         paradas e a Hoje do gestor e a Prova discordavam da Rua (que lê o mesmo dia sem zerar). A
+         decisão de "não cobrar" mora onde já se olha GV2.util (v5Situacao, excecao e motivo abaixo). */
+      hoje: { paradas_plano: Number(dHoje.planejadas) || 0, visitas_com_prova: Number(dHoje.feitasDoPlano) || 0, visitas_todas: Number(dHoje.provadas) || 0, repetidas: repMedido ? (repHoje[id] || 0) : null, fora: Math.max(0, (Number(dHoje.provadas) || 0) - (Number(dHoje.feitasDoPlano) || 0)), feitas: Number(dHoje.feitas) || 0, agenda: GV2.compromissosDoDia(id, agora.iso), sem_lugar: Number(dHoje.semLugar) || 0,
         status: status, ultima_atividade: ultima, posicao: posicao, posicaoOntem: posOntem, paradas: paradas },
       /* ONTEM CONTA TODAS AS VISITAS COM PROVA (15/10/26, Julyan: "a Kelly fez várias visitas e só
          marca 5 · preciso das visitas exatas para não conduzir errado na daily"). Antes, aqui era
@@ -78177,10 +78180,11 @@ GV2.montar = async function (so, leituraPronta) {
     p.mrrPuxar = p.puxar.reduce(function (x, n) { return x + n.mrr; }, 0);
     p.furou = Math.max(0, p.ontem.paradas_plano - p.ontem.visitas_com_prova);
     p.excecao = (p.hoje.paradas_plano === 0 && !fds ? 3 : 0)
-      + (p.hoje.paradas_plano > 0 && (p.hoje.visitas_todas || 0) < p.esperado ? 2 : 0)
+      /* sem expediente, plano montado não é cobrado (o plano agora é o real, não 0) */
+      + (!fds && p.hoje.paradas_plano > 0 && (p.hoje.visitas_todas || 0) < p.esperado ? 2 : 0)
       + (p.furou > 0 ? 1 : 0);
     p.motivo = (p.hoje.paradas_plano === 0 && !fds) ? GV2.semRotaHoje(p) + (p.furou ? ' · furou ' + p.furou + ' ' + GV2.ontemDe(ontemIso, agora.iso) : '')
-      : (p.hoje.paradas_plano > 0 && !(p.hoje.visitas_todas || 0) && agora.min > j.ini) ? (agora.min >= j.fim ? 'nenhuma visita hoje' : 'nenhuma visita até ' + GV2.hm())
+      : (!fds && p.hoje.paradas_plano > 0 && !(p.hoje.visitas_todas || 0) && agora.min > j.ini) ? (agora.min >= j.fim ? 'nenhuma visita hoje' : 'nenhuma visita até ' + GV2.hm())
       : p.travados.length >= 3 ? GV2.pl(p.travados.length, 'travado', 'travados')
       : p.furou ? 'furou ' + p.furou + ' ' + GV2.ontemDe(ontemIso, agora.iso) : 'no ritmo';
   });
