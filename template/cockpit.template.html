@@ -87814,18 +87814,33 @@ GV2.render.daily = function () {
     + (p.hoje.paradas_plano || GV2.emRampa(p) ? '' : '<div class="gv2-v8d-pe">' + GV2.html.btn({ texto: 'Pedir o plano até 12h', tipo: 'acao', tam: 'lg', acao: 'cobrar:pessoa:' + p.id }) + '</div>')
     + '</section>';
 
-  /* 4 · pra destravar + 6 · a semana */
-  const dest = GV2.v8dDestravar(p), soma = dest.reduce(function (a, n) { return a + (n.mrr || 0); }, 0);
+  /* 4 · OS QUENTES (02/11/26, Julyan: "bom ter nela os leads quentes, a gente conduzir da melhor forma"): Negociação e
+     Ag. Pagamento, o dinheiro primeiro, com o próximo passo de cada um. O Pra destravar passa a ser só o travado
+     que não é quente: o mesmo negócio não aparece duas vezes na tela. */
+  const Q = (p.quentes || []).slice().sort(function (x, y) { return (y.mrr || 0) - (x.mrr || 0) || (x.dias || 0) - (y.dias || 0); });
+  const ehQuente = {}; Q.forEach(function (n) { ehQuente[n.id] = 1; });
+  const somaQ = Q.reduce(function (a, n) { return a + (n.mrr || 0); }, 0);
+  const cq = '<div class="gv2-v8d-h"><h3>4 · Quentes</h3>' + (Q.length > 4 ? '<button type="button" class="gv2-v8d-link" data-gv2="v8neg:quentes:' + p.id + '">ver todos →</button>' : '') + '</div>'
+    + (Q.length
+      ? '<div class="gv2-v8d-num">' + (somaQ ? GV2.v6Reais(somaQ) : Q.length) + '</div><p class="gv2-v8d-s">' + GV2.e(GV2.pl(Q.length, 'negócio quente', 'negócios quentes') + (somaQ ? ' · em MRR' : ' · nenhum com MRR no CRM') + ' · ' + GV2.pl(Q.filter(function (n) { return !n.agPag && !n.proximo_passo; }).length, 'sem próximo passo', 'sem próximo passo')) + '</p>'
+        + '<div class="gv2-v8d-negs">' + Q.slice(0, 4).map(function (n) {
+          const passo = n.agPag ? 'com o financeiro' : n.proximo_passo ? 'próximo: ' + n.proximo_passo : 'sem próximo passo';
+          return '<button type="button" class="gv2-v8d-neg" data-gv2="ficha:' + n.id + '"><span><b class="gv2-ellip">' + GV2.e(n.nome) + '</b><small class="' + (n.agPag || n.proximo_passo ? 't-mute' : 't-erro') + ' gv2-ellip">'
+            + GV2.e(GV2.ETAPAS[n.etapa_idx] + ' · ' + passo) + '</small></span><b class="num">' + (n.mrr ? GV2.rs(n.mrr) : '—') + '</b></button>';
+        }).join('') + '</div>'
+      : '<div class="gv2-v8d-num t-faint">0</div><p class="gv2-v8d-s">nenhum negócio em Negociação nem em Ag. Pagamento</p>');
+  /* 5 · pra destravar + 6 · a semana */
+  const dest = GV2.v8dDestravar(p).filter(function (n) { return !ehQuente[n.id]; }), soma = dest.reduce(function (a, n) { return a + (n.mrr || 0); }, 0);
   const S = GV2.v8dSemana(p);
-  const c4 = '<section class="card gv2-v8d-c"><div class="gv2-v8d-h"><h3>4 · Pra destravar</h3>' + (dest.length ? '<button type="button" class="gv2-v8d-link" data-gv2="v8neg:travados:' + p.id + '">ver todos →</button>' : '') + '</div>'
+  const c4 = '<section class="card gv2-v8d-c">' + cq + '<hr><div class="gv2-v8d-h"><h3>5 · Pra destravar</h3>' + (dest.length ? '<button type="button" class="gv2-v8d-link" data-gv2="v8neg:travados:' + p.id + '">ver todos →</button>' : '') + '</div>'
     + (dest.length
-      ? (soma ? '<div class="gv2-v8d-num">' + GV2.v6Reais(soma) + '</div>' : '<div class="gv2-v8d-num t-av">' + dest.length + '</div>') + '<p class="gv2-v8d-s">' + GV2.e((soma ? '' : 'nenhum com MRR no CRM · ') + GV2.pl(dest.length, 'negócio', 'negócios') + ' · ' + GV2.pl(p.travados.length, 'travado', 'travados') + ' · ' + GV2.pl(p.quentesSemPasso, 'quente sem passo', 'quentes sem passo') + ' · o dinheiro primeiro') + '</p>'
-        + '<div class="gv2-v8d-negs">' + dest.slice(0, 3).map(function (n) {
+      ? (soma ? '<div class="gv2-v8d-num">' + GV2.v6Reais(soma) + '</div>' : '<div class="gv2-v8d-num t-av">' + dest.length + '</div>') + '<p class="gv2-v8d-s">' + GV2.e((soma ? '' : 'nenhum com MRR no CRM · ') + GV2.pl(dest.length, 'travado', 'travados') + ' fora dos quentes · o dinheiro primeiro') + '</p>'
+        + '<div class="gv2-v8d-negs">' + dest.slice(0, 2).map(function (n) {
           return '<button type="button" class="gv2-v8d-neg" data-gv2="ficha:' + n.id + '"><span><b class="gv2-ellip">' + GV2.e(n.nome) + '</b><small class="' + (n.travado ? 't-erro' : 't-av') + '">'
             + GV2.e((n.travado ? 'travado · ' + n.dias + ' d em ' + GV2.ETAPAS[n.etapa_idx] : 'sem próximo passo · há ' + n.dias + ' d')) + '</small></span><b class="num">' + (n.mrr ? GV2.rs(n.mrr) : '—') + '</b></button>';
         }).join('') + '</div>'
-      : '<div class="gv2-v8d-num t-ok">0</div><p class="gv2-v8d-s">nenhum travado nem quente sem próximo passo</p>')
-    + '<hr><h3>5 · A semana</h3>'
+      : '<div class="gv2-v8d-num t-ok">0</div><p class="gv2-v8d-s">nenhum travado fora dos quentes</p>')
+    + '<hr><h3>6 · A semana</h3>'
     + (S.lendo ? '<p class="gv2-v8d-s is-dim">lendo o placar…</p>' : S.erro ? '<p class="gv2-v8d-s is-dim">' + GV2.e('o placar não respondeu (' + S.erro + ')') + '</p>'
       : '<div class="gv2-v8d-sem"><b class="num">' + S.pts + ' pts</b><span>' + GV2.e(S.pos ? S.pos + 'º de ' + S.n : 'sem pontos') + '</span></div>'
         + '<p class="gv2-v8d-s">' + GV2.e(S.ehLider ? 'lidera a semana · o 1º leva R$ 250' : (S.lider ? 'líder ' + S.lider + ' · ' + S.liderPts + ' pts · o 1º leva R$ 250' : 'ninguém pontuou ainda')) + '</p>')
@@ -87833,7 +87848,7 @@ GV2.render.daily = function () {
 
   /* 5 · compromisso do último dia útil + o de hoje + navegação */
   const ca = GV2.v8dCompromissoAnt(p), rasc = GV2.estado.compromissos[p.id] || '';
-  const c5 = '<div class="gv2-v8d-pe2"><div class="gv2-v8d-ant"><div><h3>6 · Compromisso ' + GV2.e(ca ? 'de ' + GV2.diaCurto(ca.dia) : 'do último dia útil') + '</h3>'
+  const c5 = '<div class="gv2-v8d-pe2"><div class="gv2-v8d-ant"><div><h3>7 · Compromisso ' + GV2.e(ca ? 'de ' + GV2.diaCurto(ca.dia) : 'do último dia útil') + '</h3>'
     + '<p class="' + (ca && ca.texto ? '' : 'is-dim') + '">' + GV2.e(ca && ca.texto ? '“' + ca.texto + '”' : 'nenhum compromisso registrado em ' + GV2.diaCurto(b.ontemIso)) + '</p></div>'
     + (ca && ca.texto ? '<div class="gv2-v8d-seg">' + ['cumprido', 'parcial', 'nao_cumprido'].map(function (r) {
       return '<button type="button" class="' + (ca.resultado === r ? 'is-on is-' + r : '') + '" data-gv2="daily:marca:' + p.id + ':' + r + '">' + GV2.V8D_RES[r] + '</button>';

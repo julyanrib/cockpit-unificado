@@ -935,7 +935,7 @@ tabelas.gv2_falta_etapa = [
     checar('v8 Daily: a fila vai de sem plano → furou → travados → no ritmo', fila.every(function (x, i) { return i === 0 || rank[GV2.v8dMotivo(fila[i - 1]).k] <= rank[GV2.v8dMotivo(x).k]; }), fila.map(function (x) { return GV2.v8dMotivo(x).k; }).join());
     let erros = [], htmls = [];
     for (let i = 0; i < fila.length; i++) { GV2.estado.daily = i; try { htmls.push(GV2.render.daily()); } catch (e) { erros.push(i + ': ' + e.message); } }
-    const blocos = ['1 · O mês', '2 · Onde o funil trava', '3 · Último dia útil', '4 · Pra destravar', '5 · A semana', '6 · Compromisso'];
+    const blocos = ['1 · O mês', '2 · Onde o funil trava', '3 · Último dia útil', '4 · Quentes', '5 · Pra destravar', '6 · A semana', '7 · Compromisso'];
     checar('v8 Daily: cada pessoa da fila abre com os 6 blocos, sem erro', !erros.length && htmls.every(function (h) { return blocos.every(function (x) { return h.indexOf(x) > 0; }); }), erros.join(' | ') || blocos.filter(function (x) { return htmls[0].indexOf(x) < 0; }).join());
     checar('v8 Daily: a faixa diz por que a pessoa abre a daily, e o nome abre a gaveta', htmls.every(function (h, i) { return h.indexOf(GV2.e(GV2.v8dMotivo(fila[i]).t)) > 0 && h.indexOf('data-gv2="pessoa:' + fila[i].id + '"') > 0; }));
     const comD = b.pessoas.find(function (x) { return GV2.v8dDestravar(x).length >= 2; });
