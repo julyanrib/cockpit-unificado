@@ -150,7 +150,11 @@ const gestor = USUARIOS.find(u => u.role === 'manager' && u.email);
     checar('território no APP: zona escrita de quem saiu fica sem dono (desligados.json)',
       desligados.some(u => String(u.ownerId) === '89842507') && !(zApp && zApp.owner === '89842507'), JSON.stringify(zApp));
     const pApp = tApp.donoPorProximidade('São Paulo', -23.6520, -46.7080);
-    checar('território no APP: centro de zona de quem saiu não vale (desligados.json)', !!pApp && pApp.owner !== '89842507', JSON.stringify(pApp));
+    /* 02/11/26: com a lista do APP preenchida depois do carregamento, os outros centros de São Paulo saem
+       com o id de espera ('pendente_*'), que nunca é dono: sem nenhum centro válido, o lead fica sem dono
+       (null) em vez de levar um id falso. O que se protege é que nem quem saiu nem um id de espera recebe. */
+    checar('território no APP: centro de zona de quem saiu não vale (desligados.json), nem id de espera',
+      !(pApp && (pApp.owner === '89842507' || String(pApp.owner).startsWith('pendente_'))), JSON.stringify(pApp));
     // sem desligados.json e sem a marca (o pacote antigo), a regra antiga voltaria a dar o dono que saiu
     const tSem = carregarComo(USUARIOS.filter(u => !u.desligado), null);
     const zSem = tSem.donoPorZonaEscrita('São Paulo', 'Vila Mariana (Zona Sul)');

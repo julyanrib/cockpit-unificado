@@ -105,18 +105,31 @@ const bairrosDeclarados = declaracao => ativosDe(declaracao)
    com as linhas de antes de 15/10 recolocadas (o divisor de Guarulhos copiado do
    JSON de antes de 15/10), carregando lib/territorios.js de novo com o JSON trocado SÓ no cache do
    require — nada em disco muda, e o roteador real é restaurado logo em seguida. */
+/* 02/11/26: o roteador passou a perguntar "saiu do time?" também na declaração, no meridiano e na sobra
+   do município (ehDono em todas as regras). A cópia de ontem religa quem saiu na DECLARAÇÃO (logo abaixo)
+   e agora precisa religá-lo também na lista de usuários que o roteador sintético lê — senão a marca
+   `desligado` de data/usuarios.json o tira da cópia e as checagens de mecanismo voltam a medir o vazio.
+   Só a cópia muda: o roteador real continua lendo a lista de verdade. */
+const religadosNaCopia = ['Renata Pessoa', 'Fabio Aranha Panciera'];
 const roteadorSobre = function (declSintetica) {
   const pJson = require.resolve(path.join(raiz, 'data', 'territorios.json'));
+  const pUsu = require.resolve(path.join(raiz, 'data', 'usuarios.json'));
   const pLib = require.resolve(path.join(raiz, 'lib', 'territorios.js'));
   const modJson = require.cache[pJson];
+  const modUsu = require.cache[pUsu];
   const libReal = require.cache[pLib];
   const exportsReais = modJson.exports;
+  const usuariosReais = modUsu.exports;
   try {
     modJson.exports = declSintetica;
+    const lista = JSON.parse(JSON.stringify(Array.isArray(usuariosReais) ? usuariosReais : (usuariosReais.usuarios || [])));
+    lista.forEach(u => { if (u && religadosNaCopia.includes(u.nome)) { delete u.desligado; delete u.desligadoEm; delete u._desligado; } });
+    modUsu.exports = Array.isArray(usuariosReais) ? lista : Object.assign({}, usuariosReais, { usuarios: lista });
     delete require.cache[pLib];
     return require(pLib);
   } finally {
     modJson.exports = exportsReais;
+    modUsu.exports = usuariosReais;
     require.cache[pLib] = libReal;
   }
 };
