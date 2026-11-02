@@ -14327,7 +14327,7 @@ button.gv2-v9-passo:hover{background:var(--gv2-hov);border-color:var(--gv2-line-
 .gv2-v8-mm-cab span{display:inline-flex;align-items:center;gap:6px;font-size:13px;}
 .gv2-v4-funil-lin{grid-template-columns:116px minmax(0,1fr) 150px;min-height:48px;}
 .gv2-v4-funil-lin > span:first-child{font:600 13.5px/1.25 var(--gv2-font);}
-.gv2-v9-pp{grid-template-columns:minmax(150px,1fr) repeat(3,minmax(110px,1fr)) minmax(250px,1.5fr);gap:14px;min-height:64px;padding:10px 16px 10px 13px;border-top:1px solid var(--gv2-line-soft);transition:background .12s;}
+.gv2-v9-pp{grid-template-columns:minmax(150px,1fr) repeat(3,minmax(110px,1fr)) minmax(90px,.7fr) minmax(250px,1.5fr);gap:14px;min-height:64px;padding:10px 16px 10px 13px;border-top:1px solid var(--gv2-line-soft);transition:background .12s;}
 .gv2-v9-pp:not(.is-cab):hover{background:var(--gv2-hov);}
 .gv2-v9-pp.is-cab{min-height:36px;padding-top:0;padding-bottom:0;background:var(--gv2-sub);border-top:1px solid var(--gv2-line);border-bottom:1px solid var(--gv2-line);font:700 11.5px var(--gv2-font);letter-spacing:.06em;text-transform:uppercase;color:var(--gv2-dim);}
 .gv2-v9-pp .gv2-v8-pp-nome small{font:500 12.5px var(--gv2-font);}
@@ -14340,7 +14340,7 @@ button.gv2-v9-mini:hover b{text-decoration:underline;}
 .gv2-v9-fl4{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,2fr);gap:12px;align-items:start;}
 .gv2-v9-fl4 > .gv2-v8-fl5{margin-top:0;}
 @media (max-width:1240px){
-  .gv2-v9-pp{grid-template-columns:minmax(140px,1fr) repeat(3,minmax(90px,1fr));}
+  .gv2-v9-pp{grid-template-columns:minmax(140px,1fr) repeat(4,minmax(90px,1fr));}
   .gv2-v9-pp > .gv2-v9-passos,.gv2-v9-pp.is-cab > span:last-child{grid-column:1 / -1;}
 }
 @media (max-width:1050px){
@@ -77931,7 +77931,9 @@ GV2.montar = async function (so, leituraPronta) {
         /* a tarefa aberta mais antiga que já venceu (as tarefas do snapshot são as abertas): "vencida desde" */
         vencidaDesde: ppTxt ? null : ((Array.isArray(l.tarefas) ? l.tarefas : []).map(function (x) { return x && x.timestamp ? GV2.diaDe(x.timestamp) : null; }).filter(function (d) { return d && d < agora.iso; }).sort()[0] || null),
         quente: idx >= 4, negociacao: idx === 4, morno: idx === 2 || idx === 3, agPag: agPag,
-        travado: travado, semPasso: !agPag && idx >= 1 && !ppTxt,
+        /* 02/11/26 (auditoria): o campo n.semPasso (que tirava a Prospecção) saiu — nenhuma tela o lia;
+           "sem próximo passo" é GV2.semProximoPasso, a regra canônica */
+        travado: travado,
         puxar: !agPag && (travado || (idx === 4 && !ppTxt)),
         rep: 1, outros: [],
         lead: l
@@ -81918,8 +81920,8 @@ GV2.textoSemPasso = function (n) { return n && n.vencidaDesde ? 'vencida desde '
    em diante (os dois viram n.proximo_passo na montagem da base); passo vencido não conta.
    "marcados" é o passo que acabou de ser dado nesta sessão (a Hoje e o Planejamento gravam no
    HubSpot e marcam aqui, para o número descer na hora, antes da próxima carga).
-   O n.semPasso da base continua existindo para o "puxar" e os quentes do gestor: só a CONTAGEM
-   "sem próximo passo" mostrada às pessoas mudou de regra. */
+   O "puxar" e os quentes do gestor leem n.proximo_passo direto; o campo n.semPasso, que ninguém
+   lia, saiu em 02/11/26 (auditoria). */
 GV2.temProximoPasso = function (n, marcados) { return !!n && (!!n.proximo_passo || !!(marcados && marcados[n.id])); };
 GV2.semProximoPasso = function (negocios, marcados) {
   return (negocios || []).filter(function (n) { return !!n && !n.agPag && !GV2.temProximoPasso(n, marcados); });
@@ -87050,7 +87052,8 @@ GV2.v5Rende = function () {
     usados[cobQ.id] = 1;
     const m = mrrSemPasso(cobQ);
     out.push({ k: 'cobrar', rot: 'Cobrar', tom: 'is-av', tit: 'Cobrar ' + GV2.prim(cobQ.nome),
-      t: GV2.pl(cobQ.quentesSemPasso, 'quente sem próximo passo', 'quentes sem próximo passo') + (m ? ' · ' + GV2.rs(m) + ' parados' : '') + ' · negócio em Negociação sem tarefa marcada nem item no Planejamento',
+      /* 02/11/26 (auditoria): é a conta dos QUENTES; "sem próximo passo" sozinho é a regra do funil inteiro */
+      t: GV2.pl(cobQ.quentesSemPasso, 'quente sem passo', 'quentes sem passo') + (m ? ' · ' + GV2.rs(m) + ' parados' : '') + ' · negócio em Negociação sem tarefa marcada nem item no Planejamento',
       bts: [['Ver os quentes', 'rxg:filtro:sempasso-quentes', true], ['Ver ' + GV2.prim(cobQ.nome), 'pessoa:' + cobQ.id]] });
   }
   if (cob) {
@@ -87124,7 +87127,8 @@ GV2.render.v5Pessoa = function (p) {
     + res('Hoje', GV2.temRua(p) ? GV2.visHoje(p) : GV2.emRampa && GV2.emRampa(p) ? 'rampagem' : 'sem rota', p.hoje.paradas_plano ? 'do plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : (p.hoje.agenda && p.hoje.agenda.n ? GV2.pl(p.hoje.agenda.n, 'item', 'itens') + ' na agenda' : 'nenhuma parada'), 'v5dia:' + p.id + ':' + b.agora.iso)
     + res('Semana', feitoSem + ' de ' + metaSem, 'visitas com prova', 'v5rua:semana')
     + res('Mês', R.cli.feito + ' de ' + R.cli.meta, 'clientes · esperado ' + GV2.v8Num(R.cli.esp), 'v8neg:mes:' + p.id, 't-' + R.cli.selo.k)
-    + res('Quentes', String(p.quentes.length), p.quentesSemPasso ? p.quentesSemPasso + ' sem próximo passo' : 'negócios', 'v8neg:quentes:' + p.id, p.quentesSemPasso ? 't-av' : '')
+    /* 02/11/26 (auditoria): o número é dos quentes; "sem próximo passo" é o do funil inteiro (GV2.semProximoPasso) */
+    + res('Quentes', String(p.quentes.length), (p.quentesSemPasso ? GV2.pl(p.quentesSemPasso, 'quente sem passo', 'quentes sem passo') : GV2.pl(p.quentes.length, 'negócio', 'negócios')) + ' · ' + GV2.semProximoPasso(p.negocios).length + ' sem próximo passo no funil', 'v8neg:quentes:' + p.id, p.quentesSemPasso ? 't-av' : '')
     + res('Travados', String(p.travados.length), 'passaram do prazo da etapa', 'v8neg:travados:' + p.id, p.travados.length >= 4 ? 't-av' : '')
     + '</div>';
   const G8 = R ? GV2.v8Gargalo(R) : null;
@@ -87351,7 +87355,9 @@ GV2.render.raiox = function () {
   /* negócios travados: mais dinheiro primeiro; a lista inteira com filtros abre na gaveta */
   const trav = b.negocios.filter(function (n) { return n.puxar && !n.agPag; }).sort(function (x, y) { return (y.mrr - x.mrr) || (y.dias - x.dias); });
   const cob = GV2.estado.cobrados;
-  const negs = '<section class="card gv2-v5-trav"><div class="gv2-v5-cab is-acao"><div><b>Negócios para puxar</b><span>' + GV2.e(GV2.pl(trav.filter(function (n) { return n.travado; }).length, 'travado', 'travados') + ' (passou do prazo da etapa) · ' + GV2.pl(trav.filter(function (n) { return !n.travado; }).length, 'sem próximo passo', 'sem próximo passo') + ' (no prazo, mas sem tarefa marcada nem item no Planejamento) · mais dinheiro primeiro') + '</span></div>'
+  const negs = '<section class="card gv2-v5-trav"><div class="gv2-v5-cab is-acao"><div><b>Negócios para puxar</b><span>' + GV2.e(GV2.pl(trav.filter(function (n) { return n.travado; }).length, 'travado', 'travados') + ' (passou do prazo da etapa) · ' + trav.filter(function (n) { return !n.travado; }).length + ' em Negociação sem passo (no prazo, mas sem tarefa marcada nem item no Planejamento) · mais dinheiro primeiro') + '</span></div>'
+    /* 02/11/26 (auditoria): era "N sem próximo passo", mas n.puxar só pega a NEGOCIAÇÃO sem passo — o
+       número do funil inteiro (GV2.semProximoPasso) é outro e aparece no Por pessoa */
     + '<button type="button" class="gv2-v5-btn" data-gv2="rxg:filtro:todos">Ver todos os negócios</button>' + (trav.length ? '<button type="button" class="gv2-v5-btn is-prim" data-gv2="v5lote:travados">' + GV2.e(GV2.cobrarN(Math.min(40, trav.length))) + '</button>' : '') + '</div>'
     + (trav.length ? trav.slice(0, 12).map(function (n) {
       const cc = cob['neg:' + n.id];
@@ -88809,7 +88815,8 @@ GV2.v8GavPessoa = function (id) {
     + tile('Hoje', xdy, (p.hoje.paradas_plano ? 'do plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : 'sem parada no plano') + GV2.repHoje(p), 'v5dia:' + p.id + ':' + hojeIso, p.hoje.paradas_plano ? '' : 'is-mal')
     + tile('Semana', feitoSem + ' de ' + metaSem, 'visitas com prova · ' + GV2.pl(uteisSem, 'dia útil', 'dias úteis'), 'v5rua:semana')
     + tile('Mês', R.cli.feito + ' de ' + R.cli.meta, 'clientes · esperado ' + GV2.v8Num(R.cli.esp), 'v8neg:mes:' + p.id, 'is-' + mesSelo.k)
-    + tile('Quentes', String(p.quentes.length), GV2.pl(p.quentesSemPasso, 'sem próximo passo', 'sem próximo passo'), 'v8neg:quentes:' + p.id)
+    /* 02/11/26 (auditoria): o número embaixo é dos quentes — "quentes sem passo"; o funil inteiro sem próximo passo vai junto */
+    + tile('Quentes', String(p.quentes.length), GV2.pl(p.quentesSemPasso, 'quente sem passo', 'quentes sem passo') + ' · ' + GV2.semProximoPasso(p.negocios).length + ' sem próximo passo no funil', 'v8neg:quentes:' + p.id)
     + tile('Travados', String(p.travados.length), 'passaram do prazo da etapa', 'v8neg:travados:' + p.id, p.travados.length >= 10 ? 'is-av' : '')
     + '</div>';
   const funil = '<section class="gv2-v8-sec"><div class="gv2-v8-sec-cab"><b>Funil do mês contra o esperado' + GV2.v9Info('visitas: 6 por dia útil · demos e clientes: meta ' + R.cli.meta + ' · traço = onde deveria estar hoje') + '</b><span>' + GV2.e('dia útil ' + R.M.hoje + ' de ' + R.M.uteis) + '</span></div>'
@@ -88901,16 +88908,23 @@ GV2.render.v8PorPessoa = function () {
     const p = x.p, R = x.R, G = GV2.v8Gargalo(R), f = R.f;
     const passos = GV2.v9PassosHTML(f, function (i, k) { return (f[k] || 0) ? 'rxg:passo:' + i + ':' + p.id : ''; }, true);
     const tag = p.id === melhor ? ' is-melhor' : p.id === pior ? ' is-pior' : '';
+    /* G6 (auditoria 02/11/26): o mini mostra feito de ESPERADO; no começo do mês o esperado é 0 e
+       "0 de 0" parecia meta 0. O texto diz o esperado E a meta (ou "mês começando"); sem meta, "sem meta". */
     const mini = function (L, acao) {
-      return '<' + (acao ? 'button type="button" data-gv2="' + acao + '"' : 'div') + ' class="gv2-v9-mini" title="' + GV2.e(L.rot + ' · ' + L.selo.t + ' · esperado ' + GV2.v8Num(L.esp) + ' · meta ' + GV2.v8Num(L.meta)) + '"><span><b class="num t-' + L.selo.k + '">' + L.feito + '</b> de ' + GV2.v8Num(L.esp) + '</span>' + GV2.v9Trilha(L.pct, L.tick, L.selo.k) + '</' + (acao ? 'button' : 'div') + '>';
+      const semMeta = !(Number(L.meta) > 0);
+      const deTxt = semMeta ? ' · sem meta' : !(Number(L.esp) > 0) ? ' · mês começando · meta ' + GV2.v8Num(L.meta) : ' · esperado ' + GV2.v8Num(L.esp) + ' · meta ' + GV2.v8Num(L.meta);
+      return '<' + (acao ? 'button type="button" data-gv2="' + acao + '"' : 'div') + ' class="gv2-v9-mini" title="' + GV2.e(L.rot + ' · ' + L.selo.t + ' · esperado ' + GV2.v8Num(L.esp) + ' · meta ' + GV2.v8Num(L.meta)) + '"><span><b class="num t-' + L.selo.k + '">' + L.feito + '</b>' + GV2.e(deTxt) + '</span>' + GV2.v9Trilha(L.pct, L.tick, L.selo.k) + '</' + (acao ? 'button' : 'div') + '>';
     };
+    /* G3: sem próximo passo da pessoa pela regra canônica (o mesmo número do executivo) */
+    const sp = GV2.semProximoPasso(p.negocios).length;
     return '<div class="gv2-v8-pp gv2-v9-pp' + tag + '"><button type="button" class="gv2-v8-pp-nome" data-gv2="pessoa:' + p.id + '" title="' + GV2.e(G.t) + '"><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><small class="t-' + G.k + '">' + GV2.e((p.id === melhor ? 'melhor do mês · ' : p.id === pior ? 'mais longe do ritmo · ' : '') + GV2.v9GargaloCurto(R)) + '</small></button>'
       + mini(R.vis) + mini(R.dem, 'rxg:passo:2:' + p.id) + mini(R.cli, 'v8neg:mes:' + p.id)
+      + '<button type="button" class="gv2-v9-mini" data-gv2="v8neg:sempasso:' + p.id + '" title="negócios abertos sem nada marcado de hoje em diante (Ag. Pagamento fora)"><span><b class="num' + (sp ? ' t-av' : '') + '">' + sp + '</b> sem próx. passo</span></button>'
       + passos + '</div>';
   }).join('');
-  return '<section class="card gv2-v8-ppc"><div class="gv2-v5-cab is-acao"><div><b>3 · Por pessoa' + GV2.v9Info('barra = feito sobre a meta do mês · traço = esperado hoje · o nome abre a pessoa · cada número abre quem está parado na etapa') + '</b><span>traço = esperado até hoje</span></div>'
+  return '<section class="card gv2-v8-ppc"><div class="gv2-v5-cab is-acao"><div><b>3 · Por pessoa' + GV2.v9Info('barra = feito sobre a meta do mês · traço = esperado hoje · o nome abre a pessoa · cada número abre quem está parado na etapa · sem próx. passo = negócio aberto sem nada marcado de hoje em diante (Ag. Pagamento fora)') + '</b><span>traço = esperado até hoje</span></div>'
     + '<button type="button" class="gv2-v5-btn" data-gv2="v8ir:rua:semana">Planejamento do time →</button></div>'
-    + '<div class="gv2-v8-pp gv2-v9-pp is-cab"><span>Pessoa</span><span>Visitas</span><span>Demos</span><span>Clientes</span><span>Passos do mês</span></div>' + html + '</section>';
+    + '<div class="gv2-v8-pp gv2-v9-pp is-cab"><span>Pessoa</span><span>Visitas</span><span>Demos</span><span>Clientes</span><span>Sem próx. passo</span><span>Passos do mês</span></div>' + html + '</section>';
 };
 (function () {
   const c0 = GV2.v8Comando;
@@ -91368,7 +91382,7 @@ EXH4.gravar = async function (n, p, tipo, iso) {
     l.tarefas = (Array.isArray(l.tarefas) ? l.tarefas : []).concat([{ timestamp: iso + 'T12:00:00Z', subject: EXH4.rotTipo(tipo) + ' · ' + nome }]);
     const hojeIso = (EXH.agora() || {}).iso;
     n.proximo_passo = EXH4.rotTipo(tipo) + ' · ' + (iso === hojeIso ? 'hoje' : GV2.DIAS[GV2.dow(iso)] + ' ' + GV2.ddmm(iso));
-    n.semPasso = false; n.puxar = !n.agPag && !!n.travado; /* travado segue a puxar; Negociação com passo sai */
+    n.puxar = !n.agPag && !!n.travado; /* travado segue a puxar; Negociação com passo sai */
     EXH4.estado.marcados[n.id] = { tipo: tipo, data: iso, enviando: false };
     EXH.toast(nome + ' · ' + EXH4.rotTipo(tipo) + ' ' + GV2.ddmm(iso) + ' · tarefa criada no HubSpot');
   } catch (e) {

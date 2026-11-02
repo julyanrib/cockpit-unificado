@@ -174,7 +174,7 @@ tabelas.gv2_falta_etapa = [
     b.negocios.filter(n => n.nome === 'Na').length === 1 && b.negocios.find(n => n.nome === 'Na').etapa_idx === 4 && b.negocios.find(n => n.nome === 'Na').rep === 2 && /Visita/.test(b.negocios.find(n => n.nome === 'Na').outros.join()),
     b.negocios.map(n => n.nome + ':' + n.etapa_idx).join());
   const agp = b.negocios.find(n => n.id === 'c');
-  checar('v4 · 4: Ag. Pagamento nunca é travado, sem passo nem "a puxar", mesmo estourando a régua', agp && agp.agPag && !agp.travado && !agp.semPasso && !agp.puxar);
+  checar('v4 · 4: Ag. Pagamento nunca é travado, sem passo nem "a puxar", mesmo estourando a régua', agp && agp.agPag && !agp.travado && GV2.semProximoPasso([agp]).length === 0 && !agp.puxar);
   GV2.estado.filtro = 'quentes';
   const negQ = GV2.render.negocios();
   checar('v4 · 4: na lista do Raio X o Ag. Pagamento aparece "com o financeiro" e sem Cobrar', /com o financeiro/.test(negQ) && negQ.indexOf('cobrar:neg:c"') < 0);
@@ -351,6 +351,24 @@ tabelas.gv2_falta_etapa = [
     const navSem = GV2.navHTML();
     global.sessaoAtual = antS;
     checar('auditoria 02/11 · G12: "Ver como executivo" some sem ownerId na sessão', navSem.indexOf('menu:executivo') < 0 && GV2.navHTML().indexOf('menu:executivo') > 0);
+    /* G3: "sem próximo passo" por pessoa é GV2.semProximoPasso; o que é só dos quentes diz "quentes sem passo" */
+    const pp = GV2.render.v8PorPessoa();
+    const spAna = GV2.semProximoPasso(ana.negocios).length;
+    checar('auditoria 02/11 · G3: Funil › Por pessoa tem a coluna "Sem próx. passo" com o número da regra canônica',
+      pp.indexOf('<span>Sem próx. passo</span>') > 0 && new RegExp('data-gv2="v8neg:sempasso:1"[^>]*><span><b class="num[^"]*">' + spAna + '</b>').test(pp), String(spAna));
+    const rx = GV2.render.raiox();
+    checar('auditoria 02/11 · G3: "Negócios para puxar" diz "em Negociação sem passo", não "sem próximo passo (no prazo"',
+      /em Negociação sem passo \(no prazo/.test(rx) && !/sem próximo passo \(no prazo/.test(rx));
+    const pes = GV2.render.v5Pessoa(ana), hj = GV2.render.time();
+    checar('auditoria 02/11 · G3: os cartões de Quentes (Pessoas e Hoje) dizem "quentes sem passo" e não chamam isso de "sem próximo passo"',
+      !/[0-9]+ sem próximo passo<\/span>/.test(pes) && /sem próximo passo no funil/.test(pes) && /quentes? sem passo/.test(hj) && !/>[0-9]+ sem próximo passo</.test(hj));
+    /* G6: o mini do Por pessoa mostra o esperado E a meta; esperado 0 é "mês começando", não "0 de 0" */
+    const rOrig = GV2.v8Ritmo;
+    GV2.v8Ritmo = function (p, b2) { const R = rOrig(p, b2); if (p && R) { R.cli = Object.assign({}, R.cli, { feito: 0, esp: 0, meta: 8 }); } return R; };
+    const pp0 = GV2.render.v8PorPessoa();
+    GV2.v8Ritmo = rOrig;
+    checar('auditoria 02/11 · G6: com esperado 0, o Por pessoa diz "mês começando · meta 8" e nunca "0 de 0"',
+      /mês começando · meta 8/.test(pp0) && !/<\/b> de 0</.test(pp0));
   }
   checar('cada aba desenha sem erro', ['time', 'raiox', 'rua', 'pessoas', 'propostas', 'playbook', 'prova'].every(a => {
     try { GV2.estado.aba = a; return typeof GV2.render[a]() === 'string'; } catch (e) { falhas.push('aba ' + a + ': ' + e.message); return false; }
@@ -1205,7 +1223,8 @@ tabelas.gv2_falta_etapa = [
     const rotasOrig = tabelas.rotas_da_semana;
     tabelas.rotas_da_semana = [];
     const b0 = await GV2.montar();
-    const semPasso = [].concat.apply([], b0.pessoas.map(p => p.negocios || [])).filter(n => n.semPasso && !n.agPag);
+    /* 02/11/26: o campo n.semPasso saiu (auditoria); a regra é GV2.semProximoPasso */
+    const semPasso = GV2.semProximoPasso([].concat.apply([], b0.pessoas.map(p => p.negocios || [])));
     const hojeIso = b0.agora.iso;
     const futuro = semPasso[0], passado = semPasso[1];
     tabelas.rotas_da_semana = [
@@ -1216,9 +1235,10 @@ tabelas.gv2_falta_etapa = [
     const achar = (b, id) => [].concat.apply([], b.pessoas.map(p => p.negocios || [])).find(n => n.id === id);
     const f1 = futuro && achar(b1, futuro.id), p1 = passado && achar(b1, passado.id);
     checar('no plano = próximo passo: o quente planejado para depois de amanhã sai de "sem próximo passo"',
-      semPasso.length >= 2 && f1 && !f1.semPasso && /^no plano · /.test(f1.proximo_passo || '') && !f1.puxar === !f1.travado,
-      JSON.stringify([semPasso.length, f1 && f1.semPasso, f1 && f1.proximo_passo]));
-    checar('no plano = próximo passo: plano que já passou não conta', p1 && p1.semPasso && !p1.proximo_passo, JSON.stringify([p1 && p1.semPasso, p1 && p1.proximo_passo]));
+      semPasso.length >= 2 && f1 && GV2.semProximoPasso([f1]).length === 0 && /^no plano · /.test(f1.proximo_passo || '') && !f1.puxar === !f1.travado,
+      JSON.stringify([semPasso.length, f1 && f1.proximo_passo]));
+    checar('no plano = próximo passo: plano que já passou não conta', p1 && GV2.semProximoPasso([p1]).length === 1 && !p1.proximo_passo, JSON.stringify([p1 && p1.proximo_passo]));
+    checar('auditoria 02/11 · G3: o campo morto n.semPasso saiu da base', !('semPasso' in f1));
     checar('no plano = próximo passo: a carga lê também a semana que vem',
       codigo.indexOf("rotaProx: supa.rpc('rotas_da_semana', { p_segunda: GV2.somaDias(seg, 7)") > 0);
     tabelas.rotas_da_semana = rotasOrig;
