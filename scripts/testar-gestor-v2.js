@@ -169,7 +169,8 @@ tabelas.gv2_falta_etapa = [
   checar('provável = fechados + Ag. Pagamento + 60% de Negociação (v4)', bia.provavel === 2 && ana.provavel === 1 && caio.provavel === 1, 'bia ' + bia.provavel + ' ana ' + ana.provavel + ' caio ' + caio.provavel);
   /* ── v4 (Pessoas e Raio X, 07/10/26): os testes de aceite 1–4 e 8 do prompt ── */
   checar('v4 · 1: o provável do Time é a soma das Pessoas e o KPI Mês mostra o mesmo número',
-    b.time.provavel === ana.provavel + bia.provavel + caio.provavel && GV2.render.kpisTime()[4].unidade === 'provável ' + b.time.provavel, 'time ' + b.time.provavel);
+    /* 02/11/26: o KPI Mês é o da Hoje (GV2.kpisHoje); o render.kpisTime do Time v4 saiu como código morto */
+    b.time.provavel === ana.provavel + bia.provavel + caio.provavel && GV2.kpisHoje(b).provavel === b.time.provavel, 'time ' + b.time.provavel);
   checar('v4 · 3: negócio repetido (mesmo dono, mesmo nome) conta uma vez, na etapa mais avançada, com rep e as outras etapas',
     b.negocios.filter(n => n.nome === 'Na').length === 1 && b.negocios.find(n => n.nome === 'Na').etapa_idx === 4 && b.negocios.find(n => n.nome === 'Na').rep === 2 && /Visita/.test(b.negocios.find(n => n.nome === 'Na').outros.join()),
     b.negocios.map(n => n.nome + ':' + n.etapa_idx).join());
@@ -250,7 +251,6 @@ tabelas.gv2_falta_etapa = [
     GV2.base.pessoas.forEach(function (p) {
       DV.estado.p = p; DV.estado.fizEm = {};
       const h = DV.com(function () { return DV.html(p); });
-      const g = GV2.p3Resumo(p);
       /* v3 (09/10/26, ws.zip): os 5 cartões do topo são os da Pessoas v5 do gestor (GV2.render.v5Pessoa),
          mesma base. Porta → decisor: o gestor mostra a %, o executivo a escada; a % sai da escada. */
       const dv = nums(h, /class="dv-c5"><small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g);
@@ -288,8 +288,9 @@ tabelas.gv2_falta_etapa = [
     const paths = (h.match(/<path d="[^"]+"/g) || []).slice(0, 7);
     return h.indexOf('assets/takeat-t-oficial.png') > 0 && h.indexOf('>t<') < 0 && paths.length === 7 && new Set(paths).size === 7 && /aria-current="page"/.test(h);
   })());
-  checar('sem lugar no mapa: o item do plano que o app não põe na rota chega ao gestor e aparece na grade', GV2.base.porId['2'].semana[4].semLugar === 2 && GV2.render.ruaSemana().indexOf('2 s/ lugar') > 0, JSON.stringify(GV2.base.porId['2'].semana[4]));
-  checar('promessa: com alguém prometendo aparece; ninguém prometeu hoje, some das linhas (não vira 7 x não prometeu)', (function () { const ps = GV2.base.pessoas, antes = ps.map(function (p) { return p.promessa; }); const com = GV2.v4Promessa(ana); ps.forEach(function (p) { p.promessa = null; }); const sem = GV2.v4Promessa(ana); ps.forEach(function (p, i) { p.promessa = antes[i]; }); return com === 'não prometeu' && sem === ''; })());
+  /* 02/11/26: a grade da Rua v4 (render.ruaSemana) e a linha de promessa (v4Promessa) saíram como código
+     morto; fica a prova do dado, que a Rua v5 lê */
+  checar('sem lugar no mapa: o item do plano que o app não põe na rota chega ao gestor', GV2.base.porId['2'].semana[4].semLugar === 2, JSON.stringify(GV2.base.porId['2'].semana[4]));
   checar('roteiro: quente e travado primeiro (o mais perto do dinheiro antes), com o motivo certo', rt[0].n.id === 'a' && /pedir a decisão juntos/.test(rt[0].motivo) && rt[1].n.id === 'd' && rt[1].motivo.indexOf('régua 4) · ir junto no decisor') >= 0 && rt[0].hora === '09:00' && rt.slice(2).every(function (r) { return !r.n.quente && !r.n.travado; }), rt.map(r => r.hora + ' ' + r.n.id + ' ' + r.motivo).join(' | '));
   checar('combinar agora: sem plano pede o plano; travado pede data; quente pede decisão no negócio', (function () { const c = GV2.combinarAgora(ana); return c[0].regra === 'plano_diario' && c[1].regra === 'travados_com_data' && c[2].regra === 'decisao_em_negocio' && c[2].alvo.negocio_id === 'a'; })());
   checar('a rotação proposta é uma praça por semana, a mais urgente primeiro', (function () { const r = GV2.propostaRotacao(false); return r.length === 5 && r[0].inicio === '2026-10-05' && r[1].inicio === '2026-10-12'; })());
@@ -401,7 +402,6 @@ tabelas.gv2_falta_etapa = [
   checar('a Prova segue limpa com uma praça escolhida', GV2.testes.prova().length === 0, GV2.testes.ultimo.join());
   GV2.estado.prf = 'todas';
   checar('filtro "Sem sistema ou dor": Demo em diante sem um dos dois', GV2.filtroNegocios('semarma').map(n => n.id).join() === 'a', GV2.filtroNegocios('semarma').map(n => n.id).join());
-  checar('rodapé do dinheiro: o maior MRR em jogo é contra a Saipos', (GV2.maiorMrrContra(b) || {}).s === 'Saipos' && GV2.maiorMrrContra(b).v === 500);
   GV2.estado.filtro = 'todos'; GV2.estado.aba = 'raiox'; GV2.estado.rxm = 'funil';
   const rxf = GV2.render.raiox();
   /* v5: a tabela de Negócios (Sistema, filtros, Cobrar) vive na gaveta "Ver todos os negócios" */
@@ -448,13 +448,9 @@ tabelas.gv2_falta_etapa = [
   let pf = '';
   try { pf = GV2.render.pessoas(); } catch (e) { falhas.push('Pessoas › Funil: ' + e.message); }
   const ana1 = GV2.base.porId['1'];
-  const fp1 = GV2.render.funilPessoa(ana1);
-  checar('Pessoas › Funil em barras: o funil do mês e as etapas clicáveis, sem negócio aberto até escolher', /Funil do mês/.test(pf) && /data-gv2="fpetapa:4"/.test(pf) && !/data-gv2="ficha:/.test(fp1));
+  /* 02/11/26: o render.funilPessoa (dossiê v2) saiu como código morto; o funil da pessoa é o da gaveta */
+  checar('Pessoas › Funil em barras: o funil do mês e as etapas clicáveis', /Funil do mês/.test(pf) && /data-gv2="fpetapa:4"/.test(pf));
   checar('Pessoas v3 › Funil: "Para puxar" com Cobrar em cada linha e Cobrar os N (travado d, quente a sem passo)', /Para puxar · travados e quentes sem passo · 2/.test(pf) && /data-gv2="cobrar:neg:d"/.test(pf) && /data-gv2="cobrar:neg:a"/.test(pf) && /data-gv2="p3:cobrartodos:1"/.test(pf));
-  GV2.estado.fpEtapa = 4;
-  const pf2 = GV2.render.funilPessoa(ana1);
-  checar('Pessoas › Funil: clicar numa etapa lista só os negócios dela, da pessoa', /data-gv2="ficha:a"/.test(pf2) && !/data-gv2="ficha:d"/.test(pf2) && !/data-gv2="ficha:b"/.test(pf2));
-  GV2.estado.fpEtapa = null;
   /* v5: a pauta completa, os combinados e o Registrar abrem na gaveta do 1:1 */
   GV2.estado.v5Gav = { t: 'um', id: '1' };
   const um = GV2.render.pessoas();
@@ -538,11 +534,9 @@ tabelas.gv2_falta_etapa = [
   }
   /* D5 (08/10/26): a célula da Grade abre o dia da pessoa em Rua › Rotas */
   {
+    /* 02/11/26: a Grade v4 (render.ruaSemana) saiu como código morto; o comando ruadia segue */
     GV2.estado.rua = 'semana';
-    const gs = GV2.render.ruaSemana();
     const iso0 = GV2.base.semana[0].iso;
-    checar('D5: cada célula da Grade é botão para o dia da pessoa', gs.indexOf('data-gv2="ruadia:1:' + iso0 + '"') > 0
-      && (gs.match(/data-gv2="ruadia:/g) || []).length === GV2.base.ordem.length * GV2.base.semana.length);
     const pintarD5 = GV2.pintar; GV2.pintar = function () {};
     GV2.rotaComando('ruadia', ['ruadia', '2', iso0]);
     GV2.pintar = pintarD5;
@@ -785,17 +779,8 @@ tabelas.gv2_falta_etapa = [
     const fpp = GV2.render.funilPorPessoa();
     const algumMenor = GV2.base.pessoas.some(function (p) { return p.funil_mes.portas > 0 && p.funil_mes.portas < 3 && p.funil_mes.decisor > 0; });
     checar('v5 · Funil por pessoa: a taxa só aparece com 3 ou mais no passo anterior (senão "—", nunca 400%)', !/>[0-9]{3,}%</.test(fpp) && /a taxa só aparece com 3 ou mais/.test(fpp) && (!algumMenor || /<small>—<\/small>/.test(fpp)));
-    /* Território: o Abastecer com a regra C8 (estoque ÷ contas que saíram por semana) */
-    const g = global, ant = { R: g.RT7_ESTADO, E: g.rt7Estoque, O: g.rt7Orfao };
-    const ids = GV2.base.pessoas.map(function (p) { return p.id; });
-    const E = {}; E[ids[0]] = { contas: 30, consumo: 36, semanas: 30 / 36 }; E[ids[1]] = { contas: 40, consumo: 30, semanas: 40 / 30 }; E[ids[2]] = { contas: 50, consumo: null, semanas: null };
-    g.RT7_ESTADO = { carregou: true, leads: [{ id: 'x', status: 'pendente', responsavel_owner_id: ids[0], bairro: 'Tijuca', created_at: '2026-10-07T12:00:00Z' }] };
-    g.rt7Estoque = function (id) { return E[id] || { contas: 80, consumo: 20, semanas: 4 }; };
-    g.rt7Orfao = function () { return { paradas: 722, cidades: ['Vitória/ES'] }; };
-    const ab = GV2.render.v5Abastecer();
-    const k0 = GV2.v5Estoque(GV2.base.pessoas[0]).k, k1 = GV2.v5Estoque(GV2.base.pessoas[1]).k, k2 = GV2.v5Estoque(GV2.base.pessoas[2]).k;
-    g.RT7_ESTADO = ant.R; g.rt7Estoque = ant.E; g.rt7Orfao = ant.O;
-    checar('v5 · C8: < 1 semana = sem estoque (Importar), < 1,5 = acompanhar, sem consumo = "consumo não medido"', k0 === 'sem' && k1 === 'acomp' && k2 === 'nao' && /data-gv2="v5rt7:imp:/.test(ab), [k0, k1, k2].join());
+    /* 02/11/26: o Abastecer do Território v5/v9 (v5Abastecer, v5Estoque) saiu como código morto — o
+       Território v10 (t10) não o usa */
     /* a leitura da praça repinta o Território quando termina (só repintava o Raio X › Praça) */
     {
       const pg = GV2.pxGlobal, cm = GV2.camada, pt = GV2.pintar, cacheVv = GV2.px.cache.vv;
@@ -808,7 +793,7 @@ tabelas.gv2_falta_etapa = [
       GV2.pxGlobal = pg; GV2.camada = cm; GV2.pintar = pt; GV2.px.cache.vv = cacheVv;
       checar('v5 · Território: a leitura da praça termina e repinta a aba (senão fica no esqueleto)', pintou >= 2, String(pintou));
     }
-    checar('v5 · Território: fila de aprovação por dono, território sem dono com o número, e sem jargão', /Fila de aprovação/.test(ab) && /data-gv2="v5rt7:fila:/.test(ab) && /Território sem dono · 722 contas/.test(ab) && !/torneira|munição|backlog/i.test(ab + GV2.render.terr()));
+    checar('v5 · Território: sem jargão', !/torneira|munição|backlog/i.test(GV2.render.terr()));
   }
   /* D1 e D2 (08/10/26): só dá para medir no Google de verdade; aqui, que as travas estão no lugar */
   {
@@ -1117,20 +1102,15 @@ tabelas.gv2_falta_etapa = [
     const fora = P.filter(function (x) { return x.tipo === 'fora'; });
     checar('v9 Decidir: conta de quem saiu entra uma vez por grafia de cidade, e só a que ainda pode mudar (na_rota fica)',
       fora.length === 1 && fora[0].n === 2 && fora[0].titulo === 'Nova Iguaçu/RJ', JSON.stringify(fora.map(function (x) { return [x.n, x.titulo]; })));
+    /* 02/11/26: a gaveta da v9 (render.v9Gav e as v9Gav*) saiu como código morto — nenhuma tela a
+       desenhava desde o Território v2; o motor de escrita (aprovar, desfazer, dar dono) segue medido */
     GV2.v9Comando('v9g', ['v9g', 'contas', ids[0]]);
-    let gav = GV2.render.v9Gav();
-    checar('v9 Contas: abre na pessoa com o total e o rodapé; marcar conta muda o número do Aprovar',
-      /Contas de [^<]* · 2</.test(gav) && /Aprovar selecionadas \(0\)/.test(gav));
     GV2.v9Comando('v9marcar', ['v9marcar', 'a1']);
     GV2.v9Comando('v9conf', ['v9conf', 'aprovar']);
-    gav = GV2.render.v9Gav();
-    checar('v9 Contas: Aprovar pede confirmação na gaveta (sem confirm do navegador) dizendo o dia (padrão: a segunda)', /Pôr 1 conta no plano de [^<]* em seg 19\/10\?/.test(gav) && /data-gv2="v9dia:sem"|data-gv2="v9dia:municao"/.test(gav) && /data-gv2="v9aprovar"/.test(gav));
     await GV2.v9Aprovar();
     const a1 = g.RT7_ESTADO.leads.find(function (l) { return l.id === 'a1'; });
     checar('v9 Contas: aprovar grava status na rota + data_rota da segunda + dono, e só a marcada',
       pedidos.length === 1 && pedidos[0].c.status === 'na_rota' && pedidos[0].c.data_rota === '2026-10-19' && pedidos[0].c.responsavel_owner_id === ids[0] && pedidos[0].ids.join() === 'a1' && a1.status === 'na_rota', JSON.stringify(pedidos));
-    gav = GV2.render.v9Gav();
-    checar('v9 Contas: depois de aprovar, a faixa verde com o dia e o Desfazer', /1 aprovada · no plano de [^<]* em seg 19\/10/.test(gav) && /data-gv2="v9desfazer:0"/.test(gav));
     await GV2.v9Desfazer(0);
     {
       const dias = GV2.v9Dias();
@@ -1149,13 +1129,10 @@ tabelas.gv2_falta_etapa = [
     GV2.v9Comando('v9g', ['v9g', 'dono']);
     const kFora = fora[0].k;
     GV2.v9Comando('v9conf', ['v9conf', 'dar', kFora, ids[1]]);
-    gav = GV2.render.v9Gav();
-    checar('v9 Decidir dono: dar dono pede confirmação no bloco', /Dar 2 contas para/.test(gav) && gav.indexOf('data-gv2="v9dar:' + kFora + ':' + ids[1] + '"') > 0);
     await GV2.v9Dar(kFora, ids[1]);
     const P2 = GV2.v9Pendencias();
-    gav = GV2.render.v9Gav();
-    checar('v9 Decidir dono: grava o dono nas contas, o bloco fica verde e o número de sem dono cai',
-      pedidos[2] && pedidos[2].c.responsavel_owner_id === ids[1] && !P2.some(function (x) { return x.tipo === 'fora'; }) && /dono decidido/.test(gav) && GV2.v9SemDono(P2) === 1, JSON.stringify(pedidos[2]));
+    checar('v9 Decidir dono: grava o dono nas contas e a pendência de quem saiu some',
+      pedidos[2] && pedidos[2].c.responsavel_owner_id === ids[1] && !P2.some(function (x) { return x.tipo === 'fora'; }), JSON.stringify(pedidos[2]));
     let pedidosAntes = pedidos.length;
     g.supa = { from: function () { return { update: function () { return { in: function () { return { select: async function () { return { data: [], error: null }; } }; } }; } }; } };
     GV2.v9Comando('v9g', ['v9g', 'contas', ids[0]]);
@@ -1163,15 +1140,8 @@ tabelas.gv2_falta_etapa = [
     await GV2.v9Aprovar();
     checar('v9 Contas: banco que devolve 0 linhas é "nada foi gravado", nunca ✓', /Nada foi gravado/.test(GV2.estado.v9g.erro || '') && !GV2.estado.v9g.ok);
     g.RT7_FONTES = [{ id: 'casa_dos_dados', rot: 'Casa dos Dados', ativa: true }, { id: 'google_places', rot: 'Google Places', ativa: false, porque: 'x' }, { id: 'tripadvisor', rot: 'TripAdvisor', ativa: false, porque: 'y' }];
-    GV2.v9Comando('v9g', ['v9g', 'imp', ids[0]]);
-    gav = GV2.render.v9Gav();
-    checar('v9 Importar: fontes indisponíveis dizem o porquê e o Disparar desliga sem cidade',
-      /sem cobrança no Google/.test(gav) && /termos de uso/.test(gav) && (/data-gv2="v9disparar" disabled/.test(gav) || /data-gv2="v9cid:/.test(gav)));
     GV2.estado.aba = 'time'; try { GV2.visitar('rotas'); } catch (e) { /* a antiga não existe aqui: conta como não ter vindo para o Território */ }
     checar('v9: "Rotas & Prospecção" não abre mais: visitar rotas cai no Território', GV2.estado.aba === 'terr');
-    const fab = b.pessoas[2]; const fase0 = fab.fase; fab.fase = 'Preparação';
-    const abR = GV2.v9Abastecer(); fab.fase = fase0;
-    checar('v9 Abastecer: quem está em rampagem não é cobrado por consumo (selo próprio, no fim)', abR[abR.length - 1].id === fab.id && abR[abR.length - 1].e.k === 'rampa');
     g.RT7_ESTADO = ant.R; g.rt7Ativos = ant.A; g.rt7FilaDoExec = ant.F; g.rt7Score = ant.S; g.rt7Marcado = ant.M; g.rt7ProximaSegunda = ant.P; g.rt7Estoque = ant.E; g.rt7Registrar = ant.G; g.rt7Carteira = ant.C; g.supa = ant.supa;
     GV2.pintar = ant.pintar; GV2.ir = ant.ir; GV2.estado.aba = ant.aba; GV2.estado.v9g = null; GV2.estado.v9feito = null; GV2.estado.v9conf = null;
   }
@@ -1589,25 +1559,14 @@ tabelas.gv2_falta_etapa = [
       D.data === '2026-10-28' && D.vencida && GV2.rpD45(fabio).data === '2026-11-18' && !GV2.rpD45(fabio).vencida, JSON.stringify(D));
     checar('rampa · "estende" marca nova data e pede outra decisão nela',
       (function () { const y = pes('y', { decisao: { decisao: 'estende', novaData: '2026-11-13', plano: 'semana 1: 5 por dia' } }); const d = GV2.rpD45(y); return d.pendente && d.data === '2026-11-13' && !d.vencida; })());
-    checar('rampa · prospecção antes da S4 aprovada é alerta (nunca trava); depois da S4 não',
-      GV2.rpProsp(diego) && !GV2.rpProsp(leandro) && GV2.rpDiasTxt(['2026-10-28', '2026-10-27']) === '27 e 28/10' && GV2.rpDiasTxt(['2026-10-30', '2026-11-02']) === '30/10 e 02/11');
+    /* 02/11/26: o quadro da Rampa (render.rampa, rpQuadro, rpLinha, rpCelula, rpGav*, rpGrupos,
+       rpSemanaItens, rpProsp) saiu como código morto — a aba saiu do menu em 01/11; fica o que o
+       padrinho e o cadastro usam (rpLer, rpPessoas, rpFase, rpD45, rpComando, gravar) */
+    checar('rampa · os dias de prospecção por extenso',
+      GV2.rpDiasTxt(['2026-10-28', '2026-10-27']) === '27 e 28/10' && GV2.rpDiasTxt(['2026-10-30', '2026-11-02']) === '30/10 e 02/11');
     checar('rampa · a rua aprova com 6 por dia por 2 semanas seguidas (semanas inteiras)',
       GV2.rpRuaOk({ medido: { semanas: [sem('a', 30), sem('b', 31)] } }) && !GV2.rpRuaOk({ medido: { semanas: [sem('a', 29), sem('b', 31)] } })
         && !GV2.rpRuaOk({ medido: { semanas: [sem('a', 30), sem('b', 18, 3)] } }) && GV2.rpVisitasDia(leandro) === 4.2);
-    GV2.estado.rpTurma = '2026-10-05';
-    const html = GV2.render.rampa();
-    checar('rampa · o quadro tem as turmas com contagem, a célula vencida com "Aprovar fase" e o alerta de prospecção com o padrinho',
-      /Turma 05\/10<span class="num">3<\/span>/.test(html) && /Turma 14\/09<span class="num">1<\/span>/.test(html)
-        && /Venceu 25\/10 sem aprovar/.test(html) && /data-gv2="rp:aprovar:camila:s23">Aprovar fase/.test(html)
-        && /3 visitas de prospecção em 27 e 28\/10, antes da S4 aprovada/.test(html) && /Estendida até 06\/11/.test(html)
-        && /A partir de 04\/11/.test(html) && /Em curso · até 03\/11/.test(html), html.slice(0, 300));
-    const g = [];
-    GV2.rpGrupos(g, GV2.base, function (p, s, a) { return { n: p.nome, s: s, a: a }; });
-    checar('rampa · "Quem precisa de você": fase vencida e dia 45 sem decisão',
-      g.map(function (x) { return x.k; }).join() === 'rpfase,rpd45' && g[0].chips[0].s === 'S2–3 venceu 25/10' && g[1].chips[0].s === 'venceu 28/10', JSON.stringify(g.map(function (x) { return x.chips; })));
-    const it = GV2.rpSemanaItens('2026-10-26');
-    checar('rampa · a semana do gestor ganha "Aprovações da rampa" e "Dia 45 decidido"',
-      it.length === 2 && it[0].t === 'Aprovações da rampa' && it[0].feito === 1 && it[0].total === 2 && it[1].t === 'Dia 45 decidido' && it[1].total === 1, JSON.stringify(it));
     /* gravar: aprovar exige evidência; sem bater a meta pede motivo; nada vai para o HubSpot */
     const gravou = [];
     global.supa.from = function (tab) { return { upsert: function (row, o) { gravou.push({ tab: tab, row: row, o: o }); return Promise.resolve({ error: null }); },
@@ -1636,7 +1595,7 @@ tabelas.gv2_falta_etapa = [
     checar('rampa · "estende com plano" grava a decisão com nova data de 15 dias e o plano',
       gravou.length === 1 && gravou[0].tab === 'rampa_decisao_d45' && gravou[0].row.decisao === 'estende' && gravou[0].row.nova_data === '2026-11-15' && /Semana 1/.test(gravou[0].row.plano), JSON.stringify(gravou[0]));
     await new Promise(function (r) { setTimeout(r, 5); });
-    checar('rampa · nenhuma escrita no HubSpot no módulo', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.RP = {'), codigo.indexOf('GV2.rpSemanaItens = function'))));
+    checar('rampa · nenhuma escrita no HubSpot no módulo', !/hubapi|tarefaNoNegocio|cobrarNegocio\(/.test(codigo.slice(codigo.indexOf('GV2.RP = {'), codigo.indexOf('GV2.CB = {'))));
     global.supa.from = supaEra;
     Object.assign(GV2.rp, rpEra);
     GV2.estado.rpGav = null; GV2.estado.rpForm = null; GV2.estado.rpErro = null;
@@ -2126,7 +2085,8 @@ tabelas.gv2_falta_etapa = [
     const fds = ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30'];
     const s2 = EXH.semana({ meta_visitas_dia: 6, semana: fds.map(function (iso) { return { iso: iso, todas: 0, passado: true }; }) }, { semana: fds.map(function (iso) { return { iso: iso }; }), agora: { iso: '2026-11-01' } });
     checar('semana do executivo · no domingo a semana fechou: o que falta "ficou faltando"', s2.meta === 30 && s2.aberta === false && /sem\.aberta \? 'faltam ' \+ sem\.faltam : 'ficaram faltando '/.test(codigo), JSON.stringify(s2));
-    checar('rua da semana · feriado aparece como feriado e fica fora da meta', /return '<span class="gv2-sem-cel is-sem">feriado<\/span>'/.test(codigo) && /p\.meta_visitas_dia \* dias\.filter\(function \(d\) \{ return GV2\.util\(d\.iso\); \}\)\.length/.test(codigo));
+    /* 02/11/26: a Grade v4 (render.ruaSemana) saiu como código morto; a Rua v5 (render.v5Semana) é a que mostra a semana */
+    checar('rua da semana · feriado aparece como feriado e fica fora da meta', /s = d\.todas \? 'feriado · fez ' \+ d\.todas : 'feriado · não conta'/.test(codigo) && /const uteis = b\.semana\.filter\(function \(d\) \{ return GV2\.util\(d\.iso\); \}\)\.length;/.test(codigo));
     checar('time · a legenda das metas sai do ranking, não do "8 e 2" escrito à mão', /metaPorPat/.test(tpl) && !/2 para quem está em rampa/.test(tpl));
     checar('rua da semana do gestor · semana fechada diz "ficaram faltando"', /\(aberta \? 'faltam ' : 'ficaram faltando '\) \+ \(meta - feito - falta\)/.test(codigo) && /const aberta = b\.semana\.some\(function \(d\) \{ return GV2\.util\(d\.iso\) && d\.iso >= b\.agora\.iso; \}\);/.test(codigo));
     {
