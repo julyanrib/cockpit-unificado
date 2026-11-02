@@ -229,6 +229,7 @@ const B = ['b:meier', 'b:tijuca', 'b:madureira', 'b:vila isabel', 'b:penha'];
   /* acabamento (01/11/26): a etiqueta é um <span>, e a regra do texto do cartão não pode alcançá-la */
   checar('etiquetas do tamanho do texto: as regras de texto dos cartões valem só para o filho direto',
     ['pv3-sug-it', 'pv3-bop', 'pv3-atalho', 'pv3-bairro'].every(function (c) { return tpl.indexOf('.' + c + ' > span{') > -1 && tpl.indexOf('.' + c + ' span{') < 0; }));
+  checar('a etiqueta não estica dentro da coluna do cartão de sugestão', tpl.indexOf('.pv3-sug-it .pv3-tag,') > -1 || tpl.indexOf('.pv3-sug-it .pv3-tag{align-self:flex-start') > -1);
   checar('uma sugestão no dia: "Pôr no dia", não "Pôr a 1"', tpl.indexOf("'Pôr a 1'") < 0 && tpl.indexOf("'Pôr no dia'") > -1);
 }
 
