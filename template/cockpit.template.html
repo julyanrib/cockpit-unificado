@@ -22948,11 +22948,35 @@ function fn2PorRisco(a, b) {
   return b.dias - a.dias;
 }
 
+/* "SEM PRÓXIMO PASSO" DO MEU FUNIL É A REGRA CANÔNICA (02/11/26, auditoria). O KPI e o movimento
+   contavam todo cartão sem passo: Ag. Pagamento (do financeiro, fica fora em GV2.semProximoPasso) e
+   o mesmo restaurante repetido em duas etapas entravam, e o número não batia com a Hoje e o
+   Planejamento. Aqui a MESMA regra do GV2.semProximoPasso, sobre os mesmos negócios: repetido
+   (mesmo dono, mesmo nome normalizado) conta uma vez, no mais avançado (GV2.dedupNegocios), e
+   Ag. Pagamento fica fora. O passo é o de proximoPassoDoLead, que já lê PLANO_POR_NEGOCIO —
+   carregado no login, então vale mesmo se o Meu funil abrir antes da Hoje. */
+const FN2_AG_PAGAMENTO = '1395880473';
+function fn2SemPasso(itens) {
+  const abertos = (itens || []).filter(x => x && String(x.stageId) !== FN2_ETAPA_PERDIDO && FN2_ETAPAS_ABERTAS.some(e => e.id === String(x.stageId)));
+  const ordem = function (x) { return FN2_ETAPAS_ABERTAS.findIndex(e => e.id === String(x.stageId)); };
+  const norm = (typeof GV2 !== 'undefined' && GV2 && GV2.nomeNorm) ? GV2.nomeNorm
+    : function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+  const fica = new Map();
+  abertos.forEach(function (x) {
+    const nn = norm(x.lead && (x.lead.name || x.lead.dealname));
+    const k = (x.lead && x.lead.ownerId) + '|' + (nn || ('id:' + (x.lead && x.lead.id)));
+    const atual = fica.get(k);
+    if (!atual || ordem(x) > ordem(atual) || (ordem(x) === ordem(atual) && x.dias > atual.dias)) fica.set(k, x);
+  });
+  const unicos = new Set(fica.values());
+  return abertos.filter(x => unicos.has(x) && String(x.stageId) !== FN2_AG_PAGAMENTO && !x.est.passo);
+}
+
 /* ── OS TRÊS MOVIMENTOS ───────────────────────────────────────────────────────────────
    Substituem os "planos de ataque" soltos e o checklist vazio. Cada um é um filtro que
    ACENDE na própria esteira — não uma segunda lista do mesmo dado. */
 function fn2Movimentos(itens) {
-  const semPasso = itens.filter(x => !x.est.passo);
+  const semPasso = fn2SemPasso(itens);
   const estourou = itens.filter(x => x.est.estourou);
   /* "decisões que vencem esta semana": quem tem tarefa datada caindo até o fim da semana
      útil. É o oposto dos outros dois — aqui o compromisso existe e a data está chegando. */
@@ -23065,7 +23089,10 @@ function fn2Hero(r, itens, movimentos) {
      esta tela combate. O rotulo diz GANHO e o rodape diz a data do corte. */
   const colGanho = (typeof FN3_COLUNAS !== 'undefined'
     ? FN3_COLUNAS.filter(function (c) { return c.ganho; })[0] : null) || null;
-  const nGanho = colGanho ? itens.filter(x => String(x.stageId) === String(colGanho.id)).length : 0;
+  /* 02/11/26 (auditoria): "ganho + onboarding" contava em `itens`, que só tem as etapas de venda —
+     dava 0 sempre. Ganho e Onboarding vêm das etapas laterais (FN3_ETAPAS_LATERAIS), as mesmas do kanban. */
+  const laterais = (typeof fn2LeadsDasEtapas === 'function' && typeof FN3_ETAPAS_LATERAIS !== 'undefined') ? fn2LeadsDasEtapas(r, FN3_ETAPAS_LATERAIS) : [];
+  const nGanho = colGanho ? laterais.filter(x => String(x.stageId) === String(colGanho.id)).length : 0;
   const desdeGanho = (DATA.ganhoVisivel && DATA.ganhoVisivel.corte)
     ? (fn2Quando(DATA.ganhoVisivel.corte) || DATA.ganhoVisivel.corte) : null;
   const nReciclagem = fn2Reciclados(r).length;
@@ -23096,7 +23123,9 @@ function fn2Hero(r, itens, movimentos) {
      saía sempre vazia e a manchete dizia 'nenhum com valor no CRM' com 12 cartões mostrando R$, enquanto
      'Onde o dinheiro para', na mesma aba, dizia 'R$ 1,5k esperando ninguém'. Agora é a MESMA lista do
      movimento 'sem próximo passo' (fn2Movimentos: !x.est.passo), a que já dá o 48 do lado. */
-  const mrrSemPasso = itens.filter(function (x) { return !(x.est && x.est.passo); })
+  /* 02/11/26 (auditoria): a lista do movimento passou a ser fn2SemPasso (Ag. Pagamento fora, repetido
+     uma vez); o R$ lê a MESMA lista, não um filtro próprio */
+  const mrrSemPasso = ((movimentos[0] && movimentos[0].itens) || [])
     .reduce(function (a, x) { return a + (x.valor > 0 ? x.valor : 0); }, 0);
   const manchete = total === 0
     ? 'Seu funil está vazio — as contas-alvo estão no Planejamento.'
@@ -23119,11 +23148,11 @@ function fn2Hero(r, itens, movimentos) {
      Um número, uma fonte. */
   const movEstourou = movimentos.filter(function (m) { return m.id === 'estourou'; })[0];
   const nEstourados = (movEstourou && movEstourou.n) || 0;
-  const mrrGanho = itens.filter(function (x) {
+  const mrrGanho = laterais.filter(function (x) {
     return colGanho && String(x.stageId) === String(colGanho.id);
   }).reduce(function (a, x) { return a + (x.valor || 0); }, 0);
   const nOnb = (typeof FN3_ETAPA_ONBOARDING !== 'undefined')
-    ? itens.filter(function (x) { return String(x.stageId) === String(FN3_ETAPA_ONBOARDING); }).length : 0;
+    ? laterais.filter(function (x) { return String(x.stageId) === String(FN3_ETAPA_ONBOARDING); }).length : 0;
 
   return '<div class="fn2-hero">'
     /* ── 1 · O BANNER ESCURO ────────────────────────────────────────────────────── */
@@ -23329,7 +23358,7 @@ const FN2_PARADO_MIN = 7;
 function fn2Dinheiro(itens) {
   const parados = itens.filter(x => x.dias >= FN2_PARADO_MIN);
   const semMrr = itens.filter(x => !(x.valor > 0));
-  const semPasso = itens.filter(x => !x.est.passo);
+  const semPasso = fn2SemPasso(itens); /* a regra canônica (02/11/26, auditoria) */
   const rs = arr => arr.reduce((a, x) => a + (x.valor > 0 ? x.valor : 0), 0);
   return [
     { id: 'parado7', n: parados.length, itens: parados,
@@ -29970,7 +29999,7 @@ const PB7_NIVEIS = [
    negócios em 01/09/26), e nenhuma outra página resolve o que uma tarefa datada resolve. */
 const PB7_FUNIL_PARA_PAGINA = [
   { id: 'sem-passo', pagina: 'follow-up',
-    conta: itens => itens.filter(x => !x.passo).length,
+    conta: itens => itens.filter(x => x.semPasso).length,
     frase: n => 'é o que os seus <b>' + n + ' sem próximo passo</b> do funil estão pedindo — a régua desta página resolve exatamente isso' },
   { id: 'prospeccao-parada', pagina: 'acesso-decisor', etapa: '1395880469',
     conta: itens => itens.filter(x => x.stageId === '1395880469' && x.estourou).length,
@@ -30003,13 +30032,18 @@ function pb7EstadoDoFunil() {
   const sla = (DATA.stageMeta && DATA.stageMeta.slaDays) || {};
   const todos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(r.ownerId) : [])
     .filter(l => abertas.indexOf(String(l.stageId)) >= 0);
-  return todos.map(l => {
-    const dias = Number(l.dias || 0);
-    const limite = Number(sla[String(l.stageId)]);
+  const base = todos.map(l => ({ lead: l, stageId: String(l.stageId), dias: Number(l.dias || 0),
+    est: { passo: (typeof leadTemProximoPasso === 'function') ? leadTemProximoPasso(l) : !!l.proximaAtividade } }));
+  /* 02/11/26 (auditoria): o "N sem próximo passo" da trilha é o do Meu funil (fn2SemPasso: Ag.
+     Pagamento fora, repetido uma vez) — antes contava todo cartão sem passo */
+  const sem = new Set(typeof fn2SemPasso === 'function' ? fn2SemPasso(base) : base.filter(x => !x.est.passo));
+  return base.map(x => {
+    const limite = Number(sla[x.stageId]);
     return {
-      stageId: String(l.stageId),
-      passo: (typeof leadTemProximoPasso === 'function') ? leadTemProximoPasso(l) : !!l.proximaAtividade,
-      estourou: Number.isFinite(limite) && limite > 0 && dias > limite
+      stageId: x.stageId,
+      passo: x.est.passo,
+      semPasso: sem.has(x),
+      estourou: Number.isFinite(limite) && limite > 0 && x.dias > limite
     };
   });
 }
@@ -30779,7 +30813,7 @@ function pb9ResumoDoCapitulo(cap) {
      objeto com `.semPasso` e teria mostrado "undefined sem próximo passo" na tela. Contar
      aqui é o que garante que o número da frase é o mesmo do Meu Funil. */
   const estado = (typeof pb7EstadoDoFunil === 'function') ? pb7EstadoDoFunil() : [];
-  const semPasso = Array.isArray(estado) ? estado.filter(function (x) { return !x.passo; }).length : 0;
+  const semPasso = Array.isArray(estado) ? estado.filter(function (x) { return x.semPasso; }).length : 0; /* regra do Meu funil (02/11/26) */
   if (cap.rot === 'Venda na rua' && semPasso) {
     return 'Porta a porta, prospecção com dados, follow-up e o WhatsApp que converte — o capítulo'
       + ' que os seus ' + semPasso + ' sem próximo passo estão pedindo.';
@@ -31268,7 +31302,8 @@ function pb9RailHTML(pagina, cap, trilha) {
   /* USE HOJE NA RUA — número VIVO do funil. Sem funil carregado a frase some, em vez de
      mostrar "0 negócios" e ensinar o time a duvidar da tela. */
   const estado = (typeof pb7EstadoDoFunil === 'function') ? pb7EstadoDoFunil() : [];
-  const semPasso = Array.isArray(estado) ? estado.filter(function (x) { return !x.passo; }).length : 0;
+  /* 02/11/26 (auditoria): x.semPasso = a regra do Meu funil (Ag. Pagamento fora, repetido uma vez) */
+  const semPasso = Array.isArray(estado) ? estado.filter(function (x) { return x.semPasso; }).length : 0;
   const estourados = Array.isArray(estado) ? estado.filter(function (x) { return x.estourou; }).length : 0;
   const rua = (semPasso || estourados)
     ? '<div class="pb9-rail-bloco">'

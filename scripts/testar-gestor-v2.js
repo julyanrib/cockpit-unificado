@@ -771,7 +771,8 @@ tabelas.gv2_falta_etapa = [
           && fsx.readFileSync(px.join(__dirname, '..', 'api', 'hubspot-webhook.js'), 'utf8').indexOf("req.query.acao === 'atualizar'") > 0 && fsx.readdirSync(px.join(__dirname, '..', 'api')).filter(function (f) { return /\.js$/.test(f); }).length <= 12);
     }
     checar('executivo · Meu funil: o R$ dos sem próximo passo usa a lista do movimento (não x.semPasso) e Ag. Pagamento vazio não manda puxar munição (09/10/26)',
-      tpl.indexOf('const mrrSemPasso = itens.filter(function (x) { return !(x.est && x.est.passo); })') > 0 && tpl.indexOf('return x.semPasso; })') < 0
+      /* 02/11/26: a lista do movimento virou fn2SemPasso, e o R$ lê movimentos[0].itens */
+      tpl.indexOf('const mrrSemPasso = ((movimentos[0] && movimentos[0].itens) || [])') > 0 && tpl.indexOf('const semPasso = fn2SemPasso(itens);') > 0
         && tpl.indexOf("col.pagto ? 'Os negócios que aceitarem a proposta em Negociação chegam aqui.'") > 0);
     GV2.estado.menu = true;
     const navMenu = GV2.navHTML();
@@ -2153,6 +2154,29 @@ tabelas.gv2_falta_etapa = [
     checar('sem próximo passo · o card do executivo mostra a mesma quebra da aba Tarefas do app (vencido + nunca marcado)',
       /venc \+ ' com passo vencido \+ ' \+ \(sp - venc\) \+ ' nunca '/.test(codigo));
     checar('ver como executivo · quem está fora do time fica sem meta, não com 10', tpl.indexOf("fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta'") > -1 && tpl.indexOf('fechadosNoMes: 0, metaMensal: 10,') < 0);
+  }
+  /* G9 (auditoria 02/11/26): o "sem próx. passo" do Meu funil do executivo é a regra canônica —
+     Ag. Pagamento fora e o mesmo restaurante em duas etapas conta uma vez (no mais avançado);
+     "ganho + onboarding" conta as etapas laterais, não os itens de venda (dava 0 sempre) */
+  {
+    const i0 = tpl.indexOf('const FN2_AG_PAGAMENTO');
+    const i1 = tpl.indexOf('/* ── OS TRÊS MOVIMENTOS', i0);
+    const fonte = i0 > 0 && i1 > i0 ? tpl.slice(i0, i1) : '';
+    let fn = null;
+    try {
+      fn = new Function('GV2', 'FN2_ETAPA_PERDIDO', 'FN2_ETAPAS_ABERTAS', fonte + '\nreturn fn2SemPasso;')(GV2, '1396006164',
+        ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'].map(id => ({ id })));
+    } catch (e) { fn = null; }
+    const it = (id, stageId, nome, passo, dias) => ({ lead: { id, name: nome, ownerId: '1' }, stageId, dias: dias || 1, est: { passo } });
+    const lista = [
+      it('1', '1395880469', 'Bar do Zé', false), it('2', '1395880471', 'Restaurante Bar do Zé', false), /* repetido: fica o de Demo */
+      it('3', '1395880473', 'Casa Paga', false), /* Ag. Pagamento: fora */
+      it('4', '1396005401', 'Cantina', true), it('5', '1395880469', 'Pizzaria Nova', false)
+    ];
+    const sp = fn ? fn(lista).map(x => x.lead.id).sort().join() : 'sem função';
+    checar('auditoria 02/11 · G9: Meu funil · sem próx. passo tira Ag. Pagamento e conta o repetido uma vez (no mais avançado)', sp === '2,5', sp);
+    checar('auditoria 02/11 · G9: Meu funil · "ganho + onboarding" conta as etapas laterais e o Playbook usa a mesma regra',
+      /const nGanho = colGanho \? laterais\.filter/.test(tpl) && /laterais\.filter\(function \(x\) \{ return String\(x\.stageId\) === String\(FN3_ETAPA_ONBOARDING\)/.test(tpl) && tpl.indexOf('const sem = new Set(typeof fn2SemPasso === \'function\'') > 0);
   }
   /* G2 (auditoria 02/11/26): no feriado o plano do dia é o REAL (o "fds ? 0" zerava e a Hoje
      discordava da Rua); quem tem plano e não saiu não vira exceção nem "nenhuma visita" */
