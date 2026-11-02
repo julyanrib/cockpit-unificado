@@ -16601,6 +16601,26 @@ function aoVivoLigar() {
   } catch (e) {
     console.log('[ao vivo] não consegui escutar:', e && e.message);
   }
+  aoVivoRecuperar();
+}
+
+/* O QUE ACONTECEU ANTES DE A ABA ABRIR (auditoria 02/11/26: "registrei o passo e diz que estou sem"):
+   o canal só entrega o que chega com a aba aberta. Quem abria o Cockpit depois via o dado da carga,
+   que é do robô (até 2 h; da sexta, na segunda). Ao ligar, lê os sinais de negócio, tarefa e pino
+   gravados DEPOIS da carga e passa cada um pelo mesmo caminho do sinal ao vivo (relê só aqueles
+   negócios). Falhou a leitura: fica o dado da carga, como antes. */
+async function aoVivoRecuperar() {
+  try {
+    const f = await supa.from('snapshot_farol').select('atualizado_em').eq('chave', 'hubspot').maybeSingle();
+    const desde = f && f.data && f.data.atualizado_em;
+    if (!desde) return;
+    const r = await supa.from('sinais_ao_vivo').select('tipo, deal_id, owner_id, actor_id')
+      .gt('criado_em', desde).in('tipo', ['negocio', 'tarefa', 'pino', 'pino-novo']).not('deal_id', 'is', null)
+      .order('criado_em', { ascending: false }).limit(300);
+    ((r && r.data) || []).forEach(function (s) { aoVivoRecebeu(s); });
+  } catch (e) {
+    console.log('[ao vivo] não consegui recuperar os sinais desde a carga:', e && e.message);
+  }
 }
 
 function aoVivoMeInteressa(s) {
