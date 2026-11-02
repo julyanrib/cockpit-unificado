@@ -213,7 +213,7 @@ global.supa = {
   const emoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{2705}\u{2714}\u{2716}]/u;
   const v3 = codigo.slice(codigo.indexOf('TERRITÓRIO v3 (02/11/26'), codigo.indexOf('/* ══ A VOZ DA RUA vai para Pessoas'));
   checar('zero emoji na tela e no código da v3', !emoji.test(html) && !emoji.test(v3), (html.match(emoji) || v3.match(emoji) || [''])[0]);
-  checar('sem jargão técnico na tela (tabela, função, servidor por nome)', !/territorio_|sugerir_no_plano|leads_prospeccao|planos_semanais|snapshot|Supabase|0247|pipeline|rpc/i.test(texto), (texto.match(/territorio_|sugerir_no_plano|leads_prospeccao|planos_semanais|snapshot|Supabase|0247|pipeline|rpc/i) || [''])[0]);
+  checar('sem jargão técnico na tela (tabela, função, servidor por nome)', !/territorio_|sugerir_no_plano|leads_prospeccao|planos_semanais|snapshot|Supabase|0248|pipeline|rpc/i.test(texto), (texto.match(/territorio_|sugerir_no_plano|leads_prospeccao|planos_semanais|snapshot|Supabase|0248|pipeline|rpc/i) || [''])[0]);
   const iCss = tpl.indexOf('/* ══ TERRITÓRIO v3 (02/11/26, design_handoff_territorio_v3) ══ só tokens');
   const css = tpl.slice(iCss, tpl.indexOf('.gv2-t3-gr{grid-template-columns:repeat(5,minmax(96px,1fr))', iCss) + 80);
   const alvo = (sel) => { const m = css.match(new RegExp('\\' + sel + '\\{[^}]*\\}')); return m && /(min-height|height):(4[0-9]|[5-9][0-9])px/.test(m[0]); };

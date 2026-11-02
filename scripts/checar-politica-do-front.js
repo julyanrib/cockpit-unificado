@@ -49,13 +49,13 @@ const SO_DO_SERVIDOR = ['cockpit_snapshot', 'novidades_mercado', 'restaurantes_o
 const DIVIDA_CONHECIDA = [];
 
 /* TABELA NOVA QUE AINDA ESPERA A MIGRAÇÃO DO APP (02/11/26). O Território v3 lê duas tabelas que a
-   0247 do PWA-app-outbound cria (escrita, não aplicada). Enquanto ela não entra, a tabela não existe e
+   0248 do PWA-app-outbound cria (escrita, não aplicada). Enquanto ela não entra, a tabela não existe e
    a tela trata o erro "não existe" como "sem a atualização do servidor": mostra os números e avisa.
-   Os comandos aqui são os que a 0247 autoriza. Quando a 0247 for aplicada e o POLITICAS.txt regerado,
+   Os comandos aqui são os que a 0248 autoriza. Quando a 0248 for aplicada e o POLITICAS.txt regerado,
    a tabela aparece lá e esta guarda reprova até o item sair desta lista. */
 const AGUARDANDO_MIGRACAO = {
-  territorio_sugestoes: { migracao: '0247_territorio_v3', ops: ['select'] },
-  territorio_carga: { migracao: '0247_territorio_v3', ops: ['select'] }
+  territorio_sugestoes: { migracao: '0248_territorio_v3', ops: ['select'] },
+  territorio_carga: { migracao: '0248_territorio_v3', ops: ['select'] }
 };
 
 function lerPoliticas() {
