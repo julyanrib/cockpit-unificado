@@ -377,6 +377,9 @@ tabelas.gv2_falta_etapa = [
     checar('auditoria 02/11 · G7: meta 0 → "sem meta" na Pessoas (nunca "de 0"), v7Meta sem a meta 8 inventada, MRR sem a reserva 1500/3000',
       /sem meta/.test(pesSem) && !/[0-9] de 0([^0-9,]|$)/.test(pesSem) && m7.vendas === null && m7.demos === null && mrr0.meta === null && GV2.deMeta(3, 0) === '3 · sem meta' && GV2.deMeta(3, 8) === '3 de 8',
       JSON.stringify({ m7: m7, mrr: mrr0 }));
+    /* G8: a proposta vencida volta em dias ÚTEIS (régua 7, 9 dias úteis → 2 dias úteis antes de ter 06/10 = sex 02/10, não dom 04/10) */
+    const pB = b.propostas.lista.find(x => x.deal === 'b');
+    checar('auditoria 02/11 · G8: o "vale até" da vencida conta para trás em dias úteis (sex 02/10, não dom 04/10)', pB && pB.valeAteRot === '02/10', JSON.stringify(pB && { st: pB.status, ate: pB.valeAteRot }));
     checar('auditoria 02/11 · G7: o rodapé da Semana não fixa mais "pleno 8 · rampa 4"', tpl.indexOf('pleno 8 · rampa 4') < 0);
   }
   checar('cada aba desenha sem erro', ['time', 'raiox', 'rua', 'pessoas', 'propostas', 'playbook', 'prova'].every(a => {
