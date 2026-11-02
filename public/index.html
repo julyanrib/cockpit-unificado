@@ -70374,10 +70374,11 @@ GV2.pv2Taxa = function (n, d) { return d >= 3 ? Math.round(n / d * 100) : null; 
 GV2.pv2Caiu = function (p) {
   const b = GV2.base, F = p.funil_mes || {}, T = b.time.funil || [];
   const cands = [];
-  const w = p.w || [];
+
+  const w = (p.w || []).slice(0, -1);
   if (w.length >= 2) {
     const a = w[0], z = w[w.length - 1], meta = p.meta_visitas_dia || GV2.V8_VISITAS_DIA || 6;
-    if (z < a - 0.5) cands.push({ k: 'ritmo', g: (a - z) / Math.max(a, 1), t: 'Ritmo: ' + GV2.virg(a) + ' → ' + GV2.virg(z) + ' visitas com prova por dia em ' + w.length + ' semanas (meta ' + meta + ')' });
+    if (z < a - 0.5) cands.push({ k: 'ritmo', g: (a - z) / Math.max(a, 1), t: 'Ritmo: ' + GV2.virg(a) + ' → ' + GV2.virg(z) + ' visitas com prova por dia nas ' + w.length + ' últimas semanas fechadas (meta ' + meta + ')' });
   }
 
   const passo = function (kDe, kAte, iDe, iAte, rot) {
@@ -70602,7 +70603,7 @@ GV2.pv2MapaHTML = function (chave, M, cor, legenda) {
 GV2.pv2MapaTime = function () {
   GV2.pv2VisLer();
   const R = GV2.pv2;
-  const cab = '<div class="pv2-k-cab"><span class="pv2-kick is-acao">' + GV2.e('MAPA DE CALOR · ' + (GV2.estado.pv2TPes && GV2.base.porId[GV2.estado.pv2TPes] ? 'onde o ' + GV2.prim(GV2.base.porId[GV2.estado.pv2TPes].nome) + ' vai · 4 semanas' : 'onde o time vai · 4 semanas · visitas com prova').toUpperCase()) + '</span><span class="pv2-dim">client_visits · GPS ou foto</span></div>';
+  const cab = '<div class="pv2-k-cab"><span class="pv2-kick is-acao">' + GV2.e('MAPA DE CALOR · ' + (GV2.estado.pv2TPes && GV2.base.porId[GV2.estado.pv2TPes] ? 'onde o ' + GV2.prim(GV2.base.porId[GV2.estado.pv2TPes].nome) + ' vai · 4 semanas' : 'onde o time vai · 4 semanas · visitas com prova').toUpperCase()) + '</span><span class="pv2-dim">só visita com prova · GPS ou foto</span></div>';
   if (!R.vis) return '<section class="card pv2-tmapa">' + cab + '<div class="gv2-esq" style="height:320px"></div></section>';
   const sel = GV2.estado.pv2TPes ? GV2.base.porId[GV2.estado.pv2TPes] : null;
   const ps = GV2.pv2Time();
@@ -70714,6 +70715,14 @@ GV2.pv2Mapa = {
 
     mapa.addListener('idle', function () { if (g.el && document.body.contains(g.el)) GV2.pv2Mapa.desenhar(g.el); });
     mapa.addListener('bounds_changed', function () { const cv = g.el && g.el.querySelector('canvas.pv2-calor'); if (cv) cv.style.opacity = '.35'; });
+
+    const remedir = function () {
+      if (!g.el || !document.body.contains(g.el)) return;
+      maps.event.trigger(mapa, 'resize');
+      GV2.pv2Mapa.enquadrar(g.el); GV2.pv2Mapa.desenhar(g.el);
+    };
+    if (typeof ResizeObserver === 'function') { let ult = ''; new ResizeObserver(function (en) { const r = en[0] && en[0].contentRect; const ch = r ? Math.round(r.width) + 'x' + Math.round(r.height) : ''; if (ch && ch !== ult) { ult = ch; remedir(); } }).observe(div); }
+    [350, 900].forEach(function (ms) { setTimeout(remedir, ms); });
   },
   enquadrar: function (el) {
     const g = el._pv2, M = g && GV2.pv2.mapas[g.k];
@@ -70981,7 +70990,7 @@ GV2.pv2Agora = function (p) {
   }
   const j = d.estado === 'ok' ? d.jornada : null;
   const onde = GV2.pv2Lin({ t: 'Onde está: ' + (p.hoje.status === 'sem' ? 'sem check-in hoje' : (st.rot || '—')), s: (p.hoje.ultima_atividade || '') + (j ? ' · jornada ' + GV2.hhmm(j.ini) + (j.n > 1 ? ' – ' + GV2.hhmm(j.fim) : '') + ' · ' + GV2.pl(j.n, 'check-in', 'check-ins') : ''), dot: 'rota' });
-  return GV2.pv2Blo('agora', 'AGORA', 'rota', 'client_visits', onde + ls + GV2.pv2Bts([['Ver na Rua', 'v4:verrua:' + p.id, false], ['Ver o dia', 'v5dia:' + p.id + ':' + b.agora.iso, false]]));
+  return GV2.pv2Blo('agora', 'AGORA', 'rota', 'check-ins de hoje', onde + ls + GV2.pv2Bts([['Ver na Rua', 'v4:verrua:' + p.id, false], ['Ver o dia', 'v5dia:' + p.id + ':' + b.agora.iso, false]]));
 };
 GV2.pv2MapaP = function (p) {
   GV2.pv2VisLer();
@@ -71003,7 +71012,7 @@ GV2.pv2MapaP = function (p) {
   ]);
   const top = MV.lista.slice(0, 4), mx = Math.max(1, top.length ? top[0].n : 1);
   const lin = top.map(function (z) { return GV2.pv2Lin({ t: z.b, s: GV2.pl(z.n, 'visita com prova', 'visitas com prova') + ' · converte ' + (z.conv == null ? '—' : z.conv + '%'), dot: 'acao', bar: { w: z.n / mx * 100, tom: 'acao' } }); }).join('');
-  return GV2.pv2Blo('mapa', 'MAPA DE CALOR · ONDE ELE VAI · 4 SEMANAS', 'acao', 'client_visits · GPS ou foto', lentes
+  return GV2.pv2Blo('mapa', 'MAPA DE CALOR · ONDE ELE VAI · 4 SEMANAS', 'acao', 'só visita com prova · GPS ou foto', lentes
     + GV2.pv2MapaHTML('p:' + p.id + ':' + lente, M, lente === 'conv' ? 'ok' : lente === 'carteira' ? 'rota' : 'acao', 'carteira sem visita') + horas + cards + lin
     + GV2.pv2Nota(GV2.pv2Leitura(p, MV, Hr)) + GV2.pv2Bts([['Abrir no mapa da Rua', 'mapa:' + p.id, false]]));
 };
