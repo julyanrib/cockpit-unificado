@@ -92225,7 +92225,7 @@ GV2.render.pessoas = function () {
     + (semLer ? '<span class="gv2-v6-sel">' + semLer + ' sem ler</span>' : '') + '</button></div>';
   const sel = b.porId[GV2.estado.pessoa] || ps[0];
   return GV2.cabHTML('Pessoas', sub, direita)
-    + '<div class="gv2-corpo gv2-v5 gv2-v5-pes pv2">' + GV2.pv2Contadores() + GV2.pv2Placa() + GV2.pv2MapaTime()
+    + '<div class="gv2-corpo gv2-v5 gv2-v5-pes pv2">' + GV2.pv2Seguro(GV2.pv2Contadores, null, 'Minha semana de líder') + GV2.pv2Seguro(GV2.pv2Placa, null, 'O time') + GV2.pv2Seguro(GV2.pv2MapaTime, null, 'Mapa de calor')
     + (GV2.render.cbTime ? GV2.render.cbTime() : '') + (GV2.render.hbTime ? GV2.render.hbTime() : '') + (GV2.render.ldTime ? GV2.render.ldTime() : '') + (GV2.render.cfTime ? GV2.render.cfTime() : '') + GV2.faltaHTML() + '</div>'
     + (GV2.estado.pv2Pan && b.porId[GV2.estado.pv2Pan] && GV2.render.pv2Painel ? GV2.render.pv2Painel(b.porId[GV2.estado.pv2Pan]) : '')
     + (GV2.estado.pv2Ver && GV2.render.pv2Ver ? GV2.render.pv2Ver() : '')
@@ -92690,6 +92690,13 @@ GV2.pv2Campo = function (p) {
     + GV2.pv2Bts([['Marcar ida', 'pv2:modo:' + p.id + ':ida', true], ['Rotação', 'p3:rotacao', false], ['Campo completo', 'v5gav:campo:' + p.id, false]]));
 };
 
+/* um bloco que estoura vira o aviso dele, e o resto do painel continua (avisar, não travar) */
+GV2.pv2Seguro = function (fn, p, nome) {
+  try { return fn(p); } catch (e) {
+    console.error('[pessoas v2] bloco ' + nome, e);
+    return '<section class="pv2-blo"><div class="pv2-blo-cab"><span class="pv2-kick">' + GV2.e(nome.toUpperCase()) + '</span></div>' + GV2.html.estado('erro', 'Não consegui montar este bloco agora (' + ((e && e.message) || 'erro') + '). O resto da página continua.') + '</section>';
+  }
+};
 GV2.render.pv2Painel = function (p) {
   const q = GV2.pv2Dev(p), abriu = q ? Number((q.aberturas || {}).semana) > 0 : null, x = GV2.pv2Rampa(p);
   const sub = (x ? 'novato · ' + GV2.pv2Trilha(x) : 'pleno · ' + p.praca) + ' · ' + (p.ultimo1a1 ? 'último 1:1 ' + GV2.ddmm(String(p.ultimo1a1.data).slice(0, 10)) : 'nenhum 1:1 registrado') + ' · abriu o app esta semana: ' + (abriu == null ? '…' : abriu ? 'sim' : 'não');
@@ -92703,8 +92710,9 @@ GV2.render.pv2Painel = function (p) {
     + '<header class="pv2-pan-cab">' + GV2.html.av(p, 'is-g') + '<div><b>' + GV2.e(p.nome) + '</b><span>' + GV2.e(sub) + '</span></div><button type="button" class="pv2-x" data-gv2="pv2:fechar" aria-label="Fechar">' + GV2.pv2Ic.fechar + '</button></header>'
     + GV2.pv2Resumo(p)
     + '<nav class="pv2-anc">' + anc.map(function (a, i) { return '<button type="button" class="' + (i === 0 ? 'is-on' : '') + '" data-gv2="pv2:anc:' + a[0] + '">' + GV2.e(a[1]) + '</button>'; }).join('') + '</nav>'
-    + '<div class="pv2-pan-corpo" data-pv2-id="' + GV2.e(p.id) + '"><div class="pv2-pan-g">' + GV2.pv2Esq(p)
-    + '<div class="pv2-col">' + GV2.pv2Agora(p) + GV2.pv2MapaP(p) + GV2.pv2Ritmo(p) + GV2.pv2Disc(p) + GV2.pv2Funil(p) + GV2.pv2Desenv(p) + GV2.pv2Campo(p) + '</div></div>'
+    + '<div class="pv2-pan-corpo" data-pv2-id="' + GV2.e(p.id) + '"><div class="pv2-pan-g">' + GV2.pv2Seguro(GV2.pv2Esq, p, '1:1')
+    + '<div class="pv2-col">' + [[GV2.pv2Agora, 'Agora'], [GV2.pv2MapaP, 'Mapa'], [GV2.pv2Ritmo, 'Ritmo'], [GV2.pv2Disc, 'Disciplina'], [GV2.pv2Funil, 'Funil'], [GV2.pv2Desenv, 'Desenvolvimento'], [GV2.pv2Campo, 'Campo']]
+      .map(function (x) { return GV2.pv2Seguro(x[0], p, x[1]); }).join('') + '</div></div>'
     + '<div class="pv2-mais" id="pv2b-mais">' + (GV2.render.v6Rua7 ? GV2.render.v6Rua7(p) : '') + (GV2.render.cbPessoa ? GV2.render.cbPessoa(p) : '') + (GV2.render.hbPessoa ? GV2.render.hbPessoa(p) : '') + (GV2.render.ldPessoa ? GV2.render.ldPessoa(p) : '')
     + '<details class="pv2-antes"><summary>A página de antes, inteira · Agora e semana, Rua, Coaching, Evolução, PDI e a voz da rua</summary>' + antes + '</details></div></div>'
     + '<footer class="pv2-pe"><span class="pv2-dim">a página inteira de hoje continua aqui: Agora · Ritmo · Disciplina · Funil · 1:1 · Campo · os mesmos dados</span>'
