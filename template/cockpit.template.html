@@ -93035,6 +93035,194 @@ PLV3.render = function (box, rep) {
   PLV3.pintar();
   PLV3.ligar(box);
 };
+/* ══ HOJE v3 · O DIA QUE O EXECUTIVO USA DE VERDADE (01/11/26, design_handoff_hoje_v3) ═════════════
+   "Vamos refazer a aba Hoje? Será que estão usando de verdade? Preciso que eles usem isso." Em 30 dias:
+   548 check-ins, 1 fecho do dia e 2,6% das paradas vindas do Cockpit. O executivo vive no mapa do app;
+   o dia vai até ele lá (folha da manhã, pílula e toasts no mapa, fecho das 18h) e o Hoje do Cockpit vira
+   ESPELHO, com 3 blocos: o plano de hoje · Sem próximo passo N → 0 · o placar do dia.
+
+   AS CONTAS SÃO PURAS E MORAM AQUI EM CIMA (Hoje v3, 01/11/26), separadas da tela, porque a regra 1 do
+   handoff é "uma função por número, usada no app e no Cockpit". Os dois repositórios não importam um do
+   outro: o HJ3.diaDoExecutivo daqui e o diaDoExecutivo de supabase/functions/_compartilhado/hojeV3.ts no
+   app montam o MESMO dia a partir da MESMA fixture (scripts/fixtures/hoje-v3/), e as duas suítes comparam
+   com a MESMA saída esperada (scripts/testar-hoje-v3.js aqui, src/utils/hojeV3.teste.ts lá). O "sem
+   próximo passo" é o GV2.semProximoPasso (o do Planejamento v3 e do Raio X) e a sugestão "Pôr em …" é o
+   PLV3.sugestoes: o app tem a porta dos dois e a suíte prova que dão o mesmo. */
+const HJ3 = GV2.HJ3 = {};
+HJ3.DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+HJ3.dia = function (iso) { return String(iso || '').slice(0, 10); };
+HJ3.dow = function (iso) { return new Date(HJ3.dia(iso) + 'T12:00:00Z').getUTCDay(); };
+HJ3.ddmm = function (iso) { const d = HJ3.dia(iso); return d.slice(8, 10) + '/' + d.slice(5, 7); };
+HJ3.diaCurto = function (iso) { return HJ3.DIAS[HJ3.dow(iso)] + ' ' + HJ3.ddmm(iso); };
+HJ3.somaDias = function (iso, n) { const d = new Date(HJ3.dia(iso) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+HJ3.pl = function (n, um, varios) { return n + ' ' + (n === 1 ? um : varios); };
+HJ3.util = function (iso, feriados) { const w = HJ3.dow(iso); return w > 0 && w < 6 && (feriados || []).indexOf(iso) < 0; };
+HJ3.juntar = function (xs) { return xs.filter(Boolean).join(' · '); };
+
+/* ── os chips de dia: amanhã · sex 13 · seg 16 (os próximos 3 dias úteis; com hoje, para as pendências de ontem) ── */
+HJ3.chipsDeDia = function (hoje, feriados, comHoje) {
+  const out = [];
+  if (comHoje) out.push({ rot: 'hoje', iso: hoje });
+  let d = hoje;
+  for (let k = 0; k < 30 && out.length < 3; k++) {
+    d = HJ3.somaDias(d, 1);
+    if (!HJ3.util(d, feriados)) continue;
+    out.push({ rot: !comHoje && d === HJ3.somaDias(hoje, 1) ? 'amanhã' : HJ3.DIAS[HJ3.dow(d)] + ' ' + Number(d.slice(8, 10)), iso: d });
+  }
+  return out;
+};
+
+/* ── o dia do executivo: a pílula, a próxima porta, a folha da manhã, o fecho, os pushes e os 3 blocos daqui ── */
+HJ3.metrosTexto = function (m) { return m < 1000 ? Math.round(m / 10) * 10 + ' m' : (Math.round(m / 100) / 10).toFixed(1).replace('.', ',') + ' km'; };
+HJ3.contar = function (paradas) {
+  const p = paradas || [];
+  const n = function (e) { return p.filter(function (x) { return x.estado === e; }).length; };
+  const comProva = n('com_prova'), semProva = n('sem_prova');
+  return { total: p.length, comProva: comProva, semProva: semProva, pendentes: n('pendente'), naoVisitadas: n('nao_visitada'), portas: comProva + semProva,
+    proxima: p.findIndex(function (x) { return x.estado === 'pendente'; }) };
+};
+/* "Faltam N" = os pontos de quem está logo acima − os seus + 1, do placar da semana (a conta da semana do Desenvolvimento v2) */
+HJ3.faltam = function (placar) {
+  if (!placar) return { n: null, curto: null, longo: null };
+  if (placar.pos === 1) return { n: 0, curto: 'você lidera a semana', longo: 'Você lidera a semana.' };
+  if (!placar.acima || placar.pos == null) return { n: null, curto: null, longo: placar.pts ? null : 'O 1º check-in com prova põe você no placar.' };
+  const n = placar.acima.pts - placar.pts + 1;
+  const prim = String(placar.acima.nome || '').trim().split(/\s+/)[0] || 'o de cima';
+  return { n: n, curto: 'faltam ' + n + ' para passar o ' + (placar.pos - 1) + 'º', longo: 'Faltam ' + n + ' pts para passar ' + prim + '.' };
+};
+HJ3.seqTexto = function (s) { return s == null ? null : 'sequência ' + HJ3.pl(s, 'dia', 'dias'); };
+HJ3.missaoTexto = function (m) { return !m ? null : m.cumprida ? 'missão cumprida' : 'missão ' + m.n + ' de ' + m.alvo; };
+HJ3.diaDoExecutivo = function (e) {
+  const pl = HJ3.pl, juntar = HJ3.juntar;
+  const c = HJ3.contar(e.paradas);
+  const plano = e.paradas;
+  const prox = c.proxima >= 0 && plano ? plano[c.proxima] : null;
+  const f = HJ3.faltam(e.placar);
+  const expediente = !!e.util;
+  const feriado = expediente ? null : {
+    titulo: 'Sem expediente hoje',
+    texto: (e.feriado ? 'Feriado · ' + e.feriado + '.' : 'Fim de semana.') + ' Sem folha da manhã, sem push e sem cobrança. A sequência não apaga.'
+  };
+  let pilula;
+  if (!expediente) pilula = { n: '—', tom: 'mute', l1: (e.feriado ? 'Feriado' : 'Fim de semana') + ' · sem expediente', l2: 'nada é cobrado hoje · a sequência não apaga' };
+  else if (!c.portas) pilula = { n: '0', tom: 'mute', l1: juntar(['0 de ' + e.meta + ' com prova', plano == null ? 'plano —' : pl(c.total, 'parada', 'paradas') + ' hoje']), l2: juntar([HJ3.seqTexto(e.sequencia), HJ3.missaoTexto(e.missao)]) || 'o 1º check-in com prova abre o placar' };
+  else pilula = { n: String(c.comProva), tom: c.comProva >= e.meta ? 'ok' : 'acao', l1: juntar([c.comProva + ' de ' + e.meta + ' com prova', c.semProva ? c.semProva + ' sem prova' : null, e.placar ? e.placar.pts + ' pts na semana' : null]), l2: juntar([f.curto, HJ3.seqTexto(e.sequencia)]) || 'cada visita com prova soma 3 pts' };
+  const porta = !expediente || !prox ? null : {
+    kicker: 'PRÓXIMA PORTA · ' + (c.proxima + 1) + ' DE ' + c.total,
+    nome: prox.nome,
+    sub: juntar([prox.etapa, prox.hora ? '≈ ' + prox.hora : null, prox.metros != null ? HJ3.metrosTexto(prox.metros) : null]),
+    vence: prox.venceHoje ? 'passo vence hoje · ' + prox.venceHoje : null
+  };
+  const linhaPlano = plano == null
+    ? { titulo: 'O plano de hoje não respondeu', sub: 'abra a Agenda para ver as paradas', montar: null }
+    : !c.total
+      ? { titulo: 'Nada no plano de hoje', sub: e.propostas ? 'monte o dia com ' + pl(e.propostas, 'sugestão', 'sugestões') + (e.bairro ? ' perto de ' + e.bairro : '') : 'abra a Agenda para montar o dia', montar: e.propostas ? 'Montar o dia · ' + pl(e.propostas, 'sugestão', 'sugestões') : null }
+      : { titulo: 'Plano de hoje: ' + pl(c.total, 'parada', 'paradas'), sub: juntar([plano[0].hora ? '1ª às ' + plano[0].hora + (e.bairro ? ' em ' + e.bairro : '') : e.bairro, plano[0].nome]), montar: null };
+  const venc = e.vencemHoje || [];
+  const nv = venc.length;
+  const linhaVencem = !nv ? null : {
+    titulo: nv === 1 ? '1 passo vence hoje' : nv + ' passos vencem hoje',
+    sub: juntar(venc.slice(0, 2).map(function (v) { return v.acao + ' ' + v.nome + (v.hora ? ' às ' + v.hora : ''); }).concat(nv > 2 ? ['+' + (nv - 2)] : []))
+  };
+  const linhaSem = e.semPasso == null
+    ? { titulo: '— sem próximo passo', sub: 'a fila não respondeu · abra as Tarefas', linhas: [], mais: null }
+    : !e.semPasso ? null : {
+      titulo: e.semPasso + ' sem próximo passo',
+      sub: 'dar data agora · 1 toque cada · comece pelos quentes',
+      linhas: (e.topSemPasso || []).slice(0, 3).map(function (l) {
+        return { id: l.id, nome: l.nome, etapaIdx: l.etapaIdx, quente: l.quente, venc: l.venc, feito: l.feito,
+          sugT: l.sugestao ? 'Pôr em ' + l.sugestao.dia : null,
+          sugS: l.sugestao ? 'sugerido · ' + (l.sugestao.mesmo ? 'mesmo bairro do dia' : 'dia com vaga mais cedo') : null };
+      }),
+      mais: e.semPasso > 3 ? '+ ' + (e.semPasso - 3) + ' no Planejamento e no Hoje do Cockpit · o mesmo número' : null
+    };
+  const ontemN = e.ontem ? e.ontem.pendentes.length : 0;
+  const ontem = !e.ontem || !ontemN ? null : {
+    titulo: 'Ontem (' + HJ3.diaCurto(e.ontem.dia) + ') ficou sem fechar: ' + ontemN + ' sem próximo passo',
+    linhas: e.ontem.pendentes.map(function (p) { return { id: p.id, nome: p.nome, sub: 'visitado ontem' }; })
+  };
+  const emOrdem = expediente && plano != null && c.total > 0 && !nv && e.semPasso === 0 && !ontem;
+  const folha = {
+    mostra: expediente, kicker: 'SEU DIA EM 30 SEGUNDOS', titulo: e.nome ? 'Bom dia, ' + e.nome + '.' : 'Bom dia.',
+    plano: linhaPlano, vencem: linhaVencem, sem: linhaSem, ontem: ontem,
+    emOrdem: emOrdem, emOrdemTexto: 'Dia em ordem · vá para a rua', ir: 'Ir para a rua', depois: 'depois'
+  };
+  const nP = (e.pendentesFecho || []).length;
+  const portas = pl(c.portas, 'porta', 'portas');
+  const fecho = {
+    kicker: 'FECHO DO DIA · ' + HJ3.diaCurto(e.hoje).toUpperCase(),
+    titulo: nP ? portas + ' · ' + nP + ' sem próximo passo' : portas + ' · todas com próximo passo',
+    sub: nP ? 'Marque o passo de cada uma (1 toque) e feche o dia.' : 'Pronto para fechar.',
+    botao: nP ? 'fechar mesmo assim' : 'Fechar o dia',
+    botaoTom: nP ? 'contorno' : 'acao',
+    naoVisitada: 'não visitada · volta para a fila do Planejamento'
+  };
+  const checkout = {
+    titulo: 'Dia fechado',
+    texto: nP ? portas + ' · ' + nP + (nP > 1 ? ' ficaram sem passo e voltam' : ' ficou sem passo e volta') + ' amanhã às 8h' : juntar([portas, 'todas com próximo passo', HJ3.seqTexto(e.sequencia)]),
+    chips: [e.placar ? e.placar.pts + ' pts na semana' : null, HJ3.seqTexto(e.sequencia), HJ3.missaoTexto(e.missao)].filter(Boolean),
+    rodape: 'Conta para a missão e as medalhas do Meu desempenho',
+    botao: 'ver no Meu desempenho'
+  };
+  const semTxt = e.semPasso == null ? null : pl(e.semPasso, 'lead sem passo', 'leads sem passo');
+  const push08 = !expediente ? null : c.total
+    ? { titulo: juntar([pl(c.total, 'parada', 'paradas') + ' hoje', semTxt]), texto: juntar([plano && plano[0].hora ? '1ª às ' + plano[0].hora + (e.bairro ? ' em ' + e.bairro : '') : null, 'toque para ver o seu dia em 30 segundos']) }
+    : { titulo: juntar(['Nada no plano de hoje', semTxt]), texto: e.propostas ? 'monte o dia com ' + pl(e.propostas, 'sugestão', 'sugestões') + ' em 1 toque' : 'toque para ver o seu dia em 30 segundos' };
+  const push18 = !expediente || !c.portas ? null : nP
+    ? { titulo: 'Feche o dia: ' + portas + ' · ' + nP + ' sem próximo passo', texto: 'leva 1 minuto · conta para a sequência' }
+    : { titulo: 'Feche o dia: ' + portas + ' · todas com próximo passo', texto: juntar(['1 toque', HJ3.seqTexto(e.sequencia)]) };
+  const ckPlano = {
+    kicker: 'PLANO DE HOJE',
+    contagem: c.comProva + ' de ' + e.meta + ' com prova',
+    titulo: plano == null ? 'O plano não respondeu' : prox ? 'Próxima porta: ' + prox.nome + (prox.hora ? ' · ≈ ' + prox.hora : '') : c.total ? 'Dia feito · ' + c.comProva + ' com prova' : 'Nada no plano de hoje',
+    sub: juntar([HJ3.diaCurto(e.hoje), e.bairro, plano == null ? 'plano —' : pl(c.total, 'parada', 'paradas')]),
+    linhas: (plano || []).map(function (p, i) {
+      return {
+        marca: p.estado === 'com_prova' ? 'ok' : p.estado === 'sem_prova' ? 'av' : p.estado === 'nao_visitada' ? 'x' : String(i + 1),
+        hora: p.hora, nome: p.nome,
+        s: p.estado === 'com_prova' ? 'com prova · check-in' : p.estado === 'sem_prova' ? 'sem prova · fora do raio' : p.estado === 'nao_visitada' ? 'não visitada' : juntar([p.etapa, p.venceHoje ? 'passo vence hoje' : null]),
+        tom: p.estado === 'com_prova' ? 'ok' : p.estado === 'sem_prova' || (p.estado === 'pendente' && p.venceHoje) ? 'av' : 'dim',
+        proxima: i === c.proxima
+      };
+    }),
+    vencem: linhaVencem ? { titulo: linhaVencem.titulo, linhas: venc.map(function (v) { return v.nome + ' · ' + v.acao + (v.hora ? ' às ' + v.hora : ''); }) } : null,
+    rodape: 'abrir no app · a ordem e o horário são de lá'
+  };
+  const ckSem = {
+    kicker: 'SEM PRÓXIMO PASSO',
+    sub: 'o mesmo componente do Planejamento · o mesmo número do app',
+    n: e.semPasso == null ? '—' : String(e.semPasso),
+    zero: e.semPasso === 0,
+    zeroTitulo: 'Todo lead com próximo passo.',
+    zeroTexto: 'conta para a sequência Fila zerada e para a missão da semana',
+    mais: e.semPasso != null && e.semPasso > 5 ? '+ ' + (e.semPasso - 5) + ' na lista · a mesma do Planejamento e da folha da manhã do app' : null
+  };
+  const ckPlacar = {
+    kicker: 'PLACAR DO DIA',
+    pts: e.placar ? String(e.placar.pts) : '—',
+    unidade: 'pts na semana',
+    prox: !e.placar ? 'o placar não respondeu (desenvolvimento_quadro)' : f.longo || 'Cada visita com prova soma 3 pts.',
+    linhas: [
+      { v: e.sequencia == null ? 'Na rua —' : 'Na rua há ' + pl(e.sequencia, 'dia', 'dias'), t: 'sequência · feriado não apaga' },
+      { v: !e.missao ? 'Missão —' : e.missao.cumprida ? 'Missão cumprida' : 'Missão ' + e.missao.n + ' de ' + e.missao.alvo, t: 'a missão da semana do Meu desempenho' },
+      { v: 'Fechou o dia ontem: ' + (e.fechouOntem == null ? '—' : e.fechouOntem ? 'sim' : 'não'), t: 'o fecho conta para a sequência e a missão' }
+    ],
+    rodape: 'ponto só nasce de prova · os 5 números do gestor estão na Desenvolvimento'
+  };
+  return { expediente: expediente, feriado: feriado, contagem: c, pilula: pilula, porta: porta, folha: folha, fecho: fecho, checkout: checkout,
+    push08: push08, push18: push18, cockpit: { plano: ckPlano, sem: ckSem, placar: ckPlacar } };
+};
+/* os toasts pós-visita (o app os mostra; moram aqui para a paridade dos textos) */
+HJ3.toastCheguei = function (o) {
+  if (!o.comProva) return { titulo: 'Check-in sem prova · fora do raio', texto: 'não conta ponto · tire uma foto da fachada para provar', tom: 'av' };
+  return { titulo: HJ3.juntar([o.pontos ? '+' + o.pontos + ' pts' : 'Check-in com prova', HJ3.seqTexto(o.sequencia)]),
+    texto: HJ3.juntar(['check-in com prova', o.metros != null ? 'GPS a ' + Math.round(o.metros) + ' m' : null, 'agora a ficha']), tom: 'ok' };
+};
+HJ3.toastFicha = function (o) {
+  if (o.dia) return { titulo: 'Passo em ' + o.dia + ' · salvo no HubSpot', texto: o.nome + ' · aparece na Agenda do app e no Cockpit', tom: 'ok', chips: false };
+  return { titulo: o.nome + ' ficou sem próximo passo', texto: 'marcar agora · 1 toque · vira tarefa no HubSpot', tom: 'acao', chips: true };
+};
+
 /* DESENVOLVIMENTO v2 NA PESSOAS DO GESTOR (01/11/26): o 1:1 começa pelo que a pessoa conquistou. A
    primeira linha da página da pessoa é "conquistou desde o último 1:1: …" (medalhas e missões, com a
    data) e o selo "abriu esta semana: sim/não" (aberturas_de_tela). Lê desenvolvimento_quadro(p_owner)
