@@ -226,6 +226,10 @@ const B = ['b:meier', 'b:tijuca', 'b:madureira', 'b:vila isabel', 'b:penha'];
     /GV2\.PLV3\.aberta\(\)\) GV2\.PLV3\.aoVivo\(tipos\)/.test(tpl) && /GV2\.PLV3\.aberta\(\)\) \{ aoVivoAviso\(false\);/.test(tpl));
   checar('agendar pela v3 passa por pl6AgendarNoSlot (a tarefa no HubSpot antes da grade)', /await pl6AgendarNoSlot\(rep, ref, di, si,/.test(tela));
   checar('zero emoji na tela v3', !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}]/u.test(tela));
+  /* acabamento (01/11/26): a etiqueta é um <span>, e a regra do texto do cartão não pode alcançá-la */
+  checar('etiquetas do tamanho do texto: as regras de texto dos cartões valem só para o filho direto',
+    ['pv3-sug-it', 'pv3-bop', 'pv3-atalho', 'pv3-bairro'].every(function (c) { return tpl.indexOf('.' + c + ' > span{') > -1 && tpl.indexOf('.' + c + ' span{') < 0; }));
+  checar('uma sugestão no dia: "Pôr no dia", não "Pôr a 1"', tpl.indexOf("'Pôr a 1'") < 0 && tpl.indexOf("'Pôr no dia'") > -1);
 }
 
 if (falhas.length) {
