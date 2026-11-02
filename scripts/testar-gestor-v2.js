@@ -304,12 +304,20 @@ tabelas.gv2_falta_etapa = [
     const p = b.pessoas.find(x => x.nome === m.nome);
     return p.funil_mes[K[i - 1]] >= 3 && m.pct > Math.round(F[i] / F[i - 1] * 100);
   }), JSON.stringify(melhor));
-  checar('v6 · Pessoas: 4 blocos numa rolagem (Agora e semana → Rua · 7 dias → Coaching → Evolução), o resumo de 5, sem segundo nível de abas, sem "Promessa de hoje" e sem "Chamar"',
-    p3.indexOf('1 · Agora e semana') > 0 && p3.indexOf('2 · Rua · 7 dias') > p3.indexOf('1 · Agora e semana') && p3.indexOf('3 · Coaching') > p3.indexOf('2 · Rua · 7 dias') && p3.indexOf('4 · Evolução') > p3.indexOf('3 · Coaching')
-      && (p3.match(/class="gv2-v5-res"/g) || []).length === 5 && p3.indexOf('gv2-p3-abas') < 0 && p3.indexOf('Promessa de hoje') < 0 && p3.indexOf('p3:chamar') < 0);
-  checar('v5 · Pessoas: "Onde o seu tempo rende" (até 3), a lista pela necessidade de coaching e os atalhos para a gaveta (1:1, disciplina, campo, funil) e a rotação',
-    /Onde o seu tempo rende esta semana/.test(p3) && (p3.match(/class="card gv2-v5-rend"/g) || []).length <= 3 && /pela necessidade de coaching/.test(p3)
-      && ['um', 'disc', 'campo', 'funil'].every(function (t) { return p3.indexOf('data-gv2="v5gav:' + t + ':') > 0; }) && /data-gv2="p3:rotacao"/.test(p3) && !/Sua rotação de campo/.test(p3));
+  /* Pessoas v2 (02/11/26, design_handoff_gestor_v2): a página da pessoa abre num painel largo, e a página de
+     antes vai inteira para "A página de antes, inteira" no fim do painel (nada some). As checagens da v5/v6
+     abaixo leem essa parte; a v2 tem a suíte própria (testar-pessoas-v2.js). */
+  GV2.estado.pv2Pan = b.pessoas[0].id;
+  let p3pan = '';
+  try { p3pan = GV2.render.pessoas(); } catch (e) { falhas.push('pessoas v2 · painel: ' + e.message); }
+  GV2.estado.pv2Pan = null;
+  const antes = p3pan.slice(p3pan.indexOf('<details class="pv2-antes"'));
+  checar('v6 · Pessoas (a página de antes, no painel v2): 4 blocos numa rolagem (Agora e semana → Rua · 7 dias → Coaching → Evolução), o resumo de 5, sem segundo nível de abas, sem "Promessa de hoje" e sem "Chamar"',
+    antes.indexOf('1 · Agora e semana') > 0 && antes.indexOf('2 · Rua · 7 dias') > antes.indexOf('1 · Agora e semana') && antes.indexOf('3 · Coaching') > antes.indexOf('2 · Rua · 7 dias') && antes.indexOf('4 · Evolução') > antes.indexOf('3 · Coaching')
+      && (antes.match(/class="gv2-v5-res"/g) || []).length === 5 && p3pan.indexOf('gv2-p3-abas') < 0 && p3pan.indexOf('Promessa de hoje') < 0 && p3pan.indexOf('p3:chamar') < 0);
+  checar('v2 · Pessoas: "Onde o seu tempo rende" virou os 4 contadores e a placa (uma linha por pessoa); o painel tem os atalhos para a gaveta (1:1, disciplina, campo, funil) e a rotação',
+    !/Onde o seu tempo rende esta semana/.test(p3) && /MINHA SEMANA DE LÍDER/.test(p3) && (p3.match(/class="pv2-cont[ "]/g) || []).length === 4 && (p3.match(/class="pv2-lin( is-feito)?( is-apagada)?"/g) || []).length === b.pessoas.length
+      && ['um', 'disc', 'campo', 'funil'].every(function (t) { return p3pan.indexOf('data-gv2="v5gav:' + t + ':') > 0; }) && /data-gv2="p3:rotacao"/.test(p3) && !/Sua rotação de campo/.test(p3));
   let telas = p3; try { telas += GV2.render.time(); } catch (e) { falhas.push('time: ' + e.message); }
   checar('v4 · 8: "0 de 0" não aparece em lugar nenhum (Pessoas e Time)', !/(^|[^0-9])0 de 0([^0-9]|$)/.test(telas.replace(/<[^>]+>/g, ' ')), (function () { const t = telas.replace(/<[^>]+>/g, ' '); const i = t.search(/(^|[^0-9])0 de 0([^0-9]|$)/); return i < 0 ? '' : t.slice(Math.max(0, i - 80), i + 40).replace(/s+/g, ' '); })());
   GV2.estado.p3rotacao = true;
@@ -878,9 +886,9 @@ tabelas.gv2_falta_etapa = [
     p1.travados = tr; p1.quentes = qs; GV2.estado.daily = ord;
     /* 1 · ficha da pessoa: o feriado aparece como feriado */
     GV2.FERIADOS.push(GV2.base.semana[0].iso);
-    GV2.estado.aba = 'pessoas'; GV2.estado.pessoa = '1';
+    GV2.estado.aba = 'pessoas'; GV2.estado.pessoa = '1'; GV2.estado.pv2Pan = '1';
     let pf = ''; try { pf = GV2.render.pessoas(); } catch (e) { falhas.push('pessoas: ' + e.message); }
-    GV2.FERIADOS.pop();
+    GV2.FERIADOS.pop(); GV2.estado.pv2Pan = null;
     checar('Pessoas › ficha: o dia de feriado diz "feriado", não x de y', /<b class="num">feriado<\/b>/.test(pf));
   }
   /* v8 etapa 1 (13/10/26): clicar abre gaveta, não troca de aba; o ritmo com 6 visitas por dia para todos */
