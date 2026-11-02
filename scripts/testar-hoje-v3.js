@@ -71,6 +71,7 @@ const saida = {
   chips: F.chips.map(function (c) { return HJ3.chipsDeDia(c.hoje, F.feriados, c.comHoje); }),
   toasts: { cheguei: F.toasts.cheguei.map(HJ3.toastCheguei), ficha: F.toasts.ficha.map(HJ3.toastFicha) },
   sugestoes: GV2.PLV3.sugestoes(F.sugestoes),
+  ordem: GV2.PLV3.ordemPorDinheiro(F.ordem).map(function (l) { return l.nome; }),
   semPasso: semPassoDoCockpit(F.semPasso)
 };
 Object.keys(F.estados).forEach(function (nome) { saida.estados[nome] = HJ3.diaDoExecutivo(resolver(nome)); });
@@ -79,7 +80,7 @@ Object.keys(F.estados).forEach(function (nome) {
   const d = difere(limpo.estados[nome], esperado.estados[nome], nome);
   checar('paridade app × Cockpit · ' + nome, !d, d);
 });
-['chips', 'toasts', 'sugestoes', 'semPasso'].forEach(function (k) {
+['chips', 'toasts', 'sugestoes', 'ordem', 'semPasso'].forEach(function (k) {
   const d = difere(limpo[k], esperado[k], k);
   checar('paridade app × Cockpit · ' + k, !d, d);
 });
