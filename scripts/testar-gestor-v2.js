@@ -1102,8 +1102,10 @@ tabelas.gv2_falta_etapa = [
        O motor de escrita da v9 (gravar, registrar, desfazer) continua e é medido logo abaixo. */
     GV2.t10 = { lendo: false, erro: null, em: Date.now(), vis: [], cli: {} };
     let h = ''; try { h = GV2.render.terr(); } catch (e) { falhas.push('território v2: ' + e.message); }
+    /* Território v3 (02/11/26): o mapa abre na lente "cobertura" (a v2 é a lente "carga da semana") e o
+       Por executivo abre nos 30 dias (a semana é a outra aba): os cinco continuam na tela */
     checar('Território v2: 5 números, Onde agir, Territórios, Por executivo e Contra quem',
-      (h.match(/class="gv2-t10-kpi[" ]/g) || []).length === 5 && /<b>Onde agir<\/b>/.test(h) && /<b>Territórios/.test(h) && /<b>Por executivo<\/b>/.test(h) && /<b>Contra quem<\/b>/.test(h), h.slice(0, 300));
+      (h.match(/class="gv2-t10-kpi[" ]/g) || []).length === 5 && /<b>Onde agir<\/b>/.test(h) && /<b>(Territórios|O território · cobertura)/.test(h) && /<b>Por executivo/.test(h) && /<b>Contra quem<\/b>/.test(h), h.slice(0, 300));
     checar('Território v2: nenhum botão abre a tela antiga nem a busca paga (v5rt7, v9g, Importar, munição)',
       !/data-gv2="v5rt7|data-gv2="v9g|Importar|Prospecção completa|munição|torneira/.test(h));
     const P = GV2.v9Pendencias();
