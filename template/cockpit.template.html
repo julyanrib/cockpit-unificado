@@ -11026,8 +11026,12 @@ foi escrita para jogar o "0 de 27 resolvidos"
 /* a 1366 o título e o número grande não encolhem mais (v9: título 24, número 28) */
 @media (max-width:1366px){.gv2{--gv2-pad:20px 24px 24px;}}
 
-/* a casca: some o cabeçalho e as views antigas; os overlays (ficha, toasts) ficam por cima */
-body.gv2-on .app-header, body.gv2-on #appRoot > .view{display:none !important;}
+/* a casca: some o cabeçalho e as views antigas; os overlays (ficha, toasts) ficam por cima.
+   02/11/26 (auditoria): o seletor era "#appRoot > .view", mas as .view moram dentro de
+   main.app-main — não pegava nenhuma, e a tela antiga ficava montada (e rolando) debaixo do GV2.
+   Só vale com gv2-on: a visita (Playbook) troca gv2-on por gv2-visita e mostra a view dela, e o
+   Vender MOVE #precificacaoContent para dentro da casca, então esconder viewPrecificacao não o apaga. */
+body.gv2-on .app-header, body.gv2-on #appRoot .app-main > .view{display:none !important;}
 html.gv2-on, html.gv2-on body{overflow:hidden !important;}
 #gv2Raiz{position:fixed;inset:0;z-index:40;}
 /* visita (Prospecção, Playbook): o menu do gestor fica, a tela antiga ocupa o resto, o topo antigo some */
@@ -11082,6 +11086,9 @@ body.gv2-visita #appRoot{padding-left:220px;}
 .gv2-nav-pe .gv2-quem-txt span{font:500 11.5px/1.35 var(--gv2-font);color:var(--nv-dim);white-space:nowrap;}
 .gv2-nav-pe .gv2-quem-txt span:last-child{font-weight:600;}
 .gv2-nav-pe .gv2-quem-txt span.is-atrasado{color:var(--nv-av);}
+/* 02/11/26 (auditoria): a divergência da conferência automática, discreta, acima do perfil; leva à Prova */
+.gv2-nav-pe .gv2-nav-conf{border:0;background:transparent;padding:0;text-align:left;cursor:pointer;font:600 11.5px/1.35 var(--gv2-font);color:var(--nv-av);}
+.gv2.nav-recolhida .gv2-nav .gv2-nav-conf{display:none;}
 .gv2-nav-alt{height:36px;border:0;border-radius:10px;background:transparent;display:flex;align-items:center;gap:10px;padding:0 10px;color:var(--nv-dim);font:600 12.5px var(--gv2-font);cursor:pointer;width:100%;}
 .gv2-nav-alt:hover{background:var(--nv-hov);color:var(--nv-ink);}
 .gv2-nav-alt:focus-visible,.gv2-nav-pe button.gv2-quem:focus-visible{outline:2px solid var(--nv-ink);outline-offset:2px;}
@@ -76608,6 +76615,8 @@ GV2.navHTML = function () {
   const atrasado = temHs && (Date.now() - hsEm.getTime()) > GV2.HUBSPOT_ATRASO_MIN * 60000;
   const hsTxt = temHs ? 'HubSpot ' + GV2.quandoHs(b.hubspotEm) + (atrasado ? ' · atrasado' : '') : 'HubSpot —';
   const quemDica = nome + ' · app ao vivo · ' + (temHs ? (atrasado ? 'HubSpot sem atualizar desde ' + GV2.quandoHs(b.hubspotEm) : 'HubSpot atualizado ' + GV2.quandoHs(b.hubspotEm)) : 'HubSpot sem hora');
+  const temDono = typeof sessaoAtual !== 'undefined' && !!(sessaoAtual && sessaoAtual.ownerId);
+  const conf = GV2.conferencia();
   return '<nav class="gv2-nav" aria-label="Cockpit do gestor">'
     + '<div class="gv2-marca"><img class="gv2-marca-logo" src="assets/takeat-t-oficial.png" alt="Takeat" width="40" height="40"><span class="gv2-marca-txt"><b>Field Sales</b><span>cockpit do gestor</span></span></div>'
     + '<div class="gv2-nav-lista">' + GV2.ABAS.map(function (a) {
@@ -76623,13 +76632,16 @@ GV2.navHTML = function () {
     + '<div class="gv2-nav-dir"><small class="gv2-nav-rot">Do diretor</small>'
       + '<button type="button" class="gv2-nav-it" data-gv2="menu:prova" data-dica="Prova dos números" title="Prova dos números"><span class="gv2-nav-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3zM9 12l2 2 4-4"/></svg></span><span class="gv2-nav-rot">Prova dos números</span></button>'
       + '<button type="button" class="gv2-nav-it' + (GV2.estado.aba === 'acessos' ? ' is-ativo' : '') + '" data-gv2="menu:acessos" data-dica="Acessos" title="Acessos"><span class="gv2-nav-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0113-6.2M18 15v6M15 18h6"/></svg></span><span class="gv2-nav-rot">Acessos</span></button>'
-      + '<button type="button" class="gv2-nav-it" data-gv2="menu:executivo" data-dica="Ver como executivo" title="Ver como executivo"><span class="gv2-nav-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg></span><span class="gv2-nav-rot">Ver como executivo</span></button></div>'
+      /* 02/11/26 (auditoria): "Ver como executivo" sem ownerId na sessão abria uma visão sem dono
+         (tudo vazio). Sem ownerId, o botão some. */
+      + (temDono ? '<button type="button" class="gv2-nav-it" data-gv2="menu:executivo" data-dica="Ver como executivo" title="Ver como executivo"><span class="gv2-nav-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg></span><span class="gv2-nav-rot">Ver como executivo</span></button>' : '') + '</div>'
     + '<div class="gv2-nav-pe">'
+    + (conf && conf.itens.length ? '<button type="button" class="gv2-nav-conf" data-gv2="menu:prova" title="' + GV2.e(conf.itens.map(function (i) { return i.texto; }).join(' · ')) + '">' + GV2.e(conf.txt) + '</button>' : '')
     + (GV2.estado.menu ? '<div class="gv2-menu" role="menu">'
       + '<small class="is-so-estreito">Do diretor</small>'
       + '<button type="button" class="is-so-estreito" data-gv2="menu:prova">Prova dos números</button>'
       + '<button type="button" class="is-so-estreito" data-gv2="menu:acessos">Acessos</button>'
-      + '<button type="button" class="is-so-estreito" data-gv2="menu:executivo">Ver como executivo</button>'
+      + (temDono ? '<button type="button" class="is-so-estreito" data-gv2="menu:executivo">Ver como executivo</button>' : '')
       + '<button type="button" data-gv2="menu:tema">Tema ' + (document.documentElement.getAttribute('data-tema') === 'escuro' ? 'claro' : 'escuro') + '</button>'
       + '<button type="button" class="is-sair" data-gv2="menu:sair">Sair da conta</button>'
       + '</div>' : '')
@@ -77315,21 +77327,53 @@ GV2.accClique = function (parte) {
   }
 };
 
+/* A CONFERÊNCIA AUTOMÁTICA dentro do GV2 (02/11/26, auditoria): o resultado de
+   scripts/conferir-numeros.js era escrito só em #updatedLine, no cabeçalho do cockpit antigo —
+   que o GV2 esconde. O gestor nunca via a divergência. Agora sai no rodapé do menu e na Prova. */
+GV2.conferencia = function () {
+  const conf = typeof DATA !== 'undefined' && DATA && DATA.syncStatus && DATA.syncStatus.conferencia;
+  if (!conf || !conf.em) return null;
+  const hh = new Date(Date.parse(conf.em) - 3 * 3600000).toISOString().slice(11, 16);
+  const itens = Array.isArray(conf.itens) ? conf.itens : [];
+  return { hh: hh, itens: itens, txt: itens.length ? itens.length + (itens.length === 1 ? ' divergência' : ' divergências') + ' na conferência das ' + hh + ' — ver' : 'números conferidos com o HubSpot e o banco às ' + hh };
+};
+/* OS KPIs QUE A HOJE DO GESTOR MOSTRA, numa função só (02/11/26, auditoria): a Prova provava o
+   render.kpisTime (do Time v4, que ninguém mais via) e a Hoje calculava os dela à parte — "visitas"
+   da Prova era o x do plano, a da Hoje é visitasTodas; os planos da Prova contavam quem está em
+   rampagem, a Hoje não. A Hoje (render.time) e a Prova leem daqui. */
+GV2.kpisHoje = function (b) {
+  b = b || GV2.base;
+  const t = b.time;
+  const naRua = b.pessoas.filter(function (p) { return !(GV2.emRampa && GV2.emRampa(p)); });
+  return {
+    visitas: t.visitasTodas || 0, meta: t.meta,
+    planos: naRua.filter(function (p) { return p.hoje.paradas_plano > 0; }).length, naRua: naRua.length,
+    quentes: t.quentes, quentesSemPasso: t.quentesSemPasso, travados: t.travados,
+    fechados: t.fechados, metaMes: t.metaMes, provavel: t.provavel,
+    semProximoPasso: GV2.semProximoPasso(b.negocios).length
+  };
+};
 GV2.render.prova = function () {
-  const b = GV2.base, t = b.time;
-  const cab = ['Executivo', 'Planos hoje', 'Paradas hoje', 'Visitas hoje', 'Meta dia', 'Ontem prov./plan.', 'Quentes', 'MRR quentes', 'Travados', 'Fech. / meta mês'];
+  const b = GV2.base, K = GV2.kpisHoje(b);
+  const cab = ['Executivo', 'Plano hoje', 'Paradas hoje', 'Visitas hoje', 'Meta dia', 'Quentes', 'Quentes sem passo', 'Sem próx. passo', 'Travados', 'Fech. / meta mês'];
   const lin = function (nome, c, forte) {
     return { celulas: ['<span class="' + (forte ? 'cel-forte' : '') + '">' + GV2.e(nome) + '</span>'].concat(c.map(function (x) { return '<span class="num' + (forte ? ' cel-forte' : '') + '">' + GV2.e(x) + '</span>'; })) };
   };
+  /* as linhas são o que a Hoje soma: plano só de quem não está em rampagem, visitas = todas com
+     prova, meta só de quem está na meta (GV2.naMeta), sem próximo passo = GV2.semProximoPasso */
   const linhas = b.pessoas.map(function (p) {
-    return lin(p.nome, [p.hoje.paradas_plano ? '1' : '0', String(p.hoje.paradas_plano), String(p.hoje.visitas_com_prova), String(p.meta_visitas_dia), p.ontem.visitas_com_prova + ' / ' + p.ontem.paradas_plano, String(p.quentes.length), GV2.rs(p.mrrQuentes), String(p.travados.length), p.funil_mes.fechado + ' / ' + p.meta_clientes_mes]);
-  }).concat([lin('Time (topo)', [String(t.planos), String(t.paradas), String(t.visitas), String(t.meta), t.ontemProva + ' / ' + t.ontemPlan, String(t.quentes), GV2.rs(t.mrrQuentes), String(t.travados), t.fechados + ' / ' + t.metaMes], true)]);
+    const rampa = GV2.emRampa && GV2.emRampa(p);
+    return lin(p.nome, [rampa ? 'rampagem' : p.hoje.paradas_plano ? '1' : '0', String(p.hoje.paradas_plano), String(p.hoje.visitas_todas || 0), String(GV2.naMeta(p) ? p.meta_visitas_dia : 0), String(p.quentes.length), String(p.quentesSemPasso), String(GV2.semProximoPasso(p.negocios).length), String(p.travados.length), p.funil_mes.fechado + ' / ' + p.meta_clientes_mes]);
+  }).concat([lin('Hoje (topo)', [K.planos + ' de ' + K.naRua, String(b.time.paradas), String(K.visitas), String(K.meta), String(K.quentes), String(K.quentesSemPasso), String(K.semProximoPasso), String(K.travados), K.fechados + ' / ' + K.metaMes], true)]);
   const erros = GV2.testes.ultimo || [];
+  const conf = GV2.conferencia();
+  const confHTML = !conf ? '' : '<br><b class="' + (conf.itens.length ? 't-erro' : 't-ok') + '">Conferência automática: ' + GV2.e(conf.itens.length ? GV2.pl(conf.itens.length, 'divergência', 'divergências') + ' às ' + conf.hh : 'números conferidos com o HubSpot e o banco às ' + conf.hh) + '</b>'
+    + conf.itens.map(function (i) { return '<br>• ' + GV2.e(i.texto); }).join('');
   return GV2.cabHTML('Prova dos números', 'a base que alimenta todas as abas', '')
-    + '<div class="gv2-corpo is-fixo"><section class="card" style="flex:1;min-height:0;display:flex;flex-direction:column;"><div class="card-cab"><span class="card-titulo">Cada número do topo é a soma destas linhas</span><span class="card-sub">mesma base para Time, Raio X, Rua e Pessoas · nada digitado à mão</span></div>'
+    + '<div class="gv2-corpo is-fixo"><section class="card" style="flex:1;min-height:0;display:flex;flex-direction:column;"><div class="card-cab"><span class="card-titulo">Cada número do topo é a soma destas linhas</span><span class="card-sub">a mesma base da Hoje, do Funil e das Pessoas · nada digitado à mão</span></div>'
     + GV2.html.tabela({ colunas: 'minmax(150px,1.4fr) repeat(9,minmax(0,1fr))', cabecalho: cab, linhas: linhas })
-    + '<div class="gv2-sem-pe" style="display:block;">' + (erros.length ? '<b class="t-erro">Não bate: ' + GV2.e(erros.join(' · ')) + '</b><br>' : '<b class="t-ok">Os totais batem com os KPIs de Time e Raio X.</b><br>')
-    + GV2.e(b.regras) + '</div></section></div>';
+    + '<div class="gv2-sem-pe" style="display:block;">' + (erros.length ? '<b class="t-erro">Não bate: ' + GV2.e(erros.join(' · ')) + '</b><br>' : '<b class="t-ok">Os totais batem com os KPIs da Hoje e com os filtros do Funil.</b><br>')
+    + GV2.e(b.regras) + confHTML + '</div></section></div>';
 };
 
 /* ══ GV2 · A BASE ÚNICA (Fase 0 do pacote, 06/10/26) ═════════════════════════════════
@@ -78253,12 +78297,19 @@ GV2.testes = {
     conf('fechados', t.fechados, t.funil[4]);
     /* o que o gestor vê ao clicar no passo é o que foi contado */
     ['portas', 'decisor', 'demo', 'proposta', 'fechado'].forEach(function (k, i) { conf('lista do passo ' + k, t.funil[i], ((b.funilItens || [])[i] || []).length); });
-    const k = GV2.render.kpisTime();
-    conf('KPI visitas', k[0].valor, String(t.visitas));
-    conf('KPI quentes', k[2].valor, String(t.quentes));
-    conf('KPI travados', k[3].valor, String(t.travados));
-    conf('filtro quentes do Raio X', GV2.filtroNegocios('quentes', b.negocios).length, t.quentes);
-    conf('filtro travados do Raio X', GV2.filtroNegocios('travados', b.negocios).length, t.travados);
+    /* 02/11/26 (auditoria): prova os KPIs que a Hoje do gestor MOSTRA (GV2.kpisHoje, a mesma função
+       que render.time lê), e não mais o render.kpisTime do Time v4, que nenhuma tela pintava */
+    const K = GV2.kpisHoje(b);
+    conf('KPI visitas da Hoje', K.visitas, soma(function (p) { return p.hoje.visitas_todas || 0; }));
+    conf('KPI meta da Hoje', K.meta, soma(function (p) { return GV2.naMeta(p) ? p.meta_visitas_dia : 0; }));
+    conf('KPI planos da Hoje', K.planos, b.pessoas.filter(function (p) { return !(GV2.emRampa && GV2.emRampa(p)) && p.hoje.paradas_plano > 0; }).length);
+    conf('KPI quentes da Hoje', K.quentes, b.negocios.filter(function (n) { return n.quente; }).length);
+    conf('KPI quentes sem passo da Hoje', K.quentesSemPasso, soma(function (p) { return p.quentesSemPasso; }));
+    conf('KPI travados da Hoje', K.travados, b.negocios.filter(function (n) { return n.travado; }).length);
+    conf('sem próximo passo', K.semProximoPasso, soma(function (p) { return GV2.semProximoPasso(p.negocios).length; }));
+    conf('filtro quentes do Funil', GV2.filtroNegocios('quentes', b.negocios).length, t.quentes);
+    conf('filtro travados do Funil', GV2.filtroNegocios('travados', b.negocios).length, t.travados);
+    conf('filtro sem próximo passo do Funil', GV2.filtroNegocios('sempasso', b.negocios).length, K.semProximoPasso);
     GV2.testes.ultimo = erros;
     return erros;
   }
@@ -78330,7 +78381,12 @@ GV2.carregar = async function (manual) {
       }
     } catch (e) {
       console.error('[gv2] montar', e);
-      if (!GV2.base) {
+      /* 02/11/26 (auditoria): GV2.base é gravado ANTES de pintar; se a pintura lançava, o "else"
+         abaixo só soltava um toast e a tela ficava no esqueleto para sempre. Sem uma pintura boa
+         na tela (GV2.telaOk, marcado no fim de GV2.pintar), o erro vira o estado de erro com
+         "Tentar de novo". */
+      if (!GV2.base || !GV2.telaOk) {
+        GV2.telaOk = false;
         const raiz = GV2.raiz();
         if (raiz) raiz.innerHTML = '<div class="gv2" style="display:flex;align-items:center;justify-content:center;">' + GV2.html.estado('erro', 'Não consegui montar o painel: ' + ((e && e.message) || 'erro') + '. ') + GV2.html.btn({ texto: 'Tentar de novo', acao: 'recarregar' }) + GV2.html.btn({ texto: 'Abrir o cockpit antigo', acao: 'menu:antigo' }) + '</div>';
       } else GV2.toast('Não atualizei o painel: ' + ((e && e.message) || 'erro'), 'erro');
@@ -78387,6 +78443,7 @@ GV2.pintar = function () {
   if (GV2.v5Fotos) GV2.v5Fotos.ligar(raiz);
   const host = raiz.querySelector('[data-gv2-vender]');
   GV2.vender(host);
+  GV2.telaOk = true;
 };
 
 /* ══ VENDER: o motor de proposta que já existe (prc*), dentro da casca ══════════════
@@ -86716,15 +86773,18 @@ GV2.render.time = function () {
   /* fim de semana e feriado: sem meta hoje; o número que conta é o do último dia útil (auditoria 01/11/26) */
   const semExp = !GV2.util(b.agora.iso);
   const K = GV2.v9Kpi;
-  const visI = 'check-in com GPS a até 200 m do pino (foto só quando o GPS não confirma) · x de y = TODOS os pontos de contato do dia (visitas com prova, do plano ou não, repetidas incluídas) ÷ meta do time (6 por pessoa) · repetida = restaurante que a pessoa já visitou nesta semana'
+  const KH = GV2.kpisHoje(b);
+  const visI ='check-in com GPS a até 200 m do pino (foto só quando o GPS não confirma) · x de y = TODOS os pontos de contato do dia (visitas com prova, do plano ou não, repetidas incluídas) ÷ meta do time (6 por pessoa) · repetida = restaurante que a pessoa já visitou nesta semana'
     + (fonte ? '' : ' · do plano: ' + t.visitas + ' de ' + t.paradas + ' paradas' + (t.visitasTodas > t.visitas ? ' · ' + (t.visitasTodas - t.visitas) + ' fora do plano' : ''));
   const kpis = '<div class="gv2-v5-kpis">'
     + K({ rot: 'Visitas com prova', def: visI, acao: 'ir:rua:hoje', num: fonte ? '—' : semExp ? String(t.visitasTodas || 0) : (t.visitasTodas || 0) + ' de ' + t.meta, unid: fonte ? '' : semExp ? 'hoje · sem expediente' : 'da meta',
       cmp: fonte ? 'plano sem resposta (' + fonte + ')' : semExp ? b.ontemRot + ' ' + oT.v + ' de ' + oT.y : cedo ? b.ontemRot + ' ' + oT.v + ' de ' + oT.y + ' · a rua começa ~' + GV2.hhmm(comeca) : (t.repetidas ? t.repetidas + (t.repetidas === 1 ? ' repetida' : ' repetidas') + ' · ' : '') + 'do plano ' + t.visitas + ' de ' + t.paradas + ((t.visitasTodas || 0) > t.visitas ? ' · ' + ((t.visitasTodas || 0) - t.visitas) + ' fora' : '') + ' · ' + b.ontemRot + ' ' + oT.v + ' de ' + oT.y })
     + K({ rot: 'Planos de hoje', def: 'quem montou o plano do dia no app (pelo menos uma parada) · sem rota = nenhuma parada hoje' + (comAgenda ? ' · ' + comAgenda + ' sem rota com agenda no HubSpot' : '') + (rampa ? ' · ' + rampa + ' em rampagem (fora da conta)' : ''), acao: 'rxg:plano',
-      num: fonte ? '—' : naRua.filter(function (p) { return p.hoje.paradas_plano > 0; }).length + ' de ' + naRua.length, /* o mesmo conjunto em cima e embaixo (podia dar "6 de 5") */ unid: fonte ? '' : 'com plano', cmp: fonte ? fonte + ' não respondeu' : semExp ? 'sem expediente hoje · ' + GV2.pl(t.paradas, 'parada', 'paradas') : GV2.pl(t.paradas, 'parada', 'paradas') + ' · ' + (semRota ? semRota + ' sem rota' : 'ninguém sem rota') })
+      num: fonte ? '—' : KH.planos + ' de ' + KH.naRua, /* o mesmo conjunto em cima e embaixo (podia dar "6 de 5") */ unid: fonte ? '' : 'com plano', cmp: fonte ? fonte + ' não respondeu' : semExp ? 'sem expediente hoje · ' + GV2.pl(t.paradas, 'parada', 'paradas') : GV2.pl(t.paradas, 'parada', 'paradas') + ' · ' + (semRota ? semRota + ' sem rota' : 'ninguém sem rota') })
     + K({ rot: 'Quentes', def: 'negócio em Negociação ou Ag. Pagamento · sem próximo passo = sem tarefa ou reunião futura no HubSpot e fora do Planejamento', acao: 'ir:raiox:quentes',
-      num: String(t.quentes), unid: t.quentes === 1 ? 'negócio' : 'negócios', cmp: t.quentesSemPasso + ' sem próximo passo', cmpTom: t.quentesSemPasso ? 't-av' : '' })
+      /* 02/11/26 (auditoria): o número é dos QUENTES sem passo (p.quentesSemPasso), e o rótulo dizia só
+         "sem próximo passo" — que, pela regra canônica (GV2.semProximoPasso), é o funil inteiro */
+      num: String(KH.quentes), unid: KH.quentes === 1 ? 'negócio' : 'negócios', cmp: GV2.pl(KH.quentesSemPasso, 'quente sem passo', 'quentes sem passo') + ' · ' + KH.semProximoPasso + ' no funil sem próximo passo', cmpTom: KH.quentesSemPasso ? 't-av' : '' })
     + K({ rot: 'Travados', def: 'negócio que passou do prazo da etapa (a régua do playbook)' + (mrrTravNeg ? ' · ' + GV2.rsCheio(mrrTravNeg) + ' parados em Negociação' : ''), acao: 'ir:raiox:travados',
       num: String(t.travados), tom: t.travados ? 't-av' : '', unid: t.travados === 1 ? 'negócio' : 'negócios', cmp: 'passaram do prazo da etapa' })
     + (RT ? K({ rot: 'Mês', selo: RT.cli.selo, def: 'cliente = negócio que chegou a Ganho / Enviado Onboarding no mês (Ag. Pagamento ainda não) · esperado = meta × dias úteis passados · provável = fechados + Ag. Pagamento + 60% da Negociação', acao: 'rxg:mes',

@@ -322,6 +322,36 @@ tabelas.gv2_falta_etapa = [
   b.time.visitas -= 1;
   console.error = errOrig;
   checar('a Prova acusa um total que não é a soma das pessoas', acusou);
+  /* 02/11/26 (auditoria): a Prova prova os KPIs que a Hoje MOSTRA (visitasTodas, planos sem rampa,
+     sem próximo passo pela regra canônica), não o render.kpisTime do Time v4 */
+  {
+    console.error = () => {};
+    b.time.visitasTodas += 1;
+    const acusouTodas = GV2.testes.prova().some(e => /visitas da Hoje/.test(e));
+    b.time.visitasTodas -= 1;
+    console.error = errOrig;
+    const K = GV2.kpisHoje(b), pv = GV2.render.prova();
+    const linhaTopo = pv.slice(pv.indexOf('Hoje (topo)'));
+    checar('auditoria 02/11 · G4: a Prova acusa quando o KPI de visitas da Hoje (visitasTodas) não é a soma das pessoas', acusouTodas);
+    checar('auditoria 02/11 · G4/G3: a Prova tem a coluna "Sem próx. passo" e a linha do topo traz o número de GV2.semProximoPasso',
+      pv.indexOf('Sem próx. passo') > 0 && K.semProximoPasso === GV2.semProximoPasso(b.negocios).length && linhaTopo.indexOf('>' + K.semProximoPasso + '<') > 0 && pv.indexOf('Time e Raio X') < 0, String(K.semProximoPasso));
+    checar('auditoria 02/11 · G4: a Hoje lê os mesmos KPIs (GV2.kpisHoje) que a Prova prova', /const KH = GV2\.kpisHoje\(b\);/.test(codigo) && /KH\.planos \+ ' de ' \+ KH\.naRua/.test(codigo));
+    /* G1: a conferência automática aparece dentro do GV2 */
+    const antSync = DATA.syncStatus;
+    DATA.syncStatus = { conferencia: { em: '2026-10-06T12:30:00Z', itens: [{ texto: 'fechados: HubSpot 5, cockpit 4' }] } };
+    const nav = GV2.navHTML(), pv2 = GV2.render.prova();
+    DATA.syncStatus = antSync;
+    checar('auditoria 02/11 · G1: a divergência da conferência aparece no menu do GV2 e na Prova',
+      /1 divergência na conferência das 09:30 — ver/.test(nav) && /data-gv2="menu:prova"[^>]*>1 divergência/.test(nav.replace(/title="[^"]*"/g, '')) && pv2.indexOf('fechados: HubSpot 5, cockpit 4') > 0, nav.slice(nav.indexOf('gv2-nav-pe'), nav.indexOf('gv2-nav-pe') + 300));
+    checar('auditoria 02/11 · G1: com gv2-on, as views antigas (dentro de main.app-main) somem de verdade',
+      /body\.gv2-on #appRoot \.app-main > \.view\{display:none !important;\}/.test(tpl) && !/body\.gv2-on #appRoot > \.view/.test(tpl));
+    /* G12: sem ownerId na sessão, "Ver como executivo" some */
+    const antS = global.sessaoAtual;
+    global.sessaoAtual = { role: 'manager', nome: 'Gestor' };
+    const navSem = GV2.navHTML();
+    global.sessaoAtual = antS;
+    checar('auditoria 02/11 · G12: "Ver como executivo" some sem ownerId na sessão', navSem.indexOf('menu:executivo') < 0 && GV2.navHTML().indexOf('menu:executivo') > 0);
+  }
   checar('cada aba desenha sem erro', ['time', 'raiox', 'rua', 'pessoas', 'propostas', 'playbook', 'prova'].every(a => {
     try { GV2.estado.aba = a; return typeof GV2.render[a]() === 'string'; } catch (e) { falhas.push('aba ' + a + ': ' + e.message); return false; }
   }));
@@ -2078,6 +2108,22 @@ tabelas.gv2_falta_etapa = [
       /venc \+ ' com passo vencido \+ ' \+ \(sp - venc\) \+ ' nunca '/.test(codigo));
     checar('ver como executivo · quem está fora do time fica sem meta, não com 10', tpl.indexOf("fechadosNoMes: 0, metaMensal: 0, metaMrr: 0, metaReceita: 0, patamarMeta: 'sem meta'") > -1 && tpl.indexOf('fechadosNoMes: 0, metaMensal: 10,') < 0);
   }
+  /* G11 (auditoria 02/11/26): a pintura que lança no boot vira estado de erro com "Tentar de novo"
+     (antes ficava no esqueleto). Por último: o await deixa as leituras pendentes resolverem. */
+  await (async function () {
+    const antB = GV2.base, antP = GV2.pintar, antM = GV2.montar, antR = GV2.raiz, antOk = GV2.telaOk;
+    const raiz = { innerHTML: '' };
+    GV2.base = null; GV2.telaOk = false;
+    GV2.raiz = function () { return raiz; };
+    GV2.montar = async function () { return antB; };
+    GV2.pintar = function () { throw new Error('pintura quebrou'); };
+    const eo = console.error; console.error = () => {};
+    try { await GV2.carregar(); } catch (e) { /* o carregar não pode lançar */ }
+    console.error = eo;
+    checar('auditoria 02/11 · G11: se a pintura lança no boot, a tela mostra o erro com "Tentar de novo" (não fica no esqueleto)',
+      /Tentar de novo/.test(raiz.innerHTML) && /pintura quebrou/.test(raiz.innerHTML), raiz.innerHTML.slice(0, 200));
+    GV2.base = antB; GV2.pintar = antP; GV2.montar = antM; GV2.raiz = antR; GV2.telaOk = antOk;
+  })();
 
   if (falhas.length) {
     console.log('FALHOU: ' + falhas.length);
