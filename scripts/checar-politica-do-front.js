@@ -52,11 +52,9 @@ const DIVIDA_CONHECIDA = [];
    0248 do PWA-app-outbound cria (escrita, não aplicada). Enquanto ela não entra, a tabela não existe e
    a tela trata o erro "não existe" como "sem a atualização do servidor": mostra os números e avisa.
    Os comandos aqui são os que a 0248 autoriza. Quando a 0248 for aplicada e o POLITICAS.txt regerado,
-   a tabela aparece lá e esta guarda reprova até o item sair desta lista. */
-const AGUARDANDO_MIGRACAO = {
-  territorio_sugestoes: { migracao: '0248_territorio_v3', ops: ['select'] },
-  territorio_carga: { migracao: '0248_territorio_v3', ops: ['select'] }
-};
+   a tabela aparece lá e esta guarda reprova até o item sair desta lista.
+   02/11/26: a 0248 foi aplicada e o POLITICAS.txt regerado; a lista ficou vazia. */
+const AGUARDANDO_MIGRACAO = {};
 
 function lerPoliticas() {
   if (!fs.existsSync(ARQ_POLITICAS)) {
