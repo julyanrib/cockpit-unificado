@@ -48,6 +48,16 @@ const SO_DO_SERVIDOR = ['cockpit_snapshot', 'novidades_mercado', 'restaurantes_o
    dívida que fica na lista para sempre deixa de ser vista. */
 const DIVIDA_CONHECIDA = [];
 
+/* TABELA NOVA QUE AINDA ESPERA A MIGRAÇÃO DO APP (02/11/26). O Território v3 lê duas tabelas que a
+   0247 do PWA-app-outbound cria (escrita, não aplicada). Enquanto ela não entra, a tabela não existe e
+   a tela trata o erro "não existe" como "sem a atualização do servidor": mostra os números e avisa.
+   Os comandos aqui são os que a 0247 autoriza. Quando a 0247 for aplicada e o POLITICAS.txt regerado,
+   a tabela aparece lá e esta guarda reprova até o item sair desta lista. */
+const AGUARDANDO_MIGRACAO = {
+  territorio_sugestoes: { migracao: '0247_territorio_v3', ops: ['select'] },
+  territorio_carga: { migracao: '0247_territorio_v3', ops: ['select'] }
+};
+
 function lerPoliticas() {
   if (!fs.existsSync(ARQ_POLITICAS)) {
     console.error('GUARDA 24 REPROVADA: falta supabase/POLITICAS.txt.');
@@ -110,6 +120,18 @@ Object.keys(usos).sort().forEach(function (tabela) {
   if (SO_DO_SERVIDOR.indexOf(tabela) > -1) {
     problemas.push('o front usa `' + tabela + '`, que é só do servidor (RLS ligada, zero política '
       + 'de propósito). A leitura tem que passar por uma rota em api/, com service_role.');
+    return;
+  }
+  if (!(tabela in politicas) && AGUARDANDO_MIGRACAO[tabela]) {
+    const a = AGUARDANDO_MIGRACAO[tabela];
+    Object.keys(usos[tabela]).forEach(function (op) {
+      if (a.ops.indexOf(op) < 0) problemas.push('`' + tabela + '` espera a ' + a.migracao + ', que só autoriza ' + a.ops.join(', ') + '; o front faz ' + op + ' em L' + usos[tabela][op].join(', L') + '.');
+    });
+    dividaVista.push(tabela + ' (aguarda ' + a.migracao + ')');
+    return;
+  }
+  if ((tabela in politicas) && AGUARDANDO_MIGRACAO[tabela]) {
+    problemas.push('`' + tabela + '` já está em POLITICAS.txt: a ' + AGUARDANDO_MIGRACAO[tabela].migracao + ' entrou. Apague o item de AGUARDANDO_MIGRACAO.');
     return;
   }
   if (!(tabela in politicas)) {
