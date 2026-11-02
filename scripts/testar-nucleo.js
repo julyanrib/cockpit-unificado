@@ -79,11 +79,26 @@ const _real = new Date();
    dado há 2 dias úteis aparecia com 2 dias de atraso em vez de 1, todo fim de tarde, sem
    regressão nenhuma no código. Uma suíte que fica vermelha toda noite não é uma suíte: na
    noite em que houver defeito de verdade, ninguém vai distinguir. */
+/* ...E SEM FERIADO (corrigido 02/11/26, Finados, com 7 testes vermelhos na mão). Desde a 0239 o
+   núcleo conta o feriado nacional como dia não útil (GV2.util), e a suíte congelava "hoje" no
+   feriado: a visita de "hoje" saía da janela do ciclo e o atraso da cadência perdia um dia. A
+   lista é a do GV2.feriadosDoAno (fixos + Carnaval, Sexta-feira Santa e Corpus Christi). */
+function _ehFeriado(d) {
+  const y = d.getUTCFullYear();
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, dd = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - dd - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const pascoa = Date.UTC(y, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1);
+  const isoD = d.toISOString().slice(0, 10);
+  const fixos = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'].map(md => y + '-' + md);
+  const moveis = [-48, -47, -2, 60].map(n => new Date(pascoa + n * 86400000).toISOString().slice(0, 10));
+  return fixos.concat(moveis).indexOf(isoD) >= 0;
+}
+function _naoUtil(d) { return d.getUTCDay() === 0 || d.getUTCDay() === 6 || _ehFeriado(d); }
 const _diaUtil = (function () {
   const b = new Date(_real.getTime() - 3 * 3600000);
   return new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate()));
 }());
-while (_diaUtil.getUTCDay() === 0 || _diaUtil.getUTCDay() === 6) _diaUtil.setUTCDate(_diaUtil.getUTCDate() - 1);
+while (_naoUtil(_diaUtil)) _diaUtil.setUTCDate(_diaUtil.getUTCDate() - 1);
 const AGORA_MS = Date.UTC(_diaUtil.getUTCFullYear(), _diaUtil.getUTCMonth(), _diaUtil.getUTCDate(), 12, 0, 0);
 class DataFixa extends Date {
   constructor(...a) { if (a.length === 0) super(AGORA_MS); else super(...a); }
@@ -98,7 +113,7 @@ const HOJE = new Date(AGORA_MS);
   const hojeBRT = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
   const fixoBRT = new Date(AGORA_MS - 3 * 3600000).toISOString().slice(0, 10);
   const dow = new Date(hojeBRT + 'T12:00:00Z').getUTCDay();
-  const fimDeSemana = dow === 0 || dow === 6;
+  const fimDeSemana = dow === 0 || dow === 6 || _ehFeriado(new Date(hojeBRT + 'T12:00:00Z'));
   if (!fimDeSemana && fixoBRT !== hojeBRT) {
     console.error('A SUÍTE ESTÁ COM O RELÓGIO ERRADO: congelou em ' + fixoBRT
       + ' e hoje em Brasília é ' + hojeBRT + '. Qualquer vermelho daqui para baixo é dela, não do código.');
@@ -274,7 +289,7 @@ teste('recusa explícita tira o negócio da cadência', () => {
 function diasUteisAtras(n) {
   const d = new Date(Date.now() - 3 * 3600000);
   d.setUTCHours(12, 0, 0, 0);
-  const util = (x) => x.getUTCDay() !== 0 && x.getUTCDay() !== 6;
+  const util = (x) => !_naoUtil(x);
   while (!util(d)) d.setUTCDate(d.getUTCDate() - 1);
   let k = 0;
   while (k < n) { d.setUTCDate(d.getUTCDate() - 1); if (util(d)) k++; }
