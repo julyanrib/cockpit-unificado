@@ -77429,6 +77429,9 @@ GV2.render.prova = function () {
 GV2.ETAPAS = ['Prospecção', 'Visita', 'Conversa com decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento'];
 GV2.ETAPA_IDS = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
 GV2.REGUA_PADRAO = [5, 5, 4, 3, 7, 2];
+/* "MUITOS TRAVADOS" É UM NÚMERO SÓ (02/11/26, auditoria): o motivo da Hoje usava 3, a Pessoas 4, a
+   daily 5 e a gaveta 10 — a mesma pessoa era "muitos travados" numa tela e "ok" na outra */
+GV2.MUITOS_TRAVADOS = 4;
 GV2.JORNADA = { ini: 8 * 60 + 30, fim: 17 * 60 + 30 };
 
 GV2.agoraBR = function () {
@@ -78224,7 +78227,7 @@ GV2.montar = async function (so, leituraPronta) {
       + (p.furou > 0 ? 1 : 0);
     p.motivo = (p.hoje.paradas_plano === 0 && !fds) ? GV2.semRotaHoje(p) + (p.furou ? ' · furou ' + p.furou + ' ' + GV2.ontemDe(ontemIso, agora.iso) : '')
       : (!fds && p.hoje.paradas_plano > 0 && !(p.hoje.visitas_todas || 0) && agora.min > j.ini) ? (agora.min >= j.fim ? 'nenhuma visita hoje' : 'nenhuma visita até ' + GV2.hm())
-      : p.travados.length >= 3 ? GV2.pl(p.travados.length, 'travado', 'travados')
+      : p.travados.length >= GV2.MUITOS_TRAVADOS ? GV2.pl(p.travados.length, 'travado', 'travados')
       : p.furou ? 'furou ' + p.furou + ' ' + GV2.ontemDe(ontemIso, agora.iso) : 'no ritmo';
   });
 
@@ -86936,7 +86939,7 @@ GV2.render.v5PorPessoa = function (sit) {
       + '<button type="button" class="gv2-v5-pp-c" data-gv2="' + abre + '"><b class="num ' + jC + '">' + GV2.e(jT) + '</b><small>' + GV2.e(jS) + '</small></button>'
       + '<span class="gv2-v5-pp-c" title="' + GV2.e(GV2.ontemDe() + ': ' + ontemT + (ontemS ? ' · ' + ontemS : '') + ' · ' + oj) + '"><b class="num' + (furou ? ' t-av' : '') + '">' + GV2.e(ontemT) + '</b><small>' + GV2.e(ontemS || oj) + '</small></span>'
       + '<button type="button" class="num gv2-v5-pp-n is-link" data-gv2="v8neg:quentes:' + p.id + '" title="os quentes de ' + GV2.e(GV2.prim(p.nome)) + '">' + p.quentes.length + '</button>'
-      + '<button type="button" class="num gv2-v5-pp-n' + (p.travados.length >= 4 ? ' t-av' : '') + '" data-gv2="v8neg:travados:' + p.id + '" title="os travados de ' + GV2.e(GV2.prim(p.nome)) + '">' + p.travados.length + '</button>'
+      + '<button type="button" class="num gv2-v5-pp-n' + (p.travados.length >= GV2.MUITOS_TRAVADOS ? ' t-av' : '') + '" data-gv2="v8neg:travados:' + p.id + '" title="os travados de ' + GV2.e(GV2.prim(p.nome)) + '">' + p.travados.length + '</button>'
       + '<span class="gv2-v5-pp-a">' + acao + '</span></div>';
   }).join('');
   return '<section class="card gv2-v5-pp is-v8"><div class="gv2-v5-cab"><b>Por pessoa<i class="gv2-v8-i" title="o nome abre a pessoa · o plano e a jornada abrem o dia na Rua · quentes e travados abrem os negócios · barra do Mês: traço = esperado até hoje">i</i></b></div>'
@@ -87063,7 +87066,7 @@ GV2.v5Coaching = function (p) {
   const tVD = b.time.funil && b.time.funil[0] ? b.time.funil[2] / b.time.funil[0] : null;
   const vd = p.funil_mes.portas >= 10 ? p.funil_mes.demo / p.funil_mes.portas : null;
   if (vd != null && tVD != null && vd < tVD * 0.6) return { g: 90, t: p.funil_mes.portas + ' visitas e ' + GV2.pl(p.funil_mes.demo, 'demo', 'demos') + ' no mês · visita → demo ' + Math.round(vd * 100) + '%, o time faz ' + Math.round(tVD * 100) + '%' };
-  if (p.travados.length >= 4 && pd != null && tPD != null && pd <= tPD) return { g: 85, t: GV2.pl(p.travados.length, 'travado', 'travados') + ' · porta → decisor ' + Math.round(pd * 100) + '%' };
+  if (p.travados.length >= GV2.MUITOS_TRAVADOS && pd != null && tPD != null && pd <= tPD) return { g: 85, t: GV2.pl(p.travados.length, 'travado', 'travados') + ' · porta → decisor ' + Math.round(pd * 100) + '%' };
   if (cs.length && naoCump) return { g: 80, t: cump + ' de ' + cs.length + ' combinados de ' + GV2.ddmm(p.ultimo1a1.data) };
   if (p.u1 == null) return { g: 75, t: 'sem nenhum 1:1 ainda' };
   if (d.fichasMes >= 5 && d.decisor / d.fichasMes < 0.25) return { g: 70, t: d.decisor + ' de ' + d.fichasMes + ' fichas com decisor' };
@@ -87191,7 +87194,7 @@ GV2.render.v5Pessoa = function (p) {
     + res('Mês', GV2.deMeta(R.cli.feito, R.cli.meta), R.cli.meta ? 'clientes · esperado ' + GV2.v8Num(R.cli.esp) : 'clientes', 'v8neg:mes:' + p.id, 't-' + R.cli.selo.k)
     /* 02/11/26 (auditoria): o número é dos quentes; "sem próximo passo" é o do funil inteiro (GV2.semProximoPasso) */
     + res('Quentes', String(p.quentes.length), (p.quentesSemPasso ? GV2.pl(p.quentesSemPasso, 'quente sem passo', 'quentes sem passo') : GV2.pl(p.quentes.length, 'negócio', 'negócios')) + ' · ' + GV2.semProximoPasso(p.negocios).length + ' sem próximo passo no funil', 'v8neg:quentes:' + p.id, p.quentesSemPasso ? 't-av' : '')
-    + res('Travados', String(p.travados.length), 'passaram do prazo da etapa', 'v8neg:travados:' + p.id, p.travados.length >= 4 ? 't-av' : '')
+    + res('Travados', String(p.travados.length), 'passaram do prazo da etapa', 'v8neg:travados:' + p.id, p.travados.length >= GV2.MUITOS_TRAVADOS ? 't-av' : '')
     + '</div>';
   const G8 = R ? GV2.v8Gargalo(R) : null;
   const funil8 = !R ? '' : '<section class="gv2-v5-blo gv2-v8-pfunil"><div class="gv2-v5-blo-cab"><b>Funil do mês contra o esperado</b><span>' + GV2.e('dia útil ' + R.M.hoje + ' de ' + R.M.uteis + ' · traço = onde deveria estar hoje') + '</span></div>'
@@ -88730,7 +88733,7 @@ GV2.render.v7Passada = function () {
       return '<li><div><b class="gv2-ellip">' + GV2.e(i.n.nome) + '</b><span>' + GV2.e([et, i.origem, i.n.mrr ? GV2.v6Reais(i.n.mrr) + '/mês' : null].filter(Boolean).join(' · ')) + '</span></div>'
         + '<div class="gv2-v7-q-d">' + (i.semPasso ? '<em class="is-mal">sem próximo passo</em>' : '<em>' + GV2.e('próximo: ' + i.n.proximo_passo) + '</em>') + plano + '</div></li>';
     }).join('') + '</ul>' : '<div class="gv2-v6-vazio">Nada quente: nenhuma demo aberta da semana passada e nada em Negociação.</div>';
-    const resumo = [GV2.pl(demos.length, 'demo', 'demos') + ' na semana passada' + (demos.length ? ' (' + [viraram ? viraram + (viraram > 1 ? ' viraram venda' : ' virou venda') : null, abertasDemo ? abertasDemo + ' aberta' + (abertasDemo > 1 ? 's' : '') : null, sairam > 0 ? sairam + ' saiu do funil' : null].filter(Boolean).join(', ') + ')' : ''),
+    const resumo = [GV2.pl(demos.length, 'demo', 'demos') + ' na semana passada' + (demos.length ? ' (' + [viraram ? viraram + (viraram > 1 ? ' viraram venda' : ' virou venda') : null, abertasDemo ? abertasDemo + ' aberta' + (abertasDemo > 1 ? 's' : '') : null, sairam > 0 ? sairam + (sairam > 1 ? ' saíram do funil' : ' saiu do funil') : null].filter(Boolean).join(', ') + ')' : ''),
       p.agPag && p.agPag.length ? GV2.pl(p.agPag.length, 'em Ag. Pagamento (financeiro)', 'em Ag. Pagamento (financeiro)') : null].filter(Boolean).join(' · ');
     const alerta = [semPasso ? GV2.pl(semPasso, 'quente sem próximo passo', 'quentes sem próximo passo') : null, fora ? GV2.pl(fora, 'quente fora do plano', 'quentes fora do plano') : null].filter(Boolean);
     return { p: p, nq: itens.length, ag: (p.agPag || []).length, peso: semPasso * 2 + (fora || 0) + (paradas ? 0 : 3), html: '<article class="gv2-v7-p">'
@@ -88885,7 +88888,7 @@ GV2.v8GavPessoa = function (id) {
     + tile('Mês', GV2.deMeta(R.cli.feito, R.cli.meta), R.cli.meta ? 'clientes · esperado ' + GV2.v8Num(R.cli.esp) : 'clientes', 'v8neg:mes:' + p.id, 'is-' + mesSelo.k)
     /* 02/11/26 (auditoria): o número embaixo é dos quentes — "quentes sem passo"; o funil inteiro sem próximo passo vai junto */
     + tile('Quentes', String(p.quentes.length), GV2.pl(p.quentesSemPasso, 'quente sem passo', 'quentes sem passo') + ' · ' + GV2.semProximoPasso(p.negocios).length + ' sem próximo passo no funil', 'v8neg:quentes:' + p.id)
-    + tile('Travados', String(p.travados.length), 'passaram do prazo da etapa', 'v8neg:travados:' + p.id, p.travados.length >= 10 ? 'is-av' : '')
+    + tile('Travados', String(p.travados.length), 'passaram do prazo da etapa', 'v8neg:travados:' + p.id, p.travados.length >= GV2.MUITOS_TRAVADOS ? 'is-av' : '')
     + '</div>';
   const funil = '<section class="gv2-v8-sec"><div class="gv2-v8-sec-cab"><b>Funil do mês contra o esperado' + GV2.v9Info('visitas: 6 por dia útil · demos e clientes: meta ' + R.cli.meta + ' · traço = onde deveria estar hoje') + '</b><span>' + GV2.e('dia útil ' + R.M.hoje + ' de ' + R.M.uteis) + '</span></div>'
     + '<div class="gv2-v8-bars">' + GV2.v8BarraHTML(R.vis) + GV2.v8BarraHTML(R.dem) + GV2.v8BarraHTML(R.cli) + '</div>'
@@ -89078,7 +89081,7 @@ GV2.v8dMotivo = function (p) {
   const b = GV2.base;
   if (!(p.hoje && p.hoje.paradas_plano) && GV2.util(b.agora.iso) && !b.planoErro) return { k: 'plano', cor: 'erro', t: 'Abre a daily porque está sem plano hoje.' };
   if (o.paradas_plano && o.visitas_com_prova * 2 < o.paradas_plano) return { k: 'furou', cor: 'av', t: 'Está aqui porque furou o último dia útil: ' + o.visitas_com_prova + ' de ' + o.paradas_plano + '.' };
-  if ((p.travados || []).length >= 5) return { k: 'travados', cor: 'av', t: 'Está aqui pelos ' + p.travados.length + ' travados.' };
+  if ((p.travados || []).length >= GV2.MUITOS_TRAVADOS) return { k: 'travados', cor: 'av', t: 'Está aqui pelos ' + p.travados.length + ' travados.' };
   return { k: 'ritmo', cor: 'ok', t: 'Fecha a fila: cumpriu o último dia útil e não tem travado pesando.' };
 };
 GV2.v8dFila = function () {
@@ -90721,7 +90724,10 @@ GV2.render.t10Kpis = function (M) {
   return '<div class="gv2-t10-kpis">'
     + k({ mob: true, r: 'Entraram', v: String(ent), u: 'recém-abertos', s: M.carga ? 'carga de ' + GV2.DIAS_LONGOS[GV2.dow(M.carga.dia)] + ' ' + GV2.ddmm(M.carga.dia) + ' · em ' + GV2.pl(nb, 'bairro', 'bairros') : 'nenhuma carga ainda', s2: 'no mês: ' + mes })
     + k({ mob: true, r: 'Visitados com prova', v: vis + ' de ' + meta, tom: baixo ? 't-av' : '', s: bat + ' de ' + rs.length + ' ' + (bat === 1 ? 'bateu' : 'bateram') + ' 5', stom: baixo ? 't-av' : '', s2: M.fechada ? 'semana passada · ' + GV2.ddmm(M.segA) + ' a ' + GV2.ddmm(M.domA) + (M.dow >= 3 || M.dow === 0 ? ' · esta semana: ' + agora : '') : 'esta semana · a primeira da meta de 5' })
-    + k({ r: 'Viraram negócio', v: String(neg), u: neg === 1 ? 'negócio' : 'negócios', s: vis ? Math.round(neg / vis * 100) + '% dos visitados' : 'sem visitas', s2: 'dos visitados ' + (M.fechada ? 'na semana passada' : 'nesta semana') })
+    /* 02/11/26 (auditoria): era "Viraram negócio", mas a conta é quem TEM negócio no HubSpot — inclusive o
+       que já tinha antes da visita. A data de criação do negócio não chega ao Território (clients só traz
+       id_hubspot e etapa), então o rótulo diz o que é medido */
+    + k({ r: 'Com negócio', v: String(neg), u: neg === 1 ? 'negócio' : 'negócios', s: vis ? Math.round(neg / vis * 100) + '% dos visitados' : 'sem visitas', s2: 'dos visitados ' + (M.fechada ? 'na semana passada' : 'nesta semana') + ' · tem negócio no HubSpot (antes ou depois da visita)' })
     + k({ mob: true, r: 'Parados +14 dias', v: String(par), u: 'sem visita', tom: par >= 10 ? 't-av' : '', s: 'recém-abertos sem nenhuma visita', s2: 'todos os recém-abertos ativos' })
     + k({ mob: true, r: 'Vencendo', v: String(ven), u: 'em 14 dias', tom: ven >= 5 ? 't-av' : '', s: 'passam de 90 dias sem visita', s2: 'depois saem do mapa do executivo' })
     + '</div>';

@@ -2178,6 +2178,12 @@ tabelas.gv2_falta_etapa = [
     checar('auditoria 02/11 · G9: Meu funil · "ganho + onboarding" conta as etapas laterais e o Playbook usa a mesma regra',
       /const nGanho = colGanho \? laterais\.filter/.test(tpl) && /laterais\.filter\(function \(x\) \{ return String\(x\.stageId\) === String\(FN3_ETAPA_ONBOARDING\)/.test(tpl) && tpl.indexOf('const sem = new Set(typeof fn2SemPasso === \'function\'') > 0);
   }
+  /* G12 (auditoria 02/11/26): plural de "saiu do funil", uma régua só de "muitos travados", e o Território
+     não chama de "viraram negócio" quem só tem negócio */
+  checar('auditoria 02/11 · G12: "2 saíram do funil" (plural) e "1 saiu do funil"', codigo.indexOf("sairam + (sairam > 1 ? ' saíram do funil' : ' saiu do funil')") > 0);
+  checar('auditoria 02/11 · G12: "muitos travados" é GV2.MUITOS_TRAVADOS em todo lugar (nada de 3, 4, 5 ou 10 soltos)',
+    GV2.MUITOS_TRAVADOS === 4 && (codigo.match(/travados(\.length|\s*\|\|\s*\[\]\)\.length) >= GV2\.MUITOS_TRAVADOS/g) || []).length >= 6 && !/travados(\.length|\s*\|\|\s*\[\]\)\.length) >= (4|5|10)\b/.test(codigo));
+  checar('auditoria 02/11 · G12: Território diz "Com negócio" (tem negócio, antes ou depois da visita), não "Viraram negócio"', codigo.indexOf("r: 'Com negócio'") > 0 && codigo.indexOf("r: 'Viraram negócio'") < 0);
   /* G2 (auditoria 02/11/26): no feriado o plano do dia é o REAL (o "fds ? 0" zerava e a Hoje
      discordava da Rua); quem tem plano e não saiu não vira exceção nem "nenhuma visita" */
   await (async function () {
