@@ -515,7 +515,8 @@ function montarDadosCompletos() {
        mais abaixo — ele recebe só a rota dele. */
     territorios: territorios.territorios || [],
     territoriosSemDono: territorios._sem_dono || [],
-    footerText: `Fonte: HubSpot (pipeline 916011864, atualizado a cada 2h no horário comercial) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
+    /* sem id de pipeline nem definição de termo (02/11/26): é texto de tela, não nota de auditoria */
+    footerText: `Fonte: HubSpot (funil Field Sales, atualizado a cada 2h no horário comercial) + Daily.`,
     // AUTOMAÇÃO 3 (13/08/26) — status da última rodada do robô: se alguma escrita de
     // realizado_visitas/avancos/propostas falhou ou não bateu na conferência pós-escrita.
     // Opcional: undefined até a primeira rodada rodar com esta automação.
