@@ -14999,6 +14999,20 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .gv2 .pv2-seg button{flex:1;min-height:40px;border:0;border-radius:9px;background:none;color:var(--gv2-mute);font:600 12.5px var(--gv2-font);cursor:pointer;}
 .gv2 .pv2-seg button.is-on{background:var(--gv2-card);color:var(--gv2-ink);box-shadow:0 1px 3px rgba(0,0,0,.12);}
 .gv2 .pv2-blo-cab{display:flex;align-items:baseline;gap:8px;}
+/* Mês a mês (02/11/26): a tabela rola sozinha em largura estreita; números alinhados */
+.gv2 .pv2-mm-wrap{overflow-x:auto;margin-top:8px;}
+.gv2 .pv2-mm{width:100%;border-collapse:collapse;font:500 13px/1.35 var(--gv2-font);font-variant-numeric:tabular-nums;color:var(--gv2-ink);}
+.gv2 .pv2-mm th,.gv2 .pv2-mm td{padding:8px 10px;border-bottom:1px solid var(--gv2-line);text-align:right;vertical-align:top;white-space:nowrap;}
+.gv2 .pv2-mm thead th{font:700 11px/1.2 var(--gv2-font);letter-spacing:.04em;text-transform:uppercase;color:var(--gv2-dim);}
+.gv2 .pv2-mm th[scope=row],.gv2 .pv2-mm thead th:first-child{text-align:left;font-weight:700;color:var(--gv2-ink);text-transform:none;letter-spacing:0;}
+.gv2 .pv2-mm td b{font-weight:700;}
+.gv2 .pv2-mm small{display:block;font:500 11px/1.3 var(--gv2-font);color:var(--gv2-dim);}
+.gv2 .pv2-mm tr.is-corrente{background:var(--gv2-sub);}
+.gv2 .pv2-mm-up{font-style:normal;color:var(--gv2-ok);font-size:10px;margin-left:4px;}
+.gv2 .pv2-mm-dn{font-style:normal;color:var(--gv2-acao);font-size:10px;margin-left:4px;}
+.gv2 .pv2-mm-bar{display:block;height:4px;border-radius:2px;background:var(--gv2-line);margin:4px 0 2px auto;width:72px;}
+.gv2 .pv2-mm-bar > i{display:block;height:100%;border-radius:2px;background:var(--gv2-rota);margin-left:auto;}
+.gv2 .pv2-mm-leit{margin:6px 0 0;font:600 13px/1.45 var(--gv2-font);color:var(--gv2-ink);}
 .gv2 .pv2-blo-cab .pv2-kick{flex:1;}
 .gv2 .pv2-pauta{padding:14px;border-radius:14px;background:var(--gv2-rota-soft);display:flex;flex-direction:column;gap:12px;}
 .gv2 .pv2-pp{display:flex;flex-direction:column;gap:6px;}
@@ -92407,6 +92421,57 @@ GV2.pv2Lin = function (o) {
 GV2.pv2Bts = function (bs) { return '<div class="pv2-bts">' + bs.map(function (a) { return '<button type="button" class="pv2-bt' + (a[2] ? ' is-prim' : '') + '" data-gv2="' + GV2.e(a[1]) + '">' + GV2.e(a[0]) + '</button>'; }).join('') + '</div>'; };
 GV2.pv2Nota = function (t) { return '<p class="pv2-nota">' + GV2.e(t) + '</p>'; };
 
+/* ── MÊS A MÊS (pedido do gestor em 02/11/26: "clicar no mês e ver todos os resultados, para comparar o
+   crescimento"). Os 6 últimos meses da pessoa ao lado da média por pessoa do time (sem rampa), da mesma
+   fonte do "clientes · pontos do HubSpot" do Funil (resultados_mensais, 0245): clientes (contrato menos
+   estorno), MRR, demos, visitas com prova e visitas por dia útil; a seta compara com o mês anterior. ── */
+GV2.pv2MesesLer = function (p) {
+  const E = GV2.estado.pv2Meses = GV2.estado.pv2Meses || {};
+  if (E[p.id] || typeof supa === 'undefined' || !supa) return;
+  E[p.id] = { lendo: true };
+  Promise.resolve().then(function () { return supa.rpc('resultados_mensais', { p_owner: String(p.id), p_meses: 6 }); }).then(function (r) {
+    E[p.id] = r && !r.error && r.data && Array.isArray(r.data.meses) ? { d: r.data } : { erro: (r && r.error && r.error.message) || 'sem resposta' };
+    GV2.pintar();
+  }, function (e) { E[p.id] = { erro: (e && e.message) || 'erro' }; GV2.pintar(); });
+};
+GV2.pv2Meses = function (p) {
+  GV2.pv2MesesLer(p);
+  const st = (GV2.estado.pv2Meses || {})[p.id] || { lendo: true };
+  const cab = 'MÊS A MÊS · 6 MESES';
+  if (st.lendo) return GV2.pv2Blo('meses', cab, 'rota', 'você e a média do time', GV2.pv2Nota('Lendo os meses de ' + GV2.prim(p.nome) + '…'));
+  if (st.erro) return GV2.pv2Blo('meses', cab, 'rota', 'você e a média do time', GV2.pv2Nota('Não consegui ler os meses agora. Abra a página de novo em instantes.'));
+  const ms = st.d.meses.slice().reverse();
+  const porDia = function (v, u) { return u ? v / u : null; };
+  const seta = function (a, b) { if (a == null || b == null) return ''; return a > b ? '<i class="pv2-mm-up" aria-label="subiu">▲</i>' : a < b ? '<i class="pv2-mm-dn" aria-label="caiu">▼</i>' : ''; };
+  const maxV = Math.max.apply(null, ms.map(function (m) { return m.eu.vendas; }).concat([1]));
+  const linhas = ms.map(function (m, i) {
+    const ant = ms[i + 1], e = m.eu, t = m.time;
+    const nome = GV2.MESES[Number(m.mes.slice(5, 7)) - 1].slice(0, 3) + ' ' + m.mes.slice(2, 4);
+    const vd = porDia(e.visitas, m.uteis), vdT = porDia(t.visitas, m.uteis), vdA = ant ? porDia(ant.eu.visitas, ant.uteis) : null;
+    const conv = e.demos >= 3 ? Math.round(e.vendas / e.demos * 100) : null, convT = t.demos >= 3 ? Math.round(t.vendas / t.demos * 100) : null;
+    const cel = function (v, tv, extra) { return '<td><b>' + GV2.e(v) + '</b>' + (extra || '') + '<small>time ' + GV2.e(tv) + '</small></td>'; };
+    return '<tr class="' + (m.corrente ? 'is-corrente' : '') + '"><th scope="row">' + GV2.e(nome) + (m.corrente ? '<small>parcial · ' + GV2.pl(m.uteis, 'dia útil', 'dias úteis') + '</small>' : '') + '</th>'
+      + '<td class="pv2-mm-cli"><b>' + e.vendas + '</b>' + (ant && !m.corrente ? seta(e.vendas, ant.eu.vendas) : '') + '<i class="pv2-mm-bar"><i style="width:' + Math.round(Math.max(0, e.vendas) / maxV * 100) + '%"></i></i><small>time ' + GV2.virg(t.vendas) + '</small></td>'
+      + cel(GV2.rsCheio(e.mrr), GV2.rsCheio(t.mrr))
+      + cel(e.demos, GV2.virg(t.demos), ant && !m.corrente ? seta(e.demos, ant.eu.demos) : '')
+      + cel(e.visitas, GV2.virg(t.visitas))
+      + cel(vd == null ? '—' : GV2.virg(vd), vdT == null ? '—' : GV2.virg(vdT), !m.corrente ? seta(vd, vdA) : '')
+      + cel(conv == null ? '—' : conv + '%', convT == null ? '—' : convT + '%')
+      + '</tr>';
+  }).join('');
+  /* a leitura em uma linha: o último mês fechado contra o anterior e contra o time */
+  const f = ms.filter(function (m) { return !m.corrente; }), u = f[0], a = f[1];
+  let leitura = '';
+  if (u) {
+    const nU = GV2.MESES[Number(u.mes.slice(5, 7)) - 1];
+    leitura = 'Em ' + nU + ': ' + GV2.pl(u.eu.vendas, 'cliente', 'clientes') + (a ? (u.eu.vendas > a.eu.vendas ? ' (subiu de ' + a.eu.vendas + ')' : u.eu.vendas < a.eu.vendas ? ' (caiu de ' + a.eu.vendas + ')' : ' (igual ao mês anterior)') : '')
+      + ', ' + (u.eu.vendas >= u.time.vendas ? 'acima' : 'abaixo') + ' da média do time (' + GV2.virg(u.time.vendas) + ').';
+  }
+  const tab = '<div class="pv2-mm-wrap"><table class="pv2-mm"><thead><tr><th scope="col">mês</th><th scope="col">clientes</th><th scope="col">MRR</th><th scope="col">demos</th><th scope="col">visitas com prova</th><th scope="col">visitas por dia útil</th><th scope="col">demo → cliente</th></tr></thead><tbody>' + linhas + '</tbody></table></div>';
+  return GV2.pv2Blo('meses', cab, 'rota', 'você e a média do time', (leitura ? '<p class="pv2-mm-leit">' + GV2.e(leitura) + '</p>' : '') + tab
+    + GV2.pv2Nota('Clientes = vendas do HubSpot menos estornos (a mesma conta do Funil). Média do time = por pessoa ativa, sem quem está em rampa. A seta compara com o mês anterior.'));
+};
+
 /* o resumo de 5 números (o mesmo da v4): Hoje · Mês · Ritmo · Disciplina · Carteira; o clique leva ao bloco */
 GV2.pv2Resumo = function (p) {
   const r = p.resultado || {}, d = p.disc || {}, w = p.w || [], meta = p.meta_visitas_dia || GV2.V8_VISITAS_DIA || 6;
@@ -92414,7 +92479,7 @@ GV2.pv2Resumo = function (p) {
   const sp = GV2.pv2SemPasso(p), mrrP = (p.puxar || []).reduce(function (a, n) { return a + (n.mrr || 0); }, 0);
   const R = [
     { k: 'HOJE', v: p.hoje.paradas_plano ? p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano + ' provadas' : (p.hoje.visitas_todas || 0) + ' com prova', s: p.promessa != null ? 'prometeu ' + p.promessa : p.hoje.paradas_plano ? 'sem promessa no app' : 'sem plano hoje', a: 'agora' },
-    { k: 'MÊS', v: GV2.deMeta(r.fechados || 0, r.meta) + ' clientes', s: (r.meta ? 'faltam ' + r.faltam : 'sem meta') + (r.variavel != null ? ' · variável ' + GV2.rsCheio(r.variavel) : ''), a: 'funil' },
+    { k: 'MÊS', v: GV2.deMeta(r.fechados || 0, r.meta) + ' clientes', s: (r.meta ? 'faltam ' + r.faltam : 'sem meta') + (r.variavel != null ? ' · variável ' + GV2.rsCheio(r.variavel) : '') + ' · ver mês a mês', a: 'meses' },
     { k: 'RITMO', v: rit == null ? '—' : GV2.virg(rit) + '/dia', s: 'meta ' + meta + ' · 4 semanas', a: 'ritmo', tom: rit != null && rit < meta ? 'av' : rit != null ? 'ok' : '' },
     { k: 'DISCIPLINA', v: d.nReunioes == null ? '—' : GV2.pl(d.nReunioes, 'reunião', 'reuniões'), s: 'sem desfecho' + (d.nSemFicha != null ? ' · ' + GV2.pl(d.nSemFicha, 'porta sem como foi', 'portas sem como foi') : ''), a: 'disc', tom: d.nReunioes > 20 ? 'acao' : '' },
     { k: 'CARTEIRA', v: sp + ' sem passo', s: GV2.pl((p.puxar || []).length, 'a puxar', 'a puxar') + (mrrP ? ' · ' + GV2.rsCheio(mrrP) + ' de MRR' : ''), a: 'funil', tom: sp >= 10 ? 'acao' : '' }
@@ -92668,7 +92733,7 @@ GV2.pv2Funil = function (p) {
   const nota = (pr ? 'Prospecção dele: contas-alvo ' + pr.atribuidas + ' → visitadas ' + pr.visitadas + ' → avançaram ' + pr.avancaram + '. ' : '')
     + (px.length ? 'Para puxar: ' + px.map(function (n) { return n.nome + ' (' + GV2.ETAPAS[n.etapa_idx] + ', ' + n.dias + ' d)'; }).join(' · ') + '.' : 'Nada travado e nenhum quente sem passo.');
   const np = (p.puxar || []).length;
-  return GV2.pv2Blo('funil', 'FUNIL', 'ok', 'HubSpot · o mesmo do Raio X', cards + lin + GV2.pv2Nota(nota)
+  return GV2.pv2Blo('funil', 'FUNIL', 'ok', 'HubSpot · o mesmo da aba Funil', cards + lin + GV2.pv2Nota(nota)
     + GV2.pv2Bts((np ? [[GV2.cobrarN(np), 'p3:cobrartodos:' + p.id, false]] : []).concat([['Travados', 'v8neg:travados:' + p.id, false], ['Funil completo · como contamos', 'v5gav:funil:' + p.id, false]])));
 };
 GV2.pv2Desenv = function (p) {
@@ -92714,7 +92779,7 @@ GV2.pv2Seguro = function (fn, p, nome) {
 GV2.render.pv2Painel = function (p) {
   const q = GV2.pv2Dev(p), abriu = q ? Number((q.aberturas || {}).semana) > 0 : null, x = GV2.pv2Rampa(p);
   const sub = (x ? 'novato · ' + GV2.pv2Trilha(x) : 'pleno · ' + p.praca) + ' · ' + (p.ultimo1a1 ? 'último 1:1 ' + GV2.ddmm(String(p.ultimo1a1.data).slice(0, 10)) : 'nenhum 1:1 registrado') + ' · abriu o app esta semana: ' + (abriu == null ? '…' : abriu ? 'sim' : 'não');
-  const anc = [['um', '1:1'], ['agora', 'Agora'], ['mapa', 'Mapa'], ['ritmo', 'Ritmo'], ['disc', 'Disciplina'], ['funil', 'Funil'], ['dev', 'Desenvolvimento'], ['campo', 'Campo'], ['mais', 'Combinados e mais']];
+  const anc = [['um', '1:1'], ['agora', 'Agora'], ['meses', 'Mês a mês'], ['mapa', 'Mapa'], ['ritmo', 'Ritmo'], ['disc', 'Disciplina'], ['funil', 'Funil'], ['dev', 'Desenvolvimento'], ['campo', 'Campo'], ['mais', 'Combinados e mais']];
   const modo = GV2.pv2Modo(p), reg = GV2.estado.registrando && GV2.estado.registrando.id === p.id;
   const sel = GV2.estado.pv2Sel[p.id] || [], dia = GV2.estado.pv2Dia[p.id];
   const pe = reg ? ['Desfazer · ' + GV2.estado.registrando.s + 's', 'um:desfazer']
@@ -92725,7 +92790,7 @@ GV2.render.pv2Painel = function (p) {
     + GV2.pv2Resumo(p)
     + '<nav class="pv2-anc">' + anc.map(function (a, i) { return '<button type="button" class="' + (i === 0 ? 'is-on' : '') + '" data-gv2="pv2:anc:' + a[0] + '">' + GV2.e(a[1]) + '</button>'; }).join('') + '</nav>'
     + '<div class="pv2-pan-corpo" data-pv2-id="' + GV2.e(p.id) + '"><div class="pv2-pan-g">' + GV2.pv2Seguro(GV2.pv2Esq, p, '1:1')
-    + '<div class="pv2-col">' + [[GV2.pv2Agora, 'Agora'], [GV2.pv2MapaP, 'Mapa'], [GV2.pv2Ritmo, 'Ritmo'], [GV2.pv2Disc, 'Disciplina'], [GV2.pv2Funil, 'Funil'], [GV2.pv2Desenv, 'Desenvolvimento'], [GV2.pv2Campo, 'Campo']]
+    + '<div class="pv2-col">' + [[GV2.pv2Agora, 'Agora'], [GV2.pv2Meses, 'Mês a mês'], [GV2.pv2MapaP, 'Mapa'], [GV2.pv2Ritmo, 'Ritmo'], [GV2.pv2Disc, 'Disciplina'], [GV2.pv2Funil, 'Funil'], [GV2.pv2Desenv, 'Desenvolvimento'], [GV2.pv2Campo, 'Campo']]
       .map(function (x) { return GV2.pv2Seguro(x[0], p, x[1]); }).join('') + '</div></div>'
     + '<div class="pv2-mais" id="pv2b-mais">' + (GV2.render.v6Rua7 ? GV2.render.v6Rua7(p) : '') + (GV2.render.cbPessoa ? GV2.render.cbPessoa(p) : '') + (GV2.render.hbPessoa ? GV2.render.hbPessoa(p) : '') + (GV2.render.ldPessoa ? GV2.render.ldPessoa(p) : '')
     + '<details class="pv2-antes"><summary>A página de antes, inteira · Agora e semana, Rua, Coaching, Evolução, PDI e a voz da rua</summary>' + antes + '</details></div></div>'
@@ -92740,7 +92805,7 @@ GV2.render.pv2Ver = function () {
   let corpo;
   try { corpo = q ? DV2.html(DV2.montar(q, DV2.capitulos())) : GV2.html.estado('lendo', 'Lendo o Meu desempenho de ' + GV2.prim(p.nome) + '…'); } catch (e) { corpo = GV2.html.estado('erro', 'Não consegui montar a tela agora (' + ((e && e.message) || 'erro') + ').'); }
   return '<div class="gv2-rxg-veu" data-gv2="pv2:verfechar"></div><aside class="gv2-rxg pv2-vergav" role="dialog" aria-label="Como ele vê">'
-    + '<header class="gv2-rxg-cab"><div><b>' + GV2.e('O Meu desempenho de ' + GV2.prim(p.nome)) + '</b><span>o que ele vê no app · desenvolvimento_quadro · só leitura</span></div><button type="button" class="gv2-rxg-x" data-gv2="pv2:verfechar" aria-label="Fechar">×</button></header>'
+    + '<header class="gv2-rxg-cab"><div><b>' + GV2.e('O Meu desempenho de ' + GV2.prim(p.nome)) + '</b><span>o que ele vê no app · só leitura</span></div><button type="button" class="gv2-rxg-x" data-gv2="pv2:verfechar" aria-label="Fechar">×</button></header>'
     + '<div class="gv2-rxg-corpo"><div class="gv2-tokens pv2-dv2">' + corpo + '</div></div></aside>';
 };
 
