@@ -26,6 +26,10 @@ const casos = [
   ['Bruno: funil sem o Julyan', conta(bruno) === 0],
   ['Bruno: sem a gaveta', !bruno.funilForaDoTime],
   ['Julyan: a gaveta não desce crua', !julyanExec.funilForaDoTime],
+  /* 02/11/26 (auditoria): a carteira do próprio gestor desce para ele, à parte (funilDoGestor) */
+  ['gestor recebe a PRÓPRIA carteira em funilDoGestor, com a etapa', !!gestor.funilDoGestor && (gestor.funilDoGestor['1395880469'] || []).some(l => l.id === 'G1' && String(l.stageId) === '1395880469')],
+  ['gestor sem a carteira de outro dono', !m.filtrarParaPapel(c, { role: 'manager', ownerId: '1' }).funilDoGestor],
+  ['executivo não recebe funilDoGestor', !bruno.funilDoGestor && !julyanExec.funilDoGestor],
 ];
 casos.forEach(c => console.log((c[1] ? 'ok   ' : 'FALHA') + ' ' + c[0]));
 process.exit(casos.every(c => c[1]) ? 0 : 1);

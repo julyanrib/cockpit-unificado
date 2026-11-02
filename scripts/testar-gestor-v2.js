@@ -2195,6 +2195,32 @@ tabelas.gv2_falta_etapa = [
     checar('auditoria 02/11 · G2: no feriado o plano de hoje é o real (6 paradas), sem exceção de "plano sem visita" e sem "nenhuma visita"',
       biaF.hoje.paradas_plano === 6 && bF.time.paradas === GV2.base.time.paradas && (biaF.excecao & 2) === 0 && !/nenhuma visita/.test(biaF.motivo), JSON.stringify({ pl: biaF.hoje.paradas_plano, exc: biaF.excecao, m: biaF.motivo }));
   })();
+  /* G13 (02/11/26, aprovado pelo dono): a carteira do gestor entra como "você" — contada como a de um
+     executivo, mas fora de b.pessoas, da meta, do ranking e do "Quem precisa de você" */
+  await (async function () {
+    const antes = { base: GV2.base, gav: DATA.funilDoGestor };
+    DATA.funilDoGestor = {
+      '1395880472': [lead('g1', '99', 2, 700, false, false), lead('g2', '99', 12, 300, true, true)],
+      '1395880469': [lead('g3', '99', 1, 0, false, false)],
+      '1395880473': [lead('g4', '99', 9, 100, true, false)]
+    };
+    const bV = await GV2.montar();
+    GV2.base = bV;
+    const V = bV.voce;
+    const semVoce = antes.base;
+    const eo = console.error; console.error = () => {};
+    const provaV = GV2.testes.prova();
+    console.error = eo;
+    const hj = GV2.render.time(), pv = GV2.render.prova(), pp = GV2.render.v8PorPessoa();
+    const grupos = JSON.stringify(GV2.v5Grupos().grupos);
+    GV2.base = antes.base; DATA.funilDoGestor = antes.gav;
+    checar('auditoria 02/11 · G13: a carteira do gestor vira b.voce (quentes 3 com Ag. Pag., travado 1, sem próximo passo 2 = g1 e g3)',
+      !!V && V.quentes.length === 3 && V.travados.length === 1 && V.semProximoPasso === 2 && V.quentesSemPasso === 1, JSON.stringify(V && { q: V.quentes.length, t: V.travados.length, sp: V.semProximoPasso, qsp: V.quentesSemPasso }));
+    checar('auditoria 02/11 · G13: "você" fica FORA de b.pessoas, dos totais do time, da meta e do "Quem precisa de você"',
+      !bV.pessoas.some(p => p.id === '99') && bV.time.quentes === semVoce.time.quentes && bV.time.travados === semVoce.time.travados && bV.time.metaMes === semVoce.time.metaMes && !bV.negocios.some(n => n.dono === '99') && grupos.indexOf('"99"') < 0 && provaV.length === 0, provaV.join(' · '));
+    checar('auditoria 02/11 · G13: a Hoje mostra "+ você N" ao lado do time, a Prova e o Por pessoa têm a linha "Você" à parte',
+      /\+ você 3/.test(hj) && /\+ você 1/.test(hj) && pv.indexOf('Você (fora do time · não soma no topo)') > 0 && pp.indexOf('sua carteira · fora da meta do time') > 0);
+  })();
   /* G11 (auditoria 02/11/26): a pintura que lança no boot vira estado de erro com "Tentar de novo"
      (antes ficava no esqueleto). Por último: o await deixa as leituras pendentes resolverem. */
   await (async function () {

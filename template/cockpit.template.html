@@ -77387,9 +77387,13 @@ GV2.kpisHoje = function (b) {
     planos: naRua.filter(function (p) { return p.hoje.paradas_plano > 0; }).length, naRua: naRua.length,
     quentes: t.quentes, quentesSemPasso: t.quentesSemPasso, travados: t.travados,
     fechados: t.fechados, metaMes: t.metaMes, provavel: t.provavel,
-    semProximoPasso: GV2.semProximoPasso(b.negocios).length
+    semProximoPasso: GV2.semProximoPasso(b.negocios).length,
+    /* a carteira do gestor (G13): à parte, nunca somada no time */
+    voce: b.voce ? { quentes: b.voce.quentes.length, travados: b.voce.travados.length, semProximoPasso: b.voce.semProximoPasso, quentesSemPasso: b.voce.quentesSemPasso } : null
   };
 };
+/* "+ você N" ao lado do número do time, só quando o gestor tem carteira e N > 0 */
+GV2.maisVoce = function (n) { return n ? ' · + você ' + n : ''; };
 GV2.render.prova = function () {
   const b = GV2.base, K = GV2.kpisHoje(b);
   const cab = ['Executivo', 'Plano hoje', 'Paradas hoje', 'Visitas hoje', 'Meta dia', 'Quentes', 'Quentes sem passo', 'Sem próx. passo', 'Travados', 'Fech. / meta mês'];
@@ -77402,6 +77406,11 @@ GV2.render.prova = function () {
     const rampa = GV2.emRampa && GV2.emRampa(p);
     return lin(p.nome, [rampa ? 'rampagem' : p.hoje.paradas_plano ? '1' : '0', String(p.hoje.paradas_plano), String(p.hoje.visitas_todas || 0), String(GV2.naMeta(p) ? p.meta_visitas_dia : 0), String(p.quentes.length), String(p.quentesSemPasso), String(GV2.semProximoPasso(p.negocios).length), String(p.travados.length), p.funil_mes.fechado + ' / ' + p.meta_clientes_mes]);
   }).concat([lin('Hoje (topo)', [K.planos + ' de ' + K.naRua, String(b.time.paradas), String(K.visitas), String(K.meta), String(K.quentes), String(K.quentesSemPasso), String(K.semProximoPasso), String(K.travados), K.fechados + ' / ' + K.metaMes], true)]);
+  /* a carteira do gestor (G13): uma linha à parte, depois do topo — não soma nele nem na meta */
+  if (b.voce) {
+    const v = b.voce, nd = function (x) { return x == null ? '—' : String(x); };
+    linhas.push(lin('Você (fora do time · não soma no topo)', ['—', '—', nd(v.funil_mes.portas), 'sem meta', String(v.quentes.length), String(v.quentesSemPasso), String(v.semProximoPasso), String(v.travados.length), nd(v.funil_mes.fechado) + ' / sem meta']));
+  }
   const erros = GV2.testes.ultimo || [];
   const conf = GV2.conferencia();
   const confHTML = !conf ? '' : '<br><b class="' + (conf.itens.length ? 't-erro' : 't-ok') + '">Conferência automática: ' + GV2.e(conf.itens.length ? GV2.pl(conf.itens.length, 'divergência', 'divergências') + ' às ' + conf.hh : 'números conferidos com o HubSpot e o banco às ' + conf.hh) + '</b>'
@@ -77944,9 +77953,8 @@ GV2.montar = async function (so, leituraPronta) {
   GV2.noPlanoDe = noPlanoDe;
   /* o mesmo registro que proximoPassoDoLead lê nas outras telas: o que esta carga leu entra lá */
   if (typeof PLANO_POR_NEGOCIO !== 'undefined' && PLANO_POR_NEGOCIO) Object.keys(noPlanoDe).forEach(function (k) { if (!PLANO_POR_NEGOCIO[k] || noPlanoDe[k] < PLANO_POR_NEGOCIO[k]) PLANO_POR_NEGOCIO[k] = noPlanoDe[k]; });
-  GV2.ETAPA_IDS.forEach(function (sid, idx) {
-    ((DATA.funilLeads || {})[sid] || []).forEach(function (l) {
-      if (!l || donos.indexOf(String(l.ownerId)) < 0) return;
+  /* o negócio do funil na forma da base: a mesma montagem serve ao time e à carteira do gestor ("você") */
+  const montarNegocio = function (l, sid, idx) {
       const regua = Number(slaCfg[sid]) || GV2.REGUA_PADRAO[idx];
       const dias = Number(l.dias) || 0;
       const pp = typeof proximoPassoDoLead === 'function' ? proximoPassoDoLead(l) : null;
@@ -77965,7 +77973,7 @@ GV2.montar = async function (so, leituraPronta) {
            puxar = travado, ou Negociação sem próximo passo; o provável usa só Negociação */
       const agPag = idx === 5;
       const travado = !agPag && (typeof l.slaBreach === 'boolean' ? l.slaBreach : dias > regua);
-      negocios.push({
+      return {
         id: String(l.id), dono: String(l.ownerId), nome: l.name || l.dealname || 'sem nome', etapa_idx: idx, stageId: sid,
         dias: dias, regua: regua, mrr: mrr, proximo_passo: ppTxt, plano: l.plano_apresentado || null,
         /* a tarefa aberta mais antiga que já venceu (as tarefas do snapshot são as abertas): "vencida desde" */
@@ -77977,10 +77985,32 @@ GV2.montar = async function (so, leituraPronta) {
         puxar: !agPag && (travado || (idx === 4 && !ppTxt)),
         rep: 1, outros: [],
         lead: l
-      });
+      };
+  };
+  GV2.ETAPA_IDS.forEach(function (sid, idx) {
+    ((DATA.funilLeads || {})[sid] || []).forEach(function (l) {
+      if (!l || donos.indexOf(String(l.ownerId)) < 0) return;
+      negocios.push(montarNegocio(l, sid, idx));
     });
   });
   GV2.dedupNegocios(negocios);
+  /* A CARTEIRA DO GESTOR, "VOCÊ" (02/11/26, auditoria; o dono aprovou): os negócios do próprio gestor
+     chegam em DATA.funilDoGestor (o servidor manda só a dele) e viram b.voce, contados como os de um
+     executivo — quentes, travados, sem próximo passo (GV2.semProximoPasso), funil e propostas — mas
+     FORA de b.pessoas: não entram na meta do time, no ranking/placar, no "Quem precisa de você", na
+     daily nem em cobrança ou 1:1. As telas mostram o total do time e, à parte, "+ você N". */
+  const gestorDono = (typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.ownerId) ? String(sessaoAtual.ownerId) : null;
+  const gavGestor = (!so && gestorDono && donos.indexOf(gestorDono) < 0 && typeof DATA !== 'undefined' && DATA && DATA.funilDoGestor) || null;
+  const negociosVoce = [];
+  if (gavGestor) {
+    GV2.ETAPA_IDS.forEach(function (sid, idx) {
+      (gavGestor[sid] || []).forEach(function (l) { if (l && String(l.ownerId) === gestorDono) negociosVoce.push(montarNegocio(l, sid, idx)); });
+    });
+    /* dedupNegocios reescreve GV2.aliasDeal: o do time é guardado e o do gestor soma por cima */
+    const aliasTime = GV2.aliasDeal || {};
+    GV2.dedupNegocios(negociosVoce);
+    GV2.aliasDeal = Object.assign({}, aliasTime, GV2.aliasDeal || {});
+  }
 
   /* proposta do mês = entrou em Negociação no mês: o que o banco registrou (app e
      cockpit) mais o que está em Negociação há menos dias úteis do que o mês tem */
@@ -78293,6 +78323,29 @@ GV2.montar = async function (so, leituraPronta) {
         valeAteRot: n.etapa_idx === 5 ? '—' : status === 'combinado' ? 'combinado ' + GV2.ddmm(String(n.lead.aguardandoAte || '').slice(0, 10) || agora.iso) : (resta < 0 ? GV2.ddmm(venceu) : GV2.ddmm(ate)), status: status, proximo: n.proximo_passo, deal: n.id, ordem: n.etapa_idx === 5 ? 3 : status === 'combinado' ? 2 : resta < 0 ? 0 : 1 };
     }).sort(function (x, y) { return (x.ordem - y.ordem) || (y.mrr - x.mrr); });
 
+  /* "você" (G13, 02/11/26): a carteira do gestor contada como a de um executivo, fora de b.pessoas */
+  let voce = null;
+  if (gavGestor) {
+    const nv = negociosVoce;
+    const pmV = pmOk && PM.porOwner[gestorDono] ? PM.porOwner[gestorDono] : null;
+    const contaPM = function (k) { if (!pmV) return null; const vistos = {}; (pmV[k] || []).forEach(function (x) { const id = String(x.id); vistos[(GV2.aliasDeal || {})[id] || id] = 1; }); return Object.keys(vistos).length; };
+    const portasV = L.visitasMes && !L.visitasMes.erro ? (L.visitasMes.data || []).filter(function (v) { return v.provada && String(v.owner_id) === gestorDono; }).length : null;
+    const fechV = VM && VM.gestor ? ((VM.gestor.clientes || []).length) : null;
+    const quentesV = nv.filter(function (n) { return n.quente; });
+    voce = {
+      id: gestorDono, nome: 'Você', iniciais: 'VC', foraDaMeta: true,
+      negocios: nv, quentes: quentesV, travados: nv.filter(function (n) { return n.travado; }),
+      mornos: nv.filter(function (n) { return n.morno; }),
+      quentesSemPasso: quentesV.filter(function (n) { return !n.agPag && !n.proximo_passo; }).length,
+      semProximoPasso: GV2.semProximoPasso(nv).length,
+      mrrQuentes: quentesV.reduce(function (x, n) { return x + n.mrr; }, 0),
+      agPag: nv.filter(function (n) { return n.agPag; }), negociacao: nv.filter(function (n) { return n.negociacao; }),
+      puxar: nv.filter(function (n) { return n.puxar; }),
+      /* null = não medido para o gestor (a fonte não traz o dono dele), nunca 0 */
+      funil_mes: { portas: portasV, decisor: contaPM('decisor'), demo: contaPM('demo'), proposta: contaPM('proposta'), fechado: fechV },
+      propostas: { mes: contaPM('proposta'), aceitas_mes: fechV }
+    };
+  }
   const ordem = pessoas.slice().sort(function (x, y) { return (y.excecao - x.excecao) || (y.travados.length - x.travados.length) || x.nome.localeCompare(y.nome); });
   const porId = {};
   pessoas.forEach(function (p) { porId[p.id] = p; });
@@ -78313,7 +78366,7 @@ GV2.montar = async function (so, leituraPronta) {
     semanaRot: GV2.ddmm(diasSemana[0]) + ' a ' + GV2.ddmm(diasSemana[4]),
     semana: diasSemana.map(function (iso) { return { iso: iso, rot: GV2.DIAS[GV2.dow(iso)] + ' ' + iso.slice(8, 10), hoje: iso === agora.iso }; }),
     prazo2: prazo(2), prazo3: prazo(3),
-    pessoas: pessoas, ordem: ordem, porId: porId,
+    pessoas: pessoas, ordem: ordem, porId: porId, voce: voce,
     ordemRua: pessoas.slice().sort(function (x, y) { const o = { visita: 0, desloc: 1, sem: 2 }; return (o[x.hoje.status] - o[y.hoje.status]) || x.nome.localeCompare(y.nome); }),
     negocios: negocios, time: time, funilItens: AG.funilItens, gargalo: AG.gargalo, melhorPorPasso: AG.melhorPorPasso, dinheiro: AG.dinheiro,
     semValorDecisorEmDiante: AG.semValorDecisorEmDiante, emJogo: AG.emJogo,
@@ -86855,9 +86908,9 @@ GV2.render.time = function () {
     + K({ rot: 'Quentes', def: 'negócio em Negociação ou Ag. Pagamento · sem próximo passo = sem tarefa ou reunião futura no HubSpot e fora do Planejamento', acao: 'ir:raiox:quentes',
       /* 02/11/26 (auditoria): o número é dos QUENTES sem passo (p.quentesSemPasso), e o rótulo dizia só
          "sem próximo passo" — que, pela regra canônica (GV2.semProximoPasso), é o funil inteiro */
-      num: String(KH.quentes), unid: KH.quentes === 1 ? 'negócio' : 'negócios', cmp: GV2.pl(KH.quentesSemPasso, 'quente sem passo', 'quentes sem passo') + ' · ' + KH.semProximoPasso + ' no funil sem próximo passo', cmpTom: KH.quentesSemPasso ? 't-av' : '' })
+      num: String(KH.quentes), unid: KH.quentes === 1 ? 'negócio' : 'negócios', cmp: GV2.pl(KH.quentesSemPasso, 'quente sem passo', 'quentes sem passo') + ' · ' + KH.semProximoPasso + ' no funil sem próximo passo' + (KH.voce ? GV2.maisVoce(KH.voce.quentes) + (KH.voce.semProximoPasso ? ' (' + KH.voce.semProximoPasso + ' seus sem passo)' : '') : ''), cmpTom: KH.quentesSemPasso ? 't-av' : '' })
     + K({ rot: 'Travados', def: 'negócio que passou do prazo da etapa (a régua do playbook)' + (mrrTravNeg ? ' · ' + GV2.rsCheio(mrrTravNeg) + ' parados em Negociação' : ''), acao: 'ir:raiox:travados',
-      num: String(t.travados), tom: t.travados ? 't-av' : '', unid: t.travados === 1 ? 'negócio' : 'negócios', cmp: 'passaram do prazo da etapa' })
+      num: String(t.travados), tom: t.travados ? 't-av' : '', unid: t.travados === 1 ? 'negócio' : 'negócios', cmp: 'passaram do prazo da etapa' + (KH.voce ? GV2.maisVoce(KH.voce.travados) : '') })
     + (RT ? K({ rot: 'Mês', selo: RT.cli.selo, def: 'cliente = negócio que chegou a Ganho / Enviado Onboarding no mês (Ag. Pagamento ainda não) · esperado = meta × dias úteis passados · provável = fechados + Ag. Pagamento + 60% da Negociação', acao: 'rxg:mes',
         num: GV2.deMeta(t.fechados, t.metaMes), unid: 'clientes', tom: 't-' + RT.cli.selo.k, barra: { pct: RT.cli.pct, tick: RT.cli.tick, k: RT.cli.selo.k }, cmp: 'esperado ' + GV2.v8Num(RT.cli.esp) + ' · provável ' + t.provavel })
       : K({ rot: 'Mês', def: 'clientes do mês contra a meta', acao: 'rxg:mes', num: GV2.deMeta(t.fechados, t.metaMes), unid: 'clientes', cmp: 'provável ' + t.provavel }))
@@ -88993,9 +89046,18 @@ GV2.render.v8PorPessoa = function () {
       + '<button type="button" class="gv2-v9-mini" data-gv2="v8neg:sempasso:' + p.id + '" title="negócios abertos sem nada marcado de hoje em diante (Ag. Pagamento fora)"><span><b class="num' + (sp ? ' t-av' : '') + '">' + sp + '</b> sem próx. passo</span></button>'
       + passos + '</div>';
   }).join('');
+  /* G13 (02/11/26): a carteira do gestor, numa linha à parte no fim — sem meta, sem ranking, sem cobrança */
+  const V = GV2.base && GV2.base.voce;
+  const nd = function (x) { return x == null ? '—' : String(x); };
+  const linhaVoce = !V ? '' : '<div class="gv2-v8-pp gv2-v9-pp"><span class="gv2-v8-pp-nome"><b class="gv2-ellip">Você</b><small>sua carteira · fora da meta do time</small></span>'
+    + '<div class="gv2-v9-mini"><span><b class="num">' + nd(V.funil_mes.portas) + '</b> · sem meta</span></div>'
+    + '<div class="gv2-v9-mini"><span><b class="num">' + nd(V.funil_mes.demo) + '</b> · sem meta</span></div>'
+    + '<div class="gv2-v9-mini"><span><b class="num">' + nd(V.funil_mes.fechado) + '</b> · sem meta</span></div>'
+    + '<div class="gv2-v9-mini"><span><b class="num' + (V.semProximoPasso ? ' t-av' : '') + '">' + V.semProximoPasso + '</b> sem próx. passo</span></div>'
+    + '<div class="gv2-v9-mini"><span>' + GV2.e(GV2.pl(V.quentes.length, 'quente', 'quentes') + ' · ' + GV2.pl(V.travados.length, 'travado', 'travados') + ' · ' + GV2.pl(V.negocios.length, 'negócio', 'negócios')) + '</span></div></div>';
   return '<section class="card gv2-v8-ppc"><div class="gv2-v5-cab is-acao"><div><b>3 · Por pessoa' + GV2.v9Info('barra = feito sobre a meta do mês · traço = esperado hoje · o nome abre a pessoa · cada número abre quem está parado na etapa · sem próx. passo = negócio aberto sem nada marcado de hoje em diante (Ag. Pagamento fora)') + '</b><span>traço = esperado até hoje</span></div>'
     + '<button type="button" class="gv2-v5-btn" data-gv2="v8ir:rua:semana">Planejamento do time →</button></div>'
-    + '<div class="gv2-v8-pp gv2-v9-pp is-cab"><span>Pessoa</span><span>Visitas</span><span>Demos</span><span>Clientes</span><span>Sem próx. passo</span><span>Passos do mês</span></div>' + html + '</section>';
+    + '<div class="gv2-v8-pp gv2-v9-pp is-cab"><span>Pessoa</span><span>Visitas</span><span>Demos</span><span>Clientes</span><span>Sem próx. passo</span><span>Passos do mês</span></div>' + html + linhaVoce + '</section>';
 };
 (function () {
   const c0 = GV2.v8Comando;
