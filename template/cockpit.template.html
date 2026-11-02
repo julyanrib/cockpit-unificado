@@ -11230,6 +11230,9 @@ body.gv2-visita #appRoot{padding-left:220px;}
 .gv2-mapa-gm{position:absolute;inset:0;}
 
 /* ── Daily ── */
+/* A DAILY É A TELA DA REUNIÃO (02/11/26, Julyan: "é ali que mostro tudo"): aberta, o menu do Cockpit sai e ela ocupa a largura toda */
+.gv2.is-daily{grid-template-columns:minmax(0,1fr);}
+.gv2.is-daily > .gv2-nav{display:none;}
 .gv2-daily{position:absolute;inset:0;background:var(--gv2-bg);z-index:8;display:flex;flex-direction:column;padding:var(--gv2-pad);gap:14px;}
 .gv2-daily-topo{display:flex;align-items:center;gap:12px;flex:none;}
 .gv2-daily-quem{flex:1;min-width:0;display:flex;flex-direction:column;}
@@ -76234,7 +76237,7 @@ GV2.ABAS = [
 /* o HubSpot fica "atrasado" com 3 h sem carga: o robô roda a cada ~2 h (decisão de 07/10) */
 GV2.HUBSPOT_ATRASO_MIN = 180;
 GV2.navRecolhida = function () { try { return localStorage.getItem('gv2.sidebar.recolhida') === '1'; } catch (e) { return false; } };
-GV2.navClasse = function () { return (GV2.navRecolhida() ? ' nav-recolhida' : '') + (GV2.estado.navAberta ? ' nav-aberta' : ''); };
+GV2.navClasse = function () { return (GV2.navRecolhida() ? ' nav-recolhida' : '') + (GV2.estado.navAberta ? ' nav-aberta' : '') + (GV2.estado.daily != null ? ' is-daily' : ''); };
 GV2.navAlternar = function () {
   if (window.innerWidth > 1366) {
     const r = !GV2.navRecolhida();
@@ -78349,7 +78352,7 @@ GV2.clique = function (ev) {
   if (cmd === 'um' && parte[1] === 'registrar') return GV2.registrarUmAUm(parte[2]);
   if (cmd === 'daily') {
     if (parte[1] === 'abrir') { GV2.estado.daily = 0; return GV2.pintar(); }
-    if (parte[1] === 'sair') { GV2.estado.daily = null; if (GV2.pendente) { GV2.base = GV2.pendente; GV2.pendente = null; GV2.testes.prova(); } return GV2.pintar(); }
+    if (parte[1] === 'sair') { GV2.estado.daily = null; if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {}); if (GV2.pendente) { GV2.base = GV2.pendente; GV2.pendente = null; GV2.testes.prova(); } return GV2.pintar(); }
     if (parte[1] === 'ir') { GV2.estado.daily = Math.max(0, Number(parte[2]) || 0); return GV2.pintar(); }
     if (parte[1] === 'encerrar') return GV2.encerrarDaily();
   }
@@ -87768,6 +87771,7 @@ GV2.render.daily = function () {
       return '<button type="button" class="' + (j === i ? 'is-atual' : '') + '" data-gv2="daily:ir:' + j + '" title="' + GV2.e(o.nome + ' · ' + m.t) + '">' + GV2.e(o.iniciais) + '<i class="is-' + m.cor + '"></i></button>';
     }).join('') + '</div>'
     + '<button type="button" class="gv2-v5-btn is-leve" data-gv2="mg:abrir:' + p.id + '" title="' + GV2.e('onde ' + n1 + ' está e a rota de hoje') + '">Ver no mapa</button>'
+    + '<button type="button" class="gv2-v5-btn is-leve" data-gv2="daily:cheia" title="Tela cheia para projetar (Esc sai)">' + (document.fullscreenElement ? 'Sair da tela cheia' : 'Tela cheia') + '</button>'
     + GV2.html.btn({ texto: 'Encerrar daily', tam: 'lg', acao: 'daily:encerrar' })
     + '<button type="button" class="gv2-v8d-x" data-gv2="daily:sair" title="Sair (Esc)" aria-label="Sair da daily">×</button></div>';
 
@@ -87786,7 +87790,8 @@ GV2.render.daily = function () {
         : GV2.v8dBarra('MRR do mês', mrr.feito, mrr.meta, mrr.meta * M.frac, [GV2.v6Reais(mrr.feito), 'de ' + GV2.v6Reais(mrr.meta)], '')) + '</div>'
     + '<h3>2 · Onde o funil trava</h3>'
     + GV2.v9dFunilCurto(p, R, Rt)
-    + '<div class="gv2-v9-pilulas"><span>porta → decisor <b class="' + GV2.v9dTom(pd, pdT) + '">' + pd + '</b> · time ' + pdT + '</span><span>decisor → demo <b class="' + GV2.v9dTom(dd, ddT) + '">' + dd + '</b> · time ' + ddT + '</span></div>'
+    /* as taxas só com o que medir (02/11/26: "porta → decisor — · time —" no começo do mês era só ruído) */
+    + ((pd !== '—' || pdT !== '—' || dd !== '—' || ddT !== '—') ? '<div class="gv2-v9-pilulas">' + (pd !== '—' || pdT !== '—' ? '<span>porta → decisor <b class="' + GV2.v9dTom(pd, pdT) + '">' + pd + '</b> · time ' + pdT + '</span>' : '') + (dd !== '—' || ddT !== '—' ? '<span>decisor → demo <b class="' + GV2.v9dTom(dd, ddT) + '">' + dd + '</b> · time ' + ddT + '</span>' : '') + '</div>' : '')
     + '<div class="gv2-v8-garg is-' + G.k + '">' + GV2.e(G.t) + '</div></section>';
 
   /* 3 · último dia útil e hoje */
@@ -87797,7 +87802,9 @@ GV2.render.daily = function () {
       + '<p class="gv2-v8d-s">' + GV2.e((o.paradas_plano ? (oFurou ? 'furou ' + oFurou : 'cumpriu o plano') : 'sem plano') + ' · ' + GV2.pl(o.visitas_todas || 0, 'visita', 'visitas') + ' com prova' + (o.visitas_todas > o.visitas_com_prova ? ' (' + (o.visitas_todas - o.visitas_com_prova) + ' fora do plano)' : '') + (fer.length ? ' · ' + fer.map(GV2.diaCurto).join(', ') + ' foi feriado' : '')) + '</p>'
       : '<div class="gv2-v8d-num t-faint">—</div><p class="gv2-v8d-s">' + GV2.e('sem plano nem visita' + (fer.length ? ' · ' + fer.map(GV2.diaCurto).join(', ') + ' foi feriado' : '')) + '</p>')
     + '<hr><h3>Hoje · ' + GV2.e(GV2.diaCurto(b.agora.iso)) + '</h3>'
-    + (GV2.temRua(p)
+    + (!GV2.util(b.agora.iso)
+      ? '<div class="gv2-v8d-num t-ok">' + GV2.pl(p.hoje.visitas_todas || 0, 'visita', 'visitas') + '</div><p class="gv2-v8d-s">' + GV2.e('hoje não é dia útil: sem meta, toda visita com prova conta para a semana') + '</p>'
+      : GV2.temRua(p)
       ? '<div class="gv2-v8d-num ' + ((p.hoje.visitas_todas || 0) >= p.esperado ? 't-ok' : 't-av') + '">' + GV2.visHoje(p) + '</div>'
         + '<p class="gv2-v8d-s">' + GV2.e(GV2.statusRot(p) + (p.hoje.paradas_plano ? ' · do plano ' + p.hoje.visitas_com_prova + ' de ' + p.hoje.paradas_plano : ' · sem plano') + GV2.repHoje(p)) + '</p>'
       : '<div class="gv2-v8d-num t-erro">sem plano</div><p class="gv2-v8d-s">' + GV2.e('nenhuma parada no plano' + (ag ? ' · ' + GV2.pl(ag.n, 'item', 'itens') + ' na agenda' + (ag.itens && ag.itens[0] && ag.itens[0].hora ? ' ' + ag.itens[0].hora : '') : '')) + '</p>')
@@ -87818,7 +87825,7 @@ GV2.render.daily = function () {
             + GV2.e((n.travado ? 'travado · ' + n.dias + ' d em ' + GV2.ETAPAS[n.etapa_idx] : 'sem próximo passo · há ' + n.dias + ' d')) + '</small></span><b class="num">' + (n.mrr ? GV2.rs(n.mrr) : '—') + '</b></button>';
         }).join('') + '</div>'
       : '<div class="gv2-v8d-num t-ok">0</div><p class="gv2-v8d-s">nenhum travado nem quente sem próximo passo</p>')
-    + '<hr><h3>6 · A semana</h3>'
+    + '<hr><h3>5 · A semana</h3>'
     + (S.lendo ? '<p class="gv2-v8d-s is-dim">lendo o placar…</p>' : S.erro ? '<p class="gv2-v8d-s is-dim">' + GV2.e('o placar não respondeu (' + S.erro + ')') + '</p>'
       : '<div class="gv2-v8d-sem"><b class="num">' + S.pts + ' pts</b><span>' + GV2.e(S.pos ? S.pos + 'º de ' + S.n : 'sem pontos') + '</span></div>'
         + '<p class="gv2-v8d-s">' + GV2.e(S.ehLider ? 'lidera a semana · o 1º leva R$ 250' : (S.lider ? 'líder ' + S.lider + ' · ' + S.liderPts + ' pts · o 1º leva R$ 250' : 'ninguém pontuou ainda')) + '</p>')
@@ -87826,7 +87833,7 @@ GV2.render.daily = function () {
 
   /* 5 · compromisso do último dia útil + o de hoje + navegação */
   const ca = GV2.v8dCompromissoAnt(p), rasc = GV2.estado.compromissos[p.id] || '';
-  const c5 = '<div class="gv2-v8d-pe2"><div class="gv2-v8d-ant"><div><h3>5 · Compromisso ' + GV2.e(ca ? 'de ' + GV2.diaCurto(ca.dia) : 'do último dia útil') + '</h3>'
+  const c5 = '<div class="gv2-v8d-pe2"><div class="gv2-v8d-ant"><div><h3>6 · Compromisso ' + GV2.e(ca ? 'de ' + GV2.diaCurto(ca.dia) : 'do último dia útil') + '</h3>'
     + '<p class="' + (ca && ca.texto ? '' : 'is-dim') + '">' + GV2.e(ca && ca.texto ? '“' + ca.texto + '”' : 'nenhum compromisso registrado em ' + GV2.diaCurto(b.ontemIso)) + '</p></div>'
     + (ca && ca.texto ? '<div class="gv2-v8d-seg">' + ['cumprido', 'parcial', 'nao_cumprido'].map(function (r) {
       return '<button type="button" class="' + (ca.resultado === r ? 'is-on is-' + r : '') + '" data-gv2="daily:marca:' + p.id + ':' + r + '">' + GV2.V8D_RES[r] + '</button>';
@@ -87892,6 +87899,12 @@ GV2.v8dEncerrar = async function () {
     if (cmd === 'daily') {
       if (parte[1] === 'abrir') { GV2.v8dFeitos = null; GV2.estado.daily = 0; GV2.pintar(); return true; }
       if (parte[1] === 'encerrar') { GV2.v8dEncerrar(); return true; }
+      if (parte[1] === 'cheia') {
+        const fim = function () { GV2.pintar(); };
+        if (document.fullscreenElement) Promise.resolve(document.exitFullscreen && document.exitFullscreen()).then(fim, fim);
+        else Promise.resolve(document.documentElement.requestFullscreen && document.documentElement.requestFullscreen()).then(fim, function () { GV2.toast('O navegador não deixou abrir em tela cheia. Use F11.', 'erro'); });
+        return true;
+      }
       if (parte[1] === 'marca') { GV2.v8dMarcar(parte[2], parte[3]); return true; }
       if (parte[1] === 'copiar') {
         const texto = GV2.v8dTexto();
@@ -87913,7 +87926,7 @@ GV2.v9dTom = function (tx, txT) {
 GV2.v9dFunilCurto = function (p, R, Rt) {
   const f = R.f, ft = Rt.f;
   const caixa = function (rot, L, acao) {
-    return '<' + (acao ? 'button type="button" data-gv2="' + acao + '"' : 'div') + ' class="gv2-v9-fc-c"><small>' + GV2.e(rot) + '</small><b class="num t-' + L.selo.k + '">' + L.feito + '</b><span>de ' + GV2.v8Num(L.esp) + '</span></' + (acao ? 'button' : 'div') + '>';
+    return '<' + (acao ? 'button type="button" data-gv2="' + acao + '"' : 'div') + ' class="gv2-v9-fc-c"><small>' + GV2.e(rot) + '</small><b class="num t-' + L.selo.k + '">' + L.feito + '</b><span>' + (L.esp > 0 ? 'de ' + GV2.v8Num(L.esp) : 'sem esperado ainda') + '</span></' + (acao ? 'button' : 'div') + '>';
   };
   const seta = function (a, b, aT, bT, rot) {
     const tx = GV2.v8Tx(a, b), txT = GV2.v8Tx(aT, bT);
