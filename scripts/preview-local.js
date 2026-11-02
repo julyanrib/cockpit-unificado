@@ -93,6 +93,11 @@ if (arg.includes('@')) {
   if (!usuario) { console.error('Nenhum executivo com funil encontrado.'); process.exit(1); }
 }
 
+/* --como-executivo: o "Ver como executivo" do gestor, como o servidor monta (api/dados.js,
+   ?visao=executivo): o mesmo usuário gestor, recortado como executivo, sessão com role 'rep'
+   e visaoDeGestor. Serve para pôr lado a lado com o preview de um executivo de verdade. */
+const comoExecutivo = flags.includes('--como-executivo') && usuario.role === 'manager' && !!usuario.ownerId;
+if (comoExecutivo) usuario = Object.assign({}, usuario, { role: 'rep', visaoDeGestor: true });
 const dados = filtrarParaPapel(completos, usuario);
 
 // Shell desligado: o template cai no "modo antigo" (dados embutidos) e não tenta
@@ -151,7 +156,8 @@ const bootstrap = `
     role: usuario.role === 'manager' ? 'manager' : 'rep',
     ownerId: usuario.ownerId,
     nome: usuario.nome || usuario.name || usuario.email,
-    aComecar: !!usuario.aComecar
+    aComecar: !!usuario.aComecar,
+    ...(usuario.visaoDeGestor ? { visaoDeGestor: true } : {})
   })};
   /* Cliente Supabase FALSO. Sem ele, metade das telas do executivo (Daily/Briefing,
      Planejamento, PDI) sai pelo caminho "if (!DATA.supabase || !supa) return" e a
