@@ -840,17 +840,24 @@ async function hsTarefasAbertasDosNegocios(dealIds) {
     (dataTask.results || []).forEach(t => { props[String(t.id)] = t.properties || {}; });
   }
 
-  // Monta o mapa final: só tarefas EM ABERTO (NOT_STARTED), ordenadas pela data mais
-  // próxima, no máximo 3 por negócio — a ficha é um resumo, não a lista completa do CRM.
+  // Monta o mapa final: só tarefas EM ABERTO (NOT_STARTED), no máximo 3 por negócio — a ficha
+  // é um resumo, não a lista completa do CRM. QUAIS 3 (auditoria 02/11/26): antes eram as 3 mais
+  // ANTIGAS, e o negócio com 3+ tarefas vencidas perdia o passo novo (ex.: 6 vencidas e uma em
+  // 05/11 → o snapshot guardava só vencidas e o Cockpit dizia "sem passo"). Agora: a vencida mais
+  // recente (o atraso continua visível) e as próximas de hoje em diante, em ordem de data.
+  const hojeBrt = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
   const mapaFinal = {};
   Object.entries(taskIdsPorDeal).forEach(([dealId, taskIds]) => {
     const abertas = taskIds
       .map(tid => props[tid])
       .filter(p => p && p.hs_task_status === 'NOT_STARTED' && p.hs_task_subject)
       .map(p => ({ subject: p.hs_task_subject, timestamp: p.hs_timestamp || null }))
-      .sort((a, b) => (a.timestamp || '9999') < (b.timestamp || '9999') ? -1 : 1)
-      .slice(0, 3);
-    if (abertas.length) mapaFinal[dealId] = abertas;
+      .sort((a, b) => (a.timestamp || '9999') < (b.timestamp || '9999') ? -1 : 1);
+    const diaBrt = t => (t.timestamp ? new Date(Date.parse(t.timestamp) - 3 * 3600 * 1000).toISOString().slice(0, 10) : '9999');
+    const vencidas = abertas.filter(t => t.timestamp && diaBrt(t) < hojeBrt).slice(-1);
+    const proximas = abertas.filter(t => !t.timestamp || diaBrt(t) >= hojeBrt).slice(0, 3 - vencidas.length);
+    const escolhidas = [...vencidas, ...proximas];
+    if (escolhidas.length) mapaFinal[dealId] = escolhidas;
   });
   return mapaFinal;
 }
