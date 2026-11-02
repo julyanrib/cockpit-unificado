@@ -68010,6 +68010,7 @@ GV2.t3SemServidor = function (r) {
   const t = String((e.code || '') + ' ' + (e.message || ''));
   return /42P01|42883|PGRST20[0-9]|does not exist|Could not find/i.test(t);
 };
+GV2.T3_AVANCO = ['Conversa com decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Enviado Onboarding', 'Ganho'];
 GV2.t3Ler = function (forcar) {
   const S = GV2.t3;
   if (S.lendo) return S.lendo;
@@ -68068,6 +68069,8 @@ GV2.t3Modelo = function (M) {
   });
   const temNegocio = function (l) { const c = cliDoLead[String(l.id)]; return !!(String(l.hubspot_deal_id || '').trim() || (c && String(c.id_hubspot || '').trim())); };
 
+  const avancou = function (c) { return !!c && GV2.T3_AVANCO.indexOf(String(c.etapa || '')) > -1; };
+
   const fun = { ent: 0, atr: 0, rota: 0, vis: 0, neg: 0, visNeg: 0 };
   const porEx = {};
   Object.keys(M.time.ex).forEach(function (id) { const x = M.time.ex[id]; if (GV2.t10NaPraca(x.pk)) porEx[id] = { x: x, atr: 0, rota: 0, vis: 0, neg: 0, visNeg: 0, cartV: 0, cartN: 0, sug: 0, conf: 0, sugLeads: [] }; });
@@ -68089,7 +68092,7 @@ GV2.t3Modelo = function (M) {
     if (vis) { fun.vis++; r.vis++; }
     if (neg) { fun.neg++; r.neg++; }
 
-    if (vis && neg) { fun.visNeg++; r.visNeg++; }
+    if (vis && avancou(cliDoLead[id])) { fun.visNeg++; r.visNeg++; }
   });
 
   const vistoCart = {};
@@ -68104,7 +68107,7 @@ GV2.t3Modelo = function (M) {
     if (vistoCart[k]) return;
     vistoCart[k] = true;
     r.cartV++;
-    if (String(c.id_hubspot || '').trim()) r.cartN++;
+    if (avancou(c)) r.cartN++;
   });
 
   const sugSemana = (S.sugs || []).filter(function (s) { return String(s.semana) === sem.seg; });
@@ -68307,7 +68310,7 @@ GV2.render.t3Carga = function (M, M3) {
   const resto = chegam - capT;
   const nota = 'Com ' + carga + ' por pessoa, o time recebe ' + capT + ' por semana no plano. '
     + (resto > 0 ? 'Os outros ≈ ' + resto + ' seguem na lista de cada um, sem entrar no plano, até haver vaga. ' : 'A carga cobre o que chega: sobra vaga no plano. ')
-    + 'Conversão do programa até aqui: ' + GV2.pl(M3.fun.visNeg, 'negócio', 'negócios') + ' de ' + M3.fun.vis + ' visitados.';
+    + 'Conversão do programa até aqui: ' + M3.fun.visNeg + ' de ' + M3.fun.vis + ' visitados passaram da visita (decisor ou adiante).';
   const sel = '<div class="gv2-t3-sel"><span>Recém-abertos por executivo, por semana</span><div class="gv2-t3-num">'
     + '<button type="button" class="gv2-t3-nb" data-gv2="t3carga:menos" aria-label="diminuir a carga"' + (carga <= GV2.T3.MIN ? ' disabled' : '') + '>−</button>'
     + '<b class="num" aria-live="polite">' + carga + '</b>'
@@ -68466,7 +68469,7 @@ GV2.render.t3Tabela = function (M, M3, carga) {
   const cab = '<div class="gv2-t3-tr is-cab"><span>Executivo</span><span>Atribuídos</span><span>Na rota</span><span>Visitados</span><span>Negócios</span><span>Conversão · programa × carteira</span></div>';
   return '<section class="card gv2-t10-card gv2-t3-tab" id="t3-tab"><div class="gv2-t10-cab is-wrap"><div class="gv2-t10-tit"><b>Por executivo · 30 dias</b>' + seg + '</div><span class="gv2-t10-cs">conversão do programa contra a da carteira: o programa se paga?</span></div>'
     + '<div class="gv2-t3-rola">' + cab + rs.map(function (r) { return linha(r, false); }).join('') + (rs.length ? linha(tot, true) : '<div class="gv2-t10-vazio"><b>Nenhum executivo com território nesta praça</b></div>') + '</div>'
-    + '<div class="gv2-t10-pe"><span>visitados = com prova no pino · negócios = tem negócio no HubSpot · conversão = dos visitados, quantos têm negócio · carteira = as outras contas-alvo dele visitadas com prova nos 30 dias (barra = programa, traço = carteira)</span></div></section>';
+    + '<div class="gv2-t10-pe"><span>visitados = com prova no pino · negócios = tem negócio no HubSpot · conversão = dos visitados, quantos passaram da visita (Conversa com decisor ou adiante) · carteira = as outras contas-alvo dele visitadas com prova nos 30 dias (barra = programa, traço = carteira)</span></div></section>';
 };
 
 GV2.t3Medir = function (acao) {
@@ -71856,7 +71859,7 @@ GV2.pv2Modo = function (p) {
 };
 GV2.pv2Pauta = function (p) {
   const P = GV2.pautaDo1a1(p), n = GV2.prim(p.nome);
-  const conq = P.lendo ? '<span class="pv2-dim">lendo as conquistas do Meu desempenho…</span>' : P.conquistas && P.conquistas.length ? P.conquistas.map(function (c) { return '<span class="pv2-conq">' + GV2.e(c) + '</span>'; }).join('') : '<span class="pv2-dim">' + GV2.e('— · desenvolvimento_quadro não respondeu (' + (GV2.pv2DevErro(p) || 'erro') + ')') + '</span>';
+  const conq = P.lendo ? '<span class="pv2-dim">lendo as conquistas do Meu desempenho…</span>' : P.conquistas && P.conquistas.length ? P.conquistas.map(function (c) { return '<span class="pv2-conq">' + GV2.e(c) + '</span>'; }).join('') : '<span class="pv2-dim">' + GV2.e('— · o Meu desempenho dele não respondeu agora') + '</span>';
   const ultD = P.desde ? GV2.ddmm(P.desde) : null;
   const comb = !p.ultimo1a1 ? '<p class="pv2-dim">Primeiro 1:1 de ' + GV2.e(n) + ': não há combinado para conferir.</p>'
     : !P.combinados.length ? '<p class="pv2-dim">Nenhum combinado registrado nesse 1:1.</p>'
@@ -72019,7 +72022,7 @@ GV2.pv2MapaP = function (p) {
   GV2.pv2VisLer();
   const lente = GV2.estado.pv2Lente || 'visitas';
   const lentes = '<div class="pv2-chips">' + GV2.PV2.LENTES.map(function (l) { const on = lente === l[0]; return '<button type="button" class="pv2-chip' + (on ? ' is-on' : '') + '" data-gv2="pv2:lente:' + l[0] + '" aria-pressed="' + on + '">' + GV2.e(l[1]) + '</button>'; }).join('') + '</div>';
-  if (!GV2.pv2.vis) return GV2.pv2Blo('mapa', 'MAPA DE CALOR · ONDE ELE VAI · 4 SEMANAS', 'acao', 'client_visits · GPS', lentes + '<div class="gv2-esq" style="height:250px"></div>');
+  if (!GV2.pv2.vis) return GV2.pv2Blo('mapa', 'MAPA DE CALOR · ONDE ELE VAI · 4 SEMANAS', 'acao', 'só visita com prova · GPS ou foto', lentes + '<div class="gv2-esq" style="height:250px"></div>');
   const M = GV2.mapaDeCalor(p, lente), Hr = GV2.mapaDeHorarios(p), MV = lente === 'visitas' ? M : GV2.mapaDeCalor(p, 'visitas');
   const H = GV2.PV2.HORAS, max = Math.max(1, Hr.max);
   const horas = '<div class="pv2-horas"><div class="pv2-hl is-th"><span></span>' + H.map(function (h) { return '<span>' + h + '</span>'; }).join('') + '</div>'
@@ -72056,7 +72059,7 @@ GV2.pv2Ritmo = function (p) {
     else { cls = 'is-fut'; v = x.planejadas ? GV2.pl(x.planejadas, 'parada', 'paradas') : '—'; }
     return '<button type="button" class="pv2-cell ' + cls + '" data-gv2="v5dia:' + p.id + ':' + x.iso + '"><small>' + GV2.e(x.hoje ? 'hoje' : GV2.DIAS[GV2.dow(x.iso)]) + '</small><b class="num">' + GV2.e(v) + '</b></button>';
   }).join('') + '</div>';
-  return GV2.pv2Blo('ritmo', 'RITMO', 'ink', 'client_visits · dailies', cards + cells);
+  return GV2.pv2Blo('ritmo', 'RITMO', 'ink', 'visitas com prova e promessas do dia', cards + cells);
 };
 GV2.pv2Disc = function (p) {
   const d = p.disc || {}, vt = GV2.v4Time;
@@ -72071,7 +72074,7 @@ GV2.pv2Disc = function (p) {
       acts: [['Aconteceu', 'v4:desf:' + p.id + ':' + x.id + ':realizada'], ['Remarcar', 'v4:rem:' + x.id], ['Não aconteceu', 'v4:desf:' + p.id + ':' + x.id + ':nao_aconteceu']] });
   }).join('');
   const fila = d.fila7 == null ? 'Fila do app: não li agora.' : 'Fila do app, 7 dias: ' + d.fila7 + ' Feito' + (d.fila7 ? '' : ' (é um dado, não um erro)') + '.';
-  return GV2.pv2Blo('disc', 'DISCIPLINA', 'av', 'client_meetings · fichas_de_rua', cards + re + GV2.pv2Nota(fila + (d.nReunioes > 3 ? ' Ver todas as ' + d.nReunioes + ' reuniões na disciplina completa.' : ''))
+  return GV2.pv2Blo('disc', 'DISCIPLINA', 'av', 'reuniões e fichas de rua', cards + re + GV2.pv2Nota(fila + (d.nReunioes > 3 ? ' Ver todas as ' + d.nReunioes + ' reuniões na disciplina completa.' : ''))
     + GV2.pv2Bts([['Cobrar a disciplina', 'v4:cobrardisc:' + p.id, false], ['Disciplina completa', 'v5gav:disc:' + p.id, false]]));
 };
 GV2.pv2Funil = function (p) {
@@ -72097,7 +72100,7 @@ GV2.pv2Funil = function (p) {
 };
 GV2.pv2Desenv = function (p) {
   const q = GV2.pv2Dev(p), DV2 = GV2.DV2, nov = GV2.pv2Novato(p);
-  if (!q) return GV2.pv2Blo('dev', 'DESENVOLVIMENTO · O QUE ELE VÊ NO APP', 'rota', 'o mesmo do Meu desempenho', GV2.pv2Nota(GV2.pv2DevErro(p) ? '— · desenvolvimento_quadro não respondeu (' + GV2.pv2DevErro(p) + ')' : 'lendo o Meu desempenho dele…'));
+  if (!q) return GV2.pv2Blo('dev', 'DESENVOLVIMENTO · O QUE ELE VÊ NO APP', 'rota', 'o mesmo do Meu desempenho', GV2.pv2Nota(GV2.pv2DevErro(p) ? '— · o Meu desempenho dele não respondeu agora; abra de novo em instantes' : 'lendo o Meu desempenho dele…'));
   const caps = DV2.capitulos(), mi = DV2.missaoDaSemana(q), sq = DV2.sequencias(q), col = DV2.colecao(q, caps), pb = DV2.nivelPlaybook(q, caps), hab = DV2.habilidadeDoMes(q), car = DV2.carreira(q);
   const rua = q.sequencias ? q.sequencias.rua : null;
   const cards = GV2.pv2Cards([
@@ -72147,8 +72150,11 @@ GV2.render.pv2Painel = function (p) {
     + '<header class="pv2-pan-cab">' + GV2.html.av(p, 'is-g') + '<div><b>' + GV2.e(p.nome) + '</b><span>' + GV2.e(sub) + '</span></div><button type="button" class="pv2-x" data-gv2="pv2:fechar" aria-label="Fechar">' + GV2.pv2Ic.fechar + '</button></header>'
     + GV2.pv2Resumo(p)
     + '<nav class="pv2-anc">' + anc.map(function (a, i) { return '<button type="button" class="' + (i === 0 ? 'is-on' : '') + '" data-gv2="pv2:anc:' + a[0] + '">' + GV2.e(a[1]) + '</button>'; }).join('') + '</nav>'
-    + '<div class="pv2-pan-corpo" data-pv2-id="' + GV2.e(p.id) + '"><div class="pv2-pan-g">' + GV2.pv2Seguro(GV2.pv2Esq, p, '1:1')
-    + '<div class="pv2-col">' + [[GV2.pv2Agora, 'Agora'], [GV2.pv2Meses, 'Mês a mês'], [GV2.pv2MapaP, 'Mapa'], [GV2.pv2Ritmo, 'Ritmo'], [GV2.pv2Disc, 'Disciplina'], [GV2.pv2Funil, 'Funil'], [GV2.pv2Desenv, 'Desenvolvimento'], [GV2.pv2Campo, 'Campo']]
+
+    + '<div class="pv2-pan-corpo" data-pv2-id="' + GV2.e(p.id) + '"><div class="pv2-pan-g">'
+    + '<div class="pv2-col">' + GV2.pv2Seguro(GV2.pv2Esq, p, '1:1') + [[GV2.pv2Ritmo, 'Ritmo'], [GV2.pv2Disc, 'Disciplina'], [GV2.pv2Campo, 'Campo']]
+      .map(function (x) { return GV2.pv2Seguro(x[0], p, x[1]); }).join('') + '</div>'
+    + '<div class="pv2-col">' + [[GV2.pv2Agora, 'Agora'], [GV2.pv2Meses, 'Mês a mês'], [GV2.pv2MapaP, 'Mapa'], [GV2.pv2Funil, 'Funil'], [GV2.pv2Desenv, 'Desenvolvimento']]
       .map(function (x) { return GV2.pv2Seguro(x[0], p, x[1]); }).join('') + '</div></div>'
     + '<div class="pv2-mais" id="pv2b-mais">' + (GV2.render.v6Rua7 ? GV2.render.v6Rua7(p) : '') + (GV2.render.cbPessoa ? GV2.render.cbPessoa(p) : '') + (GV2.render.hbPessoa ? GV2.render.hbPessoa(p) : '') + (GV2.render.ldPessoa ? GV2.render.ldPessoa(p) : '')
     + '<details class="pv2-antes"><summary>A página de antes, inteira · Agora e semana, Rua, Coaching, Evolução, PDI e a voz da rua</summary>' + antes + '</details></div></div>'
