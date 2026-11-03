@@ -84,7 +84,8 @@ global.proximoPassoDoLead = l => (l.tarefas[0] ? { quando: new Date(l.tarefas[0]
 global.mrrDoNegocio = l => l.mrr || null;
 global.esc = v => String(v == null ? '' : v);
 global.document = { documentElement: { getAttribute: () => 'sol' } };
-global.localStorage = { getItem: () => null, setItem: () => {} };
+/* a daily v8 continua viva atrás de localStorage['daily-v8'] (03/11/26): estas conferências são dela; a v3 tem bloco próprio */
+global.localStorage = { getItem: (k) => (k === 'daily-v8' ? '1' : null), setItem: () => {} };
 global.location = { search: '' };
 
 const relogio = (iso) => { const R = Date; global.Date = class extends R { constructor(...a) { super(...(a.length ? a : [iso])); } static now() { return new R(iso).getTime(); } }; };
@@ -932,6 +933,20 @@ tabelas.gv2_falta_etapa = [
     const cache0 = GV2.v6Rk.cache[seg];
     GV2.v6Rk.cache[seg] = { em: Date.now(), d: { linhas: b.pessoas.map(function (x, i) { return { ownerId: x.id, pos: i + 1, pontos: 100 - i * 10 }; }) } };
     const fila = GV2.v8dFila(), rank = { plano: 0, furou: 1, travados: 2, ritmo: 3, rampa: 4 };
+    /* DAILY v3 (03/11/26): a mesma fila, cada pessoa abre sem erro com a pauta e as 4 colunas; a Abertura e o resumo também */
+    {
+      const ls0 = global.localStorage; global.localStorage = { getItem: () => null, setItem: () => {} };
+      const er3 = [], h3 = [];
+      for (let i = 0; i < fila.length; i++) { GV2.estado.daily = i; try { h3.push(GV2.render.daily()); } catch (e) { er3.push(i + ': ' + e.message); } }
+      const col3 = ['COBRAR HOJE', '1 · Hoje · a rota', '2 · O mês · placar', '3 · Onde o funil trava', '4 · Sem próximo passo', '5 · Quentes', '6 · A semana', '7 · Compromisso'];
+      checar('Daily v3: cada pessoa da fila abre com a pauta e as 4 colunas, sem erro', !er3.length && h3.every(function (h) { return h.indexOf('gv2-dv3') > 0 && col3.every(function (x) { return h.indexOf(x) > 0; }); }), er3.join(' | ') || col3.filter(function (x) { return (h3[0] || '').indexOf(x) < 0; }).join());
+      checar('Daily v3: a pauta tem no máximo 3 itens e nunca cobra rua de quem está em rampa', fila.every(function (x) { const pa = GV2.dv3Pauta(x); return pa.length <= 3 && (!GV2.emRampa(x) || pa.every(function (c) { return ['plano', 'furo', 'ci', 'demo', 'rota'].indexOf(c.k) < 0; })); }));
+      GV2.estado.daily = 'abertura'; let ab = ''; try { ab = GV2.render.daily(); } catch (e) { ab = 'ERRO ' + e.message; }
+      checar('Daily v3: a Abertura mostra a semana, o mês, a fila e o ranking do time', /Abertura do time/i.test(ab) && /A semana do time/.test(ab) && /A fila de hoje/.test(ab) && /Ranking da semana/.test(ab), ab.slice(0, 120));
+      GV2.estado.daily = 'fim'; let rs = ''; try { rs = GV2.render.daily(); } catch (e) { rs = 'ERRO ' + e.message; }
+      checar('Daily v3: o resumo diz quantos saíram com compromisso e traz a pauta por pessoa', /saíram com compromisso/.test(rs) && /Pauta · avisos/.test(rs), rs.slice(0, 120));
+      global.localStorage = ls0;
+    }
     checar('v8 Daily: a fila vai de sem plano → furou → travados → no ritmo', fila.every(function (x, i) { return i === 0 || rank[GV2.v8dMotivo(fila[i - 1]).k] <= rank[GV2.v8dMotivo(x).k]; }), fila.map(function (x) { return GV2.v8dMotivo(x).k; }).join());
     let erros = [], htmls = [];
     for (let i = 0; i < fila.length; i++) { GV2.estado.daily = i; try { htmls.push(GV2.render.daily()); } catch (e) { erros.push(i + ': ' + e.message); } }
