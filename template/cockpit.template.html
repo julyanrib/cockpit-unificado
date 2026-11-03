@@ -14850,6 +14850,9 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pv3-segm button.is-on{background:var(--pv3-seg-on);color:var(--gv2-ink);box-shadow:0 1px 2px rgba(0,0,0,.08);}
 .pv3-selo{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:0 10px;border-radius:999px;font:600 11.5px var(--gv2-font);background:var(--gv2-av-soft);color:var(--gv2-av);}
 .pv3-selo.is-chip{background:var(--gv2-chip);color:var(--gv2-mute);}
+.pv3-link{min-height:40px;padding:0 6px;border:0;background:transparent;color:var(--gv2-mute);font:600 12px var(--gv2-font);text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
+.pv3-link:hover{color:var(--gv2-ink);}
+.pv3-tit-v2{margin-left:auto;}
 .pv3-faixa{display:flex;align-items:center;gap:16px;min-height:56px;flex:none;padding:6px 8px 6px 14px;background:var(--gv2-card);border:1px solid var(--gv2-line);border-radius:12px;}
 .pv3-cont{display:flex;align-items:baseline;gap:8px;white-space:nowrap;padding-right:16px;border-right:1px solid var(--gv2-line);}
 .pv3-cont b{font:700 28px/1 var(--gv2-font);color:var(--pv3-acao-tx);font-variant-numeric:tabular-nums;}
@@ -42253,6 +42256,7 @@ function pl6TelaFinalHTML(d) {
         <span style="font:900 10px 'Poppins',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#E51A31;">Planejamento · sua semana, suas escolhas</span>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;">
           ${(d.semanas || []).map(sm => `<button type="button" data-pl6-semana="${sm.on}" style="display:inline-flex;align-items:center;min-height:30px;padding:0 13px;border:1.5px solid ${sm.sel ? 'var(--ink)' : 'var(--line)'};border-radius:999px;background:${sm.sel ? 'var(--dark)' : 'var(--panel)'};font:800 10.5px 'Poppins',sans-serif;color:${sm.sel ? '#FDFEFF' : 'var(--muted)'};cursor:pointer;white-space:nowrap;">${sm.rot}</button>`).join('')}
+          ${typeof GV2 !== 'undefined' && GV2.PLV3 ? `<button type="button" data-pl6-acao="voltarv3" title="volta para a tela de planejamento nova" style="margin-left:auto;min-height:40px;padding:0 8px;border:0;background:transparent;font:700 11px 'Poppins',sans-serif;color:var(--muted);text-decoration:underline;cursor:pointer;">Voltar ao planejamento novo</button>` : ''}
         </div>
         <h1 style="margin:6px 0 0;font:900 25px/1.25 'Poppins',sans-serif;letter-spacing:-.02em;color:var(--ink);text-wrap:balance;">${d.manchete}</h1>
         ${d.semanaFora ? `<span style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;font:700 11px/1.5 'Poppins',sans-serif;color:var(--amber-ink);background:var(--amber-soft);border:1px solid #EBD9AE;border-radius:10px;padding:7px 12px;">▸ ${d.semanaForaTxt}</span>` : ''}
@@ -43328,6 +43332,13 @@ function pl6Ligar(box, rep) {
         return pl6MoverPelaFicha(rep, String(arg), '1396006164', async function () { pl6Ficha = null; await redesenhar(); });
       }
       if (verbo === 'pl7decidir') { s.pl7DecidirDe = s.pl7DecidirDe === arg ? null : arg; return redesenhar(); }
+      /* a volta para a tela nova (03/11/26): tira a chave de reserva e repinta a aba (GV2.PLV3.trocarVersao) */
+      if (verbo === 'voltarv3') {
+        s.sel = null; s.diaAtivo = null; pl6Ficha = null;
+        if (typeof GV2 !== 'undefined' && GV2.PLV3 && GV2.PLV3.trocarVersao) return GV2.PLV3.trocarVersao(false);
+        if (typeof mostrarToast === 'function') mostrarToast('A tela nova não carregou nesta sessão. Recarregue a página.', 'atencao');
+        return;
+      }
       /* RECICLAR: a conta fica na Reciclagem e ganha a tarefa de retorno daqui a 60 dias, no negócio,
          com o executivo como dono — e o retorno espelha na agenda, como todo passo */
       if (verbo === 'pl7reciclar') {
@@ -91199,6 +91210,25 @@ PLV3.box = null;
 PLV3.usar = function () {
   try { return !(typeof localStorage !== 'undefined' && localStorage && localStorage.getItem('planejamento-v2') === '1'); } catch (e) { return true; }
 };
+/* A SAÍDA À VISTA (03/11/26): enquanto a v3 não tem tudo o que a v2 tinha, o executivo não pode ficar preso
+   nela. Um link discreto no cabeçalho troca para a tela anterior (a mesma chave de reserva de sempre) e a
+   v2 tem o link de volta. A escolha fica no navegador dele; se o navegador não deixa guardar, a tela diz. */
+PLV3.trocarVersao = function (paraV2) {
+  let gravou = true;
+  try {
+    if (paraV2) localStorage.setItem('planejamento-v2', '1');
+    else localStorage.removeItem('planejamento-v2');
+  } catch (er) { gravou = false; }
+  if (!gravou || PLV3.usar() === !!paraV2) {
+    PLV3.toast('Este navegador não deixou guardar a troca de tela. Tente de novo, ou fale com o gestor.', 'atencao');
+    return false;
+  }
+  PLV3.st.menu = null; PLV3.st.bOpen = null; PLV3.st.prop = null;
+  if (typeof renderProspeccaoExecutivo === 'function') {
+    Promise.resolve(renderProspeccaoExecutivo()).then(function () { PLV3.pintarPilula(); }, function () { PLV3.pintarPilula(); });
+  }
+  return true;
+};
 PLV3.aberta = function () {
   const b = PLV3.box;
   return !!(b && b.isConnected && b.querySelector && b.querySelector('[data-pv3-raiz]') && b.offsetParent !== null);
@@ -91398,6 +91428,7 @@ PLV3.html = function (D) {
     + (D.virou && off === 0 ? '<span class="pv3-selo">planejando: próxima semana · virou sex 17h, no Cockpit e no app</span>' : '')
     + (D.virou && off === -1 ? '<span class="pv3-selo is-chip">esta semana · só leitura: plano × feitas</span>' : '')
     + (D.media.fonte === 'fase' && D.ramp && D.ramp.definido && D.ramp.chave !== 'pleno' ? '<span class="pv3-selo is-chip">' + e('rampa · ' + D.ramp.label.toLowerCase() + (D.p && D.p.resultado && D.p.resultado.meta ? ' · meta ' + D.p.resultado.meta + ' no mês' : '')) + '</span>' : '')
+    + '<button type="button" class="pv3-link pv3-tit-v2" data-pv3-acao="usarv2" title="volta para a tela de planejamento de antes; dá para voltar para esta a qualquer hora">Usar o planejamento anterior</button>'
     + '</div>';
   return '<div class="pv3 gv2-tokens" data-pv3-raiz="1">' + tit + PLV3.faixaHTML(D) + (st.cadAberta ? PLV3.chipsCadenciaHTML(D) : '')
     + '<div class="pv3-corpo' + (st.filaMin ? ' is-min' : '') + '">' + PLV3.blocoFilaHTML(D) + '<div class="pv3-grade-rola" data-pv3-grade-rola="1"><div class="pv3-grade">'
@@ -92243,6 +92274,7 @@ PLV3.acao = async function (verbo, arg) {
     await pl6Carregar(PLV3.rep);
     return PLV3.pintar();
   }
+  if (verbo === 'usarv2') return PLV3.trocarVersao(true);
   if (verbo === 'cadencia') { st.cadAberta = !st.cadAberta; return PLV3.pintar(); }
   if (verbo === 'fila') { st.filaMin = !st.filaMin; return PLV3.pintar(); }
   if (verbo === 'filtro') { st.filtro = arg || 'sem'; st.menu = null; st.maisAberto = PLV3.MAIS.indexOf(st.filtro) >= 0 ? st.maisAberto : false; st.q = ''; st.filaMin = false; PLV3.pintar(); return PLV3.soltarEspera(); }
