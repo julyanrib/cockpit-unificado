@@ -95,7 +95,11 @@ global.pl6ItensDoDia = (col, porId) => (col || []).map((v, si) => {
   const l = porId.get(id) || null;
   return { si: si, id: id, tipo: l ? 'visita' : 'orfa', lead: l, hora: v && v.hora ? v.hora : null };
 }).filter(Boolean);
-global.pl6OrdemDoDia = (itens) => itens.map((it, k) => ({ it: it, st: null, fixo: null, n: k + 1 }));
+/* a ordem do dia, a hora a acertar e a régua de dias úteis são as funções DE VERDADE da v2, tiradas do template */
+const corpoDe = (nome) => { const a = tpl.indexOf(String.fromCharCode(10) + 'function ' + nome + '('); if (a < 0) return null; let i = tpl.indexOf('{', a), n = 0; for (; i < tpl.length; i++) { if (tpl[i] === '{') n++; else if (tpl[i] === '}' && --n === 0) break; } return tpl.slice(a + 1, i + 1); };
+global.ehFeriadoBR = (iso) => iso === '2026-11-02';
+['pl6MinDe', 'pl6Duracao', 'pl6HHMM', 'pl6OrdemDoDia', 'pl6AvisosDaHora', 'cadEhUtil', 'cadUteisEntre'].forEach((nome) => { const c = corpoDe(nome); if (c) (0, eval)(c); });
+if (typeof global.pl6OrdemDoDia !== 'function') global.pl6OrdemDoDia = (itens) => itens.map((it, k) => ({ it: it, st: null, fixo: null, n: k + 1 }));
 /* as escritas da v2, registradas */
 global.pl6Gravar = async (rep, campos) => { reg('pl6Gravar', [campos]); if (campos.grade) GRADE = campos.grade.map((c) => c.slice()); if (campos.regioes) REGS = campos.regioes.slice(); return { error: null }; };
 global.pl6AgendarNoSlot = async (rep, id, di, si, gk) => { reg('pl6AgendarNoSlot', [id, di, si, gk]); const g = global.pl6GradeDoPlano(); g[di][si] = gk.hora ? { id: id, hora: gk.hora } : id; await gk.mutar({ grade: g }); };
@@ -121,7 +125,7 @@ const rep = { ownerId: '1', name: 'Exec' };
 P.rep = rep;
 /* a base do funil do executivo (a mesma da Hoje): os negócios dele */
 const neg = (id, idx, nome, pp) => ({ id: id, dono: '1', etapa_idx: idx, agPag: idx === 5, proximo_passo: pp || null, nome: nome, dias: 3, lead: {} });
-const BASE = { negocios: [neg('101', 4, 'Bar Quente Sem Mapa'), neg('102', 3, 'Bistrô Quente da Tijuca'), neg('103', 1, 'Lanchonete Madureira'), neg('104', 2, 'Restaurante Coliseu', 'qui 12/11'), neg('105', 0, 'Barraca Dubiel', 'no plano · ter 10/11')], agora: { iso: '2026-11-03', min: 600 }, cru: {} };
+const BASE = { negocios: [neg('101', 4, 'Bar Quente Sem Mapa'), Object.assign(neg('102', 3, 'Bistrô Quente da Tijuca'), { lead: { tarefas: [{ timestamp: '2026-10-30T15:00:00Z', subject: 'Follow-up - Bistrô' }] } }), Object.assign(neg('103', 1, 'Lanchonete Madureira'), { lead: { tarefas: [{ timestamp: '2026-10-20T15:00:00Z', subject: 'Follow-up - Lanchonete' }] } }), neg('104', 2, 'Restaurante Coliseu', 'qui 12/11'), neg('105', 0, 'Barraca Dubiel', 'no plano · ter 10/11')], agora: { iso: '2026-11-03', min: 600 }, cru: {} };
 const comBase = (sim, erro) => { GV2.DV.estado.base = sim ? BASE : null; GV2.DV.estado.p = sim ? { id: '1', meta_visitas_dia: 6 } : null; GV2.DV.estado.erro = erro || null; };
 const ESTADO0 = JSON.stringify(P.st);
 const zerar = () => { const s0 = JSON.parse(ESTADO0); Object.keys(P.st).forEach((k) => delete P.st[k]); Object.assign(P.st, s0); GRADE = gradeNova(); REGS = [null, null, null, null, null]; chamadas.length = 0; comBase(true); Object.keys(GV2.EXH4.estado.marcados).forEach((k) => delete GV2.EXH4.estado.marcados[k]); };
@@ -327,6 +331,59 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     checar('encaixar "por perto" põe no dia pelo pl6AgendarNoSlot', ultima('pl6AgendarNoSlot') && ultima('pl6AgendarNoSlot').args[0] === 'c-102' && ultima('pl6AgendarNoSlot').args[1] === 1);
     const cart = P.cartaoHTML(D(), 2, { ref: 'c-103', si: 0, nome: 'Lanchonete', etapaIdx: 1, repetido: true, comoFoi: '/?pino=1' }, null);
     checar('o cartão diz "repetido no dia" e leva o "como foi?" para o app', /repetido no dia/.test(cart) && /href="\/\?pino=1"[^>]*>como foi\?/.test(cart));
+  }
+
+  /* ── 7b · a hora a acertar e o conflito de hora fixa (pl6AvisosDaHora, a mesma conta da v2) ── */
+  {
+    checar('a conta da hora a acertar é UMA função, e a v2 passou a usá-la', typeof global.pl6AvisosDaHora === 'function'
+      && /const pl6Av = pl6AvisosDaHora\(ordem\);/.test(tpl) && /const horaAcertar = pl6Av\.doItem\(it, ox, passou\);/.test(tpl) && /conflito: conflito \? esc\(pl6Av\.conflito\)/.test(tpl));
+    zerar();
+    /* qua 11/11: a rota do app tem duas paradas com hora fixa colada (09:00 e 09:05): a 2ª chega atrasada */
+    global.sessaoAtual = { ownerId: '1' };
+    global.PL6_ROTA = { segunda: '2026-11-09', em: Date.now(), lendo: false, dias: { '2026-11-11': new Map([
+      ['c-104', { pos: 0, fixo: '09:00', lat: -22.92, lng: -43.23 }], ['n-202', { pos: 1, fixo: '09:05', lat: -22.921, lng: -43.231 }]]) } };
+    GRADE[2] = ['c-104', 'n-202'];
+    /* qui 12/11: dois na mesma hora, e um depois das 18h */
+    GRADE[3] = [{ id: 'c-103', hora: '18:30' }, { id: 'c-401', hora: '10:00' }, { id: 'c-301', hora: '10:00' }];
+    const d2 = colher(P.diaHTML(D(), 2));
+    checar('o cabeçalho do dia avisa o conflito da hora fixa, com a conta da v2', /data-pv3-conflito="2"[\s\S]{0,200}09:05 fixo em 2ª: chega \d+ min atrasado/.test(d2), d2.slice(d2.indexOf('pv3-aviso'), d2.indexOf('pv3-aviso') + 300));
+    checar('e dá as saídas: mudar a hora ou o dia, ver a rota, acertar no app', /data-pv3-acao="cmenu:2:1"/.test(d2) && /data-pv3-acao="pl7mapa:2"/.test(d2) && /href="\/\?agenda=2026-11-11"[^>]*>acertar no app/.test(d2));
+    checar('o cartão atrasado leva o selo "hora a acertar" com o fixo e o atraso', /hora a acertar · 09:05 fixo, chega \d+ min atrasado/.test(d2));
+    const d3 = colher(P.diaHTML(D(), 3));
+    checar('hora marcada depois das 18h vira "hora a acertar · depois das 18h"', /hora a acertar · depois das 18h/.test(d3));
+    checar('dois cartões na mesma hora: "mesmo horário de"', /mesmo horário de Cliente Antigo/.test(d3) && /mesmo horário de Pagador Atrasado/.test(d3));
+    const v2txt = global.pl6AvisosDaHora(global.pl6OrdemDoDia(global.pl6ItensDoDia(GRADE[2], D().porId), global.PL6_ROTA.dias['2026-11-11'])).conflito;
+    checar('o texto da v3 é exatamente o da função da v2', !!v2txt && d2.indexOf(v2txt) >= 0, v2txt);
+    await acao('cmenu', '3:0');
+    const m3 = colher(P.diaHTML(D(), 3));
+    checar('"mudar a hora ou o dia" abre a hora nova e os outros dias', /data-pv3-hora="g:3:0"/.test(m3) && /data-pv3-acao="mudarhora:3:0"/.test(m3) && /data-pv3-acao="moverum:3:0:4"/.test(m3));
+    chamadas.length = 0;
+    P.st.hora['g:3:0'] = '11:00';
+    await acao('mudarhora', '3:0');
+    const t = ultima('criarTarefaVisitaNoHubspot');
+    checar('mudar a hora remarca a tarefa do HubSpot no mesmo dia e grava a hora no slot', t && t.args[2] === '11:00' && t.args[4] === '2026-11-12' && GRADE[3][0] && GRADE[3][0].hora === '11:00');
+    checar('e o aviso some do cartão', !/hora a acertar · depois das 18h/.test(P.diaHTML(D(), 3)));
+    chamadas.length = 0;
+    await acao('mudarhora', '3:1');
+    checar('sem hora escolhida, não grava e avisa', !ultima('pl6Gravar') && !!ultima('toast'));
+    global.sessaoAtual = undefined;
+    global.PL6_ROTA = { segunda: null, dias: null, lendo: false, em: 0 };
+  }
+
+  /* ── 7c · os recortes por dias de atraso no follow-up vencido (a data do selo "venceu") ── */
+  {
+    zerar(); P.st.filtro = 'venc';
+    const h = colher(fila());
+    const at103 = D().semL.filter((l) => l.ref === 'c-103')[0].atraso;
+    const at102 = D().semL.filter((l) => l.ref === 'c-102')[0].atraso;
+    checar('o atraso sai da data de EXH4.vencida, em dias úteis pela régua da v2 (cadUteisEntre)', typeof global.cadUteisEntre === 'function' && at103 === global.cadUteisEntre('2026-10-20', '2026-11-03') && at103 === 9 && at102 === 1, at103 + ' / ' + at102);
+    checar('o follow-up vencido tem os recortes 15 d+, 8 a 14 d, 1 a 7 d com o número', /data-pv3-acao="faixa:8-14"[^>]*>8 a 14 d <b>1<\/b>/.test(h) && /data-pv3-acao="faixa:1-7"[^>]*>1 a 7 d <b>1<\/b>/.test(h) && !/faixa:15\+/.test(h));
+    checar('o selo da linha diz a mesma data e os dias', /venceu ter 20\/10 · há 9 dias úteis/.test(h));
+    await acao('faixa', '8-14');
+    checar('o recorte "8 a 14 d" deixa só o vencido há 9 dias úteis', P.linhasDoFiltro(D()).map((l) => l.ref).join(',') === 'c-103');
+    await acao('faixa', '1-7');
+    checar('o recorte "1 a 7 d" deixa só o de 1 dia útil', P.linhasDoFiltro(D()).map((l) => l.ref).join(',') === 'c-102');
+    checar('a soma dos recortes bate com a lista do filtro', P.faixas(D(), 'venc').reduce((s, x) => s + x.n, 0) === P.linhasBase(D(), 'venc').length);
   }
 
   /* ── 8 · nada morto, nada de emoji ── */
