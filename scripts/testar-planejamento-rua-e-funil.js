@@ -76,17 +76,17 @@ console.log('1 · O BLOCO DE RUA CAI NA MÃO EM UM CLIQUE');
 
   const padrao = montar({ rua: { regiao: '', duracao: '2h' } });
   igual('sem região, o bloco na mão é "região livre"', padrao.lead.nome,
-    'Bloco de rua · região livre',
-    'é o que a barra-guia mostra, e "Bloco de rua · " sozinho seria uma frase pela metade');
+    'Prospecção de rua · região livre',
+    'é o que a barra-guia mostra, e "Prospecção de rua · " sozinho seria uma frase pela metade');
   igual('e ele é o sentinela da rua, não um lead', padrao.lead.id, PL6_RUA);
   igual('a duração padrão é 2h', padrao.duracao, '2h');
   igual('e a linha de baixo diz a duração', padrao.sub, '2h · sem conta definida');
 
   const comOnde = montar({ rua: { regiao: 'Barra da Tijuca', duracao: '3h' } });
-  igual('com região, ela entra no nome', comOnde.lead.nome, 'Bloco de rua · Barra da Tijuca');
+  igual('com região, ela entra no nome', comOnde.lead.nome, 'Prospecção de rua · Barra da Tijuca');
   igual('e a duração escolhida vai junto', comOnde.duracao, '3h');
   igual('espaço em branco não vira região', montar({ rua: { regiao: '   ' } }).lead.nome,
-    'Bloco de rua · região livre',
+    'Prospecção de rua · região livre',
     'um nome terminando em espaço é o tipo de coisa que só aparece no print do gestor');
 }());
 

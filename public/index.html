@@ -28503,7 +28503,7 @@ function pl6SelDeRua(s) {
   const onde = String(r.regiao || '').trim();
   const dur = String(r.duracao || '2h');
   return {
-    lead: { id: PL6_RUA, nome: 'Bloco de rua · ' + (onde || 'região livre') },
+    lead: { id: PL6_RUA, nome: 'Prospecção de rua · ' + (onde || 'região livre') },
     bloco: PL6_RUA, regiao: onde, duracao: dur,
     sub: dur + ' · sem conta definida'
   };
@@ -30713,7 +30713,7 @@ function pl6TelaFinalHTML(d) {
              Só aparece no propósito rua: nos outros, a coluna é a lista de contas. -->
         ${d.ruaAtiva ? `
         <div style="border:1.5px dashed var(--line);border-radius:11px;background:var(--panel);padding:11px 13px;margin-bottom:10px;">
-          <b style="display:block;font:800 11px 'Poppins',sans-serif;color:var(--ink);">Bloco de rua — sair e bater porta</b>
+          <b style="display:block;font:800 11px 'Poppins',sans-serif;color:var(--ink);">Prospecção de rua — sair e bater porta</b>
           <span style="display:block;font:700 9.5px/1.55 'Poppins',sans-serif;color:var(--muted2);margin:5px 0 9px;">Clicar em "Prospecção de rua" já põe um bloco na sua mão. Ajuste onde e quanto tempo aqui, se quiser, e clique num horário. Não cria tarefa no HubSpot: fica no plano, e a prova é o check-in do app de campo.</span>
           <input type="text" data-pl6-rua-onde="1" value="${d.ruaRegiao}" placeholder="onde? — ex.: Barra da Tijuca (opcional)" style="display:block;width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:8px 10px;font:700 11px 'Poppins',sans-serif;color:var(--ink);outline:none;margin-bottom:7px;">
           <div style="display:flex;gap:5px;margin-bottom:9px;">
@@ -61937,7 +61937,7 @@ GV2.render.v5Dia = function () {
     + (j && j.colados ? '<span class="gv2-v5-alerta">' + GV2.e('Check-ins colados: ' + j.n + ' portas em ' + j.min + ' min. Pode ser porta a porta rápido ou check-in em lote: pergunte no 1:1.') + '</span>' : '') + '</div>';
   const agenda = '<div class="card gv2-v5-mini"><small>Agenda do HubSpot</small>'
     + (d.agenda.n ? d.agenda.itens.map(function (a) { const k = a.tipo === 'ligação' ? 'lig' : a.tipo === 'reunião' ? 'reu' : 'tar'; return '<div class="gv2-v5-ag"><i>' + GV2.v5Ic(k, 12, 2.6) + '</i><b class="num">' + GV2.e(a.hora) + '</b><span>' + GV2.e(GV2.v5AgTxt(a)) + '</span></div>'; }).join('') : '<span>nenhuma tarefa ou reunião neste dia</span>')
-    + '<small class="is-sep">' + (GV2.ruaPlanejada(p.id, iso) ? 'Prospecção planejada' : 'Fora do plano') + '</small><span>' + GV2.e(d.futuro ? (GV2.ruaPlanejada(p.id, iso) ? 'bloco de rua no Planejamento' : '—') : d.fora.length ? d.fora.map(function (f) { return f.nome + ' ' + f.hora; }).join(' · ') + ' · não entra no x de y' : GV2.ruaPlanejada(p.id, iso) ? 'bloco de rua no Planejamento · nenhuma visita fora das paradas' : 'nenhuma visita fora do plano neste dia') + '</span></div>';
+    + '<small class="is-sep">' + (GV2.ruaPlanejada(p.id, iso) ? 'Prospecção planejada' : 'Fora do plano') + '</small><span>' + GV2.e(d.futuro ? (GV2.ruaPlanejada(p.id, iso) ? 'prospecção de rua no Planejamento' : '—') : d.fora.length ? d.fora.map(function (f) { return f.nome + ' ' + f.hora; }).join(' · ') + ' · não entra no x de y' : GV2.ruaPlanejada(p.id, iso) ? 'prospecção de rua no Planejamento · nenhuma visita fora das paradas' : 'nenhuma visita fora do plano neste dia') + '</span></div>';
   GV2.v5Fotos.lista = d.fotos; GV2.v5Fotos.quem = p.nome; GV2.v5Fotos.dia = iso; GV2.v5Fotos.chaveMapa = 'data-gv2-v5mapa=' + p.id + '|' + iso;
   const maxF = GV2.estado.v5FotosTodas === p.id + '|' + iso ? 99 : 8;
   const fotos = '<div class="card gv2-v5-mini gv2-v5-fotos"><div class="gv2-v5-fotos-cab"><small>Fotos dos check-ins</small>'
@@ -69842,7 +69842,10 @@ PLV3.dados = function (rep) {
       if (it.id) { naGrade[it.id] = true; if (!d.passou) naGradeFutura[it.id] = true; }
       return {
         ref: it.id || null, si: it.si, rua: it.tipo === 'rua',
-        nome: it.tipo === 'rua' ? 'Bloco de rua · ' + (it.regiao || 'região livre') : (l ? l.nome : 'conta'),
+        nome: it.tipo === 'rua' ? 'Prospecção de rua · ' + (it.regiao || 'região livre') : (l ? l.nome : 'conta'),
+
+        novas: it.tipo === 'rua' && (d.passou || d.hoje) ? PLV3.contasNovasDoDia(rep, d.iso) : null,
+        duracao: it.tipo === 'rua' ? (it.duracao || null) : null,
         etapaIdx: PLV3.idxDoLead(l), bairro: l ? l.regiao : null, semEnd: it.tipo !== 'rua' && semPino,
         tipoC: !!(l && l.tipo === 'c' && l.dealId), dealId: l ? l.dealId : null,
         feita: !!(vx && vx.feita) || !!(o.st && o.st.feita),
@@ -70188,12 +70191,21 @@ PLV3.DURACOES = ['1h', '2h', '3h', '4h'];
 PLV3.ruaHTML = function (D) {
   const st = PLV3.st, e = GV2.e, r = st.rua;
   if (!r) return '';
-  return '<div class="pv3-form" data-pv3-form="rua"><div class="pv3-form-cab"><b>Bloco de rua · sair e bater porta</b><button type="button" data-pv3-acao="ruafechar" aria-label="fechar">×</button></div>'
+  return '<div class="pv3-form" data-pv3-form="rua"><div class="pv3-form-cab"><b>Prospecção de rua · contas novas</b><button type="button" data-pv3-acao="ruafechar" aria-label="fechar">×</button></div>'
+    + '<span class="pv3-form-dica">Sair e bater porta onde ainda não tem conta sua. Não precisa de nome nem endereço: cada lugar que você cadastrar no app (+) nesse dia vira conta da sua carteira.</span>'
     + '<input type="text" data-pv3-rua="regiao" value="' + e(r.regiao || '') + '" placeholder="onde? ex.: Barra da Tijuca (opcional)" autocomplete="off" aria-label="onde">'
     + '<small>quanto tempo</small><div class="pv3-mini">' + PLV3.DURACOES.map(function (d) { return '<button type="button" class="' + ((r.duracao || '2h') === d ? 'is-on' : '') + '" data-pv3-acao="ruadur:' + d + '" aria-pressed="' + ((r.duracao || '2h') === d) + '">' + d + '</button>'; }).join('') + '</div>'
     + '<label class="pv3-hora"><span>horário (opcional)</span><input type="time" data-pv3-hora="__rua" value="' + e(st.hora.__rua || '') + '"></label>'
     + '<small>pôr no dia</small>' + PLV3.pilulasHTML(D, 'rua:')
-    + '<span class="pv3-form-dica">Não cria tarefa no HubSpot (não há negócio): a prova é o check-in do app.</span></div>';
+    + '<span class="pv3-form-dica">Não cria tarefa no HubSpot (não há negócio ainda): a prova é o check-in do app, e o resultado aparece no dia como "N contas novas na carteira".</span></div>';
+};
+
+PLV3.contasNovasDoDia = function (rep, iso) {
+  const lista = DATA && DATA.kpiDetalhe && Array.isArray(DATA.kpiDetalhe.leadsCriados) ? DATA.kpiDetalhe.leadsCriados : null;
+  if (!lista || !rep) return null;
+  const hoje = GV2.agoraBR ? GV2.agoraBR().iso : GV2.diaDe(Date.now());
+  if (GV2.somaDias(hoje, -6) > iso) return null;
+  return lista.filter(function (x) { return x && String(x.ownerId) === String(rep.ownerId) && x.criadoEm && GV2.diaDe(x.criadoEm) === iso; }).length;
 };
 PLV3.blocoFilaHTML = function (D) {
   const st = PLV3.st, e = GV2.e;
@@ -70216,7 +70228,7 @@ PLV3.blocoFilaHTML = function (D) {
       + F('cnpj', 'CNPJ novo · 90 d', D.alvos.filter(function (a) { return a.cnpj != null && a.cnpj <= 90; }).length) + F('recicl', 'Reciclagem', D.recicl.length)
       + F('cobrar', 'Ag. Pagamento', D.cobrar.length) + F('relac', 'Relacionamento', D.relac.length) + '</div>' : '')
     + (fx.length ? '<div class="pv3-faixas">' + fx.map(function (x) { const on = st.faixa === x.id; return '<button type="button" class="' + (on ? 'is-on' : '') + '" data-pv3-acao="faixa:' + (on ? '' : e(x.id)) + '" aria-pressed="' + on + '">' + e(x.rot) + ' <b>' + x.n + '</b></button>'; }).join('') + '</div>' : '')
-    + '<div class="pv3-novos"><button type="button" data-pv3-acao="novo:" aria-expanded="' + !!st.novo + '">+ lead novo</button><button type="button" data-pv3-acao="ruaabrir" aria-expanded="' + !!st.rua + '">+ bloco de rua</button></div>';
+    + '<div class="pv3-novos"><button type="button" data-pv3-acao="novo:" aria-expanded="' + !!st.novo + '">+ lead novo</button><button type="button" data-pv3-acao="ruaabrir" aria-expanded="' + !!st.rua + '">+ prospecção de rua</button></div>';
   let corpo = PLV3.novoHTML(D) + PLV3.ruaHTML(D);
 
   corpo += PLV3.quentesHTML(D);
@@ -70457,8 +70469,13 @@ PLV3.cartaoHTML = function (D, i, c, f) {
   const st = PLV3.st, e = GV2.e;
   const d = D.dias[i];
   const et = PLV3.etapa(c.etapaIdx);
-  let sub = c.rua ? 'bloco de rua' : et[0], subCls = '', cls = 'pv3-c';
-  if (c.fora) { sub = 'fora do plano · check-in' + (c.chk ? ' ' + c.chk : ''); subCls = 'is-ok'; cls += ' is-tracejado'; }
+  let sub = c.rua ? 'prospecção de rua' + (c.duracao ? ' · ' + c.duracao : '') + ' · contas novas entram na sua carteira' : et[0], subCls = '', cls = 'pv3-c';
+
+  if (c.rua && (c.novas != null || d.passou)) {
+    if (c.novas == null) sub = 'prospecção de rua';
+    else if (c.novas > 0) { sub = c.novas + (c.novas === 1 ? ' conta nova' : ' contas novas') + ' na carteira'; subCls = 'is-ok'; }
+    else sub = d.passou ? 'nenhuma conta nova cadastrada' : 'cadastre no app (+): entra na sua carteira';
+  } else if (c.fora) { sub = 'fora do plano · check-in' + (c.chk ? ' ' + c.chk : ''); subCls = 'is-ok'; cls += ' is-tracejado'; }
   else if (c.feita) { sub = c.chk ? 'feito · check-in ' + c.chk : 'feito · no app'; subCls = 'is-ok'; }
   else if (d.passou) { sub = st.reposto[c.ref] ? 'ficou · reposto ' + st.reposto[c.ref] : 'ficou para trás'; subCls = 'is-av'; cls += ' is-ficou'; }
   else if (c.fixo) sub = 'fixo ' + c.fixo + ' · no app';
