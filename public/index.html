@@ -4595,7 +4595,9 @@
 
   .dv3-grade{flex:1;min-height:0;display:grid;grid-template-columns:392px 300px 330px minmax(0,1fr);gap:10px;}
   .dv3-col{display:flex;flex-direction:column;gap:10px;min-height:0;}
-  .dv3-col > .dv3-card{display:flex;flex-direction:column;}
+  .dv3-col > .dv3-card{display:flex;flex-direction:column;overflow:hidden;}
+  .dv3-col > .dv3-ontem{flex-direction:row;align-items:baseline;flex:none;}
+  .dv3-paradas{flex:1;min-height:0;overflow:hidden;}
   .dv3-ontem{display:flex;align-items:baseline;gap:8px;padding:8px 16px;}
   .dv3-ontem b{font:800 15px 'Poppins',sans-serif;}
   .dv3-ontem span{flex:1;min-width:0;font:500 12px var(--font-body),sans-serif;color:var(--ink3);}
@@ -67098,7 +67100,7 @@ GV2.dv3Pauta = function (p) {
   const sp = GV2.dv3SemPasso(p), negs = p.negocios || [];
   if (!temPlano && !rampa && !b.planoErro) out.push({ k: 'plano', curto: 'Plano no app até 12h', pq: 'sem plano hoje · meta 6 paradas e 1 demo', longo: 'Mandar o plano com 6 paradas e 1 demo até 12h', sev: 'red' });
   const rua = !rampa;
-  if (rua && temPlano && O.ratio !== null && O.ratio < 0.5) out.push({ k: 'furo', curto: 'Cumprir as ' + (n || p.hoje.paradas_plano) + ' paradas', pq: 'ontem ' + O.txt + ' · check-in em cada uma', longo: 'Cumprir as ' + (n || p.hoje.paradas_plano) + ' paradas de hoje com check-in em cada uma (ontem ' + O.txt + ')', sev: 'red' });
+  if (rua && temPlano && O.ratio !== null && O.ratio < 0.5) out.push({ k: 'furo', curto: (n || p.hoje.paradas_plano) === 1 ? 'Cumprir a parada de hoje' : 'Cumprir as ' + (n || p.hoje.paradas_plano) + ' paradas', pq: 'ontem ' + O.txt + ' · check-in em cada uma', longo: ((n || p.hoje.paradas_plano) === 1 ? 'Cumprir a parada de hoje com check-in' : 'Cumprir as ' + (n || p.hoje.paradas_plano) + ' paradas de hoje com check-in em cada uma') + ' (ontem ' + O.txt + ')', sev: 'red' });
   if (sp.length) {
     const top = sp.slice(0, 2).map(function (x) { return x.nome; }).join(', ');
     out.push({ k: 'sp', curto: 'Tarefa nos ' + sp.length + ' sem passo', pq: top + (sp.length > 2 ? ' e +' + (sp.length - 2) : ''), longo: 'Pôr tarefa no HubSpot nos ' + sp.length + ' sem próximo passo até 18h (' + top + ')', sev: 'red' });
@@ -67188,7 +67190,7 @@ GV2.dv3Col1 = function (p) {
         : '<button type="button" class="dv3-bt ' + (pedido ? 'is-ok' : 'is-act') + '" data-gv2="daily:pedir:' + p.id + '">' + (pedido ? 'Pedido enviado ao app · até 12h ✓' : 'Pedir o plano até 12h') + '</button>') + '</div>';
   } else if (par.lendo && !par.itens.length) corpo = '<p class="t-mute" style="font:500 12.5px var(--font-body)">lendo o plano do dia…</p>';
   else {
-    const vis = par.itens.slice(0, 7);
+    const cabem = (p.quentes || []).length ? 6 : 7, vis = par.itens.slice(0, cabem);
     const quentes = (p.quentes || []).length;
     corpo = (quentes ? '<div class="dv3-bairros"><span></span><b class="t-amb">● ' + GV2.pl(quentes, 'lead quente', 'leads quentes') + ' na carteira</b></div>' : '')
       + '<ul class="dv3-paradas">' + vis.map(function (x) {
@@ -67197,7 +67199,7 @@ GV2.dv3Col1 = function (p) {
           + '<span class="dv3-chip' + (t === 'demo' ? ' is-demo' : t === 'ret' ? ' is-ret' : '') + '">' + (t === 'demo' ? 'DEMO' : t === 'ret' ? 'RETORNO' : 'VISITA') + '</span>'
           + '<em>' + (x.feita ? '✓ ' + GV2.e(x.feitaHora || (x.feitaEm ? GV2.hhmm(GV2.minDe(x.feitaEm)) : '')) : '') + '</em></li>';
       }).join('') + '</ul>'
-      + (par.itens.length > 7 ? '<button type="button" class="dv3-link" data-gv2="v5dia:' + p.id + ':' + b.agora.iso + '" style="margin-top:6px">+' + (par.itens.length - 7) + ' paradas · Ver o dia na Rua →</button>' : '');
+      + (par.itens.length > cabem ? '<button type="button" class="dv3-link" data-gv2="v5dia:' + p.id + ':' + b.agora.iso + '" style="margin-top:6px">+' + (par.itens.length - cabem) + ' paradas · Ver o dia na Rua →</button>' : '');
   }
   const rod = '<div class="dv3-rodape-c"><button type="button" class="dv3-link" data-gv2="v5dia:' + p.id + ':' + b.agora.iso + '">' + (par.ag.length ? '+ ' + GV2.pl(par.ag.length, 'tarefa do HubSpot', 'tarefas do HubSpot') + ' (na Rua)' : 'Ver o dia na Rua →') + '</button><span>' + GV2.e(ci ? GV2.pl(ci, 'check-in hoje', 'check-ins hoje') : 'nenhum check-in hoje') + '</span></div>';
   return '<div class="dv3-col">' + ontem + '<section class="dv3-card" style="flex:1"><h3 class="dv3-rot">1 · Hoje · a rota</h3>' + kpis + corpo + rod + '</section></div>';
