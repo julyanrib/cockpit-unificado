@@ -4532,6 +4532,26 @@
   .pc9-esq{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:20px;}
   .pc9-dir{flex:none;width:540px;position:sticky;top:16px;}
   .pc9-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px;box-shadow:var(--shadow-sm);min-width:0;}
+
+  .pc9-bf{position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:24px;margin:0 0 20px;padding:22px 26px;border-radius:16px;background:#0B0B0F;color:#fff;border:2px solid #E51A31;box-shadow:0 10px 30px rgba(229,26,49,.25);}
+  .pc9-bf::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 140% at 0% 0%,rgba(229,26,49,.45),transparent 55%),repeating-linear-gradient(135deg,rgba(255,255,255,.04) 0 12px,transparent 12px 24px);pointer-events:none;}
+  .pc9-bf > *{position:relative;}
+  .pc9-bf-kick{display:inline-block;padding:4px 10px;border-radius:999px;background:#FFD400;color:#0B0B0F;font:800 11px var(--font-body);letter-spacing:2px;text-transform:uppercase;}
+  .pc9-bf-tit{margin:10px 0 4px;font:800 28px/1.1 var(--font-display);letter-spacing:-.5px;}
+  .pc9-bf-tit b{color:#FF3B4E;font-weight:900;}
+  .pc9-bf-sub{margin:0;font:500 13px var(--font-body);color:rgba(255,255,255,.75);}
+  .pc9-bf-preco{display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right;}
+  .pc9-bf-plano{font:700 11px var(--font-body);letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.6);}
+  .pc9-bf-preco s{font:500 14px var(--font-body);color:rgba(255,255,255,.55);}
+  .pc9-bf-preco b{font:900 34px/1 var(--font-display);color:#FFD400;}
+  .pc9-bf-preco b small{font:600 14px var(--font-body);color:#FFD400;}
+  .pc9-bf-eco{font:600 12px var(--font-body);color:#7CF0A6;}
+  .pc9-bf-bt{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 22px;border:0;border-radius:12px;background:#E51A31;color:#fff;font:800 14px var(--font-body);cursor:pointer;white-space:nowrap;transition:transform .12s,background .12s;}
+  .pc9-bf-bt:hover{background:#FF2A42;transform:translateY(-1px);}
+  .pc9-bf.is-on .pc9-bf-bt{background:#FFD400;color:#0B0B0F;}
+  .pc9-per.is-promo{border-color:#E51A31;background:linear-gradient(135deg,rgba(229,26,49,.12),rgba(255,212,0,.12));}
+  .pc9-per.is-promo .pc9-desc{background:#E51A31;color:#fff;}
+  .pc9-p-bf{display:inline-block;margin:0 0 6px;padding:3px 9px;border-radius:999px;background:#FFD400;color:#0B0B0F;font:800 9px var(--font-body);letter-spacing:2px;}
   .pc9-ads{gap:12px;}
   .pc9-h2{margin:0;font:700 12px var(--font-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
   .pc9-rot{display:block;margin-bottom:8px;font:600 11px var(--font-body);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);}
@@ -4675,7 +4695,14 @@
     .pc9-grade{flex-direction:column;}
     .pc9-dir{width:100%;position:static;}
   }
+  @media (max-width:900px){
+    .pc9-bf{grid-template-columns:1fr;gap:14px;}
+    .pc9-bf-preco{align-items:flex-start;text-align:left;}
+  }
   @media (max-width:640px){
+    .pc9-bf{padding:18px;}
+    .pc9-bf-tit{font-size:22px;}
+    .pc9-bf-bt{width:100%;justify-content:center;}
     .pc9-card{padding:16px;}
     .pc9-h1{font-size:22px;}
     .pc9-ad{padding:10px 12px;gap:8px;}
@@ -20104,6 +20131,43 @@ function pc9Ico(nome, tam, traco) {
 }
 function pc9EhGestor() { return !!(sessaoAtual && sessaoAtual.role === 'manager'); }
 
+const PC9_PROMO = { id: 'blackfriday50', label: 'Semestral Black Friday (-50%)', months: 6, discount: 0.5, creditCard: true, promo: 'blackfriday', ate: '2026-11-30' };
+function pc9HojeBRT() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
+function pc9PromoValida(hoje) { return (hoje || pc9HojeBRT()) <= PC9_PROMO.ate; }
+function pc9ComPromo(cfg, hoje) {
+  if (!cfg || !Array.isArray(cfg.periodicidades)) return cfg;
+  const sem = cfg.periodicidades.filter(function (p) { return p.id !== PC9_PROMO.id; });
+  return Object.assign({}, cfg, { periodicidades: pc9PromoValida(hoje) ? sem.concat([Object.assign({}, PC9_PROMO)]) : sem });
+}
+function pc9SemPromo(cfg) {
+  return Object.assign({}, cfg, { periodicidades: (cfg.periodicidades || []).filter(function (p) { return !p.promo; }) });
+}
+function pc9DiasAtePromo(hoje) {
+  const a = new Date((hoje || pc9HojeBRT()) + 'T12:00:00Z'), b = new Date(PC9_PROMO.ate + 'T12:00:00Z');
+  return Math.round((b - a) / 86400000);
+}
+
+function pc9PromoHTML() {
+  const cfg = PC9.cfg, e = PC9.estado;
+  const promo = cfg && cfg.periodicidades.find(function (p) { return p.promo === 'blackfriday'; });
+  if (!promo) return '';
+  const on = e.periodicidade === promo.id;
+  const c = pc9Calcular(cfg, Object.assign({}, e, { periodicidade: promo.id }));
+  const dias = pc9DiasAtePromo();
+  const prazo = dias <= 0 ? 'último dia: só hoje' : dias === 1 ? 'termina amanhã, 30/11' : 'só até 30/11 · faltam ' + dias + ' dias';
+  return '<section class="pc9-bf' + (on ? ' is-on' : '') + '" aria-label="Black Friday Takeat">'
+    + '<div class="pc9-bf-esq"><span class="pc9-bf-kick">Black Friday Takeat</span>'
+    + '<p class="pc9-bf-tit">Semestral com <b>50% OFF</b></p>'
+    + '<p class="pc9-bf-sub">Plano e adicionais pela metade · 6x no cartão · ' + esc(prazo) + '</p></div>'
+    + '<div class="pc9-bf-preco"><span class="pc9-bf-plano">' + esc(c.tierData.name) + '</span>'
+    + '<s>' + pc9BRL(c.fullMonthly) + '/mês</s>'
+    + '<b>' + pc9BRL(c.totalMonthly) + '<small>/mês</small></b>'
+    + '<span class="pc9-bf-eco">economia de ' + pc9BRL(c.economia) + ' no semestre</span></div>'
+    + '<button type="button" class="pc9-bf-bt" data-pc9-per="' + esc(promo.id) + '" aria-pressed="' + on + '">'
+    + (on ? pc9Ico('check', 14, 3) + '<span>Aplicado na proposta</span>' : '<span>Aplicar Black Friday</span>') + '</button>'
+    + '</section>';
+}
+
 async function pc9Carregar(forcar) {
   if (PC9.cfg && !forcar) return PC9.cfg;
   if (PC9.carregando) return PC9.carregando;
@@ -20113,7 +20177,7 @@ async function pc9Carregar(forcar) {
     if (r.error) throw new Error('A tabela de preços não carregou: ' + r.error.message);
     if (!r.data) throw new Error('A tabela de preços ainda não existe no banco.');
     if (!r.data.planos || !Object.keys(r.data.planos).length || !Array.isArray(r.data.periodicidades)) throw new Error('A tabela de preços está incompleta no banco (faltam planos ou periodicidades). Avise a gestão.');
-    PC9.cfg = r.data;
+    PC9.cfg = r.data = pc9ComPromo(r.data);
     precificacaoCache = pc9ParaCacheAntigo(r.data);
     if (!PC9.estado) PC9.estado = pc9EstadoInicial(r.data);
     PC9.estado.tier = pc9TierValido(r.data, PC9.estado.tipoPlano in r.data.planos ? PC9.estado.tipoPlano : Object.keys(r.data.planos)[0], PC9.estado.tier);
@@ -20149,7 +20213,7 @@ function pc9ConfigHTML() {
   }).join('');
   const pers = cfg.periodicidades.map(function (p) {
     const on = e.periodicidade === p.id;
-    return '<button type="button" class="pc9-opc pc9-per' + (on ? ' is-on' : '') + '" data-pc9-per="' + esc(p.id) + '" aria-pressed="' + on + '">'
+    return '<button type="button" class="pc9-opc pc9-per' + (on ? ' is-on' : '') + (p.promo ? ' is-promo' : '') + '" data-pc9-per="' + esc(p.id) + '" aria-pressed="' + on + '">'
       + '<span class="pc9-opc-nome">' + esc(p.label) + '</span>'
       + (p.discount > 0 ? '<span class="pc9-desc">-' + Math.round(p.discount * 10000) / 100 + '% desconto</span>' : '')
       + (p.creditCard ? '<span class="pc9-cartao">' + pc9Ico('cartao', 10) + 'Cartão de crédito</span>' : '')
@@ -20205,7 +20269,7 @@ function pc9PropostaHTML() {
   const ano = new Date().getFullYear();
   return '<div class="pc9-prop" id="pc9Proposta">'
     + '<div class="pc9-p-topo"><div class="pc9-p-logo"><img src="assets/logo-takeat-tradicional.png" alt="Takeat"></div>'
-    + '<div class="pc9-p-plano"><p class="pc9-p-k">' + esc(c.plano.label) + ' · ' + esc(c.periodo.label) + '</p>'
+    + '<div class="pc9-p-plano">' + (c.periodo.promo === 'blackfriday' ? '<p class="pc9-p-bf">BLACK FRIDAY · 50% OFF</p>' : '') + '<p class="pc9-p-k">' + esc(c.plano.label) + ' · ' + esc(c.periodo.label) + '</p>'
     + '<p class="pc9-p-tier">' + esc(c.tierData.name) + '</p></div></div>'
     + '<div class="pc9-p-bloco"><p class="pc9-p-rot">Funcionalidades</p><div class="pc9-p-cols">'
     + '<div class="pc9-p-col">' + esq.map(secao).join('') + '</div><div class="pc9-p-col">' + dir.map(secao).join('') + '</div></div></div>'
@@ -20231,6 +20295,7 @@ function pc9TelaHTML() {
     + '<div class="pc9-topo"><div><h1 class="pc9-h1">Calculadora de Planos</h1>'
     + '<p class="pc9-sub">Simule a proposta comercial do cliente em tempo real</p></div>'
     + (pc9EhGestor() ? '<button type="button" class="pc9-editar" id="pc9Editar">Editar preços e planos</button>' : '') + '</div>'
+    + pc9PromoHTML()
     + '<div class="pc9-grade"><div class="pc9-esq">' + pc9ConfigHTML() + '</div>'
     + '<div class="pc9-dir">' + pc9PropostaHTML()
     + '<button type="button" class="pc9-baixar" id="pc9Baixar">' + pc9Ico('baixar', 15) + '<span>Baixar proposta em PNG</span></button></div></div>'
@@ -20303,7 +20368,7 @@ function pc9Ligar(slot) {
   });
   const editar = slot.querySelector('#pc9Editar');
   if (editar) editar.addEventListener('click', function () {
-    PC9.editando = true; PC9.rascunho = JSON.parse(JSON.stringify(PC9.cfg)); PC9.msg = null;
+    PC9.editando = true; PC9.rascunho = JSON.parse(JSON.stringify(pc9SemPromo(PC9.cfg))); PC9.msg = null;
     renderPrecificacaoConfigurador();
     window.scrollTo({ top: 0 });
   });
@@ -20536,9 +20601,9 @@ async function pc9SalvarEditor() {
     if (res.error) throw new Error(res.error.message);
 
     if (!res.data || !res.data.length) throw new Error('o banco não deixou gravar (só gestor do Cockpit grava a tabela de preços).');
-    PC9.cfg = res.data[0];
+    PC9.cfg = pc9ComPromo(res.data[0]);
     precificacaoCache = pc9ParaCacheAntigo(PC9.cfg);
-    PC9.rascunho = JSON.parse(JSON.stringify(PC9.cfg));
+    PC9.rascunho = JSON.parse(JSON.stringify(pc9SemPromo(PC9.cfg)));
     PC9.estado.tipoPlano = (PC9.estado.tipoPlano in PC9.cfg.planos) ? PC9.estado.tipoPlano : Object.keys(PC9.cfg.planos)[0];
     PC9.estado.tier = pc9TierValido(PC9.cfg, PC9.estado.tipoPlano, PC9.estado.tier);
     if (!PC9.cfg.periodicidades.some(function (p) { return p.id === PC9.estado.periodicidade; })) PC9.estado.periodicidade = PC9.cfg.periodicidades[0].id;
