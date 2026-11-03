@@ -297,7 +297,25 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     zerar();
     const h = colher(html());
     const dia1 = P.diaHTML(D(), 1);
-    checar('o bloqueio e o bloco de rua aparecem no dia', /Bloqueado/.test(dia1) && /Bloco de rua/.test(dia1));
+    checar('o bloqueio e o bloco de rua aparecem no dia', /Bloqueado/.test(dia1) && /Prospecção de rua/.test(dia1));
+    /* PROSPECÇÃO DE RUA ALIMENTA A CARTEIRA (03/11/26): no dia futuro o bloco promete; no dia que passou ele conta
+       as contas novas do dono naquele dia (de outro dono e de outro dia não), e nunca diz "ficou para trás" */
+    checar('dia futuro: a prospecção de rua diz que a conta nova entra na carteira', /contas novas entram na sua carteira/.test(dia1));
+    {
+      const agendaAntes = global.agendaChave;
+      global.agendaChave = () => '2026-11-11';
+      DATA.kpiDetalhe = { leadsCriados: [
+        { ownerId: '1', criadoEm: '2026-11-10T15:00:00Z' }, { ownerId: '1', criadoEm: '2026-11-10T20:30:00Z' },
+        { ownerId: '2', criadoEm: '2026-11-10T15:00:00Z' }, { ownerId: '1', criadoEm: '2026-11-11T03:30:00Z' }, { ownerId: '1', criadoEm: '2026-11-10T02:30:00Z' },
+      ] };
+      const passado = P.diaHTML(D(), 1);
+      checar('dia que passou: conta as 2 contas novas do dono no dia (BRT: 20h30 UTC é do dia; outro dono, 00h30 BRT do dia seguinte e 23h30 BRT da véspera ficam fora)', /2 contas novas na carteira/.test(passado), passado.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 300));
+      checar('e a prospecção de rua nunca vira "ficou para trás"', !/Prospecção de rua[^]*?ficou para trás/.test(passado.split('Bloqueado')[0] + passado.split('Bloqueado').slice(1).join('').split('</article>')[0]));
+      DATA.kpiDetalhe = { leadsCriados: [] };
+      checar('dia que passou sem conta nova: diz que não cadastrou nenhuma', /nenhuma conta nova cadastrada/.test(P.diaHTML(D(), 1)));
+      delete DATA.kpiDetalhe;
+      global.agendaChave = agendaAntes;
+    }
     checar('o bloqueio não conta na meta (2 de 6: a visita e a rua)', D().cont[1] === 2, String(D().cont[1]));
     checar('o cartão tem "mudar de dia" e se arrasta para outro dia', /data-pv3-acao="cmenu:1:0"/.test(dia1) && /draggable="true" data-pv3-arraste="g:1:0"/.test(dia1));
     await acao('cmenu', '1:0');
