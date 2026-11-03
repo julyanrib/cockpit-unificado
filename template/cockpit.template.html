@@ -15120,6 +15120,8 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pv3-c-dias{display:flex;flex-direction:column;gap:4px;}
 .pv3-c-dias .pv3-pd{flex-direction:row;justify-content:space-between;padding:0 8px;min-height:40px;}
 .pv3-c.is-outro{background:transparent;border-style:dashed;}
+.pv3-c .pv3-tag.is-av{white-space:normal;line-height:1.3;padding:3px 7px;}
+.pv3-aviso-a{flex:1;display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 8px;border-radius:10px;border:1px solid var(--gv2-av-barra);background:var(--gv2-card);color:var(--gv2-ink);font:600 11.5px var(--gv2-font);text-decoration:none;white-space:nowrap;}
 .pv3-c.is-ir{border-color:var(--gv2-ok);box-shadow:0 0 0 3px var(--gv2-ok-soft);}
 .pv3-c[draggable]{cursor:grab;}
 .pv3-bpop-txt{display:flex;gap:6px;padding:0 8px 8px;flex:none;}
@@ -39897,6 +39899,40 @@ function pl6OrdemDoDia(itens, rotaDoDia) {
   return com.concat(sem);
 }
 
+/* ══ A HORA A ACERTAR E O CONFLITO DO DIA (Planejamento v2, 16/10/26), numa função (03/11/26) ═════════════
+   A v2 e o Planejamento v3 avisam a mesma coisa, pela mesma conta, sobre a saída de pl6OrdemDoDia:
+     mesmo horário    dois cartões com a mesma hora marcada no dia;
+     depois das 18h   hora marcada às 18:00 ou mais;
+     fixo             parada com hora fixa em que a rota chega mais de 10 min atrasada ou espera mais de 20.
+   O conflito do dia é a primeira parada fixa nessa situação. Avisa, não trava. */
+function pl6AvisosDaHora(ordem) {
+  const lista = Array.isArray(ordem) ? ordem : [];
+  const porHora = {};
+  lista.forEach(function (x) {
+    const it = x && x.it;
+    if (!it || !it.lead || !it.hora || !/^[0-9]{2}:[0-9]{2}$/.test(String(it.hora))) return;
+    (porHora[it.hora] = porHora[it.hora] || []).push(it);
+  });
+  const c = lista.find(function (x) { return x && x.fixo && (x.espera > 20 || x.atraso > 10); }) || null;
+  const atrasoTxt = function (x) { return x.atraso > 10 ? 'chega ' + pl6Duracao(x.atraso) + ' atrasado' : 'esperaria ' + pl6Duracao(x.espera); };
+  return {
+    porHora: porHora,
+    conflitoDe: c,
+    conflito: c ? c.fixo + ' fixo em ' + c.n + 'ª: ' + atrasoTxt(c) : '',
+    doItem: function (it, ox, passou) {
+      if (!it || passou) return '';
+      ox = ox || {};
+      const horaTarde = it.hora && /^[0-9]{2}:[0-9]{2}$/.test(String(it.hora)) && String(it.hora) >= '18:00';
+      const esperaLonga = ox.fixo && (ox.espera > 20 || ox.atraso > 10);
+      const mesmoHora = it.lead && it.hora && porHora[it.hora] && porHora[it.hora].length > 1
+        ? porHora[it.hora].filter(function (x) { return x !== it; }).map(function (x) { return x.lead.nome; }).join(', ') : '';
+      return mesmoHora ? 'mesmo horário de ' + mesmoHora
+        : horaTarde ? 'hora a acertar · depois das 18h'
+        : esperaLonga ? 'hora a acertar · ' + ox.fixo + ' fixo, ' + atrasoTxt(ox) : '';
+    }
+  };
+}
+
 function pl6GradeDoPlano() {
   const g = pl6Plano && Array.isArray(pl6Plano.grade) ? pl6Plano.grade : null;
   if (!g || g.length !== PL6_DIAS_UTEIS) return pl6GradeVazia();
@@ -41289,11 +41325,8 @@ function pl6DadosFinal(rep) {
       const itensNaOrdem = ordem.map(function (x) { return x.it; });
       /* O MESMO HORÁRIO (Planejamento v2, 16/10/26): dois cartões com a mesma hora marcada no dia
          ficam com o selo âmbar "mesmo horário de X". Avisa, não trava: ele escolhe a hora que quiser. */
-      const pl7PorHora = {};
-      itensNaOrdem.forEach(function (it) {
-        if (!it || !it.lead || !it.hora || !/^[0-9]{2}:[0-9]{2}$/.test(String(it.hora))) return;
-        (pl7PorHora[it.hora] = pl7PorHora[it.hora] || []).push(it);
-      });
+      /* a conta mora em pl6AvisosDaHora, que o Planejamento v3 também usa (03/11/26) */
+      const pl6Av = pl6AvisosDaHora(ordem);
       /* o mix do dia: quantos de cada propósito (a etiqueta do cartão) */
       const pl7Mix = {};
       itensNaOrdem.forEach(function (it) {
@@ -41304,7 +41337,7 @@ function pl6DadosFinal(rep) {
         pl7Mix[pr.nome] = (pl7Mix[pr.nome] || 0) + 1;
       });
       const ordemDe = new Map(ordem.map(function (x) { return [x.it, x]; }));
-      const conflito = ordem.find(function (x) { return x.fixo && (x.espera > 20 || x.atraso > 10); });
+      const conflito = pl6Av.conflitoDe;
       /* VISITA E RUA CONTAM; BLOQUEIO NÃO. Bloqueio é compromisso fora da rua — dizer
          "3 visitas" incluindo um dentista faria o gestor cobrar visita que ninguém
          prometeu. Mas ele APARECE como cartão, porque ocupa o dia. */
@@ -41352,7 +41385,7 @@ function pl6DadosFinal(rep) {
         /* o botão Mapa: a Agenda do app NESTE dia (só no PWA, onde o app mora) */
         mapaHref: (typeof v5NoPwa === 'function' && v5NoPwa()) ? '/?agenda=' + d.iso : '',
         /* a ordem não fecha com um cadeado: avisa e manda acertar no mapa */
-        conflito: conflito ? esc(conflito.fixo + ' fixo em ' + conflito.n + 'ª: ' + (conflito.atraso > 10 ? 'chega ' + pl6Duracao(conflito.atraso) + ' atrasado' : 'esperaria ' + pl6Duracao(conflito.espera))) : '',
+        conflito: conflito ? esc(pl6Av.conflito) : '',
         regiao: esc(regTxt),
         regBorda: regTxt ? 'var(--plum-linha)' : 'var(--line)',
         regOpts: regioes.slice().sort((a, b) => b.contas - a.contas).slice(0, 40).map(function (r) {
@@ -41470,13 +41503,7 @@ function pl6DadosFinal(rep) {
           const evidOk = false;
           const kRep = it.lead ? (it.lead.id ? 'i:' + it.lead.id : 'n:' + String(it.lead.nome || '').trim().toLowerCase()) : null;
           const repetido = !!(kRep && pl6RepetidosDoDia && pl6RepetidosDoDia[kRep] > 1);
-          const horaTarde = !passou && it.hora && /^[0-9]{2}:[0-9]{2}$/.test(String(it.hora)) && String(it.hora) >= '18:00';
-          const esperaLonga = !passou && ox.fixo && (ox.espera > 20 || ox.atraso > 10);
-          const mesmoHora = !passou && it.lead && it.hora && pl7PorHora[it.hora] && pl7PorHora[it.hora].length > 1
-            ? pl7PorHora[it.hora].filter(function (x) { return x !== it; }).map(function (x) { return x.lead.nome; }).join(', ') : '';
-          const horaAcertar = mesmoHora ? 'mesmo horário de ' + mesmoHora
-            : horaTarde ? 'hora a acertar · depois das 18h'
-            : esperaLonga ? 'hora a acertar · ' + ox.fixo + ' fixo, ' + (ox.atraso > 10 ? 'chega ' + pl6Duracao(ox.atraso) + ' atrasado' : 'esperaria ' + pl6Duracao(ox.espera)) : '';
+          const horaAcertar = pl6Av.doItem(it, ox, passou);
           const linha2 = reg ? '' : app ? (it.hora || 'sem hora')
             : ox.fixo ? ox.fixo
             : ox.chega ? '≈ ' + ox.chega : (it.hora ? it.hora : 'sem hora');
@@ -91060,6 +91087,19 @@ PLV3.ordemPorDinheiro = function (fila) {
   });
 };
 
+/* ── 1b · os dias de atraso do follow-up (03/11/26): dias úteis entre a data que venceu e hoje, pela mesma régua da
+   v2 (cadUteisEntre, a do pl6AtrasoDoPasso); a data é a do selo "venceu" (EXH4.vencida), para os números baterem.
+   Sem data, null; data de hoje ou futura, 0. */
+PLV3.diasDeAtraso = function (dia, hoje) {
+  const a = String(dia || '').slice(0, 10), b = String(hoje || '').slice(0, 10);
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(a) || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(b)) return null;
+  if (a >= b) return 0;
+  if (typeof cadUteisEntre === 'function') return Math.max(0, cadUteisEntre(a, b));
+  return GV2.uteisEntre(GV2.somaDias(a, 1), b);
+};
+/* as faixas da v2 (15d+, 8–14d, 1–7d, para hoje), na ordem da v2 */
+PLV3.FAIXAS_ATRASO = [['15+', '15 d ou mais', 15, 1e9], ['8-14', '8 a 14 d', 8, 14], ['1-7', '1 a 7 d', 1, 7], ['hoje', 'para hoje', 0, 0]];
+
 /* ── 2 · a média da pessoa ──
    Visitas com prova por dia útil na janela [de, ate] (a tela passa as últimas 4 semanas que a base já lê,
    visitas_com_prova). Fonte fora do ar devolve fonte 'fora' e valor null: a tela escreve "—" e o nome da
@@ -91364,7 +91404,13 @@ PLV3.dados = function (rep) {
     const vistos = {};
     itens.forEach(function (it) { if (it.id) vistos[it.id] = (vistos[it.id] || 0) + 1; });
     const rotaDia = rota ? rota[d.iso] : null;
-    const ordem = d.hoje ? pl6OrdemDoDia(itens, rotaDia) : itens.map(function (it) { const r0 = rotaDia && it.id ? rotaDia.get(String(it.id)) : null; return { it: it, st: r0, fixo: r0 && r0.fixo ? r0.fixo : null, n: null }; });
+    /* a conta da rota vale para TODO dia (03/11/26): é dela que saem a espera e o atraso da hora fixa que a v2
+       avisava; o número de ordem continua só no dia de hoje */
+    const conta = pl6OrdemDoDia(itens, rotaDia);
+    const daConta = new Map(conta.map(function (x) { return [x.it, x]; }));
+    const ordem = d.hoje ? conta : itens.map(function (it) { const x = daConta.get(it) || {}; return { it: it, st: x.st || null, fixo: x.fixo || null, n: null, espera: x.espera || 0, atraso: x.atraso || 0 }; });
+    /* "hora a acertar" e o conflito do dia: a MESMA função da v2 (pl6AvisosDaHora) */
+    const avisos = typeof pl6AvisosDaHora === 'function' ? pl6AvisosDaHora(conta) : null;
     const dv5 = temBase && (d.passou || d.hoje) && EXH.diaDoPlano ? EXH.diaDoPlano(d.iso, function () { PLV3.pintarComCalma(); }) : null;
     const lista = ordem.map(function (o) {
       const it = o.it, l = it.lead || null;
@@ -91381,20 +91427,21 @@ PLV3.dados = function (rep) {
         fixo: o.fixo || null, n: d.hoje ? o.n : null,
         app: !!(it.origem && /^app/.test(String(it.origem))),
         hora: it.hora || null, repetido: !!(it.id && vistos[it.id] > 1),
+        acertar: avisos && !d.passou && !(vx && vx.feita) && !(o.st && o.st.feita) ? avisos.doItem(it, daConta.get(it), false) : '',
         /* o "como foi?" que a v2 levava para o app (a ficha que o gestor lê): o mesmo EXH.paradaApp */
         comoFoi: (function () { const a = dv5 && EXH.paradaApp ? EXH.paradaApp(dv5, it, d.passou) : null; return a && a.comoFoi ? a.comoFoi : ''; }()),
         lat: l && l.lat != null ? Number(l.lat) : null, lng: l && l.lng != null ? Number(l.lng) : null
       };
     });
     const fora = dv5 && Array.isArray(dv5.fora) ? dv5.fora.map(function (f) { return { fora: true, nome: f.nome || 'cliente', chk: f.hora || null, feita: true, ref: null }; }) : [];
-    return { planejados: lista, fora: fora, dv5: dv5, outros: outros };
+    return { planejados: lista, fora: fora, dv5: dv5, outros: outros, conflito: avisos && !d.passou ? avisos.conflito : '', conflitoSi: avisos && !d.passou && avisos.conflitoDe && avisos.conflitoDe.it ? avisos.conflitoDe.it.si : null };
   });
 
   /* o que ficou para trás num dia que passou (parada do plano sem check-in) volta para a fila com o selo */
-  const ficou = {};
+  const ficou = {}, ficouIso = {};
   dias.forEach(function (d, i) {
     if (!d.passou) return;
-    cartoes[i].planejados.forEach(function (c) { if (c.ref && !c.feita && !c.rua && !ficou[c.ref]) ficou[c.ref] = 'ficou ' + PLV3.rotDia(d); });
+    cartoes[i].planejados.forEach(function (c) { if (c.ref && !c.feita && !c.rua && !ficou[c.ref]) { ficou[c.ref] = 'ficou ' + PLV3.rotDia(d); ficouIso[c.ref] = d.iso; } });
   });
 
   /* ── a fila: os negócios sem próximo passo, pela função única ── */
@@ -91405,7 +91452,9 @@ PLV3.dados = function (rep) {
     const v = EXH4.vencida(n, b);
     return { ref: ref, dealId: String(n.id), n: n, nome: n.nome, etapaIdx: n.etapa_idx, dias: n.dias, quente: GV2.quenteCadencia(n),
       bairro: l ? l.regiao : null, bairroNome: l ? (l.regiaoNome || nomeB(l.regiao)) : '', semEnd: !l || !!l.semEndereco,
-      venc: v ? 'venceu ' + GV2.diaCurto(v.dia) : null, ficou: ficou[ref] || null, tirado: st.tirados[ref] || null };
+      venc: v ? 'venceu ' + GV2.diaCurto(v.dia) : null, ficou: ficou[ref] || null, tirado: st.tirados[ref] || null,
+      /* os dias de atraso, em dias úteis, da MESMA data do selo (EXH4.vencida; sem ela, o dia que ficou para trás) */
+      atraso: PLV3.diasDeAtraso(v ? v.dia : ficouIso[ref], hojeIso) };
   };
   if (temBase) {
     DV.com(function () {
@@ -91613,6 +91662,8 @@ PLV3.faixas = function (D, f) {
     fx = [{ id: 'queda', rot: 'em queda', fn: function (x) { return !!x.queda; } },
       { id: 'ganho', rot: 'Ganho', fn: function (x) { return String(x.stageId) === '1396006162'; } },
       { id: 'onboarding', rot: 'Onboarding', fn: function (x) { return String(x.stageId) === '1396006163'; } }];
+  } else if (f === 'venc') {
+    fx = PLV3.FAIXAS_ATRASO.map(function (a) { return { id: a[0], rot: a[1], fn: function (x) { return x.atraso != null && x.atraso >= a[2] && x.atraso <= a[3]; } }; });
   } else if (f === 'cobrar') {
     fx = [{ id: 'acima', rot: 'acima da régua (mais de ' + reguaPgto + ' d)', fn: function (x) { return (Number(x.dias) || 0) > reguaPgto; } },
       { id: 'dentro', rot: 'dentro da régua', fn: function (x) { return (Number(x.dias) || 0) <= reguaPgto; } }];
@@ -91804,7 +91855,7 @@ function pv3LinhaHTML(D, l) {
   const aberto = st.menu && st.menu.ref === l.ref ? st.menu.tipo : null;
   const selos = [];
   if (l.quente) selos.push(PLV3.tagHTML('QUENTE', 'is-quente'));
-  if (l.venc) selos.push(PLV3.tagHTML(l.venc, 'is-av'));
+  if (l.venc) selos.push(PLV3.tagHTML(l.venc + (l.atraso ? ' · há ' + GV2.pl(l.atraso, 'dia útil', 'dias úteis') : ''), 'is-av'));
   if (l.ficou) selos.push(PLV3.tagHTML(l.ficou, 'is-av'));
   if (l.tirado) selos.push(PLV3.tagHTML(l.tirado, 'is-av'));
   if (l.semEnd) selos.push(PLV3.tagHTML('sem lugar no mapa', 'is-mapa'));
@@ -91945,6 +91996,15 @@ PLV3.diaHTML = function (D, i) {
       }).join('') : '<span class="pv3-vazio">Nada ficou para trás neste dia.</span>') + '</div>';
     }
   }
+  /* o conflito de hora fixa do dia (o "acertar no mapa" da v2): avisa, não trava, e dá as saídas */
+  if (C.conflito && !d.passou) {
+    const ch = C.conflitoSi != null ? i + ':' + C.conflitoSi : null;
+    const noPwa = typeof v5NoPwa === 'function' && v5NoPwa();
+    corpo += '<div class="pv3-aviso is-hora" data-pv3-conflito="' + i + '"><span>' + e('Hora a acertar · ' + C.conflito) + '</span><div>'
+      + (ch ? '<button type="button" data-pv3-acao="cmenu:' + ch + '">mudar a hora ou o dia</button>' : '')
+      + '<button type="button" data-pv3-acao="pl7mapa:' + i + '">ver a rota</button>'
+      + (noPwa ? '<a class="pv3-aviso-a" href="/?agenda=' + e(d.iso) + '">acertar no app</a>' : '') + '</div></div>';
+  }
   /* o aviso de capacidade: avisa, não trava */
   if (acima) {
     const lim = PLV3.limiteCapacidade(D.mediaBase);
@@ -92034,13 +92094,15 @@ PLV3.cartaoHTML = function (D, i, c, f) {
   const movel = !c.fora && !c.feita && !d.passou && c.si != null && c.ref;
   const chave = i + ':' + c.si;
   const mOn = movel && st.cMenu === chave;
-  const mudar = movel ? '<button type="button" class="pv3-c-bt" data-pv3-acao="cmenu:' + chave + '" aria-expanded="' + !!mOn + '">mudar de dia ▾</button>'
-    + (mOn ? '<div class="pv3-c-dias">' + D.dias.map(function (dd, j) {
+  const mudar = movel ? '<button type="button" class="pv3-c-bt" data-pv3-acao="cmenu:' + chave + '" aria-expanded="' + !!mOn + '">mudar a hora ou o dia ▾</button>'
+    + (mOn ? '<div class="pv3-c-dias"><label class="pv3-hora"><span>outra hora</span><input type="time" data-pv3-hora="g:' + chave + '" value="' + e(st.hora['g:' + chave] || c.hora || '') + '"></label>'
+      + '<button type="button" class="pv3-c-bt" data-pv3-acao="mudarhora:' + chave + '">gravar a hora</button><small class="pv3-c-sub">ou outro dia</small>' + D.dias.map(function (dd, j) {
       if (j === i) return '';
       const ok = PLV3.aceitaSoltar(dd);
       return '<button type="button" class="pv3-pd' + (ok ? '' : ' is-off') + '" data-pv3-acao="moverum:' + chave + ':' + j + '"' + (ok ? '' : ' aria-disabled="true"') + '><b>' + e(PLV3.rotCurto(dd)) + '</b><small>' + e(dd.feriado ? 'feriado' : dd.passou ? 'passou' : D.cont[j] + '/' + D.meta) + '</small></button>';
     }).join('') + '</div>' : '') : '';
-  const extras = (c.repetido ? PLV3.tagHTML('repetido no dia', 'is-av') : '') + (c.hora && !c.fixo && !c.feita ? '<span class="pv3-c-sub">' + e('marcado ' + c.hora) + '</span>' : '')
+  /* a hora a acertar (a mesma conta da v2, pl6AvisosDaHora): o selo âmbar no cartão; a saída é o "mudar a hora ou o dia" */
+  const extras = (c.acertar ? PLV3.tagHTML(c.acertar, 'is-av') : '') + (c.repetido ? PLV3.tagHTML('repetido no dia', 'is-av') : '') + (c.hora && !c.fixo && !c.feita ? '<span class="pv3-c-sub">' + e('marcado ' + c.hora) + '</span>' : '')
     + (c.comoFoi ? '<a class="pv3-c-bt pv3-c-link" href="' + e(c.comoFoi) + '" target="_top">como foi? · registrar no app</a>' : '');
   const arr = movel ? ' draggable="true" data-pv3-arraste="g:' + chave + '"' : '';
   return '<div class="' + cls + (abre ? ' is-abre' : '') + (st.irRef && st.irRef === c.ref ? ' is-ir' : '') + '"' + abre + arr + (c.ref && !c.fora ? ' data-pv3-cartao="' + e(c.ref) + '"' : '') + '><div class="pv3-c-l1">' + (c.n ? '<i class="pv3-c-ord">' + c.n + '</i>' : '')
@@ -92461,6 +92523,40 @@ PLV3.moverUm = function (di, si, para) {
   if (di === para) return PLV3.pintar();
   return PLV3.moverCartoes(di, [c], para);
 };
+/* MUDAR A HORA no mesmo dia (a saída do "hora a acertar", 03/11/26): como o remarcar da v2 — o slot leva a hora
+   nova e, se é negócio, a tarefa do HubSpot do mesmo dia é remarcada (criarTarefaVisitaNoHubspot deduplica por dia) */
+PLV3.mudarHora = async function (di, si) {
+  const st = PLV3.st, D = PLV3.D, rep = PLV3.rep;
+  const hora = String(st.hora['g:' + di + ':' + si] || '').slice(0, 5);
+  if (!/^[0-9]{2}:[0-9]{2}$/.test(hora)) { PLV3.toast('Escolha a hora nova antes de gravar.', 'atencao'); return false; }
+  const d = D && D.dias[di];
+  if (!PLV3.aceitaSoltar(d)) { PLV3.toast('Esse dia já passou · escolha hoje ou depois', 'atencao'); return false; }
+  const g = pl6GradeDoPlano();
+  const v = g[di] ? g[di][si] : null;
+  if (v == null) { PLV3.toast('Esse cartão mudou enquanto você escolhia. A semana foi relida.', 'atencao'); return PLV3.pintar(); }
+  const id = typeof v === 'object' ? v.id : v;
+  const l = id && D.porId ? D.porId.get(String(id)) : null;
+  if (st.ocupado) return false;
+  st.ocupado = 'Mudando a hora…';
+  st.cMenu = null;
+  PLV3.pintar();
+  try {
+    if (l && l.tipo === 'c' && l.dealId && typeof criarTarefaVisitaNoHubspot === 'function') {
+      await criarTarefaVisitaNoHubspot({ id: l.dealId, name: l.nome, nome: l.nome }, rep.ownerId, hora, { silencioso: true, origem: 'planejamento', dealId: l.dealId }, d.iso);
+      if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal({ id: l.dealId, nome: l.nome }, d.iso, hora, rep.ownerId);
+    }
+  } catch (er) {
+    st.ocupado = false;
+    PLV3.toast('O HubSpot não confirmou a hora nova. A semana não mudou.', 'erro');
+    return PLV3.pintar();
+  }
+  g[di][si] = Object.assign({}, typeof v === 'object' ? v : { id: v }, { hora: hora });
+  st.ocupado = false;
+  const ok = await PLV3.mutar({ grade: g });
+  if (ok) { delete st.hora['g:' + di + ':' + si]; PLV3.salvo(); PLV3.toast((l ? l.nome : 'A parada') + ' · ' + PLV3.rotDia(d) + ' ' + hora + (l && l.dealId ? ' · tarefa do HubSpot remarcada' : '') + ' · se a hora é fixa no app, acerte lá também'); }
+  PLV3.pintar();
+  return ok;
+};
 /* o bloco de rua: a mesma gravação do bloco da v2 ({ id: PL6_RUA, hora, p: 'rua', regiao, duracao } na 1ª vaga do dia) */
 PLV3.porRua = async function (di) {
   const st = PLV3.st, D = PLV3.D;
@@ -92740,6 +92836,7 @@ PLV3.acao = async function (verbo, arg) {
   if (verbo === 'cmenu') { st.cMenu = st.cMenu === arg ? null : arg; const d1 = Number(arg.split(':')[0]); PLV3.pintarDias([d1]); return st.cMenu ? null : PLV3.soltarEspera(); }
   if (verbo === 'moverum') { const p3 = arg.split(':').map(Number); await PLV3.moverUm(p3[0], p3[1], p3[2]); return PLV3.soltarEspera(); }
   if (verbo === 'bairrotxt') return PLV3.bairroDigitado(Number(arg));
+  if (verbo === 'mudarhora') { const p5 = arg.split(':').map(Number); await PLV3.mudarHora(p5[0], p5[1]); return PLV3.soltarEspera(); }
   if (verbo === 'pl7mapa') { const i2 = Number(arg); st.mapaDia = st.mapaDia === i2 ? null : i2; return PLV3.pintar(); }
   if (verbo === 'pl7mapafechar') { st.mapaDia = null; return PLV3.pintar(); }
   if (verbo === 'pl7encaixar') { const p4 = arg.split('|'); await PLV3.porNoDia(p4[0], Number(p4[1])); return PLV3.soltarEspera(); }

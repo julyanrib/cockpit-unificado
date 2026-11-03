@@ -1487,7 +1487,8 @@ tabelas.gv2_falta_etapa = [
     checar('pl7 · no template: na sexta a tela abre na próxima semana, uma vez, e o chip manda depois',
       /weekday: 'short' \}\) === 'Fri'\) \{\n    PL6_SEMANA = 1; pl6UI\.semanaTocada = true;/.test(tpl) && /pl6UI\.semanaTocada = true;\n      if \(nova === \(Number\(PL6_SEMANA\) \|\| 0\)\) return;/.test(tpl));
     checar('pl7 · no template: dois cartões na mesma hora levam "mesmo horário de X" (avisa, não trava)',
-      /const horaAcertar = mesmoHora \? 'mesmo horário de ' \+ mesmoHora/.test(tpl) && /GV2\.PL7\.capacidadeHTML\(dia\.capN, dia\.capMeta, dia\.mixTxt\)/.test(tpl));
+      /* 03/11/26: a conta mora em pl6AvisosDaHora, que a v2 e o Planejamento v3 chamam */
+      /return mesmoHora \? 'mesmo horário de ' \+ mesmoHora/.test(tpl) && /const horaAcertar = pl6Av\.doItem\(it, ox, passou\);/.test(tpl) && /GV2\.PL7\.capacidadeHTML\(dia\.capN, dia\.capMeta, dia\.mixTxt\)/.test(tpl));
     checar('pl7 · no template: confirmar o rascunho grava pelo agendarNoSlot de sempre, uma conta por vez, e propor não grava',
       /if \(verbo === 'pl7confirmar'\)[\s\S]{0,900}await agendarNoSlot\(it\.id, it\.di, primeiraVaga\(it\.di\), null\)/.test(tpl)
         && /if \(verbo === 'pl7montar'\) \{ s\.pl7Aberto = true; s\.pl7Feito = null; s\.pl7Fora = new Set\(\); return redesenhar\(\); \}/.test(tpl));
