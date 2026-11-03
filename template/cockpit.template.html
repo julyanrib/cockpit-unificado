@@ -14992,7 +14992,7 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pv3-c-x{position:absolute;top:0;right:0;width:40px;height:40px;border:0;border-radius:10px;background:transparent;color:var(--gv2-faint);font:600 15px/1 var(--gv2-font);}
 .pv3-c-x:hover{color:var(--gv2-ink);background:var(--gv2-hov);}
 .pv3-c .pv3-c-l1{padding-right:22px;}
-.pv3-busca{padding:0 12px 8px;flex:none;}
+.pv3-busca{padding:8px 12px 8px;flex:none;}
 .pv3-busca input{width:100%;min-height:40px;padding:0 10px;border-radius:10px;border:1px solid var(--gv2-line-btn);background:var(--gv2-card);color:var(--gv2-ink);font:500 12.5px var(--gv2-font);}
 .pv3-c.is-abre:hover{border-color:var(--gv2-line-btn);}
 .pv3-c.is-proposta{border:1.5px dashed var(--gv2-rota);background:transparent;}
@@ -91326,6 +91326,15 @@ PLV3.dados = function (rep) {
   cobrar.concat(relac).forEach(function (r) { if (!st.linhas[r.ref] || !st.linhas[r.ref].n) st.linhas[r.ref] = r; });
   const recicl = todos.filter(function (l) { return l.reciclagem && !naGradeFutura[l.id]; })
     .map(function (l) { return { ref: l.id, dealId: l.dealId, nome: l.nome, etapaIdx: 0, dias: l.dias, quente: false, recicl: true, bairro: l.regiao, bairroNome: l.regiaoNome || nomeB(l.regiao), semEnd: !!l.semEndereco }; });
+  /* A BUSCA ACHA A CARTEIRA INTEIRA (03/11/26): só as listas da fila entravam (sem passo, alvos, reciclagem,
+     cobrar, relacionamento), e o negócio que já tinha passo marcado não era achado para planejar. Com algo
+     digitado, entra todo lead e negócio dele fora da grade dos próximos dias. */
+  const busca = st.q ? todos.filter(function (l) { return !naGradeFutura[l.id]; }).map(function (l) {
+    return l.tipo === 'n'
+      ? { ref: l.id, leadId: l.leadId, nome: l.nome, etapaIdx: 0, dias: null, quente: false, alvo: true, bairro: l.regiao, bairroNome: l.regiaoNome || nomeB(l.regiao), semEnd: !!l.semEndereco, cnpj: PL7.diasCnpj(l) }
+      : deNegocio(l, {});
+  }) : [];
+  busca.forEach(function (r) { if (!st.linhas[r.ref]) st.linhas[r.ref] = r; });
 
   /* ── a média, a meta, a capacidade ── */
   const metaFase = (function () { const r = typeof rampDoOwner === 'function' ? rampDoOwner(rep.ownerId) : null; return (r && r.alvo) || (p && p.meta_visitas_dia) || PLV3.META_PADRAO; }());
@@ -91372,7 +91381,7 @@ PLV3.dados = function (rep) {
   const virou = pl6SegundaDaSemana() !== GV2.segundaDe(hojeIso);
   return { rep: rep, segunda: segunda, hojeIso: hojeIso, agoraMin: agoraMin, antesDas10: antesDas10, dias: dias, regioes: regioes, nomeB: nomeB,
     todos: todos, porId: porId, cartoes: cartoes, temBase: temBase, baseErro: DV && DV.estado ? DV.estado.erro : null, p: p, b: b,
-    semL: semL, semPendentes: semPendentes, contador: contador, alvos: alvos, recicl: recicl, cobrar: cobrar, relac: relac,
+    semL: semL, semPendentes: semPendentes, contador: contador, alvos: alvos, recicl: recicl, cobrar: cobrar, relac: relac, busca: busca,
     meta: meta, metaFase: metaFase, media: media, mediaBase: mediaBase, metaSem: metaSem,
     bSel: bSel, bDia: bDia, bRota: bRota, contPlan: contPlan, cont: cont, sug: sug, topo: topo, ramp: ramp, virou: virou };
 };
@@ -91439,7 +91448,7 @@ PLV3.linhasDoFiltro = function (D) {
   const q = PLV3.chave(PLV3.st.q);
   if (q) {
     const vistos = {};
-    return D.semL.concat(D.cobrar, D.relac, D.recicl, D.alvos).filter(function (l) {
+    return D.semL.concat(D.cobrar, D.relac, D.recicl, D.alvos, D.busca || []).filter(function (l) {
       if (vistos[l.ref] || PLV3.chave(l.nome).indexOf(q) < 0 && PLV3.chave(l.bairroNome).indexOf(q) < 0) return false;
       vistos[l.ref] = 1; return true;
     });
@@ -91464,13 +91473,16 @@ PLV3.blocoFilaHTML = function (D) {
   const tit = st.q ? 'Procurando "' + st.q + '"' : ({ alvo: 'Contas-alvo', quentes: 'Quentes sem próximo passo', cnpj: 'CNPJ novo · 90 d', recicl: 'Reciclagem', venc: 'Follow-up vencido', cobrar: 'Ag. Pagamento · cobrar', relac: 'Relacionamento · clientes' }[st.filtro] || 'Sem próximo passo');
   const F = function (k, rot, n) { const on = st.filtro === k; return '<button type="button" class="pv3-f' + (on ? ' is-on' : '') + '" data-pv3-acao="filtro:' + k + '" aria-pressed="' + on + '">' + e(rot) + (n === '' ? '' : ' <b>' + n + '</b>') + '</button>'; };
   const maisOn = PLV3.MAIS.indexOf(st.filtro) >= 0;
-  const filtros = '<div class="pv3-filtros">' + F('sem', 'Sem passo', D.semPendentes.length) + F('quentes', 'Quentes', D.semPendentes.filter(function (l) { return l.quente; }).length)
+  /* A BUSCA SEMPRE À VISTA (Julyan, 03/11/26: "saiu a aba de pesquisar o lead, tem que ser igual antes, eles precisam
+     planejar buscando os leads"): ela existia, mas só aparecia depois de abrir o "mais ▾". Agora é a primeira
+     coisa da fila, e procura em todas as listas (sem passo, contas-alvo, reciclagem, cobrar, relacionamento). */
+  const busca = '<div class="pv3-busca"><input type="search" data-pv3-busca="1" placeholder="Buscar lead, cliente ou bairro" value="' + e(st.q || '') + '" autocomplete="off" aria-label="Buscar lead, cliente ou bairro"></div>';
+  const filtros = busca + '<div class="pv3-filtros">' + F('sem', 'Sem passo', D.semPendentes.length) + F('quentes', 'Quentes', D.semPendentes.filter(function (l) { return l.quente; }).length)
     + F('alvo', 'Contas-alvo', D.alvos.length)
     + '<button type="button" class="pv3-f' + (maisOn ? ' is-on' : '') + '" data-pv3-acao="mais" aria-expanded="' + st.maisAberto + '">mais ▾</button></div>'
     + (st.maisAberto ? '<div class="pv3-mais">' + F('venc', 'follow-up vencido', D.semPendentes.filter(function (l) { return l.venc || l.ficou; }).length)
       + F('cnpj', 'CNPJ novo · 90 d', D.alvos.filter(function (a) { return a.cnpj != null && a.cnpj <= 90; }).length) + F('recicl', 'Reciclagem', D.recicl.length)
-      + F('cobrar', 'Ag. Pagamento', D.cobrar.length) + F('relac', 'Relacionamento', D.relac.length) + '</div>' : '')
-    + (st.maisAberto || st.q ? '<div class="pv3-busca"><input type="search" data-pv3-busca="1" placeholder="achar conta pelo nome" value="' + e(st.q || '') + '" autocomplete="off" aria-label="achar conta pelo nome"></div>' : '');
+      + F('cobrar', 'Ag. Pagamento', D.cobrar.length) + F('relac', 'Relacionamento', D.relac.length) + '</div>' : '');
   let corpo = '';
   if (!D.temBase && ['sem', 'quentes', 'venc'].indexOf(st.filtro) >= 0) {
     corpo = '<div class="pv3-vazio">' + e(D.baseErro ? 'O funil do HubSpot não respondeu agora: a fila mostra "—" até voltar. ' + D.baseErro : 'Lendo o seu funil do HubSpot…') + '</div>';
