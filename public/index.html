@@ -4541,7 +4541,7 @@
     display:flex;flex-direction:column;gap:10px;padding:12px 16px;overflow:hidden;font-variant-numeric:tabular-nums;}
   .gv2-dv3 *{box-sizing:border-box;}
   .gv2-dv3 .n{font-family:'Poppins',var(--font-display),sans-serif;font-variant-numeric:tabular-nums;}
-  .gv2-dv3 button{font:inherit;color:inherit;}
+  :where(.gv2-dv3) button{font:inherit;color:inherit;}
   .dv3-kick{font:800 10.5px var(--font-body),sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--red);}
   .dv3-rot{margin:0 0 8px;font:700 10.5px var(--font-body),sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);display:flex;justify-content:space-between;align-items:center;gap:8px;}
   .dv3-card{background:var(--card);border:1px solid var(--l1);border-radius:12px;padding:12px 16px;min-width:0;min-height:0;}
@@ -4625,7 +4625,7 @@
   .dv3-chip.is-demo{background:var(--bluS);color:var(--blue2);} .dv3-chip.is-ret{background:var(--ambS);color:var(--amb2);}
   .dv3-rodape-c{margin-top:auto;padding-top:8px;display:flex;justify-content:space-between;gap:8px;font:500 11.5px var(--font-body),sans-serif;color:var(--mute);}
   .dv3-semplano{display:flex;flex-direction:column;gap:6px;margin-top:2px;}
-  .dv3-semplano > b{font:800 34px/1 'Poppins',sans-serif;color:var(--red);}
+  .dv3-semplano > b{font:800 28px/1.05 'Poppins',sans-serif;color:var(--red);}
   .dv3-semplano p{margin:0;font:500 12.5px var(--font-body),sans-serif;color:var(--ink3);}
   .dv3-semplano .dv3-bt{min-height:46px;margin-top:auto;}
 
@@ -67097,19 +67097,20 @@ GV2.dv3Pauta = function (p) {
   if (!util) return [];
   const sp = GV2.dv3SemPasso(p), negs = p.negocios || [];
   if (!temPlano && !rampa && !b.planoErro) out.push({ k: 'plano', curto: 'Plano no app até 12h', pq: 'sem plano hoje · meta 6 paradas e 1 demo', longo: 'Mandar o plano com 6 paradas e 1 demo até 12h', sev: 'red' });
-  if (temPlano && O.ratio !== null && O.ratio < 0.5) out.push({ k: 'furo', curto: 'Cumprir as ' + (n || p.hoje.paradas_plano) + ' paradas', pq: 'ontem ' + O.txt + ' · check-in em cada uma', longo: 'Cumprir as ' + (n || p.hoje.paradas_plano) + ' paradas de hoje com check-in em cada uma (ontem ' + O.txt + ')', sev: 'red' });
+  const rua = !rampa;
+  if (rua && temPlano && O.ratio !== null && O.ratio < 0.5) out.push({ k: 'furo', curto: 'Cumprir as ' + (n || p.hoje.paradas_plano) + ' paradas', pq: 'ontem ' + O.txt + ' · check-in em cada uma', longo: 'Cumprir as ' + (n || p.hoje.paradas_plano) + ' paradas de hoje com check-in em cada uma (ontem ' + O.txt + ')', sev: 'red' });
   if (sp.length) {
     const top = sp.slice(0, 2).map(function (x) { return x.nome; }).join(', ');
     out.push({ k: 'sp', curto: 'Tarefa nos ' + sp.length + ' sem passo', pq: top + (sp.length > 2 ? ' e +' + (sp.length - 2) : ''), longo: 'Pôr tarefa no HubSpot nos ' + sp.length + ' sem próximo passo até 18h (' + top + ')', sev: 'red' });
   }
-  if (temPlano && !(p.hoje.visitas_todas || 0) && stops[0]) out.push({ k: 'ci', curto: '1º check-in até ' + (stops[0].hora || '9h'), pq: 'nenhum check-in hoje · ' + stops[0].nome, longo: 'Fazer o 1º check-in em ' + stops[0].nome + ' até ' + (stops[0].hora || '9h') + ' e mandar no grupo', sev: 'amb' });
-  if (temPlano && !stops.some(function (x) { return x.acao === 'demo'; })) {
+  if (rua && temPlano && !(p.hoje.visitas_todas || 0) && stops[0]) out.push({ k: 'ci', curto: '1º check-in até ' + (stops[0].hora || '9h'), pq: 'nenhum check-in hoje · ' + stops[0].nome, longo: 'Fazer o 1º check-in em ' + stops[0].nome + ' até ' + (stops[0].hora || '9h') + ' e mandar no grupo', sev: 'amb' });
+  if (rua && temPlano && !stops.some(function (x) { return x.acao === 'demo'; })) {
     const cand = negs.find(function (x) { return x.etapa_idx === 2; }) || negs.find(function (x) { return x.etapa_idx === 1; });
     out.push({ k: 'demo', curto: 'Marcar 1 demo hoje', pq: cand ? 'candidato: ' + cand.nome + ' (' + GV2.ETAPAS[cand.etapa_idx] + ')' : 'meta: 1 demo por dia', longo: 'Sair da daily com 1 demo marcada' + (cand ? ' (' + cand.nome + ')' : ''), sev: 'amb' });
   }
   const agp = (p.agPag || []).slice().sort(function (a, b2) { return (b2.mrr || 0) - (a.mrr || 0); })[0];
   if (agp) out.push({ k: 'agp', curto: 'Receber ' + agp.nome, pq: 'Ag. Pagamento' + (agp.mrr ? ' · ' + GV2.rs(agp.mrr) : ''), longo: 'Fechar o pagamento de ' + agp.nome + ' hoje' + (agp.mrr ? ' (' + GV2.rs(agp.mrr) + ')' : ''), sev: 'amb' });
-  if (temPlano && n && n < 6) out.push({ k: 'rota', curto: '+' + (6 - n) + ' paradas na rota', pq: n + ' de 6 no plano', longo: 'Completar a rota com +' + (6 - n) + ' paradas', sev: 'amb' });
+  if (rua && temPlano && n && n < 6) out.push({ k: 'rota', curto: '+' + (6 - n) + ' paradas na rota', pq: n + ' de 6 no plano', longo: 'Completar a rota com +' + (6 - n) + ' paradas', sev: 'amb' });
   const trav = negs.filter(function (x) { return x.travado && x.proximo_passo && !x.agPag; }).sort(function (a, b2) { return (b2.mrr || 0) - (a.mrr || 0); })[0];
   if (trav) out.push({ k: 'trav', curto: 'Avançar ' + trav.nome, pq: trav.dias + ' de ' + (trav.regua || '—') + ' dias em ' + GV2.ETAPAS[trav.etapa_idx], longo: 'Avançar ou dar perda em ' + trav.nome + ' (' + trav.dias + ' dias em ' + GV2.ETAPAS[trav.etapa_idx] + ')', sev: 'amb' });
   return out.slice(0, 3);
@@ -67220,8 +67221,8 @@ GV2.dv3Col2 = function (p, R, Rt) {
   const dd = GV2.v8Tx(f.decisor || 0, f.demo || 0), ddT = GV2.v8Tx(ft.decisor || 0, ft.demo || 0);
   const G = GV2.v8Gargalo(R), prontos = GV2.dv3Prontos(R, Rt);
   const funil = '<section class="dv3-card" style="flex:1"><h3 class="dv3-rot">3 · Onde o funil trava <span style="letter-spacing:0;text-transform:none;font-weight:500">no mês</span></h3>'
-    + '<div class="dv3-funil">' + caixa(f.portas, 'portas', '', '') + caixa(f.decisor, 'decisor', pd + ' · time ' + pdT, GV2.dv3Tom(f.portas || 0, f.decisor || 0, ft.portas || 0, ft.decisor || 0))
-    + caixa(f.demo, 'demos', dd + ' · time ' + ddT, GV2.dv3Tom(f.decisor || 0, f.demo || 0, ft.decisor || 0, ft.demo || 0)) + '</div>'
+    + '<div class="dv3-funil">' + caixa(f.portas, 'portas', '', '') + caixa(f.decisor, 'decisor', pd === '—' && pdT === '—' ? '' : pd + ' · time ' + pdT, GV2.dv3Tom(f.portas || 0, f.decisor || 0, ft.portas || 0, ft.decisor || 0))
+    + caixa(f.demo, 'demos', dd === '—' && ddT === '—' ? '' : dd + ' · time ' + ddT, GV2.dv3Tom(f.decisor || 0, f.demo || 0, ft.decisor || 0, ft.demo || 0)) + '</div>'
     + '<p class="dv3-garg">' + GV2.e(G.t) + '</p>'
     + prontos.map(function (t, j) {
       const usado = GV2.dv3Usado(p.id, t);
@@ -67266,7 +67267,7 @@ GV2.dv3Col4 = function (p, P) {
   let passar = '';
   if (acima) {
     const falta = (acima.pontos || 0) - pts + 1;
-    passar = 'Pra passar ' + GV2.prim(acima.nome || GV2.nomeDe(String(acima.ownerId))) + ' (' + acima.pontos + '): ' + (falta <= 18 ? Math.ceil(falta / 3) + ' visitas com prova' : falta <= 100 ? Math.ceil(falta / 25) + ' demos' : Math.ceil(falta / 100) + ' vendas') + '.';
+    passar = 'Pra passar ' + GV2.prim(acima.nome || GV2.nomeDe(String(acima.ownerId))) + ' (' + acima.pontos + '): ' + (falta <= 18 ? GV2.pl(Math.ceil(falta / 3), 'visita com prova', 'visitas com prova') : falta <= 100 ? GV2.pl(Math.ceil(falta / 25), 'demo', 'demos') : GV2.pl(Math.ceil(falta / 100), 'venda', 'vendas')) + '.';
   }
   const nome = function (x) { return GV2.prim(x.nome || GV2.nomeDe(String(x.ownerId))); };
   const top = ls.slice(0, 3);
