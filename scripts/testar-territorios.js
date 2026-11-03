@@ -135,6 +135,9 @@ const todoMunicipioDe = (municipio, quemExclui) => TERR.find(t => t.ativo !== fa
   && (t.areas || []).some(a => a.todoOMunicipio && a.municipio === municipio));
 const semDestino = [];
 TERR.forEach(t => {
+  /* território inativo não roteia lead (lib/territorios.js filtra DESLIGADOS): o "exceto" dele não deixa zona
+     nenhuma "sem saber" (03/11/26) */
+  if (t.ativo === false) return;
   (t.areas || []).forEach(a => {
     (a.exceto || []).forEach(b => {
       const k = (a.municipio || '') + '|' + chave(b);
