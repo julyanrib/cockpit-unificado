@@ -4554,7 +4554,7 @@
   .dv3-bt.is-ink{background:var(--ink);border-color:var(--ink);color:var(--bg);}
   .dv3-bt.is-ok{background:var(--grnS);border-color:var(--grnB);color:var(--grn);}
   .dv3-x{width:34px;height:34px;border-radius:9px;border:1px solid var(--l3);background:var(--sub);cursor:pointer;font-size:18px;line-height:1;}
-  .t-red{color:var(--red)!important;} .t-amb{color:var(--amb)!important;} .t-grn{color:var(--grn)!important;} .t-mute{color:var(--mute)!important;} .t-blue{color:var(--blue2)!important;}
+  .t-red{color:var(--red)!important;} .t-amb{color:var(--amb)!important;} .t-grn{color:var(--grn)!important;} .t-mute{color:var(--mute)!important;}
   .dv3-ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
 
   .dv3-topo{height:48px;flex:none;display:flex;align-items:center;gap:14px;}
@@ -4730,9 +4730,6 @@
   .dv3-podio div.is-1 i{background:var(--amb);color:var(--onAmb);} .dv3-podio div.is-1 strong{color:var(--amb);}
   .dv3-resto{display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--l1);font:500 12px var(--font-body),sans-serif;color:var(--ink3);}
   .dv3-resto b{color:var(--ink);font-weight:800;}
-  .dv3-temp{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
-  .dv3-temp b.n{display:block;font:900 20px 'Poppins',sans-serif;}
-  .dv3-temp small{font:500 11.5px var(--font-body),sans-serif;color:var(--ink3);}
   .dv3-comecar{display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 20px;border-radius:12px;border:0;background:var(--ink);color:var(--bg);font:800 16px var(--font-body),sans-serif;cursor:pointer;}
 
   .dv3-res-tit{font:800 26px/1.1 'Poppins',sans-serif;margin:4px 0 0;}
@@ -20565,6 +20562,11 @@ function pc9PropostaHTML() {
 }
 
 function pc9TelaHTML() {
+
+  if (PC9.cfg && !pc9PromoValida() && PC9.cfg.periodicidades.some(function (x) { return x.promo; })) {
+    PC9.cfg = pc9ComPromo(PC9.cfg);
+    if (PC9.estado && PC9.estado.periodicidade === PC9_PROMO.id) { PC9.estado.periodicidade = PC9.cfg.periodicidades[0].id; pc9Sincronizar(); }
+  }
   return '<div class="pc9">'
     + '<div class="pc9-topo"><div><h1 class="pc9-h1">Calculadora de Planos</h1>'
     + '<p class="pc9-sub">Simule a proposta comercial do cliente em tempo real</p></div>'
@@ -67071,6 +67073,12 @@ GV2.v8dTexto = function () {
 };
 
 GV2.v8dEncerrar = async function () {
+
+  if (GV2.v8dEncerrando) return;
+  GV2.v8dEncerrando = true;
+  try { return await GV2.v8dEncerrarUmaVez(); } finally { GV2.v8dEncerrando = false; }
+};
+GV2.v8dEncerrarUmaVez = async function () {
   const b = GV2.base;
   const com = b.pessoas.filter(function (p) { return String(GV2.estado.compromissos[p.id] || '').trim(); });
   GV2.v8dFeitos = {};
@@ -67116,6 +67124,8 @@ GV2.v8dEncerrar = async function () {
 GV2.dv3 = { cobrados: {}, pedidos: {}, recon: {} };
 GV2.dv3Ligada = function () { try { return localStorage.getItem('daily-v8') !== '1'; } catch (e) { return true; } };
 GV2.dv3Cor = function (cor) { return cor === 'erro' ? 'red' : cor === 'av' ? 'amb' : 'grn'; };
+
+GV2.DV3_BOLINHA = { red: 'dv3-c-red', amb: 'dv3-c-amb', grn: 'dv3-c-grn' };
 GV2.dv3Hoje = function () { return GV2.base.agora.iso; };
 
 GV2.dv3Placar = function () {
@@ -67214,7 +67224,7 @@ GV2.dv3Topo = function (fila, i, p) {
     + (GV2.emRampa(p) ? '<span class="dv3-rampa">em rampa</span>' : '') + '</div></div>'
     + '<div class="dv3-fila">' + fila.map(function (o, j) {
       const m = GV2.v8dMotivo(o);
-      return '<button type="button" class="' + (j === i ? 'is-atual' : '') + '" data-gv2="daily:ir:' + j + '" title="' + GV2.e(o.nome + ' · ' + m.t) + '">' + GV2.e(o.iniciais) + '<i class="dv3-c-' + GV2.dv3Cor(m.cor) + '"></i></button>';
+      return '<button type="button" class="' + (j === i ? 'is-atual' : '') + '" data-gv2="daily:ir:' + j + '" title="' + GV2.e(o.nome + ' · ' + m.t) + '">' + GV2.e(o.iniciais) + '<i class="' + GV2.DV3_BOLINHA[GV2.dv3Cor(m.cor)] + '"></i></button>';
     }).join('') + '</div>'
     + '<button type="button" class="dv3-bt" data-gv2="mg:abrir:' + p.id + '">Ver no mapa</button>'
     + '<button type="button" class="dv3-bt" data-gv2="daily:cheia">' + (document.fullscreenElement ? 'Sair da tela cheia' : 'Tela cheia') + '</button>'
@@ -67288,7 +67298,7 @@ GV2.dv3Col2 = function (p, R, Rt) {
   const caixa = function (v, rot, tx, cls) { return '<div class="' + cls + '"><b class="n">' + (v || 0) + '</b><small>' + GV2.e(rot) + '</small>' + (tx ? '<small>' + GV2.e(tx) + '</small>' : '') + '</div>'; };
   const pd = GV2.v8Tx(f.portas || 0, f.decisor || 0), pdT = GV2.v8Tx(ft.portas || 0, ft.decisor || 0);
   const dd = GV2.v8Tx(f.decisor || 0, f.demo || 0), ddT = GV2.v8Tx(ft.decisor || 0, ft.demo || 0);
-  const G = GV2.v8Gargalo(R), prontos = GV2.dv3Prontos(R, Rt);
+  const G = GV2.v8Gargalo(R), prontos = GV2.emRampa(p) ? [] : GV2.dv3Prontos(R, Rt);
   const funil = '<section class="dv3-card" style="flex:1"><h3 class="dv3-rot">3 · Onde o funil trava <span style="letter-spacing:0;text-transform:none;font-weight:500">no mês</span></h3>'
     + '<div class="dv3-funil">' + caixa(f.portas, 'portas', '', '') + caixa(f.decisor, 'decisor', pd === '—' && pdT === '—' ? '' : pd + ' · time ' + pdT, GV2.dv3Tom(f.portas || 0, f.decisor || 0, ft.portas || 0, ft.decisor || 0))
     + caixa(f.demo, 'demos', dd === '—' && ddT === '—' ? '' : dd + ' · time ' + ddT, GV2.dv3Tom(f.decisor || 0, f.demo || 0, ft.decisor || 0, ft.demo || 0)) + '</div>'
@@ -67305,7 +67315,7 @@ GV2.dv3Col3 = function (p) {
   sp.forEach(function (n) { const k = GV2.ETAPAS[n.etapa_idx]; porEt[k] = (porEt[k] || 0) + 1; });
   const linhaNeg = function (n, extra) {
     const k = p.id + ':' + n.id, cob = GV2.dv3.cobrados[k] || GV2.dv3Usado(p.id, 'Próximo passo em ' + n.nome);
-    return '<div class="dv3-neg"><button type="button" class="dv3-neg-n" data-gv2="ficha:' + n.id + '"><b>' + GV2.e(n.nome) + '</b><small>' + GV2.e(GV2.ETAPAS[n.etapa_idx] + (n.mrr ? ' · ' + GV2.rs(n.mrr) : '')) + '</small></button>'
+    return '<div class="dv3-neg"><button type="button" class="dv3-neg-n" data-gv2="daily:ficha:' + n.id + '"><b>' + GV2.e(n.nome) + '</b><small>' + GV2.e(GV2.ETAPAS[n.etapa_idx] + (n.mrr ? ' · ' + GV2.rs(n.mrr) : '')) + '</small></button>'
       + extra + '<button type="button" class="dv3-bt ' + (cob ? 'is-ok' : 'is-act') + '" data-gv2="daily:cobneg:' + p.id + ':' + n.id + '">' + (cob ? 'Cobrado ✓' : 'Cobrar') + '</button></div>';
   };
   const s1 = '<section class="dv3-card dv3-sp"><h3 class="dv3-rot">4 · Sem próximo passo' + (sp.length > 3 ? '<button type="button" class="dv3-link" data-gv2="v8neg:sempasso:' + p.id + '">ver os ' + sp.length + ' →</button>' : '') + '</h3>'
@@ -67318,12 +67328,12 @@ GV2.dv3Col3 = function (p) {
   const somaQ = Q.reduce(function (a, n) { return a + (n.mrr || 0); }, 0);
   const qsp = Q.filter(function (n) { return !n.agPag && !n.proximo_passo; }).length;
   const nQ = sp.length >= 3 ? 2 : 3;
-  const s2 = '<section class="dv3-card dv3-qt"><h3 class="dv3-rot">5 · Quentes' + (Q.length > nQ ? '<button type="button" class="dv3-link" data-gv2="v8neg:quentes:' + p.id + '">ver todos →</button>' : '') + '</h3>'
+  const s2 = '<section class="dv3-card dv3-qt"><h3 class="dv3-rot">5 · Quentes' + (Q.length > nQ ? '<button type="button" class="dv3-link" data-gv2="daily:gaveta:q">ver todos →</button>' : '') + '</h3>'
     + (Q.length
       ? '<div class="dv3-total n">' + (somaQ ? GV2.v6Reais(somaQ) : Q.length) + '</div><p class="t-mute" style="margin:0 0 4px;font:500 12px var(--font-body)">' + GV2.e(GV2.pl(Q.length, 'negócio', 'negócios') + ' em Negociação/Ag. Pag. · ' + qsp + ' sem passo') + '</p>'
         + Q.slice(0, nQ).map(function (n) {
           const passo = n.agPag ? 'com o financeiro' : n.proximo_passo ? 'próximo: ' + n.proximo_passo : 'sem próximo passo';
-          return '<div class="dv3-neg"><button type="button" class="dv3-neg-n" data-gv2="ficha:' + n.id + '"><b>' + GV2.e(n.nome) + '</b><small class="' + (n.agPag || n.proximo_passo ? '' : 't-red') + '">' + GV2.e(GV2.ETAPAS[n.etapa_idx] + ' · ' + passo) + '</small></button><b class="n">' + (n.mrr ? GV2.rs(n.mrr) : '—') + '</b></div>';
+          return '<div class="dv3-neg"><button type="button" class="dv3-neg-n" data-gv2="daily:ficha:' + n.id + '"><b>' + GV2.e(n.nome) + '</b><small class="' + (n.agPag || n.proximo_passo ? '' : 't-red') + '">' + GV2.e(GV2.ETAPAS[n.etapa_idx] + ' · ' + passo) + '</small></button><b class="n">' + (n.mrr ? GV2.rs(n.mrr) : '—') + '</b></div>';
         }).join('')
       : '<p class="t-mute" style="font:500 12.5px var(--font-body)">nenhum negócio em Negociação nem em Ag. Pagamento</p>') + '</section>';
   return '<div class="dv3-col">' + s1 + s2 + '</div>';
@@ -67366,7 +67376,7 @@ GV2.dv3Pessoa = function (fila, i) {
   const p = fila[i], mot = GV2.v8dMotivo(p), R = GV2.v8Ritmo(p), Rt = GV2.v8Ritmo(null), P = GV2.dv3Placar();
   const L = GV2.dv3Linha(P, p.id), cor = GV2.dv3Cor(mot.cor);
   return '<div class="gv2-daily gv2-dv3" role="dialog" aria-label="Conduzir a daily">' + GV2.dv3Topo(fila, i, p)
-    + '<div class="dv3-mot"><div class="dv3-mot-f is-' + cor + '"><i class="dv3-c-' + cor + '"></i><span class="dv3-ell">' + GV2.e(mot.t) + '</span></div></div>'
+    + '<div class="dv3-mot"><div class="dv3-mot-f is-' + cor + '"><i class="' + GV2.DV3_BOLINHA[cor] + '"></i><span class="dv3-ell">' + GV2.e(mot.t) + '</span></div></div>'
     + GV2.dv3CobrarHTML(p, L)
     + '<div class="dv3-grade">' + GV2.dv3Col1(p) + GV2.dv3Col2(p, R, Rt) + GV2.dv3Col3(p) + GV2.dv3Col4(p, P) + '</div>'
     + GV2.dv3PeHTML(fila, i, p) + '</div>';
@@ -67465,7 +67475,9 @@ GV2.dv3PedirPlano = async function (pid) {
   if (GV2.dv3.pedidos[pid]) return;
   const p = GV2.base.porId[pid];
   if (!p) return;
-  await GV2.cobrarPessoa(pid);
+  GV2.dv3.pedidos[pid] = 'enviando';
+  const ok = await GV2.cobrarNoApp(p, GV2.textoSemPlano(p), 'pessoa:' + pid);
+  if (!ok) { delete GV2.dv3.pedidos[pid]; GV2.toast('O pedido não saiu para o app de ' + GV2.prim(p.nome) + '.', 'erro'); GV2.pintar(); return; }
   GV2.dv3.pedidos[pid] = true;
   try { await supa.from('registros_rodada').upsert({ tipo: 'cobranca_plano', owner_id: String(pid), data: GV2.dv3Hoje(), gestor_email: (typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.email) || null, detalhe: 'daily · pedir o plano até 12h' }, { onConflict: 'tipo,owner_id,data' }); } catch (e) {   }
   GV2.pintar();
@@ -67483,7 +67495,7 @@ GV2.dv3PedirPlano = async function (pid) {
         GV2.pintar(); return true;
       }
       if (parte[1] === 'usar') {
-        const p = GV2.base.porId[parte[2]], t = p && GV2.dv3Prontos(GV2.v8Ritmo(p), GV2.v8Ritmo(null))[Number(parte[3])];
+        const p = GV2.base.porId[parte[2]], t = p && !GV2.emRampa(p) && GV2.dv3Prontos(GV2.v8Ritmo(p), GV2.v8Ritmo(null))[Number(parte[3])];
         if (t) { GV2.dv3Juntar(p.id, t); GV2.pintar(); }
         return true;
       }
@@ -67505,10 +67517,11 @@ GV2.dv3PedirPlano = async function (pid) {
       ev.preventDefault();
       GV2.estado.compromissos[t.getAttribute('data-gv2-comp')] = t.value;
       const alvo = t.getAttribute('data-dv3-enter');
+      if (GV2.dv3x) { GV2.dv3x.gaveta = null; GV2.dv3x.ficha = null; }
       if (alvo === 'encerrar') GV2.v8dEncerrar(); else { GV2.estado.daily = Number(alvo.split(':')[1]) || 0; GV2.pintar(); }
       return;
     }
-    if (GV2.estado.daily === 'abertura' && (ev.key === 'Enter' || ev.key === 'ArrowRight') && !(t && t.matches && t.matches('input,textarea'))) {
+    if (GV2.estado.daily === 'abertura' && (ev.key === 'Enter' || ev.key === 'ArrowRight') && !(t && t.closest && t.closest('input,textarea,select,button,a,[contenteditable]'))) {
       ev.preventDefault(); ev.stopImmediatePropagation(); GV2.estado.daily = 0; GV2.pintar();
     }
   }, true);
@@ -67577,7 +67590,7 @@ GV2.dv3LerConq = function () {
   }).catch(function () { X.conq = {}; X.conqLendo = false; });
 };
 GV2.DV3_CONQ = { na_rua: 'Na rua 5 dias seguidos', primeiro_contrato: 'Primeiro contrato do mês', destaque: 'Destaque da sexta', fila_zerada: 'Fila zerada 5 dias', quentes_4: '4 contatos em todos os quentes', demo_seguidas: 'Demo 3 dias seguidos', padrinho: 'Padrinho de um formado' };
-GV2.dv3ConqNome = function (id) { const k = String(id || '').split(':')[0]; if (GV2.DV3_CONQ[k]) return GV2.DV3_CONQ[k]; const m = /^playbook_?(d+)$/.exec(k); return m ? 'Playbook nível ' + m[1] : k.replace(/_/g, ' '); };
+GV2.dv3ConqNome = function (id) { const k = String(id || '').split(':')[0]; if (GV2.DV3_CONQ[k]) return GV2.DV3_CONQ[k]; const m = /^playbook_?(\d+)$/.exec(k); return m ? 'Playbook nível ' + m[1] : k.replace(/_/g, ' '); };
 GV2.dv3ConqDe = function (p) { GV2.dv3LerConq(); const c = GV2.dv3x.conq; return c ? (c[String(p.email || '').toLowerCase()] || []) : null; };
 
 GV2.dv3LerEx = function (p) {
@@ -67620,7 +67633,7 @@ GV2.dv3RecemHTML = function (p) {
   if (!r) return GV2.dv3x.recem ? '' : '<div class="dv3-recem"><span class="dv3-selo">recém-aberto</span><span><small>lendo os recém-abertos…</small></span></div>';
   const longo = 'Visitar o recém-aberto ' + r.nome + ' hoje e registrar o Como foi', usado = GV2.dv3Usado(p.id, longo);
   return '<div class="dv3-recem' + (r.noPlano ? ' is-ok' : '') + '"><span class="dv3-selo">recém-aberto</span><span><b class="dv3-ell">' + GV2.e(r.nome) + '</b><small class="dv3-ell">' + GV2.e('aberto há ' + r.dias + 'd · ' + GV2.dv3DistTxt(r.dist) + (r.bairro ? ' · ' + r.bairro : '')) + '</small></span>'
-    + (r.noPlano ? '<em class="t-grn" style="font-style:normal;font-weight:800;font-size:12px">no plano ✓</em>'
+    + (r.noPlano || GV2.emRampa(p) ? (GV2.emRampa(p) && !r.noPlano ? '' : '<em class="t-grn" style="font-style:normal;font-weight:800;font-size:12px">no plano ✓</em>')
       : '<button type="button" class="dv3-bt ' + (usado ? 'is-ok' : 'is-act') + '" style="min-height:28px" data-gv2="daily:recem:' + p.id + '">' + (usado ? 'Cobrado ✓' : 'Cobrar') + '</button>') + '</div>';
 };
 
@@ -67675,7 +67688,7 @@ GV2.dv3FunilHTML = function (p) {
     return '<div class="dv3-fcol" style="border-top-color:' + GV2.DV3_COR_ETAPA[idx] + '"><div class="dv3-fch"><b>' + GV2.e(nome === 'Conversa com decisor' ? 'Decisor' : nome === 'Demo/Proposta' ? 'Demo' : nome === 'Ag. Pagamento' ? 'Ag. Pag.' : nome) + '</b><span class="n">' + daEtapa.length + '</span></div>'
       + '<small class="dv3-fsub">' + GV2.e((mr ? GV2.rs(mr) + ' · ' : '') + (sp || ac ? (sp ? sp + ' sem passo' : '') + (sp && ac ? ' · ' : '') + (ac ? ac + ' acima' : '') : 'tudo em dia')) + '</small>'
       + '<div class="dv3-fcards">' + (cards || '<small class="t-mute" style="padding:8px 2px">nada aqui' + (X.filtro !== 'todos' ? ' neste filtro' : '') + '</small>') + '</div>'
-      + (lista.length > 5 ? '<button type="button" class="dv3-link" data-gv2="v8neg:todos:' + p.id + '">+' + (lista.length - 5) + ' no Funil →</button>' : '') + '</div>';
+      + (lista.length > 5 ? '<button type="button" class="dv3-link" data-gv2="daily:gaveta:e' + idx + '">+' + (lista.length - 5) + ' nesta etapa →</button>' : '') + '</div>';
   }).join('');
   return '<div class="dv3-funilaba">' + cab + '<div class="dv3-fgrade">' + cols + '</div></div>';
 };
@@ -67749,16 +67762,22 @@ GV2.dv3GavetaHTML = function (p) {
       + '<a class="dv3-bt" href="https://app.hubspot.com/contacts/24373118/record/0-3/' + encodeURIComponent(n.id) + '" target="_blank" rel="noopener">HubSpot ↗</a></div>'
       + '<p class="dv3-gav-pe">A daily não grava no HubSpot. Avisar no app manda o recado para o sino do executivo.</p></aside>';
   }
-  if (X.gaveta !== 'sp') return '';
-  const sp = GV2.dv3SemPasso(p).slice();
+  if (!X.gaveta) return '';
+
+  const tipoG = X.gaveta === 'q' ? 'q' : X.gaveta.charAt(0) === 'e' ? 'e' : 'sp';
+  const porMrr = function (a, b) { return (b.mrr || 0) - (a.mrr || 0); };
+  let sp, titG;
+  if (tipoG === 'q') { sp = (p.quentes || []).slice().sort(porMrr); titG = 'Quentes'; }
+  else if (tipoG === 'e') { const ei = Number(X.gaveta.slice(1)) || 0; sp = (p.negocios || []).filter(function (n) { return n.etapa_idx === ei; }).sort(porMrr); titG = GV2.ETAPAS[ei] || 'Etapa'; }
+  else { sp = GV2.dv3SemPasso(p).slice(); titG = 'Sem próximo passo'; }
   if (X.ordem === 'antigo') sp.sort(function (a, b) { return (b.dias || 0) - (a.dias || 0) || (b.mrr || 0) - (a.mrr || 0); });
   const mrr = sp.reduce(function (a, n) { return a + (n.mrr || 0); }, 0);
   const todosLongo = sp.length ? 'Próximo passo em ' + sp.map(function (n) { return n.nome; }).join(', ') : '';
   const todosFeito = sp.length && GV2.dv3Usado(p.id, todosLongo);
-  return '<div class="dv3-ovl" data-gv2="daily:fechar"></div><aside class="dv3-gav dv3-gsp" role="dialog" aria-label="Sem próximo passo">'
-    + '<div class="dv3-gav-cab"><div><span class="dv3-kick">Sem próximo passo · ' + GV2.e(GV2.prim(p.nome)) + '</span><h3><span class="t-red">' + sp.length + '</span> ' + GV2.e(GV2.pl(sp.length, 'negócio', 'negócios') + (mrr ? ' · ' + GV2.rs(mrr) + ' em MRR' : '')) + '</h3></div><button type="button" class="dv3-x" data-gv2="daily:fechar" aria-label="Fechar">×</button></div>'
+  return '<div class="dv3-ovl" data-gv2="daily:fechar"></div><aside class="dv3-gav' + (tipoG === 'sp' ? ' dv3-gsp' : '') + '" role="dialog" aria-label="' + GV2.e(titG) + '">'
+    + '<div class="dv3-gav-cab"><div><span class="dv3-kick">' + GV2.e(titG + ' · ' + GV2.prim(p.nome)) + '</span><h3><span class="' + (tipoG === 'sp' ? 't-red' : '') + '">' + sp.length + '</span> ' + GV2.e(GV2.pl(sp.length, 'negócio', 'negócios') + (mrr ? ' · ' + GV2.rs(mrr) + ' em MRR' : '')) + '</h3></div><button type="button" class="dv3-x" data-gv2="daily:fechar" aria-label="Fechar">×</button></div>'
     + '<div class="dv3-gav-bar"><div class="dv3-seg"><button type="button" class="' + (X.ordem === 'valor' ? 'is-cumprido' : '') + '" data-gv2="daily:ordem:valor">Valiosos</button><button type="button" class="' + (X.ordem === 'antigo' ? 'is-cumprido' : '') + '" data-gv2="daily:ordem:antigo">Antigos</button></div>'
-    + (sp.length ? '<button type="button" class="dv3-bt ' + (todosFeito ? 'is-ok' : 'is-act') + '" data-gv2="daily:cobtodos:' + p.id + '">' + (todosFeito ? 'Todos no compromisso ✓' : 'Cobrar todos no compromisso') + '</button>' : '') + '</div>'
+    + (sp.length && tipoG === 'sp' ? '<button type="button" class="dv3-bt ' + (todosFeito ? 'is-ok' : 'is-act') + '" data-gv2="daily:cobtodos:' + p.id + '">' + (todosFeito ? 'Todos no compromisso ✓' : 'Cobrar todos no compromisso') + '</button>' : '') + '</div>'
     + '<div class="dv3-gav-lista">' + sp.map(function (n) {
       const k = p.id + ':' + n.id, cob = GV2.dv3.cobrados[k] || GV2.dv3Usado(p.id, 'Próximo passo em ' + n.nome), av = X.avisos[k];
       return '<div class="dv3-neg"><button type="button" class="dv3-neg-n" data-gv2="daily:ficha:' + n.id + '"><b>' + GV2.e(n.nome) + '</b><small>' + GV2.e(GV2.ETAPAS[n.etapa_idx] + (n.mrr ? ' · ' + GV2.rs(n.mrr) : '')) + '</small></button>'
@@ -67780,7 +67799,7 @@ GV2.dv3Pessoa = function (fila, i) {
     corpo = '<div class="dv3-grade">' + GV2.dv3Col1(p) + GV2.dv3Col2(p, R, Rt) + GV2.dv3Col3(p).replace('data-gv2="v8neg:sempasso:' + p.id + '"', 'data-gv2="daily:gaveta:sp"') + GV2.dv3Col4(p, P) + '</div>';
   }
   return '<div class="gv2-daily gv2-dv3" data-tema="' + GV2.dv3Tema() + '" role="dialog" aria-label="Conduzir a daily">' + GV2.dv3Topo(fila, i, p).replace('<button type="button" class="dv3-bt" data-gv2="daily:cheia">', '<button type="button" class="dv3-bt" data-gv2="daily:tema">' + (GV2.dv3Tema() === 'claro' ? 'Escuro' : 'Claro') + '</button><button type="button" class="dv3-bt" data-gv2="daily:cheia">')
-    + '<div class="dv3-mot"><div class="dv3-mot-f is-' + cor + '"><i class="dv3-c-' + cor + '"></i><span class="dv3-ell">' + GV2.e(mot.t) + '</span></div>' + GV2.dv3AbasHTML() + '</div>'
+    + '<div class="dv3-mot"><div class="dv3-mot-f is-' + cor + '"><i class="' + GV2.DV3_BOLINHA[cor] + '"></i><span class="dv3-ell">' + GV2.e(mot.t) + '</span></div>' + GV2.dv3AbasHTML() + '</div>'
     + GV2.dv3CobrarHTML(p, L) + corpo + GV2.dv3PeHTML(fila, i, p) + GV2.dv3GavetaHTML(p) + '</div>';
 };
 
@@ -67794,7 +67813,10 @@ GV2.dv3Pessoa = function (fila, i) {
 GV2.dv3Avisar = async function (pid, nid) {
   const p = GV2.base.porId[pid], n = p && (p.negocios || []).find(function (x) { return String(x.id) === String(nid); }), k = pid + ':' + nid;
   if (!n || GV2.dv3x.avisos[k]) return;
-  const ok = await GV2.recado(p, GV2.textoNegocios ? GV2.textoNegocios(p, [n]) : 'Próximo passo em ' + n.nome);
+  GV2.dv3x.avisos[k] = 'enviando';
+
+  const ok = await GV2.recado(p, 'Oi ' + GV2.prim(p.nome) + ', da daily: marque hoje o próximo passo de ' + n.nome + ' no HubSpot, com dia.');
+  if (!ok) delete GV2.dv3x.avisos[k];
   if (ok) { GV2.dv3x.avisos[k] = true; GV2.toast('Avisado no app de ' + GV2.prim(p.nome) + ' ✓'); } else GV2.toast('O aviso não saiu.', 'erro');
   GV2.pintar();
 };
@@ -67803,7 +67825,7 @@ GV2.dv3Avisar = async function (pid, nid) {
   GV2.v8Comando = function (cmd, parte) {
     if (cmd === 'daily' && GV2.dv3Ligada()) {
       const X = GV2.dv3x;
-      if (parte[1] === 'abrir') { GV2.dv3x = { aba: 1, gaveta: null, ficha: null, filtro: 'todos', ordem: 'valor', avisos: {}, recem: X.recem, recemLendo: false, conq: X.conq, conqLendo: false, ex: {}, exLendo: {} }; }
+      if (parte[1] === 'abrir') { GV2.dv3x = { aba: 1, gaveta: null, ficha: null, filtro: 'todos', ordem: 'valor', avisos: {}, recem: null, recemLendo: false, conq: null, conqLendo: false, ex: {}, exLendo: {} }; }
       if (parte[1] === 'ir') { X.gaveta = null; X.ficha = null; }
       if (parte[1] === 'aba') { X.aba = Math.max(1, Math.min(4, Number(parte[2]) || 1)); X.gaveta = null; X.ficha = null; GV2.pintar(); return true; }
       if (parte[1] === 'gaveta') { X.gaveta = parte[2] || null; X.ficha = null; GV2.pintar(); return true; }
@@ -67814,7 +67836,7 @@ GV2.dv3Avisar = async function (pid, nid) {
       if (parte[1] === 'avisar') { GV2.dv3Avisar(parte[2], parte[3]); return true; }
       if (parte[1] === 'tema') { try { localStorage.setItem('dv3-tema', GV2.dv3Tema() === 'claro' ? 'escuro' : 'claro'); } catch (e) {   } GV2.pintar(); return true; }
       if (parte[1] === 'recem') {
-        const p = GV2.base.porId[parte[2]], r = p && GV2.dv3RecemDe(p);
+        const p = GV2.base.porId[parte[2]], r = p && !GV2.emRampa(p) && GV2.dv3RecemDe(p);
         if (r) { GV2.dv3Juntar(p.id, 'Visitar o recém-aberto ' + r.nome + ' hoje e registrar o Como foi'); GV2.pintar(); }
         return true;
       }
@@ -67829,7 +67851,8 @@ GV2.dv3Avisar = async function (pid, nid) {
 
   if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') document.addEventListener('keydown', function (ev) {
     if (!GV2.dv3Ligada() || GV2.estado.daily == null || typeof GV2.estado.daily !== 'number') return;
-    const X = GV2.dv3x, t = ev.target, emCampo = t && t.matches && t.matches('input,textarea');
+    const X = GV2.dv3x, t = ev.target, emCampo = !!(t && t.closest && t.closest('input,textarea,select,[contenteditable]'));
+    if (!emCampo && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) { X.gaveta = null; X.ficha = null; }
     if (ev.key === 'Escape' && (X.ficha || X.gaveta)) { ev.preventDefault(); ev.stopImmediatePropagation(); if (X.ficha) X.ficha = null; else X.gaveta = null; GV2.pintar(); return; }
     if (!emCampo && /^[1-4]$/.test(ev.key)) { ev.preventDefault(); X.aba = Number(ev.key); X.gaveta = null; X.ficha = null; GV2.pintar(); }
   }, true);
@@ -71264,8 +71287,10 @@ PLV3.ruaHTML = function (D) {
 PLV3.contasNovasDoDia = function (rep, iso) {
   const lista = DATA && DATA.kpiDetalhe && Array.isArray(DATA.kpiDetalhe.leadsCriados) ? DATA.kpiDetalhe.leadsCriados : null;
   if (!lista || !rep) return null;
-  const hoje = GV2.agoraBR ? GV2.agoraBR().iso : GV2.diaDe(Date.now());
-  if (GV2.somaDias(hoje, -6) > iso) return null;
+
+  const hoje = (typeof agendaChave === 'function' && typeof agendaAgora === 'function') ? agendaChave(agendaAgora()) : (GV2.agoraBR ? GV2.agoraBR().iso : GV2.diaDe(Date.now()));
+
+  if (iso < GV2.segundaDe(hoje) || iso > hoje) return null;
   return lista.filter(function (x) { return x && String(x.ownerId) === String(rep.ownerId) && x.criadoEm && GV2.diaDe(x.criadoEm) === iso; }).length;
 };
 PLV3.blocoFilaHTML = function (D) {
