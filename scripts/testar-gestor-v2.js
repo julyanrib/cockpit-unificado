@@ -945,6 +945,22 @@ tabelas.gv2_falta_etapa = [
       checar('Daily v3: a Abertura mostra a semana, o mês, a fila e o ranking do time', /Abertura do time/i.test(ab) && /A semana do time/.test(ab) && /A fila de hoje/.test(ab) && /Ranking da semana/.test(ab), ab.slice(0, 120));
       GV2.estado.daily = 'fim'; let rs = ''; try { rs = GV2.render.daily(); } catch (e) { rs = 'ERRO ' + e.message; }
       checar('Daily v3: o resumo diz quantos saíram com compromisso e traz a pauta por pessoa', /saíram com compromisso/.test(rs) && /Pauta · avisos/.test(rs), rs.slice(0, 120));
+      /* fases 2 e 3: as 4 abas, a gaveta e a ficha abrem para cada pessoa, sem erro; recém-aberto lido do banco simulado */
+      GV2.dv3x.recem = fila.length ? [{ id: 'r1', nome: 'Recém Teste', bairro: 'Centro', lat: -22.9, lng: -43.2, data_abertura: GV2.somaDias(GV2.base.agora.iso, -10), status: 'atribuido', responsavel_owner_id: fila[0].id }] : [];
+      GV2.dv3x.conq = {};
+      const er4 = [];
+      for (let i = 0; i < fila.length; i++) {
+        GV2.estado.daily = i;
+        for (const aba of [1, 2, 3, 4]) { GV2.dv3x.aba = aba; GV2.dv3x.gaveta = null; GV2.dv3x.ficha = null; try { const h = GV2.render.daily(); if (h.indexOf('dv3-abas') < 0) er4.push(i + '/' + aba + ': sem abas'); } catch (e) { er4.push(i + '/' + aba + ': ' + e.message); } }
+        GV2.dv3x.aba = 1; GV2.dv3x.gaveta = 'sp'; try { const h = GV2.render.daily(); if (GV2.dv3SemPasso(fila[i]).length && h.indexOf('dv3-gsp') < 0) er4.push(i + ': gaveta não abriu'); } catch (e) { er4.push(i + '/gaveta: ' + e.message); }
+        const n0 = (fila[i].negocios || [])[0]; GV2.dv3x.gaveta = null; GV2.dv3x.ficha = n0 ? n0.id : null; try { const h = GV2.render.daily(); if (n0 && h.indexOf('Ficha do lead') < 0) er4.push(i + ': ficha não abriu'); } catch (e) { er4.push(i + '/ficha: ' + e.message); }
+      }
+      GV2.dv3x.aba = 1; GV2.dv3x.gaveta = null; GV2.dv3x.ficha = null;
+      checar('Daily v3 fases 2 e 3: as 4 abas, a gaveta Sem passo e a Ficha abrem para cada pessoa, sem erro', !er4.length, er4.slice(0, 4).join(' | '));
+      const r0 = fila[0] && GV2.dv3RecemDe(fila[0]);
+      checar('Daily v3: o recém-aberto do dia é o do próprio executivo, com os dias desde a abertura', !fila.length || !!(r0 && r0.nome === 'Recém Teste' && r0.dias === 10), JSON.stringify(r0));
+      checar('Daily v3: a ficha do lead avisa no app e não chama a rota do HubSpot', (function () { if (!fila[0] || !(fila[0].negocios || [])[0]) return true; GV2.estado.daily = 0; GV2.dv3x.ficha = fila[0].negocios[0].id; const h = GV2.render.daily(); GV2.dv3x.ficha = null; return h.indexOf('daily:avisar:') > 0 && h.indexOf('negocio-acao') < 0; }()));
+      GV2.dv3x.recem = null;
       global.localStorage = ls0;
     }
     checar('v8 Daily: a fila vai de sem plano → furou → travados → no ritmo', fila.every(function (x, i) { return i === 0 || rank[GV2.v8dMotivo(fila[i - 1]).k] <= rank[GV2.v8dMotivo(x).k]; }), fila.map(function (x) { return GV2.v8dMotivo(x).k; }).join());
