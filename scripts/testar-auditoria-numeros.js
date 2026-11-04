@@ -95,6 +95,14 @@ GV2.pintar = function () {};
   GV2.base = { agora: { iso: '2026-10-15', min: 600 }, pessoas: [], planoErro: null };
   const kelly = P('9', 'Pleno', { ontem: { paradas_plano: 14, visitas_com_prova: 5, visitas_todas: 15, feitas_do_plano: 5 }, travados: [] });
   checar('Daily: 5 de 14 do plano com 15 visitas = "furou", não "cumpriu"', GV2.v8dMotivo(kelly).k === 'furou', GV2.v8dMotivo(kelly).k);
+  /* 04/11/26 · o Marco: sem plano nem visita no último dia útil não "fecha a fila" como quem cumpriu */
+  const marco = P('7', 'Pleno', { hoje: { paradas_plano: 9, visitas_com_prova: 0, visitas_todas: 0 }, ontem: { paradas_plano: 0, visitas_com_prova: 0, visitas_todas: 0, feitas_do_plano: 0 }, travados: [] });
+  checar('Daily: sem plano nem visita no último dia útil = "semontem", não "cumpriu"', GV2.v8dMotivo(marco).k === 'semontem' && !/cumpriu/.test(GV2.v8dMotivo(marco).t), JSON.stringify(GV2.v8dMotivo(marco)));
+  const soVisita = P('6', 'Pleno', { hoje: { paradas_plano: 9, visitas_com_prova: 0, visitas_todas: 0 }, ontem: { paradas_plano: 0, visitas_com_prova: 0, visitas_todas: 3, feitas_do_plano: 0 }, travados: [] });
+  checar('Daily: sem plano mas com 3 visitas = ritmo, sem dizer "cumpriu"', GV2.v8dMotivo(soVisita).k === 'ritmo' && /3 visitas com prova/.test(GV2.v8dMotivo(soVisita).t) && !/cumpriu/.test(GV2.v8dMotivo(soVisita).t), GV2.v8dMotivo(soVisita).t);
+  GV2.base.planoErro = 'fora';
+  checar('Daily: plano que não respondeu não acusa "sem plano nem visita"', GV2.v8dMotivo(marco).k !== 'semontem', GV2.v8dMotivo(marco).k);
+  GV2.base.planoErro = null;
   checar('a origem grava o x do PLANO em ontem.visitas_com_prova e o total em visitas_todas',
     /ontem: \{ paradas_plano: Number\(dOntem\.planejadas\) \|\| 0, visitas_com_prova: Number\(dOntem\.feitasDoPlano\) \|\| 0, visitas_todas: Number\(dOntem\.provadas\) \|\| 0/.test(codigo));
 
