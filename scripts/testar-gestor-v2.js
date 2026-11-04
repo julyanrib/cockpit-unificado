@@ -932,7 +932,7 @@ tabelas.gv2_falta_etapa = [
     const b = GV2.base, seg = GV2.segundaDe(b.agora.iso);
     const cache0 = GV2.v6Rk.cache[seg];
     GV2.v6Rk.cache[seg] = { em: Date.now(), d: { linhas: b.pessoas.map(function (x, i) { return { ownerId: x.id, pos: i + 1, pontos: 100 - i * 10 }; }) } };
-    const fila = GV2.v8dFila(), rank = { plano: 0, furou: 1, travados: 2, ritmo: 3, rampa: 4 };
+    const fila = GV2.v8dFila(), rank = { plano: 0, furou: 1, semontem: 1, travados: 2, ritmo: 3, rampa: 4 };
     /* DAILY v3 (03/11/26): a mesma fila, cada pessoa abre sem erro com a pauta e as 4 colunas; a Abertura e o resumo também */
     {
       const ls0 = global.localStorage; global.localStorage = { getItem: () => null, setItem: () => {} };

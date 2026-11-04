@@ -88114,7 +88114,7 @@ GV2.mapaCutucar = function (mapa, el, chave) {
 
 GV2.V8D_MOTIVO = {
   plano: ['erro', 'Abre a daily porque está sem plano hoje.'],
-  furou: ['av', ''], travados: ['av', ''], ritmo: ['ok', 'Fecha a fila: cumpriu o último dia útil e não tem travado pesando.']
+  furou: ['av', ''], semontem: ['av', 'Está aqui porque o último dia útil ficou sem plano nem visita.'], travados: ['av', ''], ritmo: ['ok', 'Fecha a fila: cumpriu o último dia útil e não tem travado pesando.']
 };
 GV2.v8dMotivo = function (p) {
   const o = p.ontem || {};
@@ -88124,11 +88124,17 @@ GV2.v8dMotivo = function (p) {
   const b = GV2.base;
   if (!(p.hoje && p.hoje.paradas_plano) && GV2.util(b.agora.iso) && !b.planoErro) return { k: 'plano', cor: 'erro', t: 'Abre a daily porque está sem plano hoje.' };
   if (o.paradas_plano && o.visitas_com_prova * 2 < o.paradas_plano) return { k: 'furou', cor: 'av', t: 'Está aqui porque furou o último dia útil: ' + o.visitas_com_prova + ' de ' + o.paradas_plano + '.' };
+  /* SEM PLANO NEM VISITA (04/11/26): o Marco abria "Fecha a fila: cumpriu o último dia útil" com o quadro Ontem dizendo
+     "sem plano nem visita" — sem plano o teste do furou não pegava e caía no ritmo. Vai para junto do furou na fila.
+     Plano que não respondeu não acusa ninguém (o 0 seria leitura falha, não dia vazio). */
+  if (!b.planoErro && !o.paradas_plano && !o.visitas_todas) return { k: 'semontem', cor: 'av', t: 'Está aqui porque o último dia útil ficou sem plano nem visita.' };
   if ((p.travados || []).length >= GV2.MUITOS_TRAVADOS) return { k: 'travados', cor: 'av', t: 'Está aqui pelos ' + p.travados.length + ' travados.' };
+  /* sem plano, mas com visita com prova: não houve plano para "cumprir"; a frase diz o que houve */
+  if (!o.paradas_plano) return { k: 'ritmo', cor: 'ok', t: 'Fecha a fila: ' + GV2.pl(o.visitas_todas || 0, 'visita', 'visitas') + ' com prova no último dia útil, sem plano, e nenhum travado pesando.' };
   return { k: 'ritmo', cor: 'ok', t: 'Fecha a fila: cumpriu o último dia útil e não tem travado pesando.' };
 };
 GV2.v8dFila = function () {
-  const ordem = { plano: 0, furou: 1, travados: 2, ritmo: 3, rampa: 4 };
+  const ordem = { plano: 0, furou: 1, semontem: 1, travados: 2, ritmo: 3, rampa: 4 };
   return GV2.base.pessoas.slice().sort(function (x, y) {
     const a = ordem[GV2.v8dMotivo(x).k], b = ordem[GV2.v8dMotivo(y).k];
     return (a - b) || ((y.travados || []).length - (x.travados || []).length) || x.nome.localeCompare(y.nome);
@@ -89013,8 +89019,9 @@ GV2.dv3JogoHTML = function (p) {
     const h = j === 1 ? 200 : j === 0 ? 140 : 100;
     return '<div class="is-' + x.pos + (L && x === L ? ' is-eu' : '') + '"><b>' + GV2.e(nome(x)) + '</b><strong class="n">' + (x.pontos || 0) + '</strong><i class="n" style="height:' + h + 'px">' + x.pos + 'º</i></div>';
   }).join('');
-  const lista = ls.slice(0, 7).map(function (x) { return '<div class="' + (x === L ? 'is-eu' : '') + '"><span>' + x.pos + 'º</span><span class="dv3-ell">' + GV2.e(nome(x)) + '</span><b>' + (x.pontos || 0) + '</b></div>'; }).join('')
-    + (L && ls.indexOf(L) >= 7 ? '<div class="is-eu"><span>' + L.pos + 'º</span><span class="dv3-ell">' + GV2.e(nome(L)) + '</span><b>' + (L.pontos || 0) + '</b></div>' : '');
+  /* o time inteiro (04/11/26): cortava em 7 e Rodrigo e Sandro sumiam com o quadro sobrando; até 12 linhas cabem */
+  const lista = ls.slice(0, 12).map(function (x) { return '<div class="' + (x === L ? 'is-eu' : '') + '"><span>' + x.pos + 'º</span><span class="dv3-ell">' + GV2.e(nome(x)) + '</span><b>' + (x.pontos || 0) + '</b></div>'; }).join('')
+    + (L && ls.indexOf(L) >= 12 ? '<div class="is-eu"><span>' + L.pos + 'º</span><span class="dv3-ell">' + GV2.e(nome(L)) + '</span><b>' + (L.pontos || 0) + '</b></div>' : '');
   const v = (L && L.vendas) || 0, d = (L && L.reunioes) || 0, vi = (L && L.visitas) || 0;
   const conq = GV2.dv3ConqDe(p);
   return '<div class="dv3-jogo"><section class="dv3-card"><h3 class="dv3-rot">Ranking da semana · só totais<span class="t-amb" style="letter-spacing:0;text-transform:none">o 1º leva ' + GV2.e(GV2.v6Reais(P.premio)) + '</span></h3><div class="dv3-podio" style="flex:1;min-height:250px">' + pod + '</div></section>'
