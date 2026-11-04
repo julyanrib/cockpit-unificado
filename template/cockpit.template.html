@@ -40493,6 +40493,11 @@ async function pl6Carregar(rep, segundaPedida) {
    Leitura só: nenhum pino é criado daqui. Falhou a leitura, a marca simplesmente não
    aparece — não vira "sem pino" de mentira. */
 let PL6_SEM_PINO = null;   /* Set de ids de slot sem pino; null = não medido */
+/* A VISITA DO APP FORA DA CARTEIRA (Julyan, 04/11/26): ele pôs no plano do app um ex-cliente sem dono
+   (Casa do Torresmo, Serra) e o banco espelhou na grade (c-<id>), mas o Planejamento só achava o item na
+   carteira de negócios dele: virava 'orfa' e sumia. O pino do app já diz o nome e o bairro; com ele o
+   item volta como visita. Map de id de slot → { nome, regiao, lat, lng }. */
+let PL6_DO_APP = new Map();
 async function pl6CarregarPinos() {
   PL6_SEM_PINO = null;
   const g = pl6Plano && Array.isArray(pl6Plano.grade) ? pl6Plano.grade : null;
@@ -40509,9 +40514,16 @@ async function pl6CarregarPinos() {
   try {
     const comPino = new Set();
     if (deals.length) {
-      const r = await supa.from('clients').select('id_hubspot').in('id_hubspot', deals.slice(0, 300));
+      const r = await supa.from('clients').select('id_hubspot, empresa, nome, bairro, latitude, longitude').in('id_hubspot', deals.slice(0, 300));
       if (r.error) throw r.error;
-      (r.data || []).forEach(function (c) { comPino.add('c-' + c.id_hubspot); comPino.add('r-' + c.id_hubspot); });
+      const doApp = new Map();
+      (r.data || []).forEach(function (c) {
+        comPino.add('c-' + c.id_hubspot); comPino.add('r-' + c.id_hubspot);
+        const x = { nome: String(c.empresa || c.nome || 'conta'), regiao: c.bairro ? String(c.bairro) : null,
+          lat: c.latitude == null ? null : Number(c.latitude), lng: c.longitude == null ? null : Number(c.longitude) };
+        doApp.set('c-' + c.id_hubspot, x); doApp.set('r-' + c.id_hubspot, x);
+      });
+      PL6_DO_APP = doApp;
     }
     if (leads.length) {
       const r1 = await supa.from('clients').select('lead_prospeccao_id').in('lead_prospeccao_id', leads.slice(0, 300));
@@ -92525,7 +92537,11 @@ PLV3.dados = function (rep) {
   /* os cartões de cada dia: visita e bloco de rua (o mesmo recorte do número do topo da v2; a órfã não tem conta) */
   const naGradeFutura = {}, naGrade = {};
   const cartoes = dias.map(function (d, i) {
-    const todosItens = pl6ItensDoDia(grade[i], porId);
+    const todosItens = pl6ItensDoDia(grade[i], porId).map(function (it) {
+      /* a órfã que tem pino no app é visita: o nome e o bairro vêm do pino (PL6_DO_APP) */
+      const x = it.tipo === 'orfa' && it.id && PL6_DO_APP ? PL6_DO_APP.get(String(it.id)) : null;
+      return x ? Object.assign({}, it, { tipo: 'visita', lead: { id: it.id, tipo: 'app', nome: x.nome, regiao: x.regiao, lat: x.lat, lng: x.lng } }) : it;
+    });
     const itens = todosItens.filter(function (it) { return it.tipo === 'visita' || it.tipo === 'rua'; });
     /* bloqueio (compromisso fora da rua) e visita de relacionamento antiga ocupam o dia: aparecem, não contam na meta (a regra da v2) */
     const outros = todosItens.filter(function (it) { return it.tipo === 'bloqueado' || it.tipo === 'rel'; }).map(function (it) {
