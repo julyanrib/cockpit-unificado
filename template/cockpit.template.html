@@ -7707,7 +7707,7 @@
   .dv3-col{display:flex;flex-direction:column;gap:10px;min-height:0;}
   .dv3-col > .dv3-card{display:flex;flex-direction:column;overflow:hidden;}
   .dv3-col > .dv3-ontem{flex-direction:row;align-items:baseline;flex:none;}
-  .dv3-ontem .dv3-kick{white-space:nowrap;}
+  .dv3-ontem .dv3-kick{white-space:nowrap;flex:none;}
   .dv3-paradas{flex:1;min-height:0;overflow:hidden;}
   .dv3-ontem{display:flex;align-items:baseline;gap:8px;padding:8px 16px;}
   .dv3-ontem b{font:800 15px 'Poppins',sans-serif;}
@@ -88822,6 +88822,13 @@ GV2.dv3Metros = function (a, b) {
   const x = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(x));
 };
+/* PINO NO CENTRO DO BAIRRO NÃO É PROXIMIDADE (03/11/26, visto na tela: ex-clientes de 6 bairros "a 220 m da rota"):
+   coordenada repetida por 3 ou mais lugares é o centróide do geocodificador, e sai das listas de "perto" */
+GV2.dv3CoordRepetida = function (l, kLat, kLng) {
+  const conta = {}, chave = function (x) { return Number(x[kLat]).toFixed(4) + ',' + Number(x[kLng]).toFixed(4); };
+  l.forEach(function (x) { const k = chave(x); conta[k] = (conta[k] || 0) + 1; });
+  return new Set(l.filter(function (x) { return conta[chave(x)] >= 3; }).map(function (x) { return x.id; }));
+};
 /* ── recém-abertos: uma leitura enxuta por daily (Casa dos Dados com data de abertura, ainda do executivo) ── */
 GV2.dv3LerRecem = function () {
   const X = GV2.dv3x;
@@ -88830,7 +88837,7 @@ GV2.dv3LerRecem = function () {
   const ids = GV2.base.pessoas.map(function (p) { return p.id; });
   Promise.resolve(supa.from('leads_prospeccao').select('id,nome,bairro,lat,lng,data_abertura,status,data_rota,responsavel_owner_id,fonte')
     .in('responsavel_owner_id', ids).in('status', ['atribuido', 'na_rota']).not('data_abertura', 'is', null).not('lat', 'is', null).ilike('fonte', '%casa dos dados%').limit(3000))
-    .then(function (r) { X.recem = r && !r.error ? (r.data || []) : []; X.recemLendo = false; if (GV2.estado.daily != null) GV2.pintar(); },
+    .then(function (r) { const l0 = r && !r.error ? (r.data || []) : [], rep = GV2.dv3CoordRepetida(l0, 'lat', 'lng'); X.recem = l0.filter(function (x) { return !rep.has(x.id); }); X.recemLendo = false; if (GV2.estado.daily != null) GV2.pintar(); },
       function () { X.recem = []; X.recemLendo = false; });
 };
 /* o recém-aberto do dia: 1 por pessoa. O mais perto das paradas num raio de 800 m; sem nada no raio (ou sem
@@ -88871,6 +88878,8 @@ GV2.dv3LerConq = function () {
     });
   }).catch(function () { X.conq = {}; X.conqLendo = false; });
 };
+GV2.DV3_CONQ = { na_rua: 'Na rua 5 dias seguidos', primeiro_contrato: 'Primeiro contrato do mês', destaque: 'Destaque da sexta', fila_zerada: 'Fila zerada 5 dias', quentes_4: '4 contatos em todos os quentes', demo_seguidas: 'Demo 3 dias seguidos', padrinho: 'Padrinho de um formado' };
+GV2.dv3ConqNome = function (id) { const k = String(id || ''); if (GV2.DV3_CONQ[k]) return GV2.DV3_CONQ[k]; const m = /^playbook_?(d+)$/.exec(k); return m ? 'Playbook nível ' + m[1] : k.replace(/_/g, ' '); };
 GV2.dv3ConqDe = function (p) { GV2.dv3LerConq(); const c = GV2.dv3x.conq; return c ? (c[String(p.email || '').toLowerCase()] || []) : null; };
 /* ── ex-clientes perto da rota (aba Na rota): clients 'churn' no retângulo das paradas, 800 m de folga ── */
 GV2.dv3LerEx = function (p) {
@@ -88878,10 +88887,11 @@ GV2.dv3LerEx = function (p) {
   if (X.ex[p.id] || X.exLendo[p.id] || !stops.length || typeof supa === 'undefined' || !supa) return;
   X.exLendo[p.id] = true;
   const la = stops.map(function (s) { return Number(s.lat); }), lo = stops.map(function (s) { return Number(s.lng); }), d = 0.008;
-  Promise.resolve(supa.from('clients').select('id,empresa,nome,bairro,latitude,longitude,hs_churn_motivo_macro').eq('status', 'churn')
+  Promise.resolve(supa.from('clients').select('id,empresa,nome,bairro,latitude,longitude,hs_churn_motivo_macro').eq('status', 'churn').or('geo_approximate.is.null,geo_approximate.eq.false')
     .gte('latitude', Math.min.apply(null, la) - d).lte('latitude', Math.max.apply(null, la) + d).gte('longitude', Math.min.apply(null, lo) - d).lte('longitude', Math.max.apply(null, lo) + d).limit(300))
     .then(function (r) {
-      const l = r && !r.error ? (r.data || []) : [];
+      const l0 = r && !r.error ? (r.data || []) : [], rep = GV2.dv3CoordRepetida(l0, 'latitude', 'longitude');
+      const l = l0.filter(function (c) { return !rep.has(c.id); });
       X.ex[p.id] = l.map(function (c) {
         let dist = null; stops.forEach(function (s) { const m = GV2.dv3Metros({ lat: Number(s.lat), lng: Number(s.lng) }, { lat: Number(c.latitude), lng: Number(c.longitude) }); if (dist == null || m < dist) dist = m; });
         return { nome: c.empresa || c.nome || 'ex-cliente', bairro: c.bairro || '', dist: dist, motivo: c.hs_churn_motivo_macro || '' };
@@ -88949,7 +88959,7 @@ GV2.dv3NegInfo = function (n) {
 GV2.dv3FunilHTML = function (p) {
   const X = GV2.dv3x, negs = (p.negocios || []).filter(function (n) { return n.etapa_idx >= 0 && n.etapa_idx <= 5; });
   const semP = function (n) { return !n.agPag && !n.proximo_passo; };
-  const acima = function (n) { return !n.agPag && !!n.travado; };
+  const acima = function (n) { return !n.agPag && (!!n.travado || (n.dias || 0) > (n.regua || GV2.REGUA_PADRAO[n.etapa_idx] || 99)); };
   const passa = function (n) { return X.filtro === 'quentes' ? n.quente : X.filtro === 'sem' ? semP(n) : X.filtro === 'acima' ? acima(n) : true; };
   const mrr = negs.reduce(function (a, n) { return a + (n.mrr || 0); }, 0);
   const cab = '<div class="dv3-fcab"><div><b class="dv3-ftit">Funil de ' + GV2.e(GV2.prim(p.nome)) + '</b><span>' + GV2.e(GV2.pl(negs.length, 'aberto', 'abertos') + (mrr ? ' · ' + GV2.rs(mrr) + ' em MRR' : '') + ' · ' + negs.filter(semP).length + ' sem passo · ' + negs.filter(acima).length + ' acima da régua') + '</span></div>'
@@ -88958,7 +88968,7 @@ GV2.dv3FunilHTML = function (p) {
     const daEtapa = negs.filter(function (n) { return n.etapa_idx === idx; });
     const lista = daEtapa.filter(passa).sort(function (a, b) { return (semP(b) - semP(a)) || (acima(b) - acima(a)) || ((b.mrr || 0) - (a.mrr || 0)); });
     const sp = daEtapa.filter(semP).length, ac = daEtapa.filter(acima).length, mr = daEtapa.reduce(function (a, n) { return a + (n.mrr || 0); }, 0);
-    const cards = lista.slice(0, 6).map(function (n) {
+    const cards = lista.slice(0, 5).map(function (n) {
       const info = GV2.dv3NegInfo(n), regua = n.regua || GV2.REGUA_PADRAO[idx];
       const idade = n.agPag ? 'fora da régua' : (n.dias || 0) + '/' + regua + ' d';
       const tomI = n.agPag ? 't-mute' : (n.dias || 0) > regua ? 't-red' : (n.dias || 0) >= regua - 1 ? 't-amb' : 't-mute';
@@ -88969,7 +88979,7 @@ GV2.dv3FunilHTML = function (p) {
     return '<div class="dv3-fcol" style="border-top-color:' + GV2.DV3_COR_ETAPA[idx] + '"><div class="dv3-fch"><b>' + GV2.e(nome === 'Conversa com decisor' ? 'Decisor' : nome === 'Demo/Proposta' ? 'Demo' : nome === 'Ag. Pagamento' ? 'Ag. Pag.' : nome) + '</b><span class="n">' + daEtapa.length + '</span></div>'
       + '<small class="dv3-fsub">' + GV2.e((mr ? GV2.rs(mr) + ' · ' : '') + (sp || ac ? (sp ? sp + ' sem passo' : '') + (sp && ac ? ' · ' : '') + (ac ? ac + ' acima' : '') : 'tudo em dia')) + '</small>'
       + '<div class="dv3-fcards">' + (cards || '<small class="t-mute" style="padding:8px 2px">nada aqui' + (X.filtro !== 'todos' ? ' neste filtro' : '') + '</small>') + '</div>'
-      + (lista.length > 6 ? '<button type="button" class="dv3-link" data-gv2="v8neg:todos:' + p.id + '">+' + (lista.length - 6) + ' no Funil →</button>' : '') + '</div>';
+      + (lista.length > 5 ? '<button type="button" class="dv3-link" data-gv2="v8neg:todos:' + p.id + '">+' + (lista.length - 5) + ' no Funil →</button>' : '') + '</div>';
   }).join('');
   return '<div class="dv3-funilaba">' + cab + '<div class="dv3-fgrade">' + cols + '</div></div>';
 };
@@ -88993,7 +89003,7 @@ GV2.dv3JogoHTML = function (p) {
     + '<section class="dv3-card"><h3 class="dv3-rot">Os pontos de ' + GV2.e(GV2.prim(p.nome)) + '</h3><div class="dv3-tres3">'
     + '<div><b class="n">' + v * 100 + '</b><small>' + GV2.pl(v, 'venda', 'vendas') + ' × 100</small></div><div><b class="n">' + d * 25 + '</b><small>' + GV2.pl(d, 'demo', 'demos') + ' × 25</small></div><div><b class="n">' + vi * 3 + '</b><small>' + GV2.pl(vi, 'visita', 'visitas') + ' × 3</small></div></div></section>'
     + '<section class="dv3-card" style="flex:1"><h3 class="dv3-rot">Conquistas recentes · 30 dias</h3>'
-    + (conq == null ? '<p class="t-mute">lendo…</p>' : conq.length ? '<div class="dv3-chips">' + conq.slice(0, 8).map(function (c) { return '<span title="' + GV2.e(c.ganha_em) + '">' + GV2.e(c.conquista + ' · ' + GV2.ddmm(String(c.ganha_em).slice(0, 10))) + '</span>'; }).join('') + '</div>' : '<p class="t-mute">nenhuma conquista nos últimos 30 dias</p>')
+    + (conq == null ? '<p class="t-mute">lendo…</p>' : conq.length ? '<div class="dv3-chips">' + conq.slice(0, 8).map(function (c) { return '<span title="' + GV2.e(c.ganha_em) + '">' + GV2.e(GV2.dv3ConqNome(c.conquista) + ' · ' + GV2.ddmm(String(c.ganha_em).slice(0, 10))) + '</span>'; }).join('') + '</div>' : '<p class="t-mute">nenhuma conquista nos últimos 30 dias</p>')
     + '</section></div></div>';
 };
 /* ── aba 4 · Na rota: blocos novos entram aqui, nunca empurram a aba Daily ── */
