@@ -184,25 +184,25 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     checar('funil fora: a fila explica e oferece tentar de novo, Todo o funil e contas-alvo', /data-pv3-acao="relerbase"/.test(h4) && /data-pv3-acao="filtro:funil"/.test(h4) && /data-pv3-acao="filtro:alvo"/.test(h4));
   }
 
-  /* ── 3 · os quentes sem próximo passo: em qualquer filtro, com busca, todos, com gesto ── */
+  /* ── 3 · os quentes sem próximo passo: a primeira seção de "Sem passo" (v10, sem a caixa por cima), todos, com gesto ── */
   {
-    const filtros = ['sem', 'quentes', 'alvo', 'funil', 'venc', 'mapa', 'cnpj', 'recicl', 'cobrar', 'relac'];
     let todos = true, qual = '';
-    for (const f of filtros) {
+    for (const f of ['sem', 'quentes']) {
       zerar(); P.st.filtro = f;
       const h = colher(fila());
       if (!/data-pv3-quente="c-101"/.test(h) || !/data-pv3-quente="c-102"/.test(h)) { todos = false; qual = f; }
     }
-    checar('o bloco Quentes aparece em todos os filtros, com os 2 quentes', todos, 'faltou em ' + qual);
+    zerar();
+    checar('os 2 quentes aparecem em Sem passo (seção QUENTES SEM DATA) e em Quentes', todos && /QUENTES SEM DATA · 2/.test(fila()), 'faltou em ' + qual);
     zerar(); P.st.q = 'cantina'; P.st.filtro = 'alvo';
     const hq = fila();
-    checar('e com busca digitada', /data-pv3-quente="c-101"/.test(hq) && /data-pv3-quente="c-102"/.test(hq));
+    checar('com busca digitada, o resultado vem primeiro e nada fica por cima dele (v10, P2)', /data-pv3-arraste="n-20\d"/.test(hq) && !/data-pv3-quente=/.test(hq.split('data-pv3-arraste=')[0]));
     zerar();
     const h = colher(fila());
     checar('o quente SEM lugar no mapa não some do bloco (antes sumia) e diz por quê', /data-pv3-quente="c-101"[\s\S]{0,300}sem lugar no mapa/.test(h));
     checar('o quente com sugestão tem "Pôr em" o dia sugerido', /data-pv3-quente="c-102"[\s\S]{0,400}data-pv3-acao="por:c-102:\d"/.test(h));
     await acao('menu', 'c-101:qdia');
-    const h2 = colher(fila());
+    const h2 = colher(html());
     checar('o quente sem sugestão abre os dias para visita e para ligar', /data-pv3-acao="por:c-101:0"/.test(h2) && /data-pv3-acao="ligarem:c-101:0"/.test(h2));
     await acao('por', 'c-101:2');
     checar('e pôr no dia passa pelo pl6AgendarNoSlot (a tarefa no HubSpot antes da grade)', ultima('pl6AgendarNoSlot') && ultima('pl6AgendarNoSlot').args[0] === 'c-101' && ultima('pl6AgendarNoSlot').args[1] === 2);
@@ -241,7 +241,7 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     const h0 = colher(fila());
     checar('a fila tem "+ lead novo" e "+ bloco de rua"', /data-pv3-acao="novo:"/.test(h0) && /data-pv3-acao="ruaabrir"/.test(h0));
     await acao('novo', '');
-    const h = colher(fila());
+    const h = colher(html());
     checar('o formulário do lead novo tem nome, bairro, telefone e a fonte (Instagram, Maps, rua)', /data-pv3-novo="nome"/.test(h) && /data-pv3-novo="bairro"/.test(h) && /data-pv3-novo="telefone"/.test(h) && /novofonte:instagram/.test(h) && /novofonte:mapa/.test(h));
     P.st.novo.nome = 'Pizzaria Nova'; P.st.novo.fonte = 'instagram';
     await acao('novogravar');
@@ -250,10 +250,10 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     checar('e a conta criada aparece na busca para pôr num dia', P.st.novo === null && P.st.q === 'Pizzaria Nova');
     await acao('novo', ''); P.st.novo.nome = 'Duplicado';
     await acao('novogravar');
-    checar('recusa (já está na carteira) aparece no formulário, que continua aberto', P.st.novo && P.st.novo.erro === 'já está na carteira' && /já está na carteira/.test(fila()));
+    checar('recusa (já está na carteira) aparece no formulário, que continua aberto', P.st.novo && P.st.novo.erro === 'já está na carteira' && /já está na carteira/.test(html()));
     zerar();
     await acao('ruaabrir');
-    const hr = colher(fila());
+    const hr = colher(html());
     checar('o bloco de rua pede onde, quanto tempo e o dia', /data-pv3-rua="regiao"/.test(hr) && /ruadur:3h/.test(hr) && /data-pv3-acao="rua:2"/.test(hr));
     P.st.rua.regiao = 'Grajaú';
     await acao('ruadur', '3h');
@@ -267,7 +267,7 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
   {
     zerar();
     await acao('menu', 'c-103:dia');
-    const h = colher(fila());
+    const h = colher(html());
     checar('o "Pôr num dia" tem o horário opcional', /data-pv3-hora="c-103"/.test(h));
     P.st.hora['c-103'] = '14:30';
     await acao('por', 'c-103:3');
@@ -275,13 +275,15 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     checar('a hora escolhida vai para o pl6AgendarNoSlot (o relógio da v2)', a && a.args[3].hora === '14:30');
     zerar();
     await acao('menu', 'c-101:fic');
-    const hf = colher(fila());
+    const hf = colher(html());
     checar('a linha tem a Ficha: os campos da ficha da v2 (telefone)', /pv3-ficha/.test(hf) && /tel:21999/.test(hf));
     checar('sem o formulário de endereço da v2 (que aqui ficaria morto) e com o da v3', !/data-pl6-end/.test(hf) && /data-pv3-end="c-101"/.test(hf) && /gravarend:c-101/.test(hf));
     checar('e o botão da ficha completa do negócio', /data-pv3-acao="ficha:c-101"/.test(hf));
     zerar();
     PL7.toques.cache['102'] = [1, 0, 1, 1, 0, 1];
-    checar('os toques das 6 semanas aparecem na linha (PL7.toquesHTML)', /data-pv3-arraste="c-102"[\s\S]{0,900}pl7-toques/.test(fila()));
+    await acao('menu', 'c-102:fic');
+    checar('os toques das 6 semanas aparecem na Ficha da linha (PL7.toquesHTML; saíram da linha na v10)', /pv3-ficha[\s\S]*pl7-toques/.test(html()));
+    zerar();
     zerar(); P.st.filtro = 'alvo';
     const hm = colher(fila());
     checar('lista longa não trava: "mostrar mais" no fim', /data-pv3-acao="maislinhas"/.test(hm));
@@ -310,7 +312,8 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
       ] };
       const passado = P.diaHTML(D(), 1);
       checar('dia que passou: conta as 2 contas novas do dono no dia (BRT: 20h30 UTC é do dia; outro dono, 00h30 BRT do dia seguinte e 23h30 BRT da véspera ficam fora)', /2 contas novas na carteira/.test(passado), passado.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 300));
-      checar('e a prospecção de rua nunca vira "ficou para trás"', !/Prospecção de rua[^]*?ficou para trás/.test(passado.split('Bloqueado')[0] + passado.split('Bloqueado').slice(1).join('').split('</article>')[0]));
+      const cartaoRua = passado.split('class="pv3-c').filter((x) => /Prospecção de rua/.test(x))[0] || '';
+      checar('e a prospecção de rua nunca vira "ficou para trás"', !!cartaoRua && !/ficou para trás/.test(cartaoRua));
       DATA.kpiDetalhe = { leadsCriados: [] };
       checar('dia que passou sem conta nova: diz que não cadastrou nenhuma', /nenhuma conta nova cadastrada/.test(P.diaHTML(D(), 1)));
       delete DATA.kpiDetalhe;
@@ -319,7 +322,7 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     checar('o bloqueio não conta na meta (2 de 6: a visita e a rua)', D().cont[1] === 2, String(D().cont[1]));
     checar('o cartão tem "mudar de dia" e se arrasta para outro dia', /data-pv3-acao="cmenu:1:0"/.test(dia1) && /draggable="true" data-pv3-arraste="g:1:0"/.test(dia1));
     await acao('cmenu', '1:0');
-    checar('mudar de dia abre os outros dias', /data-pv3-acao="moverum:1:0:3"/.test(colher(P.diaHTML(D(), 1))));
+    checar('mudar de dia abre os outros dias (no painel por cima, v10)', /data-pv3-acao="moverum:1:0:3"/.test(colher(html())));
     chamadas.length = 0;
     await acao('moverum', '1:0:3');
     const t = ultima('criarTarefaVisitaNoHubspot');
@@ -373,7 +376,7 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     const v2txt = global.pl6AvisosDaHora(global.pl6OrdemDoDia(global.pl6ItensDoDia(GRADE[2], D().porId), global.PL6_ROTA.dias['2026-11-11'])).conflito;
     checar('o texto da v3 é exatamente o da função da v2', !!v2txt && d2.indexOf(v2txt) >= 0, v2txt);
     await acao('cmenu', '3:0');
-    const m3 = colher(P.diaHTML(D(), 3));
+    const m3 = colher(html());
     checar('"mudar a hora ou o dia" abre a hora nova e os outros dias', /data-pv3-hora="g:3:0"/.test(m3) && /data-pv3-acao="mudarhora:3:0"/.test(m3) && /data-pv3-acao="moverum:3:0:4"/.test(m3));
     chamadas.length = 0;
     P.st.hora['g:3:0'] = '11:00';
