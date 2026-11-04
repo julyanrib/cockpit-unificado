@@ -12805,7 +12805,10 @@ button.gv2-v5-pp-c:hover b{text-decoration:underline;}
 .gv2-v5-pp-x{font:700 13px var(--gv2-font);white-space:nowrap;}
 .gv2-v5-pp-n{font:700 13px var(--gv2-font);text-align:right;}
 .gv2-v5-pp-n.t-av{color:var(--gv2-av);}
-.gv2-v5-pp-a{display:flex;justify-content:center;}
+.gv2-v5-pp-a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
+.gv2-v5-pp-rec{font:600 10.5px var(--gv2-font);color:var(--gv2-dim);text-align:center;line-height:1.25;}
+.gv2-v5-pp-rec.is-ok{color:var(--gv2-ok);}
+.gv2-v5-pp-rec.is-av{color:var(--gv2-av);}
 .gv2-v5-btn.is-linha{height:34px;width:100%;padding:0 10px;font-size:12px;}
 .gv2-v5-pp-info{font:600 11.5px var(--gv2-font);color:var(--gv2-dim);text-align:center;}
 @media (max-width:1366px){
@@ -78638,6 +78641,7 @@ GV2.cobrarNoApp = async function (p, texto, chave) {
   if (!p) return false;
   const ok = await GV2.recado(p, texto);
   if (ok && chave) GV2.marcarCobrado(chave);
+  if (ok) { GV2.estado.recHoje = null; GV2.lerRecadosHoje(); }
   GV2.pintar();
   return ok;
 };
@@ -86013,8 +86017,36 @@ GV2.render.time = function () {
     + (GV2.render.rcHoje ? GV2.render.rcHoje() : '') + GV2.faltaHTML() + '</div>' + (GV2.render.v6Gav && GV2.estado.v6Gav ? GV2.render.v6Gav() : '') + (GV2.estado.ap != null && GV2.render.v8Apresentar ? GV2.render.v8Apresentar() : '');
 };
 
+/* O RECADO VISTO (Julyan, 04/11/26: "quero que apareça lá, que ele veja"). Chamar, Cobrar o plano e os
+   lotes gravam em sugestoes_planos; o app carimba visto_em no "Entendi" (0250 + marcar_recado_visto).
+   Aqui: o último recado de HOJE de cada pessoa e se ela viu. Lê no máximo a cada 60 s; sem a coluna ou
+   sem resposta, a linha simplesmente não aparece (nunca "não viu" de mentira). */
+GV2.lerRecadosHoje = function () {
+  if (typeof supa === 'undefined' || !supa || GV2.estado.recHojeVoo) return;
+  const r0 = GV2.estado.recHoje;
+  if (r0 && Date.now() - r0.em < 60000) return;
+  GV2.estado.recHojeVoo = true;
+  /* try: um erro aqui (cliente sem .order, sem rede) nunca pode atrapalhar quem chamou (o Cobrar) */
+  try {
+  const desde = new Date(Date.parse(new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10) + 'T03:00:00Z')).toISOString();
+  Promise.resolve(supa.from('sugestoes_planos').select('owner_id, created_at, visto_em').gte('created_at', desde).order('created_at', { ascending: false }).limit(500))
+    .then(function (r) {
+      const por = {};
+      if (!r.error) (r.data || []).forEach(function (x) { const k = String(x.owner_id); if (!por[k]) por[k] = { em: x.created_at, visto: x.visto_em || null, n: 0 }; por[k].n++; });
+      GV2.estado.recHoje = { em: Date.now(), por: r.error ? null : por };
+    }, function () { GV2.estado.recHoje = { em: Date.now(), por: null }; })
+    .then(function () { GV2.estado.recHojeVoo = false; if (GV2.estado.aba === 'time' && typeof GV2.pintar === 'function') GV2.pintar(); });
+  } catch (e) { GV2.estado.recHojeVoo = false; GV2.estado.recHoje = { em: Date.now(), por: null }; }
+};
+GV2.recadoHojeHTML = function (p) {
+  const rh = GV2.estado.recHoje, x = rh && rh.por ? rh.por[String(p.id)] : null;
+  if (!x) return '';
+  const t = 'cobrado ' + GV2.horaDe(x.em) + ' · ' + (x.visto ? 'visto ' + GV2.horaDe(x.visto) : 'não viu ainda');
+  return '<small class="gv2-v5-pp-rec' + (x.visto ? ' is-ok' : ' is-av') + '" title="' + GV2.e((x.n > 1 ? x.n + ' recados hoje · o último ' : 'recado de hoje ') + (x.visto ? 'visto no app às ' + GV2.horaDe(x.visto) : 'ainda não aberto no app (o "Entendi" da tela inicial)')) + '">' + GV2.e(t) + '</small>';
+};
 GV2.render.v5PorPessoa = function (sit) {
   const b = GV2.base;
+  GV2.lerRecadosHoje();
   const fonte = b.planoErro;
   /* v8: melhor do mês e mais longe do ritmo, pela mesma régua do Funil (clientes ÷ esperado) */
   const ritmo = {}; b.pessoas.forEach(function (p) { ritmo[p.id] = GV2.v8Ritmo ? GV2.v8Ritmo(p) : null; });
@@ -86069,7 +86101,7 @@ GV2.render.v5PorPessoa = function (sit) {
       + '<span class="gv2-v5-pp-c" title="' + GV2.e(GV2.ontemDe() + ': ' + ontemT + (ontemS ? ' · ' + ontemS : '') + ' · ' + oj) + '"><b class="num' + (furou ? ' t-av' : '') + '">' + GV2.e(ontemT) + '</b><small>' + GV2.e(ontemS || oj) + '</small></span>'
       + '<button type="button" class="num gv2-v5-pp-n is-link" data-gv2="v8neg:quentes:' + p.id + '" title="os quentes de ' + GV2.e(GV2.prim(p.nome)) + '">' + p.quentes.length + '</button>'
       + '<button type="button" class="num gv2-v5-pp-n' + (p.travados.length >= GV2.MUITOS_TRAVADOS ? ' t-av' : '') + '" data-gv2="v8neg:travados:' + p.id + '" title="os travados de ' + GV2.e(GV2.prim(p.nome)) + '">' + p.travados.length + '</button>'
-      + '<span class="gv2-v5-pp-a">' + acao + '</span></div>';
+      + '<span class="gv2-v5-pp-a">' + acao + GV2.recadoHojeHTML(p) + '</span></div>';
   }).join('');
   return '<section class="card gv2-v5-pp is-v8"><div class="gv2-v5-cab"><b>Por pessoa<i class="gv2-v8-i" title="o nome abre a pessoa · o plano e a jornada abrem o dia na Rua · quentes e travados abrem os negócios · barra do Mês: traço = esperado até hoje">i</i></b></div>'
     + '<div class="gv2-v5-pp-l is-cab"><span>Pessoa</span><span>Mês</span><span>Plano hoje</span><span>Visitas hoje</span><span>Jornada</span><span>Último dia útil</span><span class="is-dir">Quentes</span><span class="is-dir">Travados</span><span class="is-meio">Ação</span></div>'
