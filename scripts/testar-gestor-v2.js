@@ -955,6 +955,19 @@ tabelas.gv2_falta_etapa = [
         GV2.dv3x.aba = 1; GV2.dv3x.gaveta = 'sp'; try { const h = GV2.render.daily(); if (GV2.dv3SemPasso(fila[i]).length && h.indexOf('dv3-gsp') < 0) er4.push(i + ': gaveta não abriu'); } catch (e) { er4.push(i + '/gaveta: ' + e.message); }
         const n0 = (fila[i].negocios || [])[0]; GV2.dv3x.gaveta = null; GV2.dv3x.ficha = n0 ? n0.id : null; try { const h = GV2.render.daily(); if (n0 && h.indexOf('Ficha do lead') < 0) er4.push(i + ': ficha não abriu'); } catch (e) { er4.push(i + '/ficha: ' + e.message); }
       }
+      /* A DAILY NÃO SAI PARA O QUE GRAVA NO HUBSPOT (revisão de 03/11): nenhuma aba nem gaveta leva à gaveta antiga
+         (v8neg, cujo Cobrar cria tarefa), à ficha geral (ficha:) ou ao cobrar:neg */
+      const saidas = [];
+      for (let i = 0; i < fila.length; i++) {
+        GV2.estado.daily = i;
+        for (const aba of [1, 2, 3, 4]) for (const gav of [null, 'sp', 'q', 'e0', 'e4']) {
+          GV2.dv3x.aba = aba; GV2.dv3x.gaveta = gav; GV2.dv3x.ficha = null;
+          const h = GV2.render.daily();
+          const m = h.match(/data-gv2="(v8neg:[^"]*|ficha:[^"]*|cobrar:neg[^"]*)"/);
+          if (m) saidas.push(i + '/' + aba + '/' + gav + ': ' + m[1]);
+        }
+      }
+      checar('Daily v3: nenhuma aba nem gaveta leva ao Cobrar que grava no HubSpot (v8neg, ficha:, cobrar:neg)', !saidas.length, saidas.slice(0, 3).join(' | '));
       GV2.dv3x.aba = 1; GV2.dv3x.gaveta = null; GV2.dv3x.ficha = null;
       checar('Daily v3 fases 2 e 3: as 4 abas, a gaveta Sem passo e a Ficha abrem para cada pessoa, sem erro', !er4.length, er4.slice(0, 4).join(' | '));
       const r0 = fila[0] && GV2.dv3RecemDe(fila[0]);
