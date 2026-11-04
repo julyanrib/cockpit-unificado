@@ -457,8 +457,8 @@ conferir('a praça declarada por município inteiro não foi afetada',
   quem('vila velha', 'praia da costa') === donoDoMunicipioInteiro('vila velha')
   && quem('vitoria', 'jardim da penha') === donoDoMunicipioInteiro('vitoria')
   && donoDoMunicipioInteiro('vila velha') !== null && donoDoMunicipioInteiro('vitoria') !== null
-  && quem('canoas', 'um bairro qualquer de canoas') === 'Kelly'
-  && via('canoas', 'um bairro qualquer de canoas') === 'lista antiga',
+  /* 03/11/26: a dona da lista antiga de Canoas está desligada no usuarios.json, e desligado não recebe lead */
+  && quem('canoas', 'um bairro qualquer de canoas') === null,
   'o corte é só onde ele nomeou BAIRRO; município inteiro continua respondendo por tudo');
 
 /* A GARANTIA CONTINUA ONDE ELA PODE EXISTIR. 15/10/26: território refeito pelo Julyan —
@@ -468,10 +468,11 @@ conferir('a praça declarada por município inteiro não foi afetada',
    automática da cidade de um dono só declarado por BAIRRO não tem caso real e é medida
    na declaração sintética (Suzano, Renata, só "Centro" nomeado). */
 conferir('e a sobra do município continua existindo onde há um dono só',
-  quem('porto alegre', 'um bairro inventado qualquer') === donoDoMunicipioInteiro('porto alegre')
+  /* 03/11/26: território de Porto Alegre inativo (decisão do Julyan): sem dono, e não do vizinho */
+  quem('porto alegre', 'um bairro inventado qualquer') === null
   && quem('vila velha', 'um bairro inventado qualquer') === donoDoMunicipioInteiro('vila velha')
   && quem('vitoria', 'um bairro inventado qualquer') === donoDoMunicipioInteiro('vitoria')
-  && donoDoMunicipioInteiro('porto alegre') !== null
+  && donoDoMunicipioInteiro('vila velha') !== null
   && quemSint('suzano', 'um bairro inventado qualquer') === 'Renata',
   'bairro novo sem regra tem que cair em alguém conhecido, senão fica invisível para sempre');
 
@@ -497,9 +498,10 @@ conferir('a regra do Sérgio recusa "vila mariana" por si só',
   'sem borda de palavra a regra dele captura a rua da Renata, e a ordem do JSON é que decide quem perde');
 
 /* ── 6 · A EXCLUSÃO DO RICARDO VALE ─────────────────────────────────────────────────── */
-conferir('a Cidade Baixa é da Kelly, não do Ricardo',
-  quem('porto alegre', 'cidade baixa') === 'Kelly' && quem('porto alegre', 'moinhos de vento') === 'Kelly',
-  'foi o "só n pega cidade baixa" dele que definiu isso por exclusão');
+/* 03/11/26: os dois territórios de Porto Alegre estão inativos: a Cidade Baixa não vai para ninguém */
+conferir('a Cidade Baixa não volta para território inativo',
+  quem('porto alegre', 'cidade baixa') === null && quem('porto alegre', 'moinhos de vento') === null,
+  'território de quem saiu não roteia: lead de lá fica sem dono e visível para o gestor atribuir');
 
 /* ══ O RICARDO SAIU EM 19/09/26, E PORTO ALEGRE NÃO MUDOU DE DONO SOZINHA ══════════
    Ele cobria o município inteiro menos os três bairros da Kelly. Saiu por motivo
@@ -533,19 +535,19 @@ conferir('o território de quem saiu não é mais roteado',
    voltar a sair da sobra, alguém tirou o todoOMunicipio e a decisão dele sumiu. */
 const regraKellyPOA = (terr.DECLARADOS || []).find(r =>
   r.nome === 'Kelly Travieso Di Domenico' && r.cidade === 'porto alegre');
-conferir('Porto Alegre inteira é da Kelly, por declaração de município inteiro',
-  quem('porto alegre', 'farroupilha') === 'Kelly'
-    && quem('porto alegre', 'centro historico') === 'Kelly'
-    && via('porto alegre', 'farroupilha') === 'declarado'
-    && !!regraKellyPOA && regraKellyPOA.todoOMunicipioDeclarado === true,
-  'a decisão de 15/10 é "Porto Alegre inteira para a Kelly" escrita no JSON; vir pela sobra '
-    + 'automática quer dizer que a declaração voltou a ser por bairro');
+/* 03/11/26: território de Porto Alegre inativo (decisão do Julyan). A regra sai do roteador e a cidade
+   fica SEM DONO — nunca pela sobra automática para outra pessoa. */
+conferir('Porto Alegre fica sem dono com o território inativo',
+  !regraKellyPOA
+    && quem('porto alegre', 'farroupilha') === null
+    && quem('porto alegre', 'centro historico') === null,
+  'território inativo não roteia; se alguém voltar a responder por POA, foi decisão nova ou regressão');
 
-conferir('e os três bairros que já eram dela continuam dela',
-  quem('porto alegre', 'cidade baixa') === 'Kelly'
-    && quem('porto alegre', 'moinhos de vento') === 'Kelly'
-    && quem('porto alegre', 'auxiliadora') === 'Kelly',
-  'a troca de bairro nomeado para município inteiro não pode encolher o que já era dela');
+conferir('e os três bairros nomeados também ficam sem dono',
+  quem('porto alegre', 'cidade baixa') === null
+    && quem('porto alegre', 'moinhos de vento') === null
+    && quem('porto alegre', 'auxiliadora') === null,
+  'território inativo não pode empurrar bairro para ninguém');
 
 /* ── 7 · UMA FONTE SÓ ───────────────────────────────────────────────────────────────── */
 conferir('o roteador lê data/territorios.json',
