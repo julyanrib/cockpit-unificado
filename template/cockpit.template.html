@@ -83524,7 +83524,10 @@ GV2.v5Desvalidar = async function (vid) {
 GV2.v5RuaComando = function (cmd, parte) {
   /* fora da Rua (o "Semana" da gaveta e da página da Pessoa) o clique leva para a Rua nessa visão: antes só mudava o estado e nada acontecia */
   if (cmd === 'v5rua') { GV2.estado.rua = parte[1]; if (GV2.estado.aba !== 'rua') { GV2.estado.rxGav = null; GV2.estado.v5Gav = null; GV2.estado.v6Gav = null; GV2.estado.veu = null; GV2.ir('rua'); } else GV2.pintar(); const c = document.querySelector('#gv2Raiz .gv2-corpo'); if (c) c.scrollTop = 0; return true; }
-  if (cmd === 'v5dia') { GV2.estado.aba = 'rua'; GV2.estado.rua = 'dia'; GV2.estado.ruaSel = parte[1]; GV2.estado.rotaDia = parte[2] || null; GV2.estado.rxGav = null; GV2.pintar(); return true; }
+  /* da Daily (04/11/26): "Ver o dia na Rua" mudava a aba por baixo e a Daily seguia por cima, parecia que o clique não fazia nada.
+     Fora da Rua, sai da Daily (como o "daily:sair": tela cheia e base pendente) e das gavetas antes. A Daily na 1ª pessoa
+     é daily = 0: o teste é != null, não verdade. */
+  if (cmd === 'v5dia') { const naDaily = GV2.estado.daily != null, fora = GV2.estado.aba !== 'rua' || naDaily; if (naDaily && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {}); if (naDaily && GV2.pendente) { GV2.base = GV2.pendente; GV2.pendente = null; GV2.testes.prova(); } if (fora) { GV2.sairVisita(); GV2.estado.daily = null; GV2.estado.menu = false; GV2.estado.v5Gav = null; GV2.estado.v6Gav = null; GV2.estado.veu = null; } GV2.estado.aba = 'rua'; GV2.estado.rua = 'dia'; GV2.estado.ruaSel = parte[1]; GV2.estado.rotaDia = parte[2] || null; GV2.estado.rxGav = null; GV2.pintar(); if (fora) { const c = document.querySelector('#gv2Raiz .gv2-corpo'); if (c) c.scrollTop = 0; } return true; }
   if (cmd === 'v5praca') { const pr = GV2.base.pracas[Number(parte[1])]; if (pr) { GV2.estado.praca = pr; GV2.estado.destaque = null; GV2.pintar(); } return true; }
   if (cmd === 'v5pedir') { GV2.v5Pedir(parte[1]); return true; }
   if (cmd === 'v5validar') { GV2.estado.v5Validar = parte[1]; GV2.estado.v5ValidarTxt = ''; GV2.estado.v5ValidarErro = null; GV2.pintar(); const t = document.getElementById('v5ValidarMotivo'); if (t) t.focus(); return true; }
@@ -88594,7 +88597,7 @@ GV2.dv3Col2 = function (p, R, Rt) {
   const pd = GV2.v8Tx(f.portas || 0, f.decisor || 0), pdT = GV2.v8Tx(ft.portas || 0, ft.decisor || 0);
   const dd = GV2.v8Tx(f.decisor || 0, f.demo || 0), ddT = GV2.v8Tx(ft.decisor || 0, ft.demo || 0);
   const G = GV2.v8Gargalo(R), prontos = GV2.emRampa(p) ? [] : GV2.dv3Prontos(R, Rt);
-  const funil = '<section class="dv3-card" style="flex:1"><h3 class="dv3-rot">3 · Onde o funil trava <span style="letter-spacing:0;text-transform:none;font-weight:500">no mês</span></h3>'
+  const funil = '<section class="dv3-card" style="flex:1"><h3 class="dv3-rot"><span>3 · Onde o funil trava <span style="letter-spacing:0;text-transform:none;font-weight:500">no mês</span></span><button type="button" class="dv3-link" data-gv2="daily:aba:2" title="o funil inteiro, etapa por etapa (tecla 2)">ver o funil →</button></h3>'
     + '<div class="dv3-funil">' + caixa(f.portas, 'portas', '', '') + caixa(f.decisor, 'decisor', pd === '—' && pdT === '—' ? '' : pd + ' · time ' + pdT, GV2.dv3Tom(f.portas || 0, f.decisor || 0, ft.portas || 0, ft.decisor || 0))
     + caixa(f.demo, 'demos', dd === '—' && ddT === '—' ? '' : dd + ' · time ' + ddT, GV2.dv3Tom(f.decisor || 0, f.demo || 0, ft.decisor || 0, ft.demo || 0)) + '</div>'
     + '<p class="dv3-garg">' + GV2.e(G.t) + '</p>'
@@ -89082,7 +89085,7 @@ GV2.dv3GavetaHTML = function (p) {
   const todosLongo = sp.length ? 'Próximo passo em ' + sp.map(function (n) { return n.nome; }).join(', ') : '';
   const todosFeito = sp.length && GV2.dv3Usado(p.id, todosLongo);
   return '<div class="dv3-ovl" data-gv2="daily:fechar"></div><aside class="dv3-gav' + (tipoG === 'sp' ? ' dv3-gsp' : '') + '" role="dialog" aria-label="' + GV2.e(titG) + '">'
-    + '<div class="dv3-gav-cab"><div><span class="dv3-kick">' + GV2.e(titG + ' · ' + GV2.prim(p.nome)) + '</span><h3><span class="' + (tipoG === 'sp' ? 't-red' : '') + '">' + sp.length + '</span> ' + GV2.e(GV2.pl(sp.length, 'negócio', 'negócios') + (mrr ? ' · ' + GV2.rs(mrr) + ' em MRR' : '')) + '</h3></div><button type="button" class="dv3-x" data-gv2="daily:fechar" aria-label="Fechar">×</button></div>'
+    + '<div class="dv3-gav-cab"><div><span class="dv3-kick">' + GV2.e(titG + ' · ' + GV2.prim(p.nome)) + '</span><h3><span class="' + (tipoG === 'sp' ? 't-red' : '') + '">' + sp.length + '</span> ' + GV2.e((sp.length === 1 ? 'negócio' : 'negócios') + (mrr ? ' · ' + GV2.rs(mrr) + ' em MRR' : '')) + '</h3></div><button type="button" class="dv3-x" data-gv2="daily:fechar" aria-label="Fechar">×</button></div>'
     + '<div class="dv3-gav-bar"><div class="dv3-seg"><button type="button" class="' + (X.ordem === 'valor' ? 'is-cumprido' : '') + '" data-gv2="daily:ordem:valor">Valiosos</button><button type="button" class="' + (X.ordem === 'antigo' ? 'is-cumprido' : '') + '" data-gv2="daily:ordem:antigo">Antigos</button></div>'
     + (sp.length && tipoG === 'sp' ? '<button type="button" class="dv3-bt ' + (todosFeito ? 'is-ok' : 'is-act') + '" data-gv2="daily:cobtodos:' + p.id + '">' + (todosFeito ? 'Todos no compromisso ✓' : 'Cobrar todos no compromisso') + '</button>' : '') + '</div>'
     + '<div class="dv3-gav-lista">' + sp.map(function (n) {
