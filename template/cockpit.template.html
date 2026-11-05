@@ -22588,8 +22588,10 @@ function campoPassagemHTML(campo, valor) {
   } else {
     const tipoInput = campo.tipo === 'numero' ? 'number' : campo.tipo === 'data' ? 'date' : campo.tipo === 'tel' ? 'tel' : campo.tipo === 'email' ? 'email' : 'text';
     const extra = campo.tipo === 'numero' ? ` step="1" inputmode="numeric"${campo.min != null ? ` min="${campo.min}"` : ''}` : '';
-    const limite = campo.maxLen ? ` maxlength="${campo.maxLen}" placeholder="até ${campo.maxLen} caracteres (ex.: 1520 ou S/N)"` : '';
-    const input = `<input id="${id}" type="${tipoInput}"${extra}${limite} data-prop="${campo.prop}" data-tipo="${campo.tipo}" value="${esc(valor)}" autocomplete="off">`;
+    const limite = campo.maxLen ? ` maxlength="${campo.maxLen}" placeholder="até ${campo.maxLen} caracteres (ex.: 1520 ou S/N)"`
+      : campo.prop === 'celular' ? ` inputmode="numeric" placeholder="${CELULAR_DICA}"` : '';
+    const valorMostrado = campo.prop === 'celular' && valor ? (normalizarCelular(valor).valor || valor) : valor;
+    const input = `<input id="${id}" type="${tipoInput}"${extra}${limite} data-prop="${campo.prop}" data-tipo="${campo.tipo}" value="${esc(valorMostrado)}" autocomplete="off">`;
     /* A LUPA SÓ NO CNPJ (16/09/26). Botão de ícone e não de texto: "Buscar na Receita"
        ao lado do campo comeria a largura do input no grid de duas colunas, e este
        formulário já é apertado. 38px, que é o piso de toque desta casa para botão
@@ -22818,7 +22820,22 @@ function conferirCpfCnpj(digitos) {
    vira a segunda, em vez de virar um `if` perdido dentro de uma tela. */
 const PROPS_TAMANHO_MINIMO = { informacoes_sobre_o_maior_desafio: 50 };
 const PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };
+/* ══ CELULAR: SÓ DDD + NÚMERO (05/11/26) ═══════════════════════════════════════════
+   Julyan: "não pode contar o +55, é só o DDD e número, já até coloquei em um formato
+   para eles não errarem mais". A base tinha de tudo: "+55 11 968994337",
+   "+55-27-32320000", "(027) 99825-8518", "11967512789". Aqui o celular vira só dígitos,
+   10 (fixo) ou 11 (celular). O +55 e o zero da frente o executivo pode até digitar: a
+   tela tira sozinha, em vez de recusar quem colou o número do WhatsApp. */
+const CELULAR_DICA = 'DDD + número, sem +55 · ex.: 21987654321';
+function normalizarCelular(valor) {
+  let d = String(valor == null ? '' : valor).replace(/[^0-9]/g, '');
+  if (d.length >= 12 && d.startsWith('55')) d = d.slice(2);
+  if ((d.length === 11 || d.length === 12) && d.startsWith('0')) d = d.slice(1);
+  if (d.length === 10 || d.length === 11) return { valor: d, erro: null };
+  return { valor: null, erro: 'Só o DDD e o número, sem +55: 10 ou 11 dígitos (ex.: 21987654321). Vieram ' + d.length + '.' };
+}
 function limparSoDigitos(prop, valor) {
+  if (prop === 'celular') return normalizarCelular(valor);
   if (!(prop in PROPS_SO_DIGITOS)) return { valor: valor, erro: null };
   const digitos = String(valor == null ? '' : valor).replace(/[^0-9]/g, '');
   const teto = PROPS_SO_DIGITOS[prop];
@@ -48401,7 +48418,7 @@ function abrirNovaContaProspeccao(aoConcluir, semente) {
       </div>
       <div class="pe-campo" data-campo="__telefone">
         <label for="peTelefone">Telefone / celular</label>
-        <input id="peTelefone" type="tel" maxlength="20" autocomplete="off" placeholder="opcional aqui — obrigatório na Conversa com Decisor">
+        <input id="peTelefone" type="tel" maxlength="20" autocomplete="off" inputmode="numeric" placeholder="DDD + número, sem +55 · opcional aqui">
         <small class="erro" hidden></small>
       </div>
       ${campos.map(c => campoPassagemHTML(c, '')).join('')}
@@ -48479,7 +48496,17 @@ function abrirNovaContaProspeccao(aoConcluir, semente) {
     /* SÓ ENTRA SE ELE DIGITOU. String vazia é escrita VÁLIDA nesta rota e significa
        LIMPAR a propriedade (está documentado em limparPropriedades) — mandar '' num
        negócio novo escreveria vazio de propósito num campo que ninguém preencheu. */
-    if (telefone) coleta.propriedades.celular = telefone;
+    if (telefone) {
+      const cel = normalizarCelular(telefone);
+      if (cel.erro) {
+        divTelefone.classList.add('erro');
+        status.style.color = 'var(--red)';
+        status.textContent = cel.erro;
+        try { inputTelefone.focus(); } catch (e) {}
+        return;
+      }
+      coleta.propriedades.celular = cel.valor;
+    }
 
     btnCriar.disabled = true;
     btnCriar.textContent = 'Criando no HubSpot…';
@@ -62462,6 +62489,7 @@ function v5PintarConta() {
       papel.textContent = sessaoAtual.role === 'manager' ? 'Gestor' : 'Executivo';
     }
   }
+  if (typeof v5RotuloBusca === 'function') v5RotuloBusca();
   document.getElementById('perfilAvatarBadge').addEventListener('click', (ev) => { ev.stopPropagation(); v5AlternarMenu(); });
 }
 
@@ -62553,18 +62581,26 @@ document.addEventListener('click', (ev) => {
   if (res && !res.hidden && !ev.target.closest('#v5Busca')) v5FecharBusca();
 });
 
-/* ── A BUSCA GLOBAL ─────────────────────────────────────────────────────────────
-   "A mesma busca do mapa": nome do negócio, bairro, cidade, rua e dono. Procura no que
-   a sessão já carregou (DATA.funilLeads e a carteira de cada executivo) — nenhuma
-   consulta nova. O gestor acha também as pessoas do time. */
+/* ── A BUSCA DO TOPO ─────────────────────────────────────────────────────────────
+   Nome do negócio, bairro, cidade, rua e dono. Procura no que a sessão já carregou
+   (DATA.funilLeads e a carteira de cada executivo) — nenhuma consulta nova. O gestor acha
+   o time inteiro e as pessoas. O EXECUTIVO acha só o funil dele (Julyan, 05/11/26: buscar
+   no mapa todo "tá confundindo eles" — achava negócio de colega e abria a ficha). */
+function v5BuscaSoDoDono() {
+  if (!sessaoAtual || !sessaoAtual.ownerId) return null;
+  if (sessaoAtual.role === 'manager') return null;
+  return String(sessaoAtual.ownerId);
+}
 function v5Normalizar(s) {
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 }
 let v5IndiceBusca = null;
 function v5MontarIndice() {
   const porId = new Map();
+  const dono = v5BuscaSoDoDono();
   const juntar = (l, sid) => {
     if (!l || l.id == null || porId.has(String(l.id))) return;
+    if (dono && l.ownerId != null && l.ownerId !== '' && String(l.ownerId) !== dono) return;
     porId.set(String(l.id), { l, stageId: l.stageId || sid });
   };
   Object.entries(DATA.funilLeads || {}).forEach(([sid, lista]) => (lista || []).forEach((l) => juntar(l, sid)));
@@ -62615,8 +62651,8 @@ function v5PintarBusca() {
   const achados = v5Buscar(input.value);
   if (!achados) { v5FecharBusca(); return; }
   res.innerHTML = achados.length
-    ? achados.map(v5LinhaBusca).join('') + '<span class="v5-busca-rodape">A mesma busca do mapa · abre a ficha do negócio</span>'
-    : '<span class="v5-busca-vazio">Nada com esse nome. Tente o bairro ou a rua.</span>';
+    ? achados.map(v5LinhaBusca).join('') + '<span class="v5-busca-rodape">' + (v5BuscaSoDoDono() ? 'Só o seu funil' : 'O funil do time') + ' · abre a ficha do negócio</span>'
+    : '<span class="v5-busca-vazio">' + (v5BuscaSoDoDono() ? 'Nada com esse nome no seu funil.' : 'Nada com esse nome.') + ' Tente o bairro ou a rua.</span>';
   res.hidden = false;
   input.setAttribute('aria-expanded', 'true');
 }
@@ -62642,11 +62678,17 @@ function v5AbrirAchado(valor) {
   const lead = buscarLeadFunilPorId(id);
   abrirFichaLeadFunilDrawer(lead, null, null);
 }
+function v5RotuloBusca() {
+  const input = document.getElementById('v5BuscaInput');
+  if (!input) return;
+  const txt = v5BuscaSoDoDono() ? 'Buscar no meu funil: negócio, bairro ou rua' : 'Buscar negócio, lead, pessoa ou rua';
+  if (input.placeholder !== txt) { input.placeholder = txt; input.setAttribute('aria-label', txt); }
+}
 (function v5LigarBusca() {
   const input = document.getElementById('v5BuscaInput');
   const res = document.getElementById('v5BuscaRes');
   if (!input || !res) return;
-  input.addEventListener('focus', () => { v5IndiceBusca = null; });
+  input.addEventListener('focus', () => { v5IndiceBusca = null; v5RotuloBusca(); });
   input.addEventListener('input', v5PintarBusca);
   input.addEventListener('keydown', (ev) => {
     const itens = [...res.querySelectorAll('.v5-busca-item')];
