@@ -15195,6 +15195,7 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pv3-cad-l.is-info:hover{background:transparent;}
 /* o quadro */
 .pv3-corpo{display:grid;grid-template-columns:var(--pv3-fila) minmax(0,1fr);gap:8px;flex:1;min-height:0;padding-bottom:6px;}
+.pv3-abas{display:none;}
 .pv3-corpo.is-min{grid-template-columns:44px minmax(0,1fr);}
 /* a fila */
 .pv3-fila{display:flex;flex-direction:column;min-height:0;background:var(--gv2-card);border:1px solid var(--gv2-line);border-radius:14px;overflow:hidden;}
@@ -15486,12 +15487,26 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pv3-pilula.is-salvo{background:var(--gv2-ok-soft);color:var(--gv2-ok);border-color:var(--gv2-ok-soft);}
 .pv3-pilula.is-fora i{background:var(--gv2-faint);}
 @media (max-width:760px){
-  .pv3{height:auto;overflow:visible;padding:12px;}
+  .pv3{height:auto;min-height:0;overflow:visible;padding:12px;}
   .pv3-faixa{flex-wrap:wrap;}
-  .pv3-corpo{grid-template-columns:1fr;}
-  .pv3-fila{max-height:70vh;}
-  .pv3-grade-rola{overflow-x:auto;}
-  .pv3-grade{height:auto;min-height:420px;}
+  /* v10 §11: abas de dia, fila de 280 px e UM dia ocupando o resto */
+  .pv3-abas{display:flex;gap:6px;margin:0 0 8px;overflow-x:auto;}
+  .pv3-aba{flex:1 0 88px;min-height:40px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px 6px;border-radius:10px;border:1px solid var(--gv2-line);background:var(--gv2-card);color:var(--gv2-ink);font:600 12px var(--gv2-font);cursor:pointer;}
+  .pv3-aba b{font-weight:700;font-size:12px;}
+  .pv3-aba small{font-size:10px;color:var(--gv2-mute);}
+  .pv3-aba.is-on{border:1.5px solid var(--gv2-ink);}
+  .pv3-aba.is-fer{opacity:.55;cursor:default;}
+  /* altura fixa: com a .pv3 em height:auto o flex:1 do corpo dava 0 e a lista da fila sumia (medido 04/11) */
+  .pv3-corpo,.pv3-corpo.is-min{grid-template-columns:280px minmax(0,1fr);flex:none;height:min(72vh,640px);}
+  .pv3-fila{max-height:none;min-height:0;}
+  .pv3-grade-rola{overflow:visible;}
+  .pv3-grade{height:100%;min-height:0;min-width:0;}
+  .pv3-grade > .pv3-dia{display:none;}
+  .pv3-grade[data-pv3-estreita="0"] > .pv3-dia[data-pv3-dia="0"],
+  .pv3-grade[data-pv3-estreita="1"] > .pv3-dia[data-pv3-dia="1"],
+  .pv3-grade[data-pv3-estreita="2"] > .pv3-dia[data-pv3-dia="2"],
+  .pv3-grade[data-pv3-estreita="3"] > .pv3-dia[data-pv3-dia="3"],
+  .pv3-grade[data-pv3-estreita="4"] > .pv3-dia[data-pv3-dia="4"]{display:flex;flex:1 1 auto;}
   .pv3-gaveta{width:100%;}
   .pv3-l-ics{display:flex;position:static;}
   .pv3 button{min-height:40px;}
@@ -92819,9 +92834,28 @@ PLV3.html = function (D) {
     + '<button type="button" class="pv3-link pv3-tit-v2" data-pv3-acao="usarv2" title="volta para a tela de planejamento de antes; dá para voltar para esta a qualquer hora">Usar o planejamento anterior</button>'
     + '</div>';
   return '<div class="pv3 gv2-tokens" data-pv3-raiz="1">' + tit + PLV3.faixaHTML(D)
-    + '<div class="pv3-corpo' + (st.filaMin ? ' is-min' : '') + '">' + PLV3.blocoFilaHTML(D) + '<div class="pv3-grade-rola" data-pv3-grade-rola="1"><div class="pv3-grade">'
+    + PLV3.abasDiaHTML(D)
+    + '<div class="pv3-corpo' + (st.filaMin ? ' is-min' : '') + '">' + PLV3.blocoFilaHTML(D) + '<div class="pv3-grade-rola" data-pv3-grade-rola="1"><div class="pv3-grade" data-pv3-estreita="' + PLV3.diaEstreita(D) + '">'
     + D.dias.map(function (d, i) { return PLV3.diaHTML(D, i); }).join('') + '</div></div></div>'
     + PLV3.camadaHTML(D) + PLV3.mapaHTML(D) + '</div>';
+};
+/* LARGURA ESTREITA (handoff v10 §11, até 760 px): abas de dia (40 px, mínimo 88 px) e UM dia ao lado da fila.
+   Acima de 760 px as abas ficam escondidas pelo CSS e a grade mostra os cinco dias, como sempre. */
+PLV3.diaEstreita = function (D) {
+  const st = PLV3.st;
+  if (st.diaEstreita != null && D.dias[st.diaEstreita] && !D.dias[st.diaEstreita].feriado) return st.diaEstreita;
+  let i = D.dias.findIndex(function (d) { return d.hoje && !d.feriado; });
+  if (i < 0) i = D.dias.findIndex(function (d) { return !d.passou && !d.feriado; });
+  if (i < 0) i = D.dias.findIndex(function (d) { return !d.feriado; });
+  return i < 0 ? 0 : i;
+};
+PLV3.abasDiaHTML = function (D) {
+  const e = GV2.e, on = PLV3.diaEstreita(D);
+  return '<div class="pv3-abas" role="tablist" aria-label="dia da semana">' + D.dias.map(function (d, i) {
+    const sub = d.feriado ? 'feriado' : d.hoje ? 'hoje · ' + D.cont[i] + '/' + D.meta : d.passou ? 'passou' : D.cont[i] + '/' + D.meta;
+    return '<button type="button" role="tab" class="pv3-aba' + (i === on ? ' is-on' : '') + (d.feriado ? ' is-fer' : '') + '" data-pv3-acao="diaest:' + i + '" aria-selected="' + (i === on) + '"'
+      + (d.feriado ? ' aria-disabled="true" title="' + e(d.feriado + ' · feriado · não aceita visita') + '"' : '') + '><b>' + e(PLV3.rotCurto(d)) + '</b><small>' + e(sub) + '</small></button>';
+  }).join('') + '</div>';
 };
 PLV3.faixaHTML = function (D) {
   const st = PLV3.st, e = GV2.e;
@@ -94195,7 +94229,13 @@ PLV3.acao = async function (verbo, arg) {
   const st = PLV3.st, D = PLV3.D;
   const ult = arg.lastIndexOf(':');
   const ref = ult >= 0 ? arg.slice(0, ult) : arg, num = ult >= 0 ? Number(arg.slice(ult + 1)) : NaN;
+  if (verbo === 'diaest') {
+    const i = Number(arg);
+    if (D && D.dias[i] && D.dias[i].feriado) { PLV3.toast(D.dias[i].feriado + ' · feriado · não aceita visita', 'atencao'); return; }
+    st.diaEstreita = i; return PLV3.pintar();
+  }
   if (verbo === 'semana') {
+    st.diaEstreita = null;
     PL6_SEMANA = Number(arg) || 0;
     if (typeof pl6UI !== 'undefined') pl6UI.semanaTocada = true;
     st.prop = null; st.bOpen = null; st.menu = null; st.comoAberto = null;
