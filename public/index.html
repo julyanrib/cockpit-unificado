@@ -18859,8 +18859,6 @@ const KB7_ONB_CAMPOS = [
   { p: 'observacoes', r: 'Observações', t: 'area', ph: 'detalhes do onboarding' }
 ];
 const KB7_ANEXO_MAX = 6 * 1024 * 1024;
-const KB7_INSTALACAO = ['Manhã', 'Tarde', 'Noite', 'Combinar com o onboarding'];
-function kb7Digitos(v) { return String(v || '').replace(/[^0-9]/g, ''); }
 function kb7LerArquivo(arq) {
   return new Promise(function (ok, erro) {
     const fr = new FileReader();
@@ -18871,7 +18869,6 @@ function kb7LerArquivo(arq) {
 }
 function kb7JanelaOnboarding(lead) {
   const valor = typeof fn2Valor === 'function' ? fn2Valor(lead) : 0;
-  const dor = [lead.gargalo_operacional, lead.informacoes_sobre_o_maior_desafio].filter(kb7Preenchido).join(' · ');
   const leitura = function (rot, v, vazio) {
     return '<div class="kb7-ler"><span>' + esc(rot) + '</span><b' + (kb7Preenchido(v) ? '' : ' class="is-vazio"') + '>'
       + esc(kb7Preenchido(v) ? String(v).split(';').join(' · ') : vazio) + '</b></div>';
@@ -18907,16 +18904,6 @@ function kb7JanelaOnboarding(lead) {
     +   '<span class="kb7-dica-campo" data-kb7-anexo-info>De preferência uma pasta compactada só. Arquivo maior: mande o link abaixo.</span></div>'
     + '<div class="kb7-campo"><b class="kb7-falta is-livre">Link(s) do cardápio (opcional)</b>'
     +   '<input type="text" class="kb7-input" data-kb7-onb-campo="links_dos_cardapios" placeholder="https://… (iFood, Drive, site)" value="' + esc(lead.links_dos_cardapios || '') + '"></div>'
-    + '<span class="kb7-secao">Para o onboarding chegar na loja · vai na nota</span>'
-    + '<div class="kb7-campo"><b class="kb7-falta" data-kb7-ob="resp">Responsável na loja · obrigatório</b>'
-    +   '<input type="text" class="kb7-input" data-kb7-onb-campo="resp" placeholder="quem o onboarding procura na loja"></div>'
-    + '<div class="kb7-campo"><b class="kb7-falta" data-kb7-ob="tel">Telefone do responsável · obrigatório</b>'
-    +   '<input type="tel" inputmode="tel" class="kb7-input" data-kb7-onb-campo="tel" placeholder="(21) 99999-9999" value="' + esc(lead.celular || '') + '"></div>'
-    + '<div class="kb7-campo"><b class="kb7-falta" data-kb7-ob="inst">Instalação · obrigatório</b>'
-    +   '<div class="kb7-chips" data-kb7-grupo="inst">' + KB7_INSTALACAO.map(o => '<button type="button" class="kb7-chip" data-kb7-chip="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div>'
-    +   '<span class="kb7-dica-campo">É a preferência do cliente. Quem marca o horário é o onboarding.</span></div>'
-    + '<div class="kb7-campo"><b class="kb7-falta is-livre">Recado para o onboarding (opcional)</b>'
-    +   '<textarea class="kb7-input is-area" data-kb7-onb-campo="recado" rows="2" placeholder="dor do cliente, melhor horário, o que combinou">' + esc(dor ? 'Dor: ' + dor : '') + '</textarea></div>'
     + '<p class="kb7-faltam" data-kb7-faltam></p>'
     + '<div class="kb7-janela-acoes"><button type="button" class="kb7-btn" data-kb7-j="cancelar">Cancelar</button>'
     + '<button type="button" class="kb7-btn is-acao" data-kb7-j="ok" disabled>Enviar para onboarding</button></div></div>';
@@ -18929,9 +18916,6 @@ function kb7JanelaOnboarding(lead) {
   const faltas = function () {
     const f = [];
     KB7_ONB_CAMPOS.forEach(function (c) { if (c.ob && !valorDe(c)) f.push([c.p, c.r.toLowerCase().replace('?', '')]); });
-    if (!campo('resp')) f.push(['resp', 'responsável']);
-    if (kb7Digitos(campo('tel')).length < 10) f.push(['tel', 'telefone com DDD']);
-    if (!escolha.inst) f.push(['inst', 'instalação']);
     return f;
   };
   const atualizar = function () {
@@ -18983,19 +18967,15 @@ function kb7JanelaOnboarding(lead) {
       const links = campo('links_dos_cardapios');
       if (links) props.links_dos_cardapios = links;
       if (anexos.length || links) props.formato_do_cardapio = anexos.length && links ? 'Anexo(s) + Link(s)' : anexos.length ? 'Anexo(s)' : 'Link(s)';
-      const recado = campo('recado');
+
       const partes = [
-        'Responsável: ' + campo('resp'),
-        'Telefone: ' + campo('tel'),
-        'Instalação: ' + escolha.inst,
-        kb7Preenchido(lead.adicional) ? 'Módulos (conferidos): ' + String(lead.adicional).split(';').join(', ') : '',
-        recado ? 'Recado: ' + recado : ''
+        kb7Preenchido(lead.adicional) ? 'Módulos (conferidos): ' + String(lead.adicional).split(';').join(', ') : ''
       ].filter(Boolean);
       fechar();
       kb7Confirmar(lead, KB7_GANHO, KB7_ONB, props,
-        { nota: 'Enviado ao onboarding pelo Cockpit · ' + partes.join(' · '), motivo: partes.join(' · '),
+        { nota: 'Enviado ao onboarding pelo Cockpit' + (partes.length ? ' · ' + partes.join(' · ') : ''), motivo: partes.join(' · ') || 'Enviado ao onboarding',
           anexos: anexos.length ? anexos : null,
-          aviso: ' enviado ao onboarding' + (anexos.length ? ' · o cardápio sobe junto' : '') + ' · o recado entra como nota' });
+          aviso: ' enviado ao onboarding' + (anexos.length ? ' · o cardápio sobe junto' : '') });
     }
   });
   atualizar();
@@ -35314,7 +35294,8 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
       return;
     }
 
-    if (lead.telefone) coleta.propriedades.celular = lead.telefone;
+    const celDaConta = lead.telefone ? normalizarCelular(lead.telefone) : null;
+    if (celDaConta && celDaConta.valor) coleta.propriedades.celular = celDaConta.valor;
     btnCriar.disabled = true;
     btnCriar.textContent = 'Criando no HubSpot…';
     status.style.color = 'var(--muted2)';

@@ -824,9 +824,9 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
      nao foi". Medido: o corpo enviado tinha telefone (que a rota escreve na DESCRIÇÃO) e
      propriedades sem `celular` — a propriedade que a ficha lê e o gestor filtra. */
   checar('o formulário manual manda o telefone como propriedade celular',
-    template.indexOf('coleta.propriedades.celular = telefone;') > -1);
+    template.indexOf('coleta.propriedades.celular = cel.valor;') > -1);
   checar('e a conta-alvo também',
-    template.indexOf('if (lead.telefone) coleta.propriedades.celular = lead.telefone;') > -1);
+    template.indexOf('if (celDaConta && celDaConta.valor) coleta.propriedades.celular = celDaConta.valor;') > -1);
   checar('a rota aceita celular (senão os dois acima virariam 400)',
     fs.readFileSync(path.join(raiz, 'api', 'criar-negocio.js'), 'utf8')
       .indexOf("'celular'") > -1);
