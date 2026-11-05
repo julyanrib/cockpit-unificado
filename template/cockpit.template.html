@@ -15196,6 +15196,7 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 /* o quadro */
 .pv3-corpo{display:grid;grid-template-columns:var(--pv3-fila) minmax(0,1fr);gap:8px;flex:1;min-height:0;padding-bottom:6px;}
 .pv3-abas{display:none;}
+.pv3-ficha-acoes{display:none;}
 .pv3-corpo.is-min{grid-template-columns:44px minmax(0,1fr);}
 /* a fila */
 .pv3-fila{display:flex;flex-direction:column;min-height:0;background:var(--gv2-card);border:1px solid var(--gv2-line);border-radius:14px;overflow:hidden;}
@@ -15508,7 +15509,11 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
   .pv3-grade[data-pv3-estreita="3"] > .pv3-dia[data-pv3-dia="3"],
   .pv3-grade[data-pv3-estreita="4"] > .pv3-dia[data-pv3-dia="4"]{display:flex;flex:1 1 auto;}
   .pv3-gaveta{width:100%;}
-  .pv3-l-ics{display:flex;position:static;}
+  /* fila de 280 px: os 4 ícones esmagavam nome e selo; as mesmas ações estão na Ficha (toque na linha), como no print 19 */
+  .pv3-l-ics{display:none;}
+  .pv3-l{cursor:pointer;}
+  .pv3-ficha-acoes{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;}
+  .pv3-ficha-acoes button{flex:1 1 auto;min-height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--gv2-line);background:var(--gv2-card);color:var(--gv2-ink);font:600 12px var(--gv2-font);cursor:pointer;}
   .pv3 button{min-height:40px;}
 }
 /* ══ PESSOAS v2 · a semana de gestão do líder (02/11/26, design_handoff_gestor_v2) ══════════════════
@@ -93172,6 +93177,9 @@ PLV3.fichaHTML = function (D, l) {
   /* os toques das 6 semanas saíram da linha (v10) e moram aqui */
   const toques = l.dealId && PL7.toquesHTML ? '<small>toques · 6 semanas</small>' + PL7.toquesHTML(PL7.toquesDe(l.dealId)) : '';
   return '<div class="pv3-ficha">' + (campos.length ? '<dl>' + campos.map(function (c) { return '<dt>' + c.rot + '</dt><dd>' + c.v + '</dd>'; }).join('') + '</dl>' : '<span class="pv3-vazio">' + e(bruto ? 'Sem mais dados desta conta na carga desta sessão.' : 'Esta conta não está na carga desta sessão.') + '</span>')
+    /* até 760 px a linha da fila não mostra os ícones: as mesmas três ações moram aqui (o CSS só as mostra na largura estreita) */
+    + '<div class="pv3-ficha-acoes"><button type="button" data-pv3-acao="menu:' + e(l.ref) + ':dia">Pôr num dia</button>'
+    + (l.alvo ? '' : '<button type="button" data-pv3-acao="menu:' + e(l.ref) + ':tel">Ligar em</button><button type="button" data-pv3-acao="menu:' + e(l.ref) + ':dec">Decidir</button>') + '</div>'
     + toques + end + (l.dealId ? '<div class="pv3-mini"><button type="button" data-pv3-acao="ficha:' + e(l.ref) + '">abrir a ficha completa do negócio</button></div>' : '') + '</div>';
 };
 /* perdido: os rótulos da prancha, gravados nos valores que o HubSpot aceita (nenhum campo novo) */
@@ -94351,7 +94359,12 @@ function pv3Ligar(box) {
     /* digitar o endereço dentro do cartão não abre a ficha do cartão */
     if (ev.target.closest && ev.target.closest('input,textarea,select,label,a')) return;
     const el = ev.target.closest && ev.target.closest('[data-pv3-acao]');
-    if (!el || !box.contains(el)) return;
+    if (!el || !box.contains(el)) {
+      /* largura estreita (v10 §11): a linha da fila perde os ícones, e tocar nela abre a Ficha, onde estão as mesmas ações */
+      const lin = ev.target.closest && ev.target.closest('.pv3-lista [data-pv3-arraste]');
+      if (lin && box.contains(lin) && window.matchMedia && window.matchMedia('(max-width:760px)').matches) PLV3.acao('menu', lin.getAttribute('data-pv3-arraste') + ':fic');
+      return;
+    }
     if (el.getAttribute('aria-disabled') === 'true') {
       const a0 = String(el.getAttribute('data-pv3-acao'));
       const i0 = Number(a0.slice(a0.lastIndexOf(':') + 1));
