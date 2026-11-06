@@ -15244,7 +15244,7 @@ b.hj4-rn{color:var(--gv2-ink);font-weight:700;}
 .hj4-et.is-pior{border-color:var(--gv2-erro);background:var(--gv2-erro-soft);}
 .hj4-et1{display:flex;align-items:center;gap:7px;min-width:0;font:600 12.5px var(--gv2-font);color:var(--gv2-ink);}
 .hj4-et1 > b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.hj4-et1 em{flex:none;font:700 9.5px var(--gv2-font);font-style:normal;letter-spacing:.04em;color:#FFFFFF;background:var(--gv2-erro);border-radius:4px;padding:1px 6px;}
+.hj4-et1 em{flex:none;font:700 9.5px var(--gv2-font);font-style:normal;letter-spacing:.04em;color:#FFFFFF;background:var(--gv2-erro-barra);border-radius:4px;padding:1px 6px;}
 .hj4-etn{margin-left:auto;flex:none;font:500 11.5px var(--gv2-font);color:var(--gv2-mute);}
 .hj4-etn b{font:700 13px var(--gv2-font);color:var(--gv2-ink);}
 .hj4-etb{display:block;height:7px;border-radius:999px;background:var(--gv2-track);overflow:hidden;}
@@ -95268,18 +95268,23 @@ HJ4.diaDoPor = function (D, l) {
   const s = D.sug && D.sug.deLead ? D.sug.deLead[l.ref] : null;
   if (s) return s.dia;
   const j = GV2.PLV3.diaLivre ? GV2.PLV3.diaLivre(D) : null;
-  return j == null ? null : j;
+  if (j != null) return j;
+  /* sem outro dia útil na semana (sexta antes das 17h, quando a semana ainda não virou): hoje, se aceita, como o
+     "escolher o dia" do Planejamento oferece */
+  const h = D.dias.findIndex(function (d) { return d.hoje && GV2.PLV3.aceitaSoltar(d); });
+  return h >= 0 ? h : null;
 };
 HJ4.etapas = function () {
   const rep = HJ4.st.rep;
   const leve = rep && GV2.baseLeve ? GV2.baseLeve(rep.ownerId) : null;
   if (!leve) return null;
-  const por = GV2.ETAPA_IDS.map(function (sid, idx) { return { sid: sid, idx: idx, total: 0, parados: 0, antigo: 0, regua: null }; });
+  const sla = (DATA.stageMeta && DATA.stageMeta.slaDays) || {};
+  const por = GV2.ETAPA_IDS.map(function (sid, idx) { return { sid: sid, idx: idx, total: 0, parados: 0, antigo: 0, regua: Number(sla[sid]) || (GV2.REGUA_PADRAO ? GV2.REGUA_PADRAO[idx] : null) || null }; });
   leve.b.negocios.forEach(function (n) {
     const e = por[n.etapa_idx];
     if (!e) return;
     e.total++;
-    e.regua = n.regua;
+    if (n.regua != null) e.regua = n.regua;
     if (n.travado) e.parados++;
     e.antigo = Math.max(e.antigo, Number(n.dias) || 0);
   });

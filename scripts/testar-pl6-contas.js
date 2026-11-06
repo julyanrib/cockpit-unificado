@@ -897,8 +897,9 @@ console.log('');
       && /const pl6SegundaAtual = pl6SegundaDaSemana\(\);/.test(cod)
       /* A QUARTA ERA A GRAVAÇÃO DA MINHA DAILY, e saiu com ela em 24/09/26. Ficaram as
          duas pré-cargas, que são as outras leituras de fora da tela — e as duas pedem a
-         semana do RELÓGIO, que é o ponto. */
-      && (cod.match(/pl6Carregar\([a-zA-Z]+, pl6SegundaDaSemana\(\)\)/g) || []).length === 2,
+         semana do RELÓGIO, que é o ponto. A TERCEIRA (06/11/26) é a do Hoje do executivo v4
+         (HJ4.render), que lê a grade desta semana para o "Pôr em [dia]": também do relógio. */
+      && (cod.match(/pl6Carregar\([a-zA-Z]+, pl6SegundaDaSemana\(\)\)/g) || []).length === 3,
     'sem o argumento, um passo de hoje entraria na linha da semana que vem, no dia errado');
 
   /* TROCAR DE SEMANA RECARREGA. pl6Plano é a linha de UMA semana; desenhar com a linha
