@@ -51,10 +51,14 @@ function rodar(cenario) {
     }
     /* a busca por ASSUNTO + dia + dono */
     if (u.indexOf('/objects/tasks/search') > -1) {
+      /* buscaLenta: a busca demora, para medir se a leitura do negócio sai sem esperá-la */
+      if (cenario.buscaLenta) await new Promise(function (r) { setTimeout(r, 40); });
+      chamadas.buscaRespondeu = true;
       return { ok: true, status: 200, json: async () => ({ results: cenario.porAssunto || [] }) };
     }
     /* as tarefas ASSOCIADAS ao negócio */
     if (u.indexOf('/associations/tasks') > -1) {
+      if (chamadas.associacaoAntesDaBusca == null) chamadas.associacaoAntesDaBusca = !chamadas.buscaRespondeu;
       return { ok: true, status: 200,
         json: async () => ({ results: (cenario.doNegocio || []).map(t => ({ toObjectId: t.id })) }) };
     }
@@ -189,6 +193,18 @@ const CORPO = {
   checar('e a busca por associação nem é chamada sem dealId',
     r5.chamadas.filter(function (c) { return c.url.indexOf('/associations/tasks') > -1; }).length === 0,
     'chamada à toa em rota de escrita é latência no clique do executivo');
+
+  /* ══ 4b. AS DUAS LEITURAS AO MESMO TEMPO (06/11/26) ═══════════════════════════════════
+     Em fila, cada arraste do Planejamento esperava a busca por assunto para só então ler as
+     tarefas do negócio. A leitura do negócio tem de sair antes de a busca responder. */
+  const r6 = await rodar({
+    email: String(REP.email).toLowerCase(),
+    body: Object.assign({}, CORPO, { dealId: '777', data: '2026-09-25' }),
+    porAssunto: [], doNegocio: [], buscaLenta: true
+  });
+  checar('a leitura do negócio não espera a busca por assunto', r6.chamadas.associacaoAntesDaBusca === true,
+    'em fila são 2 a 3 idas ao HubSpot a mais em cada arraste · veio ' + r6.chamadas.associacaoAntesDaBusca);
+  igual('e sem tarefa nenhuma, nasce uma', r6.criou.length, 1);
 
   /* ══ 5. A LEITURA É BEST-EFFORT ══════════════════════════════════════════════════
      Se a associação falhar, o pior caso é o de antes: nasce uma tarefa a mais. Recusar

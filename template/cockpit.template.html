@@ -15362,6 +15362,12 @@ button.pl7-regra:hover{box-shadow:inset 0 0 0 1.5px #E51A31;}
 .pv3-c.is-ficou{opacity:.6;}
 .pv3-c.is-outro{background:transparent;border:1px dashed var(--gv2-line-btn);}
 .pv3-c.is-proposta{background:transparent;border:1px dashed var(--gv2-rota);}
+/* o arraste responde na hora (06/11/26): o cartão já está no dia enquanto grava; o que está saindo fica apagado */
+.pv3-c.is-gravando{background:transparent;border:1px dashed var(--gv2-line-btn);animation:pv3Gravando 1.2s ease-in-out infinite alternate;}
+.pv3-c.is-saindo{opacity:.45;}
+.pv3-l.is-gravando{opacity:.55;cursor:progress;}
+@keyframes pv3Gravando{from{opacity:1;}to{opacity:.55;}}
+@media (prefers-reduced-motion: reduce){.pv3-c.is-gravando{animation:none;opacity:.75;}}
 .pv3-c.is-ir{background:var(--pv3-hl);}
 .pv3-c.hl-checkin,.pv3-c.hl-entrou,.pv3-c.hl-reord,.pv3-c.hl-saiu{background:var(--pv3-hl);}
 .pv3-c.is-saiu .pv3-c-nome{text-decoration:line-through;}
@@ -92583,7 +92589,12 @@ PLV3.st = {
   ocupado: false, bAuto: {}, q: '',
   /* paridade com a v2 (03/11/26): o recorte dentro do filtro, quantas linhas à vista, o lead novo, o bloco de rua,
      a hora escolhida ao pôr num dia, o mapa do dia, o cartão com "mudar de dia" aberto e o dia achado pela busca */
-  faixa: null, limite: 120, novo: null, rua: null, hora: {}, mapaDia: null, cMenu: null, irRef: null, bTxt: {}
+  faixa: null, limite: 120, novo: null, rua: null, hora: {}, mapaDia: null, cMenu: null, irRef: null, bTxt: {},
+  /* O ARRASTE RESPONDE NA HORA (06/11/26): gravar leva 2 a 5 s (tarefa no HubSpot, depois a semana no banco) e a tela
+     ficava parada esse tempo todo; o executivo achava que não tinha pegado. Enquanto grava, o cartão já está no dia
+     com "gravando…" e a linha da fila não arrasta de novo. gravando: ref → { di, nome, etapaIdx, bairroNome };
+     movendo: "di:si" → { para, nome, etapaIdx, bairro } (cartão da grade mudando de dia). */
+  gravando: {}, movendo: {}
 };
 PLV3.rep = null;
 PLV3.box = null;
@@ -93156,6 +93167,11 @@ function pv3LinhaHTML(D, l) {
   if (st.feitos[l.ref]) {
     return '<div class="pv3-l is-feito"><i class="pv3-ok">✓</i><div class="pv3-l-c"><b class="pv3-l-nome">' + e(l.nome) + '</b><span class="pv3-l-ctx">' + e(st.feitos[l.ref]) + '</span></div></div>';
   }
+  /* gravando: sem draggable e sem botões, para não mandar o mesmo lead duas vezes */
+  if (st.gravando[l.ref]) {
+    const gd = PLV3.D && PLV3.D.dias ? PLV3.D.dias[st.gravando[l.ref].di] : null;
+    return '<div class="pv3-l is-gravando"><i class="pv3-dot" style="background:' + et[1] + '"></i><div class="pv3-l-c"><b class="pv3-l-nome">' + e(l.nome) + '</b><span class="pv3-l-ctx">' + e('gravando' + (gd ? ' em ' + PLV3.rotDia(gd) : '') + '…') + '</span></div></div>';
+  }
   const aberto = st.menu && st.menu.ref === l.ref ? st.menu.tipo : null;
   /* UM selo só na linha (v10), o mais importante; todos ficam no title */
   const selos = [];
@@ -93300,7 +93316,18 @@ PLV3.diaHTML = function (D, i) {
   }
   /* SEM AVISO DE CAPACIDADE (Julyan, 04/11/26: "eu n quero isso não"). O dia só conta "N de meta". */
   const fl = function (c) { return c.ref ? st.flash[c.ref + '@' + i] : null; };
+  /* o que está gravando para este dia já aparece aqui, tracejado, com "gravando…" (some quando a grade confirma) */
+  const gravandoAqui = Object.keys(st.gravando).filter(function (r) { return st.gravando[r].di === i && !C.planejados.some(function (c) { return c.ref === r; }); })
+    .map(function (r) { return st.gravando[r]; })
+    .concat(Object.keys(st.movendo).map(function (k) { return st.movendo[k]; }).filter(function (m) { return m.para === i; }));
+  const fantasmaGravando = function (g) {
+    const etg = PLV3.etapa(g.etapaIdx);
+    return '<div class="pv3-c is-gravando" aria-busy="true"><div class="pv3-c-1"><b class="pv3-c-nome">' + e(g.nome) + '</b></div>'
+      + '<div class="pv3-c-ctx"><i class="pv3-dot" style="background:' + etg[1] + '"></i><span class="pv3-ellip">' + e(etg[0] + (g.bairroNome ? ' · ' + g.bairroNome : '')) + '</span></div>'
+      + PLV3.tagHTML('GRAVANDO…', 'is-chip') + '</div>';
+  };
   corpo += C.planejados.map(function (c) { return PLV3.cartaoHTML(D, i, c, fl(c)); }).join('')
+    + gravandoAqui.map(fantasmaGravando).join('')
     + (st.fantasmas[i] || []).map(function (c) { return PLV3.cartaoHTML(D, i, c, { tipo: 'saiu', t: c.selo, hl: c.hl }); }).join('')
     + C.fora.map(function (c) { return PLV3.cartaoHTML(D, i, c, null); }).join('')
     + (C.outros || []).map(function (c) { return PLV3.cartaoHTML(D, i, c, null); }).join('');
@@ -93348,7 +93375,7 @@ PLV3.diaHTML = function (D, i) {
           + (ga ? PLV3.tagHTML('RECÉM-ABERTO', 'is-rota') : PLV3.tagHTML(TG[s.origem][0], TG[s.origem][1])) + '</span><i>+</i></button>';
       }).join('') + '</div>';
   }
-  if (!C.planejados.length && !C.fora.length && !(C.outros || []).length && !nProp && !sg.length && !d.passou) {
+  if (!C.planejados.length && !C.fora.length && !(C.outros || []).length && !nProp && !sg.length && !gravandoAqui.length && !d.passou) {
     corpo += '<div class="pv3-vazio-dia">vazio · arraste da fila</div>';
   }
   let solta = '';
@@ -93397,7 +93424,7 @@ PLV3.cartaoHTML = function (D, i, c, f) {
   }
   /* o cartão de negócio abre a ficha do negócio (a mesma do Meu funil), como na v2 */
   const abre = c.tipoC && !c.fora && c.ref ? ' data-pv3-acao="ficha:' + e(c.ref) + '" role="button" tabindex="0"' : '';
-  const tirar = !c.fora && !c.feita && !d.passou && c.si != null ? '<button type="button" class="pv3-c-ic" data-pv3-acao="tirar:' + i + ':' + c.si + '" aria-label="' + e('tirar ' + c.nome + ' do dia') + '" title="tirar do dia · volta para a fila">×</button>' : '';
+  const tirar = !c.fora && !c.feita && !d.passou && c.si != null && !st.movendo[i + ':' + c.si] ? '<button type="button" class="pv3-c-ic" data-pv3-acao="tirar:' + i + ':' + c.si + '" aria-label="' + e('tirar ' + c.nome + ' do dia') + '" title="tirar do dia · volta para a fila">×</button>' : '';
   /* bloqueio e visita de relacionamento antiga: ocupam o dia, não contam na meta, saem pelo × (como na v2) */
   if (c.outro) {
     const rel = /relacionamento/i.test(c.nome);
@@ -93406,8 +93433,11 @@ PLV3.cartaoHTML = function (D, i, c, f) {
       + (c.hora ? PLV3.tagHTML(c.hora + ' · não conta na meta', 'is-chip') : '') + '</div>';
   }
   /* MUDAR A HORA OU O DIA: o ▾ do cartão abre o painel por cima (PLV3.camadaHTML) */
-  const movel = !c.fora && !c.feita && !d.passou && c.si != null && c.ref;
   const chave = i + ':' + c.si;
+  /* saindo para outro dia: fica apagado aqui, sem arrastar, até a grade gravar */
+  const saindo = !!st.movendo[chave];
+  if (saindo) { cls += ' is-saindo'; selo = PLV3.tagHTML('mudando de dia…', 'is-chip'); }
+  const movel = !saindo && !c.fora && !c.feita && !d.passou && c.si != null && c.ref;
   const mOn = movel && st.cMenu === chave;
   const mudar = movel ? '<button type="button" class="pv3-c-ic' + (mOn ? ' is-on' : '') + '" data-pv3-acao="cmenu:' + chave + '" aria-expanded="' + !!mOn + '" aria-label="' + e('mudar a hora ou o dia de ' + c.nome) + '" title="mudar a hora ou o dia">▾</button>' : '';
   const extras = (c.acertar ? PLV3.tagHTML(c.acertar, 'is-av') : '') + (c.repetido ? PLV3.tagHTML('repetido no dia', 'is-av') : '') + (c.hora && !c.fixo && !c.feita && !c.rua ? PLV3.tagHTML('marcado ' + c.hora, 'is-chip') : '')
@@ -93812,12 +93842,19 @@ PLV3.porNoDia = async function (ref, di, lote) {
   if (!d) return false;
   if (!PLV3.aceitaSoltar(d)) { PLV3.toast(d.feriado ? 'Feriado · ' + d.feriado + ' · escolha outro dia' : 'Esse dia já passou · escolha hoje ou depois', 'atencao'); return false; }
   st.menu = null;
+  if (st.gravando[ref]) return false;   /* já está indo: o segundo arraste do mesmo lead não manda de novo */
   const g = pl6GradeDoPlano();
   let si = g[di].findIndex(function (v) { return v == null; });
   if (si < 0) si = g[di].length;
   const linha = st.linhas[ref] || null;
   const alvo = D.alvos.filter(function (a) { return a.ref === ref; })[0];
   let gravou = false;
+  /* a conta-alvo abre o painel de criar negócio antes; o "gravando…" é só de quem grava direto */
+  if (!alvo && linha) {
+    st.gravando[ref] = { di: di, nome: linha.nome, etapaIdx: linha.etapaIdx, bairroNome: linha.bairroNome || '' };
+    if (!lote) PLV3.pintar();
+  }
+  try {
   await pl6AgendarNoSlot(rep, ref, di, si, {
     mutar: async function (campos) {
       const ok = await PLV3.mutar(campos); gravou = gravou || ok;
@@ -93832,6 +93869,7 @@ PLV3.porNoDia = async function (ref, di, lote) {
     /* a hora que ele escolheu no "Pôr num dia" (opcional, como o relógio da v2); sem ela, a da vaga */
     hora: st.hora[ref] || null
   });
+  } finally { delete st.gravando[ref]; }
   const entrou = pl6GradeDoPlano()[di].some(function (v) { return pl6SlotId(v) === ref; });
   if (entrou && gravou) {
     if (linha && linha.ficou) st.reposto[ref] = PLV3.rotDia(d);
@@ -93950,7 +93988,13 @@ PLV3.moverCartoes = async function (di, cs, para) {
   if (!PLV3.aceitaSoltar(destino)) { PLV3.toast(destino && destino.feriado ? 'Feriado · ' + destino.feriado + ' · escolha outro dia' : 'Esse dia já passou · escolha hoje ou depois', 'atencao'); return false; }
   st.ocupado = 'Movendo ' + cs.length + '…';
   st.cMenu = null;
+  const chavesMov = cs.map(function (c) {
+    const k = di + ':' + c.si;
+    st.movendo[k] = { para: para, nome: c.nome, etapaIdx: c.etapaIdx, bairroNome: c.bairro && D.nomeB ? D.nomeB(c.bairro) : '' };
+    return k;
+  });
   PLV3.pintar();
+  try {
   const g = pl6GradeDoPlano();
   let movidos = 0;
   for (let k = 0; k < cs.length; k++) {
@@ -93977,8 +94021,10 @@ PLV3.moverCartoes = async function (di, cs, para) {
     PLV3.salvo();
     PLV3.toast(GV2.pl(movidos, 'parada foi', 'paradas foram') + ' para ' + PLV3.rotDia(destino) + ' · as tarefas no HubSpot mudaram de data');
   } else if (!movidos) PLV3.toast('O HubSpot não confirmou a nova data. A semana não mudou.', 'erro');
+  chavesMov.forEach(function (k) { delete st.movendo[k]; });
   PLV3.pintar();
   return ok;
+  } finally { st.ocupado = false; chavesMov.forEach(function (k) { delete st.movendo[k]; }); }
 };
 PLV3.moverUm = function (di, si, para) {
   const D = PLV3.D;
@@ -94439,6 +94485,7 @@ function pv3Ligar(box) {
     const el = ev.target.closest && ev.target.closest('[data-pv3-arraste]');
     if (!el) return;
     const ref = el.getAttribute('data-pv3-arraste');
+    if (PLV3.st.gravando[ref] || PLV3.st.movendo[String(ref).replace(/^g:/, '')]) { ev.preventDefault(); return; }
     PLV3.st.arrastando = ref;
     PLV3.st.menu = null;
     try { ev.dataTransfer.setData('text/plain', ref); ev.dataTransfer.effectAllowed = 'move'; } catch (er) { /* sem dataTransfer, o estado basta */ }
