@@ -231,7 +231,9 @@ conferir('nenhum bairro conta para dois donos',
      Paulo (Sé, República, Bela Vista, Consolação…) ficou SEM EXECUTIVO — reprovar aqui era o
      teste dizendo a verdade. Quem assume é decisão do Julyan; enquanto não assumir, o caso que
      exige dono é 'santana' (Sérgio). */
-  ['vila maria', 'mooca', 'santana'].every(b => donosDe('São Paulo', b).length === 1),
+  /* 06/11/26: 'mooca' trocou por 'tatuape zona leste' — o Julyan deixou o Allef só com Moema, Tatuapé e
+     Guarulhos, e o resto da zona leste (Mooca inclusive) ficou sem dono. */
+  ['vila maria', 'tatuape zona leste', 'santana'].every(b => donosDe('São Paulo', b).length === 1),
   'lead contado em duas sub-cotas faz as duas parecerem cheias e a busca para antes de trazer o que falta');
 
 /* 15/10/26: território refeito pelo Julyan. Curicica ficou sem dono; o par de donos
