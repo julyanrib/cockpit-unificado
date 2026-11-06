@@ -52,6 +52,8 @@ checar('o ranking não tem linha clicável', (function () {
 }()), 'linha de colega clicável levaria a cliente de colega');
 checar('os pesos vêm do banco (regra), nunca fixos', !/\* 100\b|× 100'|\b25 \*|\* 25\b/.test(mod) && /R\.venda/.test(mod) && /R\.reuniao/.test(mod) && /R\.visita/.test(mod));
 checar('fonte fora mostra "—", nunca 0', /HJ4\.fora\(/.test(mod) && /Fonte fora · /.test(mod));
+checar('QUENTE é a regra do Planejamento (quenteCadencia), não o termômetro', /HJ4\.temp = function \(l\) \{ return l && l\.n && GV2\.quenteCadencia\(l\.n\)/.test(mod) && !/tempFaixa/.test(mod),
+  'com o termômetro, o mesmo lead saía FRIO no Hoje e QUENTE no Planejamento');
 checar('desfazer só no "sem passo" (no vencido apagaria a tarefa antiga)', /if \(!pz \|\| pz\.vencido\) return;/.test(mod));
 
 console.log('');
