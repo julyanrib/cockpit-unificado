@@ -12319,6 +12319,14 @@ button.gv2-v4-chip-av:hover{filter:brightness(1.1);}
 .dv2-1a1-selos{display:flex;gap:6px;flex-wrap:wrap;}
 .dv2-1a1-selos em{font:700 11px/1.4 var(--gv2-font);font-style:normal;padding:2px 8px;border-radius:999px;background:var(--gv2-chip);color:var(--gv2-mute);}
 .dv2-1a1-selos em.is-ok{background:var(--gv2-card);color:var(--gv2-ok);}
+/* o relacionamento da pessoa (06/11/26): pediu indicação? nas visitas a cliente */
+.rel-1a1{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:12px;background:var(--gv2-sub);border:1px solid var(--gv2-line);margin-bottom:12px;}
+.rel-1a1 > b{font:700 13px/1.4 var(--gv2-font);color:var(--gv2-ink);}
+.rel-1a1 > span{font:500 12.5px/1.45 var(--gv2-font);color:var(--gv2-ink);}
+.rel-1a1 .is-av{color:var(--gv2-av);font-weight:700;}
+.rel-1a1 details{font:500 12px/1.45 var(--gv2-font);color:var(--gv2-mute);}
+.rel-1a1 summary{cursor:pointer;font-weight:600;color:var(--gv2-ink);}
+.rel-1a1 ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:2px;}
 .dv-vazio{font:500 13.5px/1.5 var(--gv2-font);color:var(--gv2-mute);flex-direction:row;align-items:center;flex-wrap:wrap;gap:10px;}
 .dv-card-cab{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .dv-card-cab h3{margin:0;font:700 16px/1.3 var(--gv2-font);}
@@ -95585,6 +95593,59 @@ HJ4.ligar = function (el) {
     if (fim < 0) return h;
     const corte = fim + '</span></div>'.length;
     return h.slice(0, corte) + GV2.DV2.linhaDoGestor(p) + h.slice(corte);
+  };
+})();
+
+/* RELACIONAMENTO NA PÁGINA DA PESSOA (06/11/26): a pergunta "Pediu indicação?" que o app faz depois do
+   Cheguei num cliente ativo (0254). Uma linha logo abaixo do cabeçalho da pessoa: visitas a cliente desde
+   06/11 (quando a pergunta nasceu, 30 dias no máximo), quantas pediram, quantas indicaram e quantas ficaram
+   sem resposta, com os indicados e os clientes sem resposta para cobrar no 1:1. Lê relacionamento_do_executivo
+   só daquela pessoa, uma vez a cada 2 minutos; fonte fora mostra "—", nunca 0. */
+GV2.REL = { por: {} };
+GV2.REL.linha = function (p) {
+  const e = GV2.e;
+  if (!p || !p.id) return '';
+  const g = GV2.REL.por[p.id];
+  if (!g || (!g.lendo && Date.now() - (g.em || 0) > 120000)) {
+    GV2.REL.por[p.id] = Object.assign({}, g || {}, { lendo: true, em: Date.now() });
+    if (typeof supa !== 'undefined' && supa) {
+      Promise.resolve().then(function () { return supa.rpc('relacionamento_do_executivo', { p_owner: String(p.id) }); }).then(function (r) {
+        GV2.REL.por[p.id] = r && !r.error && r.data && !r.data.erro ? { q: r.data, em: Date.now() } : { erro: (r && r.error && r.error.message) || (r && r.data && r.data.erro) || 'erro', em: Date.now() };
+        if (GV2.pintar) GV2.pintar();
+      }, function (er) { GV2.REL.por[p.id] = { erro: (er && er.message) || 'erro', em: Date.now() }; if (GV2.pintar) GV2.pintar(); });
+    }
+    if (!g || !g.q) return '<div class="rel-1a1"><span class="dv2-n">lendo as visitas de relacionamento…</span></div>';
+  }
+  const atual = GV2.REL.por[p.id];
+  const q = (atual && atual.q) || (g && g.q);
+  if (!q) {
+    if (atual && atual.erro) return '<div class="rel-1a1"><b>Relacionamento</b><span>' + e('— · fonte fora (relacionamento_do_executivo): ' + atual.erro) + '</span></div>';
+    return '<div class="rel-1a1"><span class="dv2-n">lendo as visitas de relacionamento…</span></div>';
+  }
+  const ddmm = function (iso) { const d = String(iso || '').slice(0, 10); return d.slice(8, 10) + '/' + d.slice(5, 7); };
+  const desde = ddmm(q.desde);
+  const n = Number(q.visitas) || 0;
+  if (!n) return '<div class="rel-1a1"><b>' + e('Relacionamento · desde ' + desde) + '</b><span>' + e('Nenhuma visita a cliente desde ' + desde + '. A pergunta "Pediu indicação?" aparece no app depois do Cheguei num cliente ativo.') + '</span></div>';
+  const pediu = (Number(q.indicou) || 0) + (Number(q.nao_indicou) || 0);
+  const sem = Number(q.sem_resposta) || 0;
+  const partes = [GV2.pl(n, 'visita a cliente', 'visitas a cliente'), 'pediu indicação em ' + pediu + (pediu ? ' (' + GV2.pl(Number(q.indicou) || 0, 'indicou', 'indicaram') + ')' : ''), 'não pediu em ' + (Number(q.nao_pediu) || 0)];
+  const ind = (q.indicacoes || []).map(function (x) { return '<li>' + e(ddmm(x.em) + ' · ' + x.cliente + ' → ' + [x.nome || 'sem nome', x.telefone].filter(Boolean).join(' · ')) + '</li>'; }).join('');
+  const sr = (q.sem_resposta_lista || []).map(function (x) { return '<li>' + e(ddmm(x.em) + ' · ' + x.cliente) + '</li>'; }).join('');
+  return '<div class="rel-1a1"><b>' + e('Relacionamento · desde ' + desde) + '</b><span>' + e(partes.join(' · ')) + (sem ? ' · <em class="is-av">' + e(GV2.pl(sem, 'sem resposta', 'sem resposta')) + '</em>' : '') + '</span>'
+    + (ind ? '<details><summary>' + e(GV2.pl((q.indicacoes || []).length, 'indicação', 'indicações')) + '</summary><ul>' + ind + '</ul></details>' : '')
+    + (sr ? '<details><summary>' + e('sem resposta · cobrar no 1:1') + '</summary><ul>' + sr + '</ul></details>' : '') + '</div>';
+};
+(function () {
+  const pag0 = GV2.render.v5Pessoa;
+  if (typeof pag0 !== 'function') return;
+  GV2.render.v5Pessoa = function (p) {
+    const h = pag0.apply(this, arguments);
+    if (!p || !h) return h;
+    const ini = h.indexOf('<div class="gv2-v5-pcab">');
+    const fim = ini < 0 ? -1 : h.indexOf('</span></div>', ini);
+    if (fim < 0) return h;
+    const corte = fim + '</span></div>'.length;
+    return h.slice(0, corte) + GV2.REL.linha(p) + h.slice(corte);
   };
 })();
 
