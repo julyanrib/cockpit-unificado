@@ -73454,7 +73454,7 @@ const HJ4 = GV2.HJ4 = {};
 HJ4.usar = function () {
   try { return !(typeof localStorage !== 'undefined' && localStorage && localStorage.getItem('hoje-v3') === '1'); } catch (e) { return true; }
 };
-HJ4.st = { rep: null, tab: 'sem', placar: 'load', P: null, placarErro: null, lidoEm: 0, posted: {}, vistos: { sem: [], venc: [] }, medido: null, tToast: null };
+HJ4.st = { rep: null, tab: 'sem', placar: 'load', P: null, placarErro: null, lidoEm: 0, posted: {}, indo: {}, vistos: { sem: [], venc: [] }, medido: null, tToast: null };
 HJ4.e = function (t) { return GV2.e(t); };
 HJ4.raiz = function () { return typeof document !== 'undefined' && document.getElementById ? document.getElementById('hj4Raiz') : null; };
 HJ4.naTela = function () { const el = HJ4.raiz(); return !!(el && el.isConnected !== false); };
@@ -73654,10 +73654,11 @@ HJ4.pintarFunil = function () {
   else {
     const D = F.D;
     const total = F.sem.length + F.venc.length;
-    const lista = HJ4.ordenar(st.tab === 'venc' ? F.venc : F.sem).filter(function (l) { return !st.posted[l.ref]; });
+    const lista = HJ4.ordenar(st.tab === 'venc' ? F.venc : F.sem).filter(function (l) { return !st.posted[l.ref] && !st.indo[l.ref]; });
 
     const out = [];
-    (st.vistos[st.tab] || []).forEach(function (ref, i) { if (st.posted[ref]) out[i] = st.posted[ref].linha; });
+
+    (st.vistos[st.tab] || []).forEach(function (ref, i) { if (st.posted[ref]) out[i] = st.posted[ref].linha; else if (st.indo[ref]) out[i] = st.indo[ref]; });
     let k = 0;
     for (let i = 0; i < 5; i++) if (!out[i] && lista[k]) out[i] = lista[k++];
     const linhas = out.filter(Boolean);
@@ -73740,9 +73741,11 @@ HJ4.por = async function (ref, di) {
   if (!l) { PL.toast('Esse negócio já saiu da lista. Recarreguei.', 'atencao'); return HJ4.pintarFunil(); }
   PL.rep = st.rep; PL.D = F.D;
   const eraVencido = !!l.venc;
+  st.indo[ref] = l;
   const p = PL.porNoDia(ref, di);
   HJ4.pintarFunil();
-  const ok = await p;
+  let ok = false;
+  try { ok = await p; } finally { delete st.indo[ref]; }
   if (ok) {
     const rot = PL.rotCurto(F.D.dias[di]);
     st.posted[ref] = { linha: l, rot: rot, di: di, iso: F.D.dias[di].iso, vencido: eraVencido };
