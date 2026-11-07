@@ -1141,15 +1141,17 @@ tabelas.gv2_falta_etapa = [
     g.supa = { from: function (tab) { return { update: function (c) { return { in: function (col, lista) { return { select: async function () { pedidos.push({ tab: tab, c: c, ids: lista.slice() }); return { data: lista.map(function (i) { return { id: i }; }), error: null }; } }; } }; } }; } };
     GV2.pintar = function () {}; GV2.ir = function (a) { GV2.estado.aba = a; };
     GV2.estado.aba = 'terr'; GV2.estado.v9g = null;
-    /* Território v2 (15/10/26): a tela é a do territ.zip (scripts/testar-territorio-v2.js mede as
-       regras); aqui, que ela desenha neste mundo e que nenhum botão leva à tela v9 nem à busca paga.
+    /* Território (o v2 de 15/10/26 virou v4 em 06/11/26): aqui, que a aba desenha neste mundo e que nenhum botão leva à tela v9 nem à busca paga.
        O motor de escrita da v9 (gravar, registrar, desfazer) continua e é medido logo abaixo. */
     GV2.t10 = { lendo: false, erro: null, em: Date.now(), vis: [], cli: {} };
     let h = ''; try { h = GV2.render.terr(); } catch (e) { falhas.push('território v2: ' + e.message); }
     /* Território v3 (02/11/26): o mapa abre na lente "cobertura" (a v2 é a lente "carga da semana") e o
        Por executivo abre nos 30 dias (a semana é a outra aba): os cinco continuam na tela */
-    checar('Território v2: 5 números, Onde agir, Territórios, Por executivo e Contra quem',
-      (h.match(/class="gv2-t10-kpi[" ]/g) || []).length === 5 && /<b>Onde agir<\/b>/.test(h) && /<b>(Territórios|O território · cobertura)/.test(h) && /<b>Por executivo/.test(h) && /<b>Contra quem<\/b>/.test(h), h.slice(0, 300));
+    /* Território v4 (06/11/26): a aba lê só o territorio_resumo (scripts/testar-territorio-v3.js mede as regras e
+       scripts/testar-territorio-orcamento.js, as leituras); aqui, sem o banco, ela desenha o cabeçalho e o
+       esqueleto ou a fonte fora, nunca um número inventado */
+    checar('Território v4: cabeçalho com o filtro de praça e, sem o banco, esqueleto ou fonte fora',
+      /<h1>Território<\/h1>/.test(h) && /data-gv2="t4pr:rj"/.test(h) && (/gv2-t4-lendo/.test(h) || /Fonte fora · territorio_resumo/.test(h)), h.slice(0, 300));
     checar('Território v2: nenhum botão abre a tela antiga nem a busca paga (v5rt7, v9g, Importar, munição)',
       !/data-gv2="v5rt7|data-gv2="v9g|Importar|Prospecção completa|munição|torneira/.test(h));
     const P = GV2.v9Pendencias();
