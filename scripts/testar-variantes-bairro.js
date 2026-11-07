@@ -17,8 +17,9 @@ for (const [b, quem] of [
   /* 28/10/26: a zona leste passou do Fabio para o Allef (o Fabio saiu do time). O que este
      teste protege é a NORMALIZAÇÃO do nome do bairro — acento, caixa, parêntese colado —, não
      quem é o dono; o nome aqui é só o rótulo do caso. */
-  ['Penha de Franca', 'Allef'], ['PENHA DE FRANCA', 'Allef'], ['Jardim Penha', 'Allef'], ['Jardim America da Penha', 'Allef'],
-  ['Vila Carrao', 'Allef'], ['Jardim Vila Formosa', 'Allef'], ['Parque da Vila Prudente', 'Allef'], ['Parque da Mooca', 'Allef'],
+  /* 06/11/26: o Allef ficou só com Moema, Tatuapé e Guarulhos; a zona leste (Penha, Carrão, Mooca…) ficou sem
+     dono e foi para a lista de baixo. A normalização segue provada nos bairros que têm dono. */
+  ['Tatuape', 'Allef'], ['TATUAPE', 'Allef'], ['Tatuapé', 'Allef'], ['MOEMA', 'Allef'],
   ['Vila Maria Baixa', 'Sérgio'], ['Parque Mandaqui', 'Sérgio'], ['Casa Verde Alta', 'Sérgio'], ['Jardim Cidade Pirituba', 'Sérgio'],
   ['Jardim Sao Paulo(Zona Norte)', 'Sérgio'],
 ]) ok((dono(b) || '').startsWith(quem), `${b} → ${quem} (veio ${dono(b)})`);
@@ -26,7 +27,7 @@ for (const [b, quem] of [
 /* 'Alto do Pari' mudou de lado em 28/10/26: era da Renata, que saiu do time, e o CENTRO de São
    Paulo ficou SEM EXECUTIVO. Ele desce para a lista de baixo de propósito — enquanto estiver
    aqui, este teste é o lembrete de que o centro não tem dono. */
-for (const b of ['Chacara Santana', 'CHACARA SANTANA', 'Jardim Sao Paulo(Zona Leste)', 'Vila Santana', 'Jardim Belem', 'Alto do Pari']) {
+for (const b of ['Chacara Santana', 'CHACARA SANTANA', 'Jardim Sao Paulo(Zona Leste)', 'Vila Santana', 'Jardim Belem', 'Alto do Pari', 'Penha de Franca', 'Vila Carrao']) {
   ok(dono(b) === null, `${b} continua sem dono (fora dos bairros declarados)`);
 }
 
