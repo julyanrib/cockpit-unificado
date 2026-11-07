@@ -40859,7 +40859,10 @@ async function pl6CriarLead(rep, campos) {
   return { lead: r.lead, cidade: cidade };
 }
 
-async function pl6Carregar(rep, segundaPedida) {
+/* soGrade (07/11/26): o Hoje v4 só precisa da linha da semana (o dia do "Pôr em" e a vaga de cada dia). Os pinos
+   do app e os sem endereço são do Planejamento, que sempre chama a carga completa ao abrir:
+   medido em produção, eram 6 a 9 leituras de clients a mais em toda abertura do Hoje do executivo. */
+async function pl6Carregar(rep, segundaPedida, opcoes) {
   pl6Plano = null;
   if (!DATA.supabase || !supa) return { ok: false, motivo: 'sem conexão com o servidor nesta sessão' };
   const segunda = segundaPedida || pl6SegundaEmFoco();
@@ -40870,7 +40873,10 @@ async function pl6Carregar(rep, segundaPedida) {
     return { ok: false, motivo: error.message || 'o banco recusou a leitura' };
   }
   pl6Plano = (data && data[0]) ? data[0] : null;
-  await Promise.all([pl6CarregarPinos(), pl6CarregarPinosDoApp(rep).catch(function () {}), pl6CompletarDoEspelho(rep).catch(function () {})]);
+  /* o espelho fica mesmo no soGrade: é 1 leitura pequena, só quando falta negócio, e sem ela o negócio criado hoje no app
+     não conta na vaga do dia (o "Pôr em" sugeriria um dia cheio) */
+  if (opcoes && opcoes.soGrade) await pl6CompletarDoEspelho(rep).catch(function () {});
+  else await Promise.all([pl6CarregarPinos(), pl6CarregarPinosDoApp(rep).catch(function () {}), pl6CompletarDoEspelho(rep).catch(function () {})]);
   return { ok: true, tinhaLinha: !!pl6Plano };
 }
 
@@ -78231,7 +78237,9 @@ GV2.montar = async function (so, leituraPronta) {
   GV2.ultimaLeitura = { so: so || null, L: L };
   /* recém-abertos da semana: DEPOIS da primeira pintura (é uma ida a mais ao banco, e a carga
      não espera por ela); quando chega, repinta se a Rua estiver aberta */
-  setTimeout(function () { GV2.lerNovosDaSemana(L).then(function () { if (GV2.estado && GV2.estado.aba === 'rua' && GV2.pintar) GV2.pintar(); }); }, 0);
+  /* 07/11/26: a remontagem do playbook atrasado (leituraPronta) usa a MESMA leitura: a conta já foi feita na
+     primeira montagem e daria o mesmo número; refazer eram 2 idas ao banco a mais em toda abertura do gestor. */
+  if (!leituraPronta || GV2.novosSemana == null) setTimeout(function () { GV2.lerNovosDaSemana(L).then(function () { if (GV2.estado && GV2.estado.aba === 'rua' && GV2.pintar) GV2.pintar(); }); }, 0);
   if (L.rotaSem && !L.rotaSem.erro && L.visSem && !L.visSem.erro && GV2.rota) {
     const segL = GV2.segundaDe(agora.iso);
     GV2.rota.cache[segL] = { estado: 'ok', itens: L.rotaSem.data || [], visitas: (L.visSem && L.visSem.data) || [] };
@@ -96291,7 +96299,7 @@ HJ4.render = async function (el, rep) {
   HJ4.pintar();
   /* a grade da semana (1 linha de planos_semanais): o dia do "Pôr em" e a vaga de cada dia saem dela */
   if (typeof pl6Carregar === 'function' && typeof pl6SegundaDaSemana === 'function' && !(typeof pl6Plano !== 'undefined' && pl6Plano && String(pl6Plano.data_segunda) === String(pl6SegundaDaSemana()))) {
-    Promise.resolve(pl6Carregar(rep, pl6SegundaDaSemana())).then(function () { HJ4.pintarFunil(); }, function () { HJ4.pintarFunil(); });
+    Promise.resolve(pl6Carregar(rep, pl6SegundaDaSemana(), { soGrade: true })).then(function () { HJ4.pintarFunil(); }, function () { HJ4.pintarFunil(); });
   }
   await HJ4.lerPlacar();
   HJ4.pintar();

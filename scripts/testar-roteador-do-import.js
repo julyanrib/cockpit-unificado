@@ -146,6 +146,9 @@ const pessoaAntiga = nome => declAntiga.territorios.find(x => x.rep === nome);
   if (!p) throw new Error('a suíte precisa de ' + nome + ' na declaração: ela modela o território de antes');
   delete p.ativo; delete p.desligadoEm;
 });
+/* 07/11/26: no dado real o Allef tem 5 bairros de Guarulhos (com semSobra). A cópia modela a Guarulhos de
+   antes (Sérgio a oeste, Renata a leste); com o Allef nela o Macedo teria dois donos e o mecanismo mediria outra coisa. */
+pessoaAntiga('Allef Costa da Silva').areas = pessoaAntiga('Allef Costa da Silva').areas.filter(a => a.municipio !== 'Guarulhos');
 pessoaAntiga('Sérgio Caetano').areas.push({ municipio: 'Guarulhos', uf: 'SP', bairros: ['Vila Augusta'] });
 pessoaAntiga('Renata Pessoa').areas.push({ municipio: 'Guarulhos', uf: 'SP', bairros: ['Macedo'] });
 pessoaAntiga('Renata Pessoa').areas.push({ municipio: 'Suzano', uf: 'SP', bairros: ['Centro'] });
@@ -214,10 +217,12 @@ conferir('todo executivo declarado e ativo tem id no roteador',
 /* 15/10/26: território refeito pelo Julyan — "o resto podemos apagar, vamos buscar só a
    partir desses lugares". Guarulhos saiu da rota dos dois (era Sérgio a oeste, Renata a
    leste) e não foi para ninguém. Sem dono e VISÍVEL, nunca com o dono antigo. */
-conferir('Guarulhos ficou sem dono, nas duas metades',
-  quem('guarulhos', 'vila augusta') === null && quem('guarulhos', 'macedo') === null
-  && quem('guarulhos', 'jardim cumbica') === null,
-  'Guarulhos saiu da rota em 15/10; lead de lá com dono seria carga para quem não anda mais ali');
+/* 06/11/26: Guarulhos voltou SÓ nos 5 bairros onde o Allef mais visita (semSobra: o resto da cidade continua sem
+   dono, não vira dele por ele ser o único dono declarado lá). */
+conferir('Guarulhos: só os 5 bairros do Allef têm dono; o resto da cidade continua sem',
+  quem('guarulhos', 'vila augusta') === null && quem('guarulhos', 'macedo') === 'Allef'
+  && quem('guarulhos', 'itapegica') === 'Allef' && quem('guarulhos', 'jardim cumbica') === null,
+  'o Allef ficou com os bairros onde atua; a cidade inteira (~140 bairros) seria uma fila que ele não roda');
 
 /* 11/09/26, Julyan: "do Luiz Pimentel, coloca só nova iguaçu por enquanto". As outras
    quatro cidades da Baixada saíram do território dele e não foram para ninguém — saem
@@ -557,11 +562,12 @@ conferir('o roteador lê data/territorios.json',
 /* 15/10/26: território refeito pelo Julyan. Madureira ficou sem dono; os dois casos
    agora são bairros em que a lista antiga de 01/09 diz OUTRA pessoa: Mooca (lista:
    Renata; declaração: Fabio) e Anil (lista: Bruno; declaração: André). */
+/* 07/11/26: a Mooca ficou sem dono (06/11); o caso de SP passou a ser o Tatuapé (lista antiga: Renata; declaração: Allef). */
 conferir('e a declaração é consultada ANTES das listas antigas',
-  via('sao paulo', 'mooca') === 'declarado' && quem('sao paulo', 'mooca') === donoDeclarado('sao paulo', 'mooca')
+  via('sao paulo', 'tatuape') === 'declarado' && quem('sao paulo', 'tatuape') === donoDeclarado('sao paulo', 'tatuape')
   && via('rio de janeiro', 'anil') === 'declarado' && quem('rio de janeiro', 'anil') === donoDeclarado('rio de janeiro', 'anil')
-  && donoDeclarado('sao paulo', 'mooca') !== null && donoDeclarado('rio de janeiro', 'anil') !== null
-  && terr.TERRITORIOS.some(x => !x.sobra && x.teste('sao paulo mooca'))
+  && donoDeclarado('sao paulo', 'tatuape') !== null && donoDeclarado('rio de janeiro', 'anil') !== null
+  && terr.TERRITORIOS.some(x => !x.sobra && x.teste('sao paulo tatuape'))
   && terr.TERRITORIOS.some(x => !x.sobra && x.teste('rio de janeiro anil')),
   'se a lista antiga vier primeiro, a decisão de hoje não chega ao lead');
 
