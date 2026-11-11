@@ -9707,6 +9707,17 @@ button.gv2-v9-passo:hover{background:var(--gv2-hov);border-color:var(--gv2-line-
 .gv2-v5-grp.is-sev0{border-left-color:var(--gv2-erro-barra);}
 .gv2-v5-grp > .gv2-v5-btn{height:36px;width:124px;padding:0 8px;font-size:13px;}
 .gv2-v8-soinf{background:var(--gv2-sub);border-radius:12px;}
+
+.gv2-v5-pendmes{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:12px 16px;border-top:1px solid var(--gv2-line-soft);}
+.gv2-v5-pendmes > b{font:600 13px var(--gv2-font);color:var(--gv2-dim);}
+.gv2-v5-pendmes-bts{display:flex;flex-wrap:wrap;gap:6px;min-width:0;}
+.gv2-v5-pendmes-bt{height:28px;padding:0 10px;border-radius:14px;border:1px solid var(--gv2-line);background:transparent;color:var(--gv2-dim);font:500 12.5px var(--gv2-font);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;}
+.gv2-v5-pendmes-bt b{font-weight:700;color:var(--gv2-ink);}
+.gv2-v5-pendmes-bt:hover{background:var(--gv2-hov);}
+.gv2-v5-pp-sinais{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;}
+.gv2-v5-pp-sinais em{font:600 10.5px/1 var(--gv2-font);font-style:normal;padding:3px 6px;border-radius:8px;white-space:nowrap;background:var(--gv2-sub);color:var(--gv2-dim);}
+.gv2-v5-pp-sinais em.is-dia{background:var(--gv2-av-soft);color:var(--gv2-av);}
+.gv2-v5-pp-sinais em.is-travou,.gv2-v5-pp-sinais em.is-semrota{background:var(--gv2-erro-soft);color:var(--gv2-erro);}
 .gv2-v8-soinf-cab small.gv2-v9-selo{text-transform:none;letter-spacing:0;}
 .gv2-v9-kpi .gv2-v9-trilha{margin-top:2px;}
 .gv2-v5-ruaagora .gv2-v5-leg{font-size:13px;}
@@ -63061,7 +63072,7 @@ GV2.v5Grupos = function () {
   const b = GV2.base;
   const sit = {};
   b.pessoas.forEach(function (p) { sit[p.id] = GV2.v5Situacao(p); });
-  const chip = function (p, s, acao) { return { ini: p.iniciais, n: GV2.prim(p.nome), s: s, tip: p.nome, a: acao || 'v5dia:' + p.id + ':' + b.agora.iso }; };
+  const chip = function (p, s, acao) { return { pid: p.id, ini: p.iniciais, n: GV2.prim(p.nome), s: s, tip: p.nome, a: acao || 'v5dia:' + p.id + ':' + b.agora.iso }; };
   const g = [];
   const tv = b.planoErro ? [] : b.pessoas.filter(function (p) { return sit[p.id].k === 'travou'; });
   if (tv.length) g.push({ k: 'travou', l: 'Travou', sev: 0, curta: '1 h após a 1ª parada', regra: 'plano com hora e nenhuma visita 1 h depois da primeira parada e da janela habitual',
@@ -63085,7 +63096,7 @@ GV2.v5Grupos = function () {
   if (top.length) {
     GV2.estado.v5Dinheiro = top.map(function (n) { return n.id; });
     g.push({ k: 'dinheiro', l: 'Dinheiro parado', sev: 2, curta: din.length > top.length ? 'os ' + top.length + ' de mais MRR, de ' + din.length : 'quente sem passo', regra: 'quente sem próximo passo e o maior travado de cada um',
-      chips: top.map(function (n) { const p = b.porId[n.dono]; return { ini: p ? p.iniciais : '—', n: n.nome, s: (n.mrr ? GV2.rsCheio(n.mrr) + ' · ' : '') + n.dias + ' d', tip: (p ? p.nome + ' · ' : '') + GV2.ETAPAS[n.etapa_idx] + ' há ' + n.dias + ' dias', a: 'ficha:' + n.id }; }),
+      chips: top.map(function (n) { const p = b.porId[n.dono]; return { pid: p ? p.id : null, ini: p ? p.iniciais : '—', n: n.nome, s: (n.mrr ? GV2.rsCheio(n.mrr) + ' · ' : '') + n.dias + ' d', tip: (p ? p.nome + ' · ' : '') + GV2.ETAPAS[n.etapa_idx] + ' há ' + n.dias + ' dias', a: 'ficha:' + n.id }; }),
       btn: top.length > 1 ? 'Cobrar os ' + top.length : 'Cobrar', acao: 'v5lote:dinheiro' });
   }
 
@@ -63104,11 +63115,34 @@ GV2.v5Grupos = function () {
   const ns = b.planoErro || b.agora.min < 360 ? [] : b.pessoas.filter(function (p) { return sit[p.id].k === 'naosaiu'; });
   if (ns.length) g.push({ k: 'naosaiu', l: 'Ainda não saiu', sev: 3, info: true, curta: 'antes da janela habitual', regra: 'antes da janela habitual (4 últimas semanas)',
     chips: ns.map(function (p) { return chip(p, GV2.v5Janela(p)); }) });
+
+  const sp = [];
+  [b.agora.iso, b.ontemIso].forEach(function (dia) {
+    const c = GV2.v5Semana(dia);
+    if (!c || c.estado !== 'ok') return;
+    (c.visitas || []).forEach(function (v) {
+      if (v.provada || v.dia !== dia || !b.porId[String(v.owner_id)]) return;
+      sp.push({ p: b.porId[String(v.owner_id)], dia: dia });
+    });
+  });
+  if (sp.length) {
+    const porP = {};
+    sp.forEach(function (x) { const k = x.p.id; (porP[k] = porP[k] || { p: x.p, n: 0, dia: x.dia }).n += 1; if (x.dia === b.agora.iso) porP[k].dia = x.dia; });
+    const lista = Object.keys(porP).map(function (k) { return porP[k]; }).sort(function (x, y) { return y.n - x.n; });
+    g.push({ k: 'semprova', l: 'Visita sem prova', sev: 2, curta: 'hoje e ' + b.ontemRot + ' · valide se aconteceu', regra: 'check-in que não provou (GPS pior que 100 m, foto longe do pino ou declarada) · abra o dia e use "Validar visita…" se você sabe que aconteceu',
+      chips: lista.map(function (x) { return chip(x.p, GV2.pl(x.n, 'sem prova', 'sem prova') + (x.dia === b.agora.iso ? ' hoje' : ' ' + b.ontemRot), 'v5dia:' + x.p.id + ':' + x.dia); }),
+      btn: 'Validar', acao: 'v5dia:' + lista[0].p.id + ':' + lista[0].dia });
+  }
   GV2.v10Grupos(g, b, chip);
 
   if (GV2.hbGrupos) GV2.hbGrupos(g, b, chip);
+
+  g.forEach(function (x) { if (GV2.V5_PENDENCIA_MES[x.k]) x.mes = true; });
   return { grupos: g, sit: sit };
 };
+GV2.V5_PENDENCIA_MES = { umaum: '1:1', hbdef: 'habilidade', orfa: 'carteira de quem saiu', semfecho: 'fecho do dia', semficha: 'visita sem ficha', pino: 'pino movido' };
+
+GV2.V5_SINAL = { travou: 'travou', semrota: 'sem rota', furou: 'furou ontem', dinheiro: 'dinheiro parado', semprova: 'visita sem prova', umaum: '1:1 atrasado', hbdef: 'sem habilidade', semfecho: 'não fechou o dia', semficha: 'visita sem ficha', pino: 'pino movido' };
 
 GV2.V10_UM_DIAS = 7;
 GV2.v10 = { dia: null, lendo: false, erro: null, d: null };
@@ -63203,7 +63237,7 @@ GV2.v5Selo = function () {
   const b = GV2.base, m = GV2.v5SeloMem;
   if (m && m.b === b && m.f === GV2.v5Grupos && m.min === b.agora.min && m.pe === b.planoErro) return m.n;
   let n = 0;
-  try { n = GV2.v5Grupos().grupos.filter(function (x) { return x.sev < 3; }).length; } catch (e) { n = 0; }
+  try { n = GV2.v5Grupos().grupos.filter(function (x) { return x.sev < 3 && !x.mes; }).length; } catch (e) { n = 0; }
   GV2.v5SeloMem = { b: b, f: GV2.v5Grupos, min: b.agora.min, pe: b.planoErro, n: n };
   return n;
 };
@@ -65330,16 +65364,24 @@ GV2.render.time = function () {
       : K({ rot: 'Mês', def: 'clientes do mês contra a meta', acao: 'rxg:mes', num: GV2.deMeta(t.fechados, t.metaMes), unid: 'clientes', cmp: 'provável ' + t.provavel }))
     + '</div>';
   const aviso = fonte ? '<div class="gv2-v5-fonte"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 17h.01M10.3 3.9 2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg><span><b>Não li o Planejamento agora</b> · ' + GV2.e(fonte + ' não respondeu às ' + b.horaTxt + '. Plano e paradas aparecem como "—"; visitas, jornada e agenda continuam.') + '</span><button type="button" class="gv2-v5-btn" data-gv2="v5recarregar">Tentar de novo</button></div>' : '';
-  const gAcao = G.grupos.filter(function (g) { return !g.info; }), gInfo = G.grupos.filter(function (g) { return g.info; });
+  const gAcao = G.grupos.filter(function (g) { return !g.info && !g.mes; }), gInfo = G.grupos.filter(function (g) { return g.info; });
+  const gMes = G.grupos.filter(function (g) { return g.mes && !g.info; });
   const grupos = gAcao.length ? gAcao.map(function (g) {
     return '<div class="gv2-v5-grp is-sev' + g.sev + ' is-' + g.k + '"><div class="gv2-v5-grp-txt" title="' + GV2.e(g.regra) + '"><b>' + GV2.e(g.l) + '</b><span>' + GV2.e(g.curta || g.regra) + '</span></div>'
       + '<div class="gv2-v5-grp-chips">' + g.chips.map(function (c) { return '<button type="button" class="gv2-v5-pchip" data-gv2="' + GV2.e(c.a) + '" title="' + GV2.e(c.tip) + '"><i>' + GV2.e(c.ini) + '</i><b class="gv2-ellip">' + GV2.e(c.n) + '</b><span>' + GV2.e(c.s) + '</span></button>'; }).join('') + '</div>'
       + (g.info ? '<span class="gv2-v5-grp-info">só informa</span>' : '<button type="button" class="gv2-v5-btn' + (g.btn === 'Chamar' ? ' is-acao' : '') + '" data-gv2="' + GV2.e(g.acao) + '">' + GV2.e(g.btn) + '</button>') + '</div>';
   }).join('') : '<div class="gv2-v5-grp-vazio">Ninguém precisa de você agora: planos montados, gente na rua, nenhum quente parado.</div>';
+
+  const pendMes = gMes.length ? '<div class="gv2-v5-pendmes"><b title="o que se resolve no 1:1 e na gestão da semana · não pede ação agora">Pendências do mês</b><div class="gv2-v5-pendmes-bts">'
+    + gMes.map(function (g) {
+      const nome = GV2.V5_PENDENCIA_MES[g.k] || g.l;
+      const qt = g.k === 'orfa' ? String(g.curta || '').replace(/\s*sem dono ativo/, '') : String(g.chips.length);
+      return '<button type="button" class="gv2-v5-pendmes-bt" data-gv2="' + GV2.e(g.acao) + '" title="' + GV2.e(g.l + ' · ' + g.regra + ' · ' + g.chips.map(function (c) { return c.n + ' (' + c.s + ')'; }).join(', ')) + '">' + GV2.e(nome) + ' <b class="num">' + GV2.e(qt) + '</b></button>';
+    }).join('') + '</div></div>' : '';
   const soInforma = gInfo.map(function (g) {
     return '<div class="gv2-v8-soinf"><div class="gv2-v8-soinf-cab" title="' + GV2.e(g.regra) + '"><small class="gv2-v9-selo is-info">só informa</small><b>' + GV2.e(g.l) + '</b><span>' + GV2.e(g.curta || g.regra) + '</span></div><div class="gv2-v5-grp-chips">' + g.chips.map(function (c) { return '<button type="button" class="gv2-v5-pchip" data-gv2="' + GV2.e(c.a) + '" title="' + GV2.e(c.tip) + '"><i>' + GV2.e(c.ini) + '</i><b class="gv2-ellip">' + GV2.e(c.n) + '</b><span>' + GV2.e(c.s) + '</span></button>'; }).join('') + '</div></div>';
   }).join('');
-  const quem = '<section class="card gv2-v5-quem"><div class="gv2-v5-cab is-linha"><b>Quem precisa de você<i class="gv2-v8-i" title="uma linha por situação, a mais grave primeiro · passe o mouse na situação para ver a regra inteira">i</i></b></div>' + grupos + soInforma + '</section>';
+  const quem = '<section class="card gv2-v5-quem"><div class="gv2-v5-cab is-linha"><b>Quem precisa de você<i class="gv2-v8-i" title="só o que pede ação hoje, a mais grave primeiro · o que é do mês fica na última linha · passe o mouse na situação para ver a regra inteira">i</i></b></div>' + grupos + soInforma + pendMes + '</section>';
   const praca = GV2.estado.praca || b.pracaPrincipal;
   const chips = b.pracas.map(function (pr, i) { const n = b.pessoas.filter(function (p) { return p.praca === pr; }).length; return '<button type="button" class="gv2-v5-chip' + (pr === praca ? ' is-on' : '') + '" data-gv2="v5praca:' + i + '">' + GV2.e(pr + ' · ' + n) + '</button>'; }).join('');
   const reserva = typeof PT6_GM !== 'undefined' && PT6_GM.falhou;
@@ -65348,7 +65390,7 @@ GV2.render.time = function () {
     + '<div class="gv2-v5-mapa-cx is-hoje"><div class="gv2-mapa gv2-v5-mapa" data-gv2-mapa="time"></div>' + (reserva ? '<span class="gv2-v5-mapa-aviso">Mapa reserva · o Google não carregou. Os pinos e a lista continuam.</span>' : '') + '</div>'
     + '<div class="gv2-v5-leg">' + ['visita', 'desloc', 'sem'].map(function (k) { return '<span><i class="lg-st" style="background:' + GV2.STATUS[k].cor + '"></i>' + GV2.e(k === 'sem' ? 'sem check-in hoje (último ponto)' : GV2.STATUS[k].rot) + '</span>'; }).join('') + '</div></section>';
   return GV2.cabHTML('Hoje', sub, direita)
-    + '<div class="gv2-corpo gv2-v5">' + aviso + kpis + '<div class="gv2-v5-meio is-v8">' + rua + quem + '</div>' + GV2.render.v5PorPessoa(G.sit) + GV2.render.g0Hoje()
+    + '<div class="gv2-corpo gv2-v5">' + aviso + kpis + '<div class="gv2-v5-meio is-v8">' + rua + quem + '</div>' + GV2.render.v5PorPessoa(G.sit, G.grupos) + GV2.render.g0Hoje()
 
     + (GV2.render.v6Placar ? '<div id="gv2-hoje-ranking" class="gv2-hoje-ranking">' + GV2.render.v6Placar() + (GV2.render.v7Mes ? GV2.render.v7Mes() : '') + '</div>' : '')
     + (GV2.render.rcHoje ? GV2.render.rcHoje() : '') + GV2.faltaHTML() + '</div>' + (GV2.render.v6Gav && GV2.estado.v6Gav ? GV2.render.v6Gav() : '') + (GV2.estado.ap != null && GV2.render.v8Apresentar ? GV2.render.v8Apresentar() : '');
@@ -65377,9 +65419,26 @@ GV2.recadoHojeHTML = function (p) {
   const t = 'cobrado ' + GV2.horaDe(x.em) + ' · ' + (x.visto ? 'visto ' + GV2.horaDe(x.visto) : 'não viu ainda');
   return '<small class="gv2-v5-pp-rec' + (x.visto ? ' is-ok' : ' is-av') + '" title="' + GV2.e((x.n > 1 ? x.n + ' recados hoje · o último ' : 'recado de hoje ') + (x.visto ? 'visto no app às ' + GV2.horaDe(x.visto) : 'ainda não aberto no app (o "Entendi" da tela inicial)')) + '">' + GV2.e(t) + '</small>';
 };
-GV2.render.v5PorPessoa = function (sit) {
+GV2.render.v5PorPessoa = function (sit, grupos) {
   const b = GV2.base;
   GV2.lerRecadosHoje();
+
+  const sinais = {};
+  (grupos || []).forEach(function (g) {
+    if (g.info || !GV2.V5_SINAL[g.k]) return;
+    (g.chips || []).forEach(function (c) {
+      if (!c.pid) return;
+      const l = sinais[c.pid] = sinais[c.pid] || [];
+      if (!l.some(function (x) { return x.k === g.k; })) l.push({ k: g.k, t: GV2.V5_SINAL[g.k], mes: !!g.mes, tip: g.l + ' · ' + c.s });
+    });
+  });
+  const sinaisHTML = function (p) {
+    const l = sinais[p.id] || [];
+    const dia = l.filter(function (x) { return !x.mes; }), mes = l.filter(function (x) { return x.mes; });
+    if (!l.length) return '';
+    return '<span class="gv2-v5-pp-sinais">' + dia.map(function (x) { return '<em class="is-dia is-' + x.k + '" title="' + GV2.e(x.tip) + '">' + GV2.e(x.t) + '</em>'; }).join('')
+      + (mes.length ? '<em class="is-mes" title="' + GV2.e('pendências do mês · ' + mes.map(function (x) { return x.tip; }).join(' · ')) + '">+' + mes.length + ' do mês</em>' : '') + '</span>';
+  };
   const fonte = b.planoErro;
 
   const ritmo = {}; b.pessoas.forEach(function (p) { ritmo[p.id] = GV2.v8Ritmo ? GV2.v8Ritmo(p) : null; });
@@ -65424,7 +65483,7 @@ GV2.render.v5PorPessoa = function (sit) {
     const r = p.hoje.repetidas || 0;
     const xCurto = fonte ? 'sem resposta' : p.hoje.fora ? '+' + p.hoje.fora + (GV2.ruaPlanejada(p.id) ? ' na rua' : ' fora') : r ? GV2.pl(r, 'repetida', 'repetidas') : 'com prova';
     return '<div class="gv2-v5-pp-l' + tag + '">'
-      + '<button type="button" class="gv2-v5-pp-p" data-gv2="pessoa:' + p.id + '" title="' + GV2.e('abrir ' + GV2.prim(p.nome) + ' na Pessoas (1:1, campo, funil)') + '">' + GV2.html.av(p) + '<span><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><small class="gv2-ellip">' + GV2.e((p.id === melhor ? 'melhor do mês · ' : p.id === pior ? 'mais longe do ritmo · ' : '') + p.praca) + '</small></span></button>' + mes
+      + '<button type="button" class="gv2-v5-pp-p" data-gv2="pessoa:' + p.id + '" title="' + GV2.e('abrir ' + GV2.prim(p.nome) + ' na Pessoas (1:1, campo, funil)') + '">' + GV2.html.av(p) + '<span><b class="gv2-ellip">' + GV2.e(p.nome) + '</b><small class="gv2-ellip">' + GV2.e((p.id === melhor ? 'melhor do mês · ' : p.id === pior ? 'mais longe do ritmo · ' : '') + p.praca) + '</small>' + sinaisHTML(p) + '</span></button>' + mes
       + '<button type="button" class="gv2-v5-pp-c is-link" data-gv2="' + abre + '"><b class="num">' + GV2.e(planoT) + '</b><small class="' + (p.hoje.sem_lugar && !fonte ? 't-av' : '') + '">' + GV2.e(planoS) + '</small></button>'
       + '<span class="gv2-v5-pp-c gv2-v5-pp-x" title="' + GV2.e(x + ' visitas · ' + xS) + '"><b class="num' + (p.hoje.visitas_todas ? '' : ' t-dim') + '">' + GV2.e(x) + '</b><small>' + GV2.e(xCurto) + '</small></span>'
       + '<button type="button" class="gv2-v5-pp-c" data-gv2="' + abre + '"><b class="num ' + jC + '">' + GV2.e(jT) + '</b><small>' + GV2.e(jS) + '</small></button>'
