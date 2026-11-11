@@ -70541,7 +70541,8 @@ GV2.t5Praca = function (M, pk) {
     if (f[0] !== pk) return;
     fichas += Number(f[2]) || 0; dec += Number(f[3]) || 0; aus += Number(f[4]) || 0;
     const k = f[1] ? GV2.normalizarSistema(f[1]) : null;
-    if (k) sis[k] = (sis[k] || 0) + (Number(f[2]) || 0);
+
+    if (k && k !== 'Outro') sis[k] = (sis[k] || 0) + (Number(f[2]) || 0);
   });
   const sistemas = Object.keys(sis).map(function (k) { return { k: k, n: sis[k] }; }).sort(function (a, b) { return b.n - a.n || a.k.localeCompare(b.k); });
   const execs = ex.map(function (e) {
@@ -70918,9 +70919,11 @@ GV2.render.t4Fila = function (M) {
     : 'Acima de 13 semanas o lead vence antes da vez: ~' + GV2.t4N(M.perde) + ' vão vencer assim.' + (M.semFolga.length ? ' ' + M.semFolga.map(function (k) { return GV2.T4.ROT[k]; }).join(' e ') + ' não tem folga.' : '');
   let bt = '';
   if (M.eq) {
-    const t = 'Passar ' + M.eq.n + ' de ' + GV2.t4Nome(M.eq.de.nome) + ' para ' + GV2.lista(M.eq.para.map(function (x) { return GV2.t4Nome(x.nome); }));
-    bt = e.t4eqOk ? '<button type="button" class="gv2-v5-btn is-acao" data-gv2="t4eq:ok"' + (e.t4ocupado ? ' disabled' : '') + '>' + GV2.e('Confirmar: ' + t.charAt(0).toLowerCase() + t.slice(1)) + '</button>'
-      : '<button type="button" class="gv2-v5-btn is-prim" data-gv2="t4eq" title="os que vencem primeiro, nos bairros mais perto de quem recebe · viram sugestão no plano dele (origem resgate)">' + GV2.e(t) + '</button>';
+
+    const para = GV2.lista(M.eq.para.map(function (x) { return GV2.t4Nome(x.nome); }));
+    const t = 'Passar ' + M.eq.n + ' de ' + GV2.t4Nome(M.eq.de.nome);
+    bt = e.t4eqOk ? '<button type="button" class="gv2-v5-btn is-acao" data-gv2="t4eq:ok"' + (e.t4ocupado ? ' disabled' : '') + ' title="' + GV2.e('para ' + para) + '">' + GV2.e('Confirmar: para ' + para) + '</button>'
+      : '<button type="button" class="gv2-v5-btn is-prim" data-gv2="t4eq" title="' + GV2.e('para ' + para + ' · os que vencem primeiro, nos bairros mais perto de quem recebe · viram sugestão no plano dele (origem resgate)') + '">' + GV2.e(t + ' →') + '</button>';
   }
   return '<section class="card gv2-t4-card gv2-t4-fila">' + GV2.t4Kick('A FILA', '', '<span class="gv2-t4-ksub">sem visita · ' + M.carga + '/semana</span><button type="button" class="gv2-t4-link" data-gv2="t4fila">ver todos</button>', 'is-acao')
     + '<div class="gv2-t4-fls">' + linhas + '</div><p class="gv2-t4-pe">' + GV2.e(frase) + '</p>' + (bt ? '<div class="gv2-t4-bts">' + bt + '</div>' : '') + '</section>';
@@ -70930,11 +70933,13 @@ GV2.render.t4Dono = function (M) {
   const nb = M.semDono.length, nl = M.semDono.reduce(function (a, b) { return a + (Number(b.sem) || 0); }, 0);
   const saiu = M.R.carteira_quem_saiu || [];
   const tot = saiu.reduce(function (a, o) { return a + Math.max(o.lp, o.pinos); }, 0);
+
+  const quem = saiu.map(function (o) { return GV2.t4Nome(o.nome) + ' ' + Math.max(o.lp, o.pinos); }).join(', ');
   return '<section class="card gv2-t4-card gv2-t4-dono">' + GV2.t4Kick('DONO DO BAIRRO', '', '', 'is-av')
-    + '<div class="gv2-t4-dl"><b class="num ' + (nb ? 't-acao' : 't-ok') + '">' + nb + '</b><span>' + GV2.e(nb ? (nb === 1 ? 'bairro sem dono, ' : 'bairros sem dono, ') + GV2.pl(nl, 'recém-aberto que o motor não sugere', 'recém-abertos que o motor não sugere') : 'todo bairro com recém-aberto tem dono') + '</span>'
-    + (nb ? '<button type="button" class="gv2-v5-btn is-prim" data-gv2="t4donos">' + GV2.e('Dar dono aos ' + nb) + '</button>' : '') + '</div>'
-    + '<div class="gv2-t4-dl"><b class="num ' + (tot ? 't-av' : 't-ok') + '">' + GV2.t4N(tot) + '</b><span>' + GV2.e(tot ? 'contas na carteira de quem saiu: ' + saiu.map(function (o) { return GV2.t4Nome(o.nome) + ' ' + Math.max(o.lp, o.pinos); }).join(', ') : 'ninguém que saiu tem conta para repartir') + '</span>'
-    + (tot ? '<button type="button" class="gv2-v5-btn" data-gv2="menu:acessos" title="o mesmo Repartir do Hoje do gestor: cada conta vai para o dono do bairro dela">Repartir</button>' : '') + '</div></section>';
+    + '<div class="gv2-t4-dl" title="' + GV2.e(nb ? GV2.pl(nl, 'recém-aberto sem visita', 'recém-abertos sem visita') + ' em bairro sem dono: o motor não sugere lá' : '') + '"><b class="num ' + (nb ? 't-acao' : 't-ok') + '">' + nb + '</b><span>' + GV2.e(nb ? (nb === 1 ? 'bairro sem dono' : 'bairros sem dono') : 'todo bairro com recém-aberto tem dono') + '</span></div>'
+    + '<div class="gv2-t4-dl" title="' + GV2.e(quem) + '"><b class="num ' + (tot ? 't-av' : 't-ok') + '">' + GV2.t4N(tot) + '</b><span>' + GV2.e(tot ? (saiu.length === 1 ? 'na carteira de ' + GV2.t4Nome(saiu[0].nome) : 'na carteira de quem saiu') : 'ninguém que saiu tem conta para repartir') + '</span></div>'
+    + '<div class="gv2-t4-bts">' + (nb ? '<button type="button" class="gv2-v5-btn is-prim" data-gv2="t4donos">' + GV2.e('Dar dono aos ' + nb) + '</button>' : '')
+    + (tot ? '<button type="button" class="gv2-v5-btn" data-gv2="menu:acessos" title="o mesmo Repartir do Hoje do gestor: cada conta vai para o dono do bairro dela">' + GV2.e('Repartir ' + GV2.t4N(tot)) + '</button>' : '') + '</div></section>';
 };
 
 GV2.t4Perto = function (M, b) {
