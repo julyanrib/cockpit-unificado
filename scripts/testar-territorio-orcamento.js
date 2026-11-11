@@ -80,7 +80,7 @@ const abrir = async (cod) => {
   checar('a abertura lê o territorio_resumo uma vez', A.pedidos.filter(p => p === 'territorio_resumo').length === 1, A.pedidos.join(', '));
   checar('a abertura não lê nenhuma tabela direto (nem leads_prospeccao, nem clients)', A.tabelas.length === 0, A.tabelas.join(', '));
   checar('a medição registra a abertura (uma vez)', A.pedidos.filter(p => p === 'registrar_abertura').length === 1, A.pedidos.join(', '));
-  checar('a tela montou com o resumo', /2 · POR EXECUTIVO/.test(A.h));
+  checar('a tela montou com o resumo', /4 · GERIR O TERRITÓRIO/.test(A.h));
   /* repintar (cada clique repinta) não relê */
   const n0 = A.pedidos.length;
   for (let i = 0; i < 5; i++) A.GV2.render.terr();
