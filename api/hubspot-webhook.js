@@ -116,6 +116,18 @@ const RESERVA_MINUTOS = 110;
 // segura (pode ter lido o HubSpot antes da venda): a nova entra na fila do concurrency do workflow.
 // O repositório é público desde então: minuto de Actions não custa, e venda são poucas por dia.
 const ETAPAS_DE_VENDA = ['1396006162', '1396006163'];
+// RODADA PRESA NÃO É RODADA VIVA (12/11/26). Uma rodada `schedule` ficou em `queued` no GitHub
+// das 17:19 de 11/11 até o dia seguinte e nunca começou. A trava "já há uma na fila" recusou
+// TODO disparo desde então, de venda inclusive, e o Julyan teve de atualizar à mão. O robô leva
+// ~5 min; rodada na fila ou em andamento há mais de RODADA_PRESA_MINUTOS é órfã e não segura
+// ninguém. Sem a data (resposta sem workflow_runs), vale o comportamento antigo: conta como viva.
+const RODADA_PRESA_MINUTOS = 30;
+function haRodadaViva(dados) {
+  if (!dados || !(dados.total_count > 0)) return false;
+  const criada = Date.parse(((dados.workflow_runs || [])[0] || {}).created_at || '');
+  if (!Number.isFinite(criada)) return true;
+  return (Date.now() - criada) < RODADA_PRESA_MINUTOS * 60 * 1000;
+}
 function ehAvisoDeVenda(corpoCru) {
   try {
     const eventos = JSON.parse(corpoCru);
@@ -183,7 +195,7 @@ module.exports = async function handler(req, res) {
       const headersGitHub = { Authorization: `Bearer ${githubPat}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
       const naFila = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?status=queued&per_page=1`, { headers: headersGitHub });
       const fila = naFila.ok ? await naFila.json() : { total_count: 0 };
-      if ((fila.total_count || 0) > 0) return res.status(200).json({ ok: true, disparado: false, venda: true, motivo: 'já há uma rodada na fila: ela pega esta venda' });
+      if (haRodadaViva(fila)) return res.status(200).json({ ok: true, disparado: false, venda: true, motivo: 'já há uma rodada na fila: ela pega esta venda' });
       const disparo = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
         { method: 'POST', headers: { ...headersGitHub, 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main', inputs: { origem: 'venda' } }) });
       if (!disparo.ok) return res.status(200).json({ ok: true, disparado: false, venda: true, motivo: 'GitHub recusou: ' + disparo.status });
@@ -310,7 +322,7 @@ module.exports = async function handler(req, res) {
     );
     const dadosAndamento = emAndamento.ok ? await emAndamento.json() : { total_count: 0 };
     const dadosFila = naFila.ok ? await naFila.json() : { total_count: 0 };
-    if ((dadosAndamento.total_count || 0) > 0 || (dadosFila.total_count || 0) > 0) {
+    if (haRodadaViva(dadosAndamento) || haRodadaViva(dadosFila)) {
       return res.status(200).json({ ok: true, disparado: false, motivo: 'já havia uma rodada em andamento/na fila' });
     }
 
