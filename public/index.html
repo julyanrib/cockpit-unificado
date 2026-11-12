@@ -3104,6 +3104,15 @@
   .fn2-rodape b{color:var(--ink);}
   .fn2-rodape .fn2-pe-marca{color:var(--red);}
 
+  .fn2-dg:empty{display:none;}
+  .fn2-dg{border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);padding:12px 16px;margin:12px 0;display:flex;flex-direction:column;gap:4px;}
+  .fn2-dg-cab{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;}
+  .fn2-dg-cab small{font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);flex-basis:100%;}
+  .fn2-dg-cab b{font-family:var(--font-display);font-size:26px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1;}
+  .fn2-dg-cab span{font-size:13px;font-weight:600;color:var(--ink);}
+  .fn2-dg-l{margin:0;font-size:12px;color:var(--muted);line-height:1.5;}
+  .fn2-dg-l b{color:var(--ink);}
+
   .fn3-novo{display:inline-flex;align-items:center;min-height:38px;padding:0 15px;
     border:1px solid var(--ink);border-radius:var(--r-pill);background:var(--dark);
     color:#FFFDF8;font:800 11.5px var(--font-body);cursor:pointer;white-space:nowrap;}
@@ -7643,6 +7652,16 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
 .gv2-v4-comolin .gv2-v4-link{padding:4px 0;}
 .gv2-v4-como{margin:0;padding:10px 12px;border-radius:var(--gv2-r-ctl);background:var(--gv2-sub);font:var(--gv2-mini);color:var(--gv2-mute);}
 .gv2-v4-nota{margin:0;font:var(--gv2-mini);color:var(--gv2-dim);}
+
+.gv2-dg{margin:12px 0 8px;padding:12px 14px;border-radius:var(--gv2-r-ctl);background:var(--gv2-sub);display:flex;flex-direction:column;gap:8px;}
+.gv2-dg-cab{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 10px;}
+.gv2-dg-cab small{flex-basis:100%;font:700 10.5px var(--gv2-font);letter-spacing:1px;text-transform:uppercase;color:var(--gv2-dim);}
+.gv2-dg-cab b{font:700 24px var(--gv2-font);color:var(--gv2-ink);line-height:1.1;}
+.gv2-dg-cab span{font:600 13px var(--gv2-font);color:var(--gv2-ink);}
+.gv2-dg-pp{display:flex;flex-wrap:wrap;gap:6px;}
+.gv2-dg-p{display:inline-flex;align-items:baseline;gap:4px;padding:3px 9px;border-radius:999px;background:var(--gv2-card);border:1px solid var(--gv2-line);font:500 12px var(--gv2-font);color:var(--gv2-mute);white-space:nowrap;}
+.gv2-dg-p b{color:var(--gv2-ink);font-weight:700;}
+.gv2-dg-p small{color:var(--gv2-dim);font-size:11px;font-variant-numeric:tabular-nums;}
 .gv2-v4-prosp{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--gv2-line-soft);padding-top:8px;}
 .gv2-v4-prosp small{font:var(--gv2-rotulo);letter-spacing:.05em;text-transform:uppercase;color:var(--gv2-dim);}
 .gv2-v4-prosp b{font:700 13px var(--gv2-font);}
@@ -19501,6 +19520,45 @@ async function kb7RegistrarHistorico(lead, de, para, motivo) {
   } catch (e) {   }
 }
 
+const FN2_DG_REFERENCIA = 2.5;
+function fn2DgVirg(n) { return (Math.round(n * 10) / 10).toFixed(1).replace('.', ',').replace(/,0$/, ''); }
+async function fn2PintarDemoGanho(r) {
+  const slot = document.getElementById('fn2DemoGanho');
+  if (!slot || !r || !r.ownerId) return;
+  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const mesNome = new Date(hoje + 'T12:00:00Z').toLocaleDateString('pt-BR', { month: 'long', timeZone: 'UTC' });
+  const cab = '<div class="fn2-dg-cab"><small>Demo → cliente em ' + esc(mesNome) + '</small>';
+  if (!DATA.supabase || typeof supa === 'undefined' || !supa) { slot.innerHTML = ''; return; }
+  let linhas;
+  try {
+    const { data, error } = await supa.from('pontos_eventos').select('tipo,negocio_id')
+      .eq('owner_id', String(r.ownerId)).in('tipo', ['demo_realizada', 'contrato', 'estorno']).gte('ref_em', hoje.slice(0, 8) + '01T03:00:00Z');
+    if (error) throw error;
+    linhas = data || [];
+  } catch (e) {
+    slot.innerHTML = cab + '<b>—</b></div><p class="fn2-dg-l">Não li os seus pontos do mês agora (pontos_eventos não respondeu).</p>';
+    return;
+  }
+  const demos = new Set(linhas.filter(x => x.tipo === 'demo_realizada').map(x => x.negocio_id)).size;
+  const clientes = Math.max(0, linhas.filter(x => x.tipo === 'contrato').length - linhas.filter(x => x.tipo === 'estorno').length);
+  const temTaxa = demos >= 3 && clientes > 0;
+  const por = temTaxa ? demos / clientes : null;
+  const pct = temTaxa ? Math.min(100, Math.round(clientes / demos * 100)) : null;
+  const grande = pct != null ? pct + '%' : '—';
+  const sub = temTaxa ? '1 cliente a cada ' + fn2DgVirg(por) + ' demos'
+    : demos < 3 ? 'poucas demos no mês para ter a sua taxa' : 'nenhum cliente ainda no mês';
+  const meta = Number(r.metaMensal || r.meta) || 0;
+  const faltam = Math.max(0, meta - clientes);
+  const taxaUsada = por || FN2_DG_REFERENCIA;
+  const deQuem = por ? 'com a sua taxa' : 'pela referência do playbook (2,5 demos por cliente)';
+  const linhaMeta = !meta ? 'Sem meta de clientes neste mês.'
+    : !faltam ? '<b>Meta de ' + meta + ' batida.</b> Cada demo a mais é cliente acima da meta.'
+    : 'Meta ' + meta + ' · faltam <b>' + faltam + ' ' + (faltam === 1 ? 'cliente' : 'clientes') + '</b> → umas <b>' + Math.ceil(faltam * taxaUsada) + ' demos</b> ' + deQuem + '.';
+  slot.innerHTML = cab + '<b>' + grande + '</b><span>' + esc(sub) + '</span></div>'
+    + '<p class="fn2-dg-l">Você: ' + clientes + ' ' + (clientes === 1 ? 'cliente' : 'clientes') + ' de ' + demos + ' ' + (demos === 1 ? 'demo' : 'demos') + ' no mês · referência do time: 40% (2,5 demos por cliente).</p>'
+    + '<p class="fn2-dg-l">' + linhaMeta + '</p>';
+}
+
 function fn2ShellHTML(r) {
   fn2OwnerAtual = r.ownerId || null;
 
@@ -19517,6 +19575,7 @@ function fn2ShellHTML(r) {
   return `<div class="fn2-shell" data-fn2-owner="${esc(String(r.ownerId || ''))}"
       data-fn2-pulsa="${esc(pulsando)}">
     ${fn2Hero(r, itens, movimentos)}
+    <div id="fn2DemoGanho" class="fn2-dg" aria-live="polite"></div>
     ${fn2Contexto(movimentos, itens.length)}
     ${kb7QuadroHTML(r, todos, acesos, fn2LeadsDasEtapas(r, FN3_ETAPAS_LATERAIS))}
     ${fn2PosVenda(r)}
@@ -19912,6 +19971,7 @@ async function renderMeuFunil() {
   try {
     el.innerHTML = fn2ShellHTML(r);
     fn2Ligar(el, r);
+    void fn2PintarDemoGanho(r);
   } catch (e) {
     console.error('Meu Funil v2 falhou:', e);
     el.innerHTML = '<div class="empty-state">Não consegui montar o funil agora. Recarregue a aba; se persistir, o erro está no console.</div>';
@@ -60892,7 +60952,27 @@ GV2.render.funil = function () {
       return '<button type="button" class="gv2-v4-funil-lin' + (GV2.estado.passo === i ? ' is-sel' : '') + '" data-gv2="rxg:passo:' + i + '" title="ver os ' + n + ' leads deste passo"><span>' + ROT[i] + '</span>'
         + '<div class="gv2-fp-trilho"><i style="width:' + Math.max(6, Math.round(n / max * 100)) + '%">' + n + '</i></div>'
         + '<span class="gv2-v4-funil-tx"><b>' + GV2.e(l1) + '</b><small class="' + cls2 + '" title="' + GV2.e(tit) + '">' + GV2.e(l2) + '</small></span></button>';
-    }).join('') + '</div><p class="gv2-v4-nota">"Melhor" só aparece com taxa acima do time e 3 ou mais no passo anterior.</p></section>';
+    }).join('') + '</div>' + GV2.render.demoGanho(b) + '<p class="gv2-v4-nota">"Melhor" só aparece com taxa acima do time e 3 ou mais no passo anterior.</p></section>';
+};
+
+GV2.render.demoGanho = function (b) {
+  const F = b.time.funil, demos = F[2] || 0, fech = F[4] || 0;
+  const conta = function (d, c) {
+    if (d < 3) return { big: '—', sub: d ? 'só ' + GV2.pl(d, 'demo', 'demos') + ' no mês' : 'nenhuma demo no mês' };
+    if (!c) return { big: '0%', sub: GV2.pl(d, 'demo', 'demos') + ' e nenhum cliente ainda' };
+    if (c > d) return { big: '100%+', sub: 'mais clientes que demos no mês' };
+    return { big: Math.round(c / d * 100) + '%', sub: '1 cliente a cada ' + GV2.virg(d / c).replace(/,0$/, '') + ' demos', por: d / c };
+  };
+  const t = conta(demos, fech);
+  const pp = b.pessoas.map(function (p) {
+    const f = p.funil_mes || {}, d = f.demo || 0, c = f.fechado || 0, x = conta(d, c);
+    return { nome: GV2.prim(p.nome), d: d, c: c, x: x };
+  }).filter(function (p) { return p.d > 0; }).sort(function (a, z) { return ((a.x.por || 99) - (z.x.por || 99)) || (z.d - a.d); });
+  return '<div class="gv2-dg"><div class="gv2-dg-cab"><small>Demo → cliente · ' + GV2.e(GV2.base.mesNome || 'mês') + '</small><b class="num">' + GV2.e(t.big) + '</b><span>' + GV2.e(t.sub + ' · ' + fech + ' de ' + demos) + '</span></div>'
+    + (pp.length ? '<div class="gv2-dg-pp">' + pp.map(function (p) {
+      return '<span class="gv2-dg-p" title="' + GV2.e(p.c + ' clientes de ' + p.d + ' demos no mês') + '"><b>' + GV2.e(p.nome) + '</b> ' + GV2.e(p.x.por ? GV2.virg(p.x.por).replace(/,0$/, '') + ' demos/cliente' : p.x.big) + ' <small>' + p.c + '/' + p.d + '</small></span>';
+    }).join('') + '</div>' : '')
+    + '<p class="gv2-v4-nota">referência do playbook: 40% · 2,5 demos por cliente · taxa por pessoa com 3 ou mais demos no mês</p></div>';
 };
 
 GV2.render.dinheiro = function () {
