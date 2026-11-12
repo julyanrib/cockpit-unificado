@@ -88842,23 +88842,25 @@ GV2.v8Comando = function (cmd, parte) {
       const h = (typeof DATA !== 'undefined' && DATA && DATA.historicoEtapas) || {};
       const c = h.ciclo || {};
       const vel = (h.velocidade || []).filter(function (v) { return v && v.n; });
-      const maxV = Math.max.apply(null, vel.map(function (v) { return v.mediana || 0; }).concat([1]));
+      /* a barra é o "3 em cada 4": a mediana de quase toda etapa é 0 dia, porque o negócio anda várias
+         etapas no mesmo dia (o registro vem depois da visita) — medida em 12/11/26 */
+      const maxV = Math.max.apply(null, vel.map(function (v) { return v.p75 || 0; }).concat([1]));
       const po = h.porOwner || {};
       const pp = GV2.rx().pessoas.map(function (p) { const x = po[p.id] && po[p.id].ciclo; return { nome: GV2.prim(p.nome), n: x ? x.n : 0, m: x ? x.mediana : null }; })
         .sort(function (a, z) { return (a.m == null) - (z.m == null) || (a.m - z.m) || (z.n - a.n); });
       const corpo = '<p class="gv2-rxg-p">' + GV2.e('Dias entre o negócio entrar no funil (Prospecção ou Visita) e virar Ganho, nos últimos ' + (h.dias || 120) + ' dias. Mediana: metade dos clientes fecha em até ' + dd(c.mediana) + '; 3 em cada 4, em até ' + dd(c.p75) + '.') + '</p>'
         + '<p class="gv2-rxg-p t-dim">' + GV2.e('Entram ' + (c.n || 0) + ' dos ' + (c.ganhosNaJanela || 0) + ' ganhos da janela: os que andaram o funil por 2 dias ou mais. Os outros ' + (c.semCicloNoCrm || 0) + ' foram cadastrados no HubSpot já ganhos (a venda na rua entra no CRM no dia do fechamento) e não têm ciclo para medir.') + '</p>'
-        + '<h4 class="gv2-rxg-h">Onde o tempo vai <small>mediana entre entrar numa etapa e entrar na próxima · só quem avançou</small></h4>'
+        + '<h4 class="gv2-rxg-h">Onde o tempo vai <small>3 em cada 4 negócios saem da etapa em até… · todos os que avançaram, não só os ganhos</small></h4>'
         + (vel.length ? '<div class="gv2-cic">' + vel.map(function (v) {
-          const estoura = v.sla && v.mediana != null && v.mediana > v.sla;
-          return '<div class="gv2-cic-l"><span class="gv2-ellip">' + GV2.e(v.nome) + '</span><div class="gv2-cic-tr"><i class="' + (estoura ? 'is-av' : '') + '" style="width:' + Math.max(4, Math.round((v.mediana || 0) / maxV * 100)) + '%"></i></div>'
-            + '<b class="num">' + GV2.e(dd(v.mediana)) + '</b><small>' + GV2.e('3 em 4 até ' + dd(v.p75) + (v.sla ? ' · régua ' + dd(v.sla) : '') + ' · ' + v.n) + '</small></div>';
-        }).join('') + '</div>' : '<p class="t-dim gv2-rxg-p">O robô não mandou o tempo por etapa nesta carga.</p>')
+          const estoura = v.sla && v.p75 != null && v.p75 > v.sla;
+          return '<div class="gv2-cic-l"><span class="gv2-ellip">' + GV2.e(v.nome) + '</span><div class="gv2-cic-tr"><i class="' + (estoura ? 'is-av' : '') + '" style="width:' + Math.max(4, Math.round((v.p75 || 0) / maxV * 100)) + '%"></i></div>'
+            + '<b class="num">' + GV2.e(dd(v.p75)) + '</b><small>' + GV2.e('mediana ' + dd(v.mediana) + (v.sla ? ' · régua ' + dd(v.sla) : '') + ' · ' + v.n + ' negócios') + '</small></div>';
+        }).join('') + '</div><p class="gv2-v4-nota" style="margin-top:6px">' + GV2.e('Mediana perto de 0 dia é o negócio andando várias etapas no mesmo dia: o executivo registra depois da visita. Por isso a barra é o "3 em cada 4", onde a demora aparece.') + '</p>' : '<p class="t-dim gv2-rxg-p">O robô não mandou o tempo por etapa nesta carga.</p>')
         + '<h4 class="gv2-rxg-h">Por pessoa <small>mediana do ciclo de cada um · entre parênteses, quantos ganhos mediram</small></h4>'
         + '<div class="gv2-dg-pp">' + pp.map(function (p) {
           return '<span class="gv2-dg-p"><b>' + GV2.e(p.nome) + '</b> ' + GV2.e(p.n >= 3 ? dd(p.m) : '—') + ' <small>(' + p.n + ')</small></span>';
         }).join('') + '</div>'
-        + '<p class="gv2-v4-nota" style="margin-top:8px">' + GV2.e('Com menos de 3 ganhos medidos a mediana da pessoa fica "—". Barra âmbar: a etapa demora mais que a régua do playbook.') + '</p>';
+        + '<p class="gv2-v4-nota" style="margin-top:8px">' + GV2.e('Com menos de 3 ganhos medidos a mediana da pessoa fica "—". Barra âmbar: 3 em cada 4 demoram mais que a régua do playbook.') + '</p>';
       return { tit: 'Tempo de ciclo', sub: 'da primeira porta ao ganho · mediana ' + dd(c.mediana), corpo: corpo };
     }
     return c0();
