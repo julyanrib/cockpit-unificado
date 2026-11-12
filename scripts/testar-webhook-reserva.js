@@ -35,15 +35,17 @@ function pedido(eventos, agora = AGORA) {
   return req;
 }
 
-async function rodar({ ultimaRodadaHaMin, lockGanho = true, githubUltimaFalha = false, emAndamento = 0, naFila = 0, eventos = null, agora = AGORA }) {
+async function rodar({ ultimaRodadaHaMin, lockGanho = true, githubUltimaFalha = false, emAndamento = 0, naFila = 0, filaHaMin = null, andamentoHaMin = null, eventos = null, agora = AGORA }) {
   const chamadas = [];
   global.fetch = async (url, opt = {}) => {
     const u = String(url);
     chamadas.push(u);
     const resp = (status, corpo) => ({ ok: status < 300, status, json: async () => corpo, text: async () => JSON.stringify(corpo) });
     if (u.includes('/rest/v1/webhook_cooldown')) return resp(200, lockGanho ? [{ id: 1 }] : []);
-    if (u.includes('status=in_progress')) return resp(200, { total_count: emAndamento });
-    if (u.includes('status=queued')) return resp(200, { total_count: naFila });
+    /* com a idade, a resposta leva workflow_runs como a do GitHub; sem ela, só o total (formato antigo) */
+    const lista = (n, haMin) => haMin == null ? { total_count: n } : { total_count: n, workflow_runs: [{ created_at: new Date(agora - haMin * 60000).toISOString() }] };
+    if (u.includes('status=in_progress')) return resp(200, lista(emAndamento, andamentoHaMin));
+    if (u.includes('status=queued')) return resp(200, lista(naFila, filaHaMin));
     if (u.includes('/runs?per_page=1')) {
       if (githubUltimaFalha) return resp(502, {});
       const criada = ultimaRodadaHaMin == null ? [] : [{ created_at: new Date(AGORA - ultimaRodadaHaMin * 60000).toISOString() }];
@@ -75,6 +77,13 @@ const casos = [
   { nome: 'venda com rodada em andamento → dispara (entra na fila)', cfg: { ultimaRodadaHaMin: 2, emAndamento: 1, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006162' }] }, dispara: true },
   { nome: 'venda com rodada já na fila → não dispara', cfg: { ultimaRodadaHaMin: 2, naFila: 1, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006162' }] }, dispara: false },
   { nome: 'venda às 23h (fora da janela) → dispara', cfg: { ultimaRodadaHaMin: 5, agora: Date.parse('2026-09-29T02:00:00Z'), eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006162' }] }, dispara: true },
+  // RODADA PRESA (12/11/26): uma na fila desde a véspera não pode calar o webhook
+  { nome: 'rodada na fila há 5 min → não dispara', cfg: { ultimaRodadaHaMin: 240, naFila: 1, filaHaMin: 5 }, dispara: false },
+  { nome: 'rodada presa na fila há 20 h → dispara', cfg: { ultimaRodadaHaMin: 240, naFila: 1, filaHaMin: 1200 }, dispara: true },
+  { nome: 'rodada presa em andamento há 2 h → dispara', cfg: { ultimaRodadaHaMin: 240, emAndamento: 1, andamentoHaMin: 120 }, dispara: true },
+  { nome: 'rodada presa na fila, robô rodou há 30 min → não dispara (a reserva segue valendo)', cfg: { ultimaRodadaHaMin: 30, naFila: 1, filaHaMin: 1200 }, dispara: false },
+  { nome: 'venda com rodada presa na fila há 20 h → dispara', cfg: { ultimaRodadaHaMin: 2, naFila: 1, filaHaMin: 1200, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006162' }] }, dispara: true },
+  { nome: 'venda com rodada na fila há 5 min → não dispara', cfg: { ultimaRodadaHaMin: 2, naFila: 1, filaHaMin: 5, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1396006162' }] }, dispara: false },
   { nome: 'mudança para Demo, robô rodou há 5 min → não dispara', cfg: { ultimaRodadaHaMin: 5, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1395880471' }] }, dispara: false },
   { nome: 'Ag. Pagamento não é venda → não dispara', cfg: { ultimaRodadaHaMin: 5, eventos: [{ objectId: 9, propertyName: 'dealstage', propertyValue: '1395880473' }] }, dispara: false },
 ];
