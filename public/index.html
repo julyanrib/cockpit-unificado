@@ -19545,7 +19545,7 @@ async function fn2PintarDemoGanho(r) {
   const por = temTaxa ? demos / clientes : null;
   const pct = temTaxa ? Math.min(100, Math.round(clientes / demos * 100)) : null;
   const grande = pct != null ? pct + '%' : '—';
-  const sub = temTaxa ? '1 cliente a cada ' + fn2DgVirg(por) + ' demos'
+  const sub = temTaxa ? (por <= 1 ? 'cada demo virou cliente' : '1 cliente a cada ' + fn2DgVirg(por) + ' demos')
     : demos < 3 ? 'poucas demos no mês para ter a sua taxa' : 'nenhum cliente ainda no mês';
   const meta = Number(r.metaMensal || r.meta) || 0;
   const faltam = Math.max(0, meta - clientes);
@@ -19555,7 +19555,7 @@ async function fn2PintarDemoGanho(r) {
     : !faltam ? '<b>Meta de ' + meta + ' batida.</b> Cada demo a mais é cliente acima da meta.'
     : 'Meta ' + meta + ' · faltam <b>' + faltam + ' ' + (faltam === 1 ? 'cliente' : 'clientes') + '</b> → umas <b>' + Math.ceil(faltam * taxaUsada) + ' demos</b> ' + deQuem + '.';
   slot.innerHTML = cab + '<b>' + grande + '</b><span>' + esc(sub) + '</span></div>'
-    + '<p class="fn2-dg-l">Você: ' + clientes + ' ' + (clientes === 1 ? 'cliente' : 'clientes') + ' de ' + demos + ' ' + (demos === 1 ? 'demo' : 'demos') + ' no mês · referência do time: 40% (2,5 demos por cliente).</p>'
+    + '<p class="fn2-dg-l">Você: ' + clientes + ' ' + (clientes === 1 ? 'cliente' : 'clientes') + ' de ' + demos + ' ' + (demos === 1 ? 'demo' : 'demos') + ' no mês · referência do playbook: 40% (2,5 demos por cliente).</p>'
     + '<p class="fn2-dg-l">' + linhaMeta + '</p>';
 }
 
@@ -60961,7 +60961,7 @@ GV2.render.demoGanho = function (b) {
     if (d < 3) return { big: '—', sub: d ? 'só ' + GV2.pl(d, 'demo', 'demos') + ' no mês' : 'nenhuma demo no mês' };
     if (!c) return { big: '0%', sub: GV2.pl(d, 'demo', 'demos') + ' e nenhum cliente ainda' };
     if (c > d) return { big: '100%+', sub: 'mais clientes que demos no mês' };
-    return { big: Math.round(c / d * 100) + '%', sub: '1 cliente a cada ' + GV2.virg(d / c).replace(/,0$/, '') + ' demos', por: d / c };
+    return { big: Math.round(c / d * 100) + '%', sub: d === c ? 'cada demo virou cliente' : '1 cliente a cada ' + GV2.virg(d / c).replace(/,0$/, '') + ' demos', por: d / c };
   };
   const t = conta(demos, fech);
   const pp = b.pessoas.map(function (p) {
@@ -60970,7 +60970,7 @@ GV2.render.demoGanho = function (b) {
   }).filter(function (p) { return p.d > 0; }).sort(function (a, z) { return ((a.x.por || 99) - (z.x.por || 99)) || (z.d - a.d); });
   return '<div class="gv2-dg"><div class="gv2-dg-cab"><small>Demo → cliente · ' + GV2.e(GV2.base.mesNome || 'mês') + '</small><b class="num">' + GV2.e(t.big) + '</b><span>' + GV2.e(t.sub + ' · ' + fech + ' de ' + demos) + '</span></div>'
     + (pp.length ? '<div class="gv2-dg-pp">' + pp.map(function (p) {
-      return '<span class="gv2-dg-p" title="' + GV2.e(p.c + ' clientes de ' + p.d + ' demos no mês') + '"><b>' + GV2.e(p.nome) + '</b> ' + GV2.e(p.x.por ? GV2.virg(p.x.por).replace(/,0$/, '') + ' demos/cliente' : p.x.big) + ' <small>' + p.c + '/' + p.d + '</small></span>';
+      return '<span class="gv2-dg-p" title="' + GV2.e(p.c + ' clientes de ' + p.d + ' demos no mês') + '"><b>' + GV2.e(p.nome) + '</b> ' + GV2.e(p.x.por ? (p.x.por <= 1 ? '1 demo/cliente' : GV2.virg(p.x.por).replace(/,0$/, '') + ' demos/cliente') : p.x.big) + ' <small>' + p.c + '/' + p.d + '</small></span>';
     }).join('') + '</div>' : '')
     + '<p class="gv2-v4-nota">referência do playbook: 40% · 2,5 demos por cliente · taxa por pessoa com 3 ou mais demos no mês</p></div>';
 };
