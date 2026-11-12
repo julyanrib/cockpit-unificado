@@ -12044,6 +12044,14 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
 .gv2-dg-p{display:inline-flex;align-items:baseline;gap:4px;padding:3px 9px;border-radius:999px;background:var(--gv2-card);border:1px solid var(--gv2-line);font:500 12px var(--gv2-font);color:var(--gv2-mute);white-space:nowrap;}
 .gv2-dg-p b{color:var(--gv2-ink);font-weight:700;}
 .gv2-dg-p small{color:var(--gv2-dim);font-size:11px;font-variant-numeric:tabular-nums;}
+/* gaveta do ciclo: o tempo por etapa (12/11/26) */
+.gv2-cic{display:flex;flex-direction:column;gap:8px;}
+.gv2-cic-l{display:grid;grid-template-columns:156px minmax(0,1fr) 64px;grid-template-rows:auto auto;column-gap:10px;align-items:center;font:500 13px var(--gv2-font);color:var(--gv2-ink);}
+.gv2-cic-tr{height:8px;border-radius:4px;background:var(--gv2-track);overflow:hidden;}
+.gv2-cic-tr i{display:block;height:100%;border-radius:4px;background:var(--gv2-ink);}
+.gv2-cic-tr i.is-av{background:var(--gv2-av);}
+.gv2-cic-l b{text-align:right;font-weight:700;}
+.gv2-cic-l small{grid-column:2 / 4;font:var(--gv2-mini);color:var(--gv2-dim);}
 .gv2-v4-prosp{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--gv2-line-soft);padding-top:8px;}
 .gv2-v4-prosp small{font:var(--gv2-rotulo);letter-spacing:.05em;text-transform:uppercase;color:var(--gv2-dim);}
 .gv2-v4-prosp b{font:700 13px var(--gv2-font);}
@@ -87293,10 +87301,13 @@ GV2.render.raiox = function () {
   const perTop = per ? per.lista.filter(function (x) { return x.motivo !== 'Outros'; }).slice(0, 2).map(function (x) { return x.motivo + ' ' + x.n; }).join(' · ') : '';
   const h = typeof DATA !== 'undefined' && DATA && DATA.historicoEtapas, c = h && h.ciclo;
   const kpi = function (rot, val, s, acao) { return '<' + (acao ? 'button type="button" data-gv2="' + acao + '"' : 'div') + ' class="gv2-v5-kpi' + (acao ? '' : ' is-fixo') + '"><small>' + GV2.e(rot) + '</small><b class="num">' + GV2.e(val) + '</b><span>' + GV2.e(s) + '</span></' + (acao ? 'button' : 'div') + '>'; };
-  const kpis = '<div class="gv2-v5-kpis is-4">'
+  /* Demo → cliente entrou na faixa em 12/11/26 (Julyan): a mesma conta do cartão Funil do mês;
+     o clique explica e abre por pessoa. O Ciclo passou a abrir o detalhe (o que é, onde o tempo vai) */
+  const kpis = '<div class="gv2-v5-kpis">'
     + kpi('Porta → fechado', pc(F[4], F[0]), GV2.pl(F[4], 'fechado', 'fechados') + ' de ' + F[0] + ' portas no mês', F[4] ? 'rxg:passo:4' : '')
     + kpi('Decisor → Demo', GV2.v8Tx ? GV2.v8Tx(F[1], F[2]) : (F[1] ? Math.round(F[2] / F[1] * 100) + '%' : '—'), GV2.pl(F[2], 'demo', 'demos') + ' de ' + F[1] + ' conversas com decisor', F[2] ? 'rxg:passo:2' : '')
-    + kpi('Ciclo · mediana', c && c.n >= 3 ? GV2.virg(c.mediana).replace(/,0$/, '') + ' dias' : '—', c ? (c.n >= 3 ? '3 em cada 4 em até ' + GV2.virg(c.p75).replace(/,0$/, '') + ' dias · ' + c.n + ' fechados em 120 dias' : 'menos de 3 fechados que andaram o funil') : 'o robô não mandou o histórico', '')
+    + kpi('Demo → cliente', F[2] < 3 ? '—' : F[4] > F[2] ? '100%+' : Math.round(F[4] / F[2] * 100) + '%', F[2] ? GV2.pl(F[4], 'cliente', 'clientes') + ' de ' + GV2.pl(F[2], 'demo', 'demos') + ' no mês' + (F[4] && F[4] <= F[2] ? ' · 1 a cada ' + GV2.virg(F[2] / F[4]).replace(/,0$/, '') : '') : 'nenhuma demo no mês', 'rxg:demo')
+    + kpi('Ciclo · mediana', c && c.n >= 3 ? GV2.virg(c.mediana).replace(/,0$/, '') + ' dias' : '—', c ? (c.n >= 3 ? '3 em cada 4 em até ' + GV2.virg(c.p75).replace(/,0$/, '') + ' dias · ' + c.n + ' fechados em ' + ((h && h.dias) || 120) + ' dias' : 'menos de 3 fechados que andaram o funil') : 'o robô não mandou o histórico', c ? 'rxg:ciclo' : '')
     /* PERDAS DO MÊS (15/10/26, auditoria): o número era só das fichas de rua com motivo (23) e o
        HubSpot tinha 108 levados a Perdido no mês, a maioria limpeza de carteira em lote. Agora o
        número grande é a perda de verdade (Perdido no mês, fora o lote), e o detalhe diz o lote e
@@ -88810,6 +88821,55 @@ GV2.v8Comando = function (cmd, parte) {
     const o = GV2.estado.rxGav;
     if (o && o.t === 'pessoa') return GV2.v8GavPessoa(o.id);
     return c0();
+  };
+})();
+/* ══ AS GAVETAS DE DEMO → CLIENTE E DO CICLO (12/11/26, Julyan: "quero clicar e saber o que é, ver
+   isso, aprofundar"). Nenhum dado novo: o funil do mês da base e o historicoEtapas que o robô já
+   manda (ciclo, velocidade por etapa e o ciclo de cada dono). A lista de negócios do ciclo não vem
+   no snapshot; por isso a gaveta mostra o tempo por etapa e por pessoa, e diz o que ficou fora. */
+(function () {
+  const c0 = GV2.rxGavConteudo;
+  const dd = function (n) { return n == null ? '—' : GV2.virg(n).replace(/,0$/, '') + (n === 1 ? ' dia' : ' dias'); };
+  GV2.rxGavConteudo = function () {
+    const o = GV2.estado.rxGav;
+    if (o && o.t === 'demo') {
+      const b = GV2.rx();
+      return { tit: 'Demo → cliente', sub: 'clientes do mês ÷ demos do mês · ' + (GV2.base.mesNome || 'mês'),
+        corpo: '<p class="gv2-rxg-p">' + GV2.e('Conta do mês: quantos viraram cliente neste mês dividido por quantas demos foram feitas neste mês (demo realizada e contrato menos estorno, os mesmos pontos do ranking). Não é a mesma turma: quem fecha em novembro uma demo de outubro conta nos clientes e não nas demos. Seguindo cada demo até o ganho, a conversão do time tem ficado perto de 40% — 2,5 demos por cliente, a referência do playbook.') + '</p>'
+          + GV2.render.demoGanho(b) };
+    }
+    if (o && o.t === 'ciclo') {
+      const h = (typeof DATA !== 'undefined' && DATA && DATA.historicoEtapas) || {};
+      const c = h.ciclo || {};
+      const vel = (h.velocidade || []).filter(function (v) { return v && v.n; });
+      /* a barra é o "3 em cada 4": a mediana de quase toda etapa é 0 dia, porque o negócio anda várias
+         etapas no mesmo dia (o registro vem depois da visita) — medida em 12/11/26 */
+      const maxV = Math.max.apply(null, vel.map(function (v) { return v.p75 || 0; }).concat([1]));
+      const po = h.porOwner || {};
+      const pp = GV2.rx().pessoas.map(function (p) { const x = po[p.id] && po[p.id].ciclo; return { nome: GV2.prim(p.nome), n: x ? x.n : 0, m: x && x.n >= 3 ? x.mediana : null }; })
+        .sort(function (a, z) { return (a.m == null) - (z.m == null) || (a.m - z.m) || (z.n - a.n); });
+      const corpo = '<p class="gv2-rxg-p">' + GV2.e('Dias entre o negócio entrar no funil (Prospecção ou Visita) e virar Ganho, nos últimos ' + (h.dias || 120) + ' dias. Mediana: metade dos clientes fecha em até ' + dd(c.mediana) + '; 3 em cada 4, em até ' + dd(c.p75) + '.') + '</p>'
+        + '<p class="gv2-rxg-p t-dim">' + GV2.e('Entram ' + (c.n || 0) + ' dos ' + (c.ganhosNaJanela || 0) + ' ganhos da janela: os que andaram o funil por 2 dias ou mais. Os outros ' + (c.semCicloNoCrm || 0) + ' foram cadastrados no HubSpot já ganhos (a venda na rua entra no CRM no dia do fechamento) e não têm ciclo para medir.') + '</p>'
+        + '<h4 class="gv2-rxg-h">Onde o tempo vai <small>3 em cada 4 negócios saem da etapa em até… · todos os que avançaram, não só os ganhos</small></h4>'
+        + (vel.length ? '<div class="gv2-cic">' + vel.map(function (v) {
+          const estoura = v.sla && v.p75 != null && v.p75 > v.sla;
+          return '<div class="gv2-cic-l"><span class="gv2-ellip">' + GV2.e(v.nome) + '</span><div class="gv2-cic-tr"><i class="' + (estoura ? 'is-av' : '') + '" style="width:' + Math.max(4, Math.round((v.p75 || 0) / maxV * 100)) + '%"></i></div>'
+            + '<b class="num">' + GV2.e(dd(v.p75)) + '</b><small>' + GV2.e('mediana ' + dd(v.mediana) + (v.sla ? ' · régua ' + dd(v.sla) : '') + ' · ' + v.n + ' negócios') + '</small></div>';
+        }).join('') + '</div><p class="gv2-v4-nota" style="margin-top:6px">' + GV2.e('Mediana perto de 0 dia é o negócio andando várias etapas no mesmo dia: o executivo registra depois da visita. Por isso a barra é o "3 em cada 4", onde a demora aparece.') + '</p>' : '<p class="t-dim gv2-rxg-p">O robô não mandou o tempo por etapa nesta carga.</p>')
+        + '<h4 class="gv2-rxg-h">Por pessoa <small>mediana do ciclo de cada um · entre parênteses, quantos ganhos mediram</small></h4>'
+        + '<div class="gv2-dg-pp">' + pp.map(function (p) {
+          return '<span class="gv2-dg-p"><b>' + GV2.e(p.nome) + '</b> ' + GV2.e(p.n >= 3 ? dd(p.m) : '—') + ' <small>(' + p.n + ')</small></span>';
+        }).join('') + '</div>'
+        + '<p class="gv2-v4-nota" style="margin-top:8px">' + GV2.e('Com menos de 3 ganhos medidos a mediana da pessoa fica "—". Barra âmbar: 3 em cada 4 demoram mais que a régua do playbook.') + '</p>';
+      return { tit: 'Tempo de ciclo', sub: 'da primeira porta ao ganho · mediana ' + dd(c.mediana), corpo: corpo };
+    }
+    return c0();
+  };
+  const k0 = GV2.rxGavClique;
+  GV2.rxGavClique = function (parte) {
+    if (parte[1] === 'demo') { GV2.rxGavAbrir({ t: 'demo' }); return true; }
+    if (parte[1] === 'ciclo') { GV2.rxGavAbrir({ t: 'ciclo' }); return true; }
+    return k0(parte);
   };
 })();
 

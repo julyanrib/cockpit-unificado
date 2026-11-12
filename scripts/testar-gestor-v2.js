@@ -784,7 +784,7 @@ tabelas.gv2_falta_etapa = [
       navMenu.indexOf('data-gv2="menu:sair">Sair da conta<') > 0 && tpl.indexOf("if (o === 'sair') { const bt = document.getElementById('perfilSairBtn');") > 0);
     GV2.estado.aba = 'raiox'; GV2.estado.prf = 'todas';
     const fu = GV2.render.raiox();
-    checar('v5 · Funil: 4 cartões do funil, sem o "Funil · Praça" e com "Negócios para puxar" (travado separado de sem passo)', (fu.match(/class="gv2-v5-kpi( is-fixo)?"/g) || []).length === 4 && fu.indexOf('data-gv2="rxm:') < 0 && /Negócios para puxar/.test(fu) && /passou do prazo da etapa/.test(fu) && /<h1>Funil<\/h1>/.test(fu));
+    checar('v5 · Funil: 5 cartões do funil (Demo → cliente desde 12/11/26), sem o "Funil · Praça" e com "Negócios para puxar" (travado separado de sem passo)', (fu.match(/class="gv2-v5-kpi( is-fixo)?"/g) || []).length === 5 && fu.indexOf('data-gv2="rxg:demo"') > 0 && fu.indexOf('data-gv2="rxm:') < 0 && /Negócios para puxar/.test(fu) && /passou do prazo da etapa/.test(fu) && /<h1>Funil<\/h1>/.test(fu));
     const fpp = GV2.render.funilPorPessoa();
     const algumMenor = GV2.base.pessoas.some(function (p) { return p.funil_mes.portas > 0 && p.funil_mes.portas < 3 && p.funil_mes.decisor > 0; });
     checar('v5 · Funil por pessoa: a taxa só aparece com 3 ou mais no passo anterior (senão "—", nunca 400%)', !/>[0-9]{3,}%</.test(fpp) && /a taxa só aparece com 3 ou mais/.test(fpp) && (!algumMenor || /<small>—<\/small>/.test(fpp)));
