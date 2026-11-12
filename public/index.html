@@ -62102,7 +62102,7 @@ DV2.carreira = function (q) {
 };
 
 DV2.nivelPlaybook = function (q, capitulos) {
-  if (!q.playbook || !capitulos || !capitulos.length) return { fora: true, nivel: 0, total: 0, completa: false, feitos: [], titulo: 'Playbook · —', sub: (q.fontes.playbook || 'playbook_progresso') + ' não respondeu', proximo: null, ganhoEm: null };
+  if (!q.playbook || !capitulos || !capitulos.length) return { fora: true, nivel: 0, total: 0, completa: false, feitos: [], titulo: 'Playbook · —', sub: !q.playbook ? (q.fontes.playbook || 'playbook_progresso') + ' não respondeu' : DV2.estado.pbFalhou ? 'o conteúdo do Playbook não respondeu' : 'carregando a trilha do Playbook…', proximo: null, ganhoEm: null };
   const em = {};
   q.playbook.forEach(function (x) { em[x.slug] = x.em; });
   const feitos = capitulos.map(function (c) { return c.paginas.length > 0 && c.paginas.every(function (p) { return !!em[p]; }); });
@@ -62318,14 +62318,23 @@ DV2.render = async function (el, origem) {
   const abertura = origem || s.origem || (DV2.temSeloNoMenu() ? 'selo_menu' : 'menu');
   s.origem = null;
   if (typeof supa !== 'undefined' && supa) Promise.resolve().then(function () { return supa.rpc('registrar_abertura', { p_tela: 'desenvolvimento', p_origem: abertura }); }).then(function () {}, function () {});
+
+  const pb = DV2.garantirPlaybook();
+  const repintar = function () { if (DV2.el === el && DV2.estaNaTela()) DV2.pintar(); };
   if (!s.q) {
     el.innerHTML = '<div class="gv2-tokens dv2"><div class="dv-lendo">Montando o seu jogo com os mesmos números do app…</div></div>';
-    await DV2.carregar();
+    await Promise.all([DV2.carregar(), Promise.race([pb.p, new Promise(function (ok) { setTimeout(ok, 2500); })])]);
   } else {
-    DV2.carregar(true).then(function () { if (DV2.el === el && DV2.estaNaTela()) DV2.pintar(); });
+    DV2.carregar(true).then(repintar);
   }
   DV2.pintar();
+  if (pb.faltava) pb.p.then(function (ok) { s.pbFalhou = !ok; repintar(); });
   if (s.rolarColecao) { s.rolarColecao = false; setTimeout(function () { const c = document.getElementById('dv2Colecao'); if (c && c.scrollIntoView) c.scrollIntoView({ behavior: DV2.reduzir() ? 'auto' : 'smooth', block: 'start' }); }, 60); }
+};
+DV2.garantirPlaybook = function () {
+  if (typeof playbookDados !== 'function' || DV2.tentar(playbookDados)) return { faltava: false, p: Promise.resolve(true) };
+  if (typeof carregarPlaybookProtegido !== 'function') return { faltava: true, p: Promise.resolve(false) };
+  return { faltava: true, p: Promise.resolve().then(function () { return carregarPlaybookProtegido(); }).then(function () { return !!DV2.tentar(playbookDados); }, function () { return false; }) };
 };
 DV2.estaNaTela = function () { return !!(DV2.el && DV2.el.isConnected !== false && DV2.el.querySelector && DV2.el.querySelector('.dv2')); };
 DV2.reduzir = function () { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
@@ -67398,6 +67407,7 @@ GV2.v8Gargalo = function (R) {
   if (GV2.v8Comecando()) { const d = GV2.v8PrimeiroUtil(); return { k: 'ok', t: 'O mês começa ' + (d === GV2.base.agora.iso ? 'hoje' : GV2.DIAS_LONGOS[GV2.dow(d)] + ' ' + GV2.ddmm(d)) + ': o esperado conta a partir do primeiro dia útil fechado' }; }
   const rv = R.vis.esp ? R.vis.feito / R.vis.esp : 1, rd = R.dem.esp ? R.dem.feito / R.dem.esp : 1;
   const pv = Math.round(rv * 100), pd = Math.round(rd * 100), dd = GV2.v8Tx(R.f.decisor || 0, R.f.demo || 0);
+  if (!R.dem.meta) return rv >= 0.9 ? { k: 'ok', t: 'Visitas em ' + pv + '% do esperado · sem meta de demo neste mês' } : { k: 'av', t: 'Visitas em ' + pv + '% do esperado: faltam portas · sem meta de demo neste mês' };
   if (rv >= 0.9 && rd >= 0.9) return { k: 'ok', t: 'Visitas em ' + pv + '% e demos em ' + pd + '% do esperado: no ritmo, proteger o que está quente' };
   if (rd >= 0.9) return { k: 'av', t: 'Demos em ' + pd + '%, visitas em ' + pv + '%: converte, mas faltam portas' };
   if (rv >= 0.9) return { k: 'mal', t: 'Visitas em ' + pv + '%, demos em ' + pd + '%: volume ok, perde entre a visita e a demo (decisor → demo ' + dd + ')' };
@@ -69120,6 +69130,8 @@ GV2.v9PassosHTML = function (f, acao, compacto) {
 GV2.v9GargaloCurto = function (R) {
   if (GV2.v8Comecando()) return 'mês começando';
   const rv = R.vis.esp ? R.vis.feito / R.vis.esp : 1, rd = R.dem.esp ? R.dem.feito / R.dem.esp : 1;
+
+  if (!R.dem.meta) return rv >= 0.9 ? 'no ritmo' : 'faltam portas';
   if (rv >= 0.9 && rd >= 0.9) return 'no ritmo';
   if (rd >= 0.9) return 'converte, faltam portas';
   if (rv >= 0.9) return 'perde na demo';
