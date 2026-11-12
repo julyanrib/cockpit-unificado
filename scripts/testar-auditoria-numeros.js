@@ -147,6 +147,13 @@ GV2.pintar = function () {};
   checar('Funil por pessoa: com meta de demo o diagnóstico segue o de antes', GV2.v9GargaloCurto(R12(20, 42, 5, 1.8, 5)) === 'converte, faltam portas' && GV2.v9GargaloCurto(R12(47, 42, 4, 7.4, 20)) === 'perde na demo');
   checar('Desenvolvimento: a aba pede o conteúdo do Playbook (sem ele a trilha saía "não respondeu")',
     tpl.includes('DV2.garantirPlaybook = function') && tpl.includes('const pb = DV2.garantirPlaybook();') && tpl.includes('if (pb.faltava) pb.p.then(function (ok) { s.pbFalhou = !ok; repintar(); });') && tpl.includes("'carregando a trilha do Playbook…'"));
+  /* 12/11/26 · o gestor no celular: só CSS, só até 640 px, e tem de ser o ÚLTIMO bloco da folha */
+  const cel = tpl.slice(tpl.indexOf('O GESTOR NO CELULAR'), tpl.indexOf('</style><!-- /gv2-css -->'));
+  checar('celular: o bloco do gestor existe e fecha a folha gv2', cel.length > 3000 && cel.length < 12000 && cel.includes('@media (max-width:640px){'));
+  checar('celular: as abas viram a barra de baixo, com o nome à mostra', cel.includes('.gv2 .gv2-nav-lista{position:fixed;left:0;right:0;bottom:0;') && cel.includes('.gv2-nav-rot{display:block;'));
+  checar('celular: a página inteira rola e termina acima da barra', cel.includes('.gv2 > .gv2-main{padding:12px 12px calc(70px + env(safe-area-inset-bottom,0px));overflow-y:auto;') && cel.includes('.gv2 > .gv2-main > .gv2-corpo{overflow:visible;flex:none;'));
+  checar('celular: Pessoas, Propostas e tabela larga têm regra própria', cel.includes('.pv2-placa .pv2-lin.is-th{display:none;}') && cel.includes('.gv2-prop{grid-template-columns:minmax(0,1fr);') && cel.includes('.gv2-tab{overflow-x:auto;'));
+  checar('celular: nada do bloco vale no computador (uma media só, sem regra solta)', (cel.match(/@media/g) || []).length === 1 && cel.trim().endsWith('}'));
   console.log(falhas.length ? 'auditoria de números: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length) + '\n  ✗ ' + falhas.join('\n  ✗ ') : 'auditoria de números: ' + ok + ' verificações · tudo certo.');
   process.exit(falhas.length ? 1 : 0);
 })().catch((e) => { console.log('auditoria de números: quebrou — ' + (e && e.stack || e)); process.exit(1); });
