@@ -813,7 +813,10 @@ function filtrarParaPapel(dados, usuario) {
       minimoDaTurma: dados.historicoEtapas.minimoDaTurma,
       escada: {},
       velocidade: dados.historicoEtapas.velocidade || [],
-      ciclo: dados.historicoEtapas.ciclo || null,
+      /* a lista do ciclo desce só com os negócios DELE */
+      ciclo: dados.historicoEtapas.ciclo ? Object.assign({}, dados.historicoEtapas.ciclo, {
+        lista: (dados.historicoEtapas.ciclo.lista || []).filter(x => String(x.owner) === String(meuId))
+      }) : null,
       agregado: dados.historicoEtapas.agregado || null,
       porOwner: { [meuId]: (dados.historicoEtapas.porOwner || {})[meuId] || null },
       /* passos do mês: a lista inteira só a dele; dos colegas, só quantos (o ranking de

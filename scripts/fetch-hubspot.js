@@ -1778,6 +1778,7 @@ async function historicoDeEtapas() {
     const rp = rankDaPorta(d);
     return rp != null && rp <= PORTAS_DE_ENTRADA && (d.ganho - d.porta) >= 2 * DIA;
   };
+  const idsDoTimeCiclo = new Set(REPS.map(r => String(r.ownerId)));
   const ganhosNaJanela = negocios.filter(d => d.ganho != null);
   const comCiclo = ganhosNaJanela.filter(andouOFunil);
   const ciclos = comCiclo.map(d => (d.ganho - d.porta) / DIA);
@@ -1786,7 +1787,16 @@ async function historicoDeEtapas() {
     ganhosNaJanela: ganhosNaJanela.length,
     semCicloNoCrm: ganhosNaJanela.length - comCiclo.length,
     mediana: ciclos.length ? Math.round(mediana(ciclos) * 10) / 10 : null,
-    p75: ciclos.length ? Math.round(percentil(ciclos, 0.75) * 10) / 10 : null
+    p75: ciclos.length ? Math.round(percentil(ciclos, 0.75) * 10) / 10 : null,
+    /* A LISTA, NEGÓCIO A NEGÓCIO (12/11/26): o gestor clicou no ciclo e quis ver quem
+       entra na mediana. Só os do time e só os medidos — o corte do executivo (montar-dados)
+       deixa nele apenas os dele. Do mais lento ao mais rápido. */
+    lista: comCiclo.filter(d => idsDoTimeCiclo.has(String(d.owner))).map(d => ({
+      id: d.id, nome: d.nome || ('negócio ' + d.id), owner: d.owner,
+      porta: STAGE_LABELS[HIST_ORDEM[rankDaPorta(d) - 1]] || null,
+      entrou: new Date(d.porta).toISOString(), ganhou: new Date(d.ganho).toISOString(),
+      dias: Math.round((d.ganho - d.porta) / DIA * 10) / 10, mrr: d.mrr || 0
+    })).sort((a, b) => b.dias - a.dias)
   };
 
   /* POR EXECUTIVO: a janela inteira, não mês a mês — turma de um mês por pessoa tem n
