@@ -140,6 +140,13 @@ GV2.pintar = function () {};
   checar('cabeçalho: o texto tem piso de largura e as ações descem de linha', /\.gv2-cab-txt\{flex:1 1 260px;min-width:min\(100%,260px\);\}/.test(tpl));
   checar('KPIs da Hoje acima do celular: cada cartão com ao menos 190px (5 fixas davam 117px a 767px)', /\.gv2-v5-kpis:not\(\.is-4\)\{grid-template-columns:repeat\(auto-fit,minmax\(190px,1fr\)\);\}/.test(tpl));
 
+  /* 12/11/26 · auditoria final */
+  GV2.base = { agora: { iso: '2026-11-12', min: 600 }, pessoas: [] };
+  const R12 = (vf, ve, df, de, dm) => ({ vis: { feito: vf, esp: ve }, dem: { feito: df, esp: de, meta: dm }, f: {} });
+  checar('Funil por pessoa: quem não tem meta de demo no mês não sai "converte" (o Jean, 0 demo)', GV2.v9GargaloCurto(R12(7, 42, 0, 0, 0)) === 'faltam portas' && !/converte/.test(GV2.v8Gargalo(R12(7, 42, 0, 0, 0)).t), GV2.v9GargaloCurto(R12(7, 42, 0, 0, 0)));
+  checar('Funil por pessoa: com meta de demo o diagnóstico segue o de antes', GV2.v9GargaloCurto(R12(20, 42, 5, 1.8, 5)) === 'converte, faltam portas' && GV2.v9GargaloCurto(R12(47, 42, 4, 7.4, 20)) === 'perde na demo');
+  checar('Desenvolvimento: a aba pede o conteúdo do Playbook (sem ele a trilha saía "não respondeu")',
+    tpl.includes('DV2.garantirPlaybook = function') && tpl.includes('const pb = DV2.garantirPlaybook();') && tpl.includes('if (pb.faltava) pb.p.then(function (ok) { s.pbFalhou = !ok; repintar(); });') && tpl.includes("'carregando a trilha do Playbook…'"));
   console.log(falhas.length ? 'auditoria de números: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length) + '\n  ✗ ' + falhas.join('\n  ✗ ') : 'auditoria de números: ' + ok + ' verificações · tudo certo.');
   process.exit(falhas.length ? 1 : 0);
 })().catch((e) => { console.log('auditoria de números: quebrou — ' + (e && e.stack || e)); process.exit(1); });
