@@ -258,12 +258,12 @@ conferir('Méier e Vila Valqueire são do Sandro, e Madureira saiu da rota dele'
   && quem('rio de janeiro', 'madureira') === null,
   'a rota do Sandro de 15/10 é Vila Valqueire e Méier; Madureira com dono seria a rota velha ou a lista antiga decidindo');
 
-/* Cachambi era do Luiz por declaração; com ele fora do Rio, ela não é de ninguém — e
-   NÃO PODE voltar para o Sandro pela lista de 01/09, que é o mapa antigo. É isto que
-   esta checagem protege agora: a lista velha não reassume o bairro órfão. */
-conferir('Cachambi ficou sem dono, e a lista antiga não a reassume',
-  quem('rio de janeiro', 'cachambi') === null,
-  'a lista de 01/09 a dava ao Sandro; deixá-la reassumir poria o lead na carteira de quem não pediu');
+/* Cachambi era do Luiz; ficou órfã quando ele saiu do Rio e, em 12/11/26, entrou na rota da
+   Larah (#1014). A lista de 01/09, o mapa antigo, a dava ao Sandro — e NÃO PODE vencer a
+   declaração nova. */
+conferir('Cachambi é da Larah, e a lista antiga não a devolve ao Sandro',
+  quem('rio de janeiro', 'cachambi') === 'Larah',
+  'a lista de 01/09 a dava ao Sandro; deixá-la vencer poria o lead na carteira de quem não pediu');
 
 /*  TODO BAIRRO NOMEADO CAI EM QUEM O NOMEOU — a varredura inteira, não três exemplos.
     Substituiu, em 28/10/26, as checagens que cravavam "Tijuca é do Bruno", "Anil é do

@@ -7670,6 +7670,14 @@ button.gv2-funil-lin.is-sel{background:var(--gv2-acao-soft);}
 .gv2-cic-tr i.is-av{background:var(--gv2-av);}
 .gv2-cic-l b{text-align:right;font-weight:700;}
 .gv2-cic-l small{grid-column:2 / 4;font:var(--gv2-mini);color:var(--gv2-dim);}
+.gv2-cicl{display:flex;flex-direction:column;border-top:1px solid var(--gv2-line);}
+.gv2-cicl-l{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--gv2-line);color:var(--gv2-ink);text-decoration:none;}
+.gv2-cicl-l:hover{background:var(--gv2-track);}
+.gv2-cicl-l>span{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;}
+.gv2-cicl-l>span b{font:600 13px var(--gv2-font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gv2-cicl-l>span small{font:var(--gv2-mini);color:var(--gv2-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gv2-cicl-l>b{flex:0 0 auto;font:700 13px var(--gv2-font);}
+.gv2-cicl-l>b.is-av{color:var(--gv2-av);}
 .gv2-v4-prosp{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--gv2-line-soft);padding-top:8px;}
 .gv2-v4-prosp small{font:var(--gv2-rotulo);letter-spacing:.05em;text-transform:uppercase;color:var(--gv2-dim);}
 .gv2-v4-prosp b{font:700 13px var(--gv2-font);}
@@ -67504,7 +67512,19 @@ GV2.v8Comando = function (cmd, parte) {
         + '<div class="gv2-dg-pp">' + pp.map(function (p) {
           return '<span class="gv2-dg-p"><b>' + GV2.e(p.nome) + '</b> ' + GV2.e(p.n >= 3 ? dd(p.m) : '—') + ' <small>(' + p.n + ')</small></span>';
         }).join('') + '</div>'
-        + '<p class="gv2-v4-nota" style="margin-top:8px">' + GV2.e('Com menos de 3 ganhos medidos a mediana da pessoa fica "—". Barra âmbar: 3 em cada 4 demoram mais que a régua do playbook.') + '</p>';
+        + '<p class="gv2-v4-nota" style="margin-top:8px">' + GV2.e('Com menos de 3 ganhos medidos a mediana da pessoa fica "—". Barra âmbar: 3 em cada 4 demoram mais que a régua do playbook.') + '</p>'
+
+        + (function () {
+          const L = Array.isArray(c.lista) ? c.lista : null;
+          if (!L) return '<p class="t-dim gv2-rxg-p">A lista de negócios chega na próxima carga do robô.</p>';
+          if (!L.length) return '';
+          const nomes = {}; GV2.rx().pessoas.forEach(function (p) { nomes[String(p.id)] = GV2.prim(p.nome); });
+          const br = function (iso) { const t = Date.parse(iso); return isNaN(t) ? '—' : GV2.ddmm(new Date(t - 3 * 3600e3).toISOString()); };
+          return '<h4 class="gv2-rxg-h">Os ' + L.length + ' negócios medidos <small>do mais lento ao mais rápido · entrou no funil → ganho</small></h4><div class="gv2-cicl">'
+            + L.map(function (x) {
+              return '<a class="gv2-cicl-l" href="https://app.hubspot.com/contacts/24373118/record/0-3/' + encodeURIComponent(x.id) + '" target="_blank" rel="noopener"><span class="gv2-ellip"><b>' + GV2.e(x.nome) + '</b><small>' + GV2.e((nomes[String(x.owner)] || 'fora do time') + ' · ' + (x.porta || 'porta') + ' ' + br(x.entrou) + ' → ganho ' + br(x.ganhou)) + '</small></span><b class="num' + (c.p75 != null && x.dias > c.p75 ? ' is-av' : '') + '">' + GV2.e(dd(x.dias)) + '</b></a>';
+            }).join('') + '</div><p class="gv2-v4-nota" style="margin-top:6px">' + GV2.e('Em âmbar, os que passaram do "3 em cada 4" (' + dd(c.p75) + '). Clique abre o negócio no HubSpot.') + '</p>';
+        })();
       return { tit: 'Tempo de ciclo', sub: 'da primeira porta ao ganho · mediana ' + dd(c.mediana), corpo: corpo };
     }
     return c0();
