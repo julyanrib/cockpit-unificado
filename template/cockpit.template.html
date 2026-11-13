@@ -84447,6 +84447,7 @@ GV2.v5Grupos = function () {
       chips: lista.map(function (x) { return chip(x.p, GV2.pl(x.n, 'sem prova', 'sem prova') + (x.dia === b.agora.iso ? ' hoje' : ' ' + b.ontemRot), 'v5dia:' + x.p.id + ':' + x.dia); }),
       btn: 'Validar', acao: 'v5dia:' + lista[0].p.id + ':' + lista[0].dia });
   }
+  if (GV2.voltasGrupo) GV2.voltasGrupo(g, b, chip);
   GV2.v10Grupos(g, b, chip);
   /* sem a aba Rampa (01/11/26), o Hoje não cobra aprovação de fase nem dia 45: não há onde decidir */
   if (GV2.hbGrupos) GV2.hbGrupos(g, b, chip);
@@ -84456,9 +84457,80 @@ GV2.v5Grupos = function () {
   g.forEach(function (x) { if (GV2.V5_PENDENCIA_MES[x.k]) x.mes = true; });
   return { grupos: g, sit: sit };
 };
+/* ══ VOLTA MARCADA E NÃO FEITA (13/11/26) ═════════════════════════════════════════════════
+   Medido em 13/11: de 180 voltas marcadas na ficha de rua e já vencidas, 134 entraram no plano
+   em até 3 dias e só 50 foram feitas. A volta não se perde no planejamento: ela não é cobrada.
+   A conta vem pronta do banco (voltas_do_time, 0262): a última ficha do negócio antes de hoje
+   marcou o próximo passo como visita. "De hoje" é a data marcada; "vencida" é data passada
+   sem ficha nem check-in desde então. Só negócio aberto, no nome de quem é do time hoje.
+   Releitura a cada 10 min, porque "feitas hoje" anda durante o dia. Só lê, não grava nada. */
+GV2.voltas = { d: null, em: 0, lendo: false, erro: null };
+GV2.VOLTAS_MIN = 10;
+GV2.voltasLer = async function () {
+  const V = GV2.voltas;
+  if (V.lendo || typeof supa === 'undefined' || !supa) return;
+  V.lendo = true;
+  try {
+    const r = await supa.rpc('voltas_do_time');
+    if (r.error) throw r.error;
+    V.d = r.data || null; V.erro = V.d ? null : 'voltas_do_time não respondeu';
+  } catch (e) { V.erro = (e && e.message) || String(e); }
+  V.em = Date.now(); V.lendo = false;
+  GV2.v5SeloMem = null;
+  if (GV2.estado.aba === 'time' || GV2.estado.v5Gav) GV2.pintar();
+};
+GV2.voltasDe = function (p) { const V = GV2.voltas; return (V.d && V.d.pessoas && V.d.pessoas[String(p.id)]) || null; };
+GV2.voltasGrupo = function (g, b, chip) {
+  const V = GV2.voltas;
+  if (!V.lendo && Date.now() - V.em > GV2.VOLTAS_MIN * 60000) setTimeout(GV2.voltasLer, 0);
+  if (!V.d || !V.d.pessoas) return;
+  const l = b.pessoas.map(function (p) { return { p: p, v: GV2.voltasDe(p) }; })
+    .filter(function (x) { return x.v && (x.v.vencidas > 0 || x.v.hoje > x.v.hoje_feitas); })
+    .sort(function (x, y) { return (y.v.vencidas - x.v.vencidas) || (y.v.hoje - x.v.hoje); });
+  if (!l.length) return;
+  const venc = l.reduce(function (s, x) { return s + x.v.vencidas; }, 0);
+  const hoje = b.pessoas.reduce(function (s, p) { const v = GV2.voltasDe(p); return s + (v ? v.hoje : 0); }, 0);
+  const feitas = b.pessoas.reduce(function (s, p) { const v = GV2.voltasDe(p); return s + (v ? v.hoje_feitas : 0); }, 0);
+  g.push({ k: 'volta', l: venc ? 'Volta não feita' : 'Voltas de hoje', sev: 1, n: venc || hoje - feitas,
+    curta: (hoje ? 'hoje ' + feitas + ' de ' + hoje + ' · ' : '') + (venc ? 'a data passou' : 'ainda por fazer'),
+    regra: 'a última ficha do negócio marcou voltar em visita · vencida = a data passou e não houve ficha nem check-in depois · só negócio aberto',
+    chips: l.map(function (x) {
+      const c = chip(x.p, (x.v.vencidas ? GV2.pl(x.v.vencidas, 'vencida', 'vencidas') : '') + (x.v.vencidas && x.v.hoje ? ' · ' : '') + (x.v.hoje ? 'hoje ' + x.v.hoje_feitas + ' de ' + x.v.hoje : ''), 'v5gav:voltas:' + x.p.id);
+      c.sinal = x.v.vencidas ? GV2.pl(x.v.vencidas, 'volta vencida', 'voltas vencidas') : 'volta de hoje ' + x.v.hoje_feitas + ' de ' + x.v.hoje;
+      return c;
+    }),
+    btn: 'Ver as voltas', acao: 'v5gav:voltas:' + l[0].p.id });
+};
+GV2.p3Voltas = function (p) {
+  const V = GV2.voltas, n = GV2.prim(p.nome);
+  if (!V.d) {
+    if (!V.lendo && Date.now() - V.em > 30000) setTimeout(GV2.voltasLer, 0);
+    return '<div class="gv2-p3-erro"><b>' + GV2.e(V.erro ? 'Não li as voltas agora' : 'Lendo as voltas…') + '</b><span>' + GV2.e(V.erro ? 'As fichas de rua não responderam (' + V.erro + ').' : 'A lista aparece em instantes.') + '</span></div>';
+  }
+  const v = GV2.voltasDe(p), hoje = String(V.d.hoje);
+  const lista = (v && v.lista) || [];
+  if (!lista.length) return '<div class="gv2-p3-bloco"><div class="gv2-p3-bloco-cab"><b>Voltas marcadas e não feitas</b><span class="t-ok">0</span></div><p class="gv2-hist">' + GV2.e(n + ' não tem volta vencida nem volta para hoje.') + '</p></div>';
+  const dias = function (iso) { return Math.round((Date.parse(hoje + 'T12:00:00Z') - Date.parse(String(iso).slice(0, 10) + 'T12:00:00Z')) / 86400000); };
+  const it = function (x) {
+    const eHoje = String(x.dia) === hoje, d = dias(x.dia);
+    const quando = eHoje ? (x.feita ? 'feita hoje' : 'é hoje') : 'venceu há ' + GV2.pl(d, 'dia', 'dias');
+    const sub = [x.etapa, x.bairro, 'visitou ' + GV2.ddmm(String(x.visitou)), 'marcou ' + GV2.ddmm(String(x.dia)), x.horario_dono ? 'dono: ' + String(x.horario_dono).replace(/_/g, ' ') : ''].filter(Boolean).join(' · ');
+    return '<div class="gv2-v4-reun-it"><span class="gv2-ellip"><b>' + GV2.e(x.nome) + '</b><small>' + GV2.e(sub) + '</small></span>'
+      + '<span class="gv2-v4-reun-bt"><b class="num ' + (eHoje ? (x.feita ? 't-ok' : 't-av') : d > 7 ? 't-erro' : 't-av') + '">' + GV2.e(quando) + '</b>'
+      + '<a class="gv2-v4-link" href="https://app.hubspot.com/contacts/24373118/record/0-3/' + encodeURIComponent(x.deal) + '" target="_blank" rel="noopener">HubSpot ↗</a></span></div>';
+  };
+  const deHoje = lista.filter(function (x) { return String(x.dia) === hoje; }), venc = lista.filter(function (x) { return String(x.dia) !== hoje; });
+  const bloco = function (tit, n2, tom, corpo, pe) {
+    return '<div class="gv2-p3-bloco gv2-v4-reun"><div class="gv2-p3-bloco-cab"><b>' + GV2.e(tit) + '</b><span class="' + tom + ' num">' + GV2.e(n2) + '</span></div><div class="gv2-v4-reun-lista">' + corpo + '</div>' + (pe ? '<p class="gv2-hist">' + GV2.e(pe) + '</p>' : '') + '</div>';
+  };
+  return (deHoje.length ? bloco('Voltas de hoje', v.hoje_feitas + ' de ' + v.hoje, v.hoje_feitas >= v.hoje ? 't-ok' : 't-av', deHoje.map(it).join(''), '') : '')
+    + (venc.length ? bloco('Marcadas e não feitas', String(v.vencidas), 't-av', venc.map(it).join(''),
+      (v.vencidas > venc.length ? 'mostrando as ' + venc.length + ' mais recentes de ' + v.vencidas + ' · ' : '') + 'a última ficha marcou voltar em visita e não houve ficha nem check-in depois · lido ' + GV2.hhmm((new Date(V.em).getHours()) * 60 + new Date(V.em).getMinutes())) : '');
+};
+
 GV2.V5_PENDENCIA_MES = { umaum: '1:1', hbdef: 'habilidade', orfa: 'carteira de quem saiu', semfecho: 'fecho do dia', semficha: 'visita sem ficha', pino: 'pino movido' };
 /* o sinal curto de cada situação na linha da pessoa (Por pessoa) */
-GV2.V5_SINAL = { travou: 'travou', semrota: 'sem rota', furou: 'furou ontem', dinheiro: 'dinheiro parado', semprova: 'visita sem prova', umaum: '1:1 atrasado', hbdef: 'sem habilidade', semfecho: 'não fechou o dia', semficha: 'visita sem ficha', pino: 'pino movido' };
+GV2.V5_SINAL = { travou: 'travou', volta: 'volta vencida', semrota: 'sem rota', furou: 'furou ontem', dinheiro: 'dinheiro parado', semprova: 'visita sem prova', umaum: '1:1 atrasado', hbdef: 'sem habilidade', semfecho: 'não fechou o dia', semficha: 'visita sem ficha', pino: 'pino movido' };
 
 /* ══ O QUE COBRA O GESTOR (30/10/26) ══════════════════════════════════════════════════════
    Julyan, 30/10, depois da auditoria contra The Sales Acceleration Formula: as ferramentas de
@@ -86851,7 +86923,7 @@ GV2.render.qpCartao = function (G, b) {
     const vis = todos ? g.chips : g.chips.slice(0, GV2.QP_HOJE_CHIPS);
     const mais = todos ? '' : '<button type="button" class="gv2-qp-mais" data-gv2="qpmais:' + g.k + '" title="mostrar os ' + g.chips.length + '">+' + (g.chips.length - vis.length) + '</button>';
     const btn = g.k === 'travou' && g.chips.length > 1 ? 'Chamar os ' + g.chips.length : g.btn;
-    return '<div class="gv2-qp-l is-' + camada + ' is-' + g.k + '"><div class="gv2-qp-sit" title="' + GV2.e(g.regra) + '"><b>' + GV2.e(g.l) + ' <em class="num">' + g.chips.length + '</em></b><span>' + GV2.e(g.curta || g.regra) + '</span></div>'
+    return '<div class="gv2-qp-l is-' + camada + ' is-' + g.k + '"><div class="gv2-qp-sit" title="' + GV2.e(g.regra) + '"><b>' + GV2.e(g.l) + ' <em class="num">' + (g.n != null ? g.n : g.chips.length) + '</em></b><span>' + GV2.e(g.curta || g.regra) + '</span></div>'
       + '<div class="gv2-qp-chips">' + vis.map(function (c) { return GV2.render.qpChip(c, ag); }).join('') + mais + '</div>'
       + (g.btn ? '<button type="button" class="gv2-qp-bt' + (ag ? ' is-cheio' : '') + '" data-gv2="' + GV2.e(g.acao) + '">' + GV2.e(btn) + '</button>' : '<span></span>') + '</div>';
   };
@@ -86932,7 +87004,7 @@ GV2.render.v5PorPessoa = function (sit, grupos) {
     (g.chips || []).forEach(function (c) {
       if (!c.pid) return;
       const l = sinais[c.pid] = sinais[c.pid] || [];
-      if (!l.some(function (x) { return x.k === g.k; })) l.push({ k: g.k, t: GV2.V5_SINAL[g.k], mes: !!g.mes, tip: g.l + ' · ' + c.s });
+      if (!l.some(function (x) { return x.k === g.k; })) l.push({ k: g.k, t: c.sinal || GV2.V5_SINAL[g.k], mes: !!g.mes, tip: g.l + ' · ' + c.s });
     });
   });
   const sinaisHTML = function (p) {
@@ -87336,6 +87408,7 @@ GV2.render.v5Gav = function () {
   const T = { um: ['1:1 com ' + n, 'pauta pronta · os combinados vão para o sino do app', GV2.p3UmAUm(p) + GV2.p3Pe(p, 'um')],
     disc: ['Disciplina de ' + n, 'o que ficou sem fechar · o cockpit avisa, não trava', GV2.p3Disciplina(p) + GV2.p3Pe(p, 'disc')],
     campo: ['Campo com ' + n, 'a ida, a rota do dia e a devolutiva', GV2.p3Campo(p) + GV2.p3Pe(p, 'campo')],
+    voltas: ['Voltas de ' + n, 'a ficha marcou voltar em visita e ninguém voltou · cobre pelo nome do restaurante', GV2.p3Voltas(p)],
     funil: ['Funil de ' + n, 'o mesmo número do Hoje e do Funil · negócio repetido conta uma vez', GV2.p3Funil(p) + GV2.p3Pe(p, 'funil')] }[g.t];
   if (!T) return '';
   return '<div class="gv2-rxg-veu" data-gv2="v5gav:fechar"></div><aside class="gv2-rxg gv2-v5-gav" role="dialog" aria-label="' + GV2.e(T[0]) + '">'
