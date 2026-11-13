@@ -154,6 +154,27 @@ GV2.pintar = function () {};
   checar('celular: a página inteira rola e termina acima da barra', cel.includes('.gv2 > .gv2-main{padding:12px 12px calc(70px + env(safe-area-inset-bottom,0px));overflow-y:auto;') && cel.includes('.gv2 > .gv2-main > .gv2-corpo{overflow:visible;flex:none;'));
   checar('celular: Pessoas, Propostas e tabela larga têm regra própria', cel.includes('.pv2-placa .pv2-lin.is-th{display:none;}') && cel.includes('.gv2-prop{grid-template-columns:minmax(0,1fr);') && cel.includes('.gv2-tab{overflow-x:auto;'));
   checar('celular: nada do bloco vale no computador (uma media só, sem regra solta)', (cel.match(/@media/g) || []).length === 1 && cel.trim().endsWith('}'));
+  /* 13/11/26 · volta marcada e não feita, no Hoje do gestor */
+  {
+    const P = [{ id: '1', nome: 'Ana Souza', iniciais: 'AS' }, { id: '2', nome: 'Beto Lima', iniciais: 'BL' }, { id: '3', nome: 'Caio Reis', iniciais: 'CR' }];
+    const bV = { agora: { iso: '2026-11-13', min: 600 }, pessoas: P };
+    const chipV = (p, s2, a) => ({ pid: p.id, n: p.nome, s: s2, a: a });
+    GV2.voltas = { d: null, em: Date.now(), lendo: false, erro: null };
+    let gV = []; GV2.voltasGrupo(gV, bV, chipV);
+    checar('voltas: sem leitura do banco o Hoje não inventa linha', gV.length === 0);
+    GV2.voltas.d = { hoje: '2026-11-13', pessoas: { '1': { hoje: 2, hoje_feitas: 2, vencidas: 0, lista: [] }, '2': { hoje: 3, hoje_feitas: 1, vencidas: 4, lista: [] }, '3': { hoje: 0, hoje_feitas: 0, vencidas: 9, lista: [] } } };
+    gV = []; GV2.voltasGrupo(gV, bV, chipV);
+    checar('voltas: o número do grupo é o de negócios vencidos, não o de pessoas', gV.length === 1 && gV[0].k === 'volta' && gV[0].n === 13 && gV[0].chips.length === 2, JSON.stringify(gV[0] && { n: gV[0].n, c: gV[0].chips.length }));
+    checar('voltas: quem mais deve vem primeiro, e quem fez todas as de hoje não aparece', gV[0].chips[0].pid === '3' && gV[0].chips[1].pid === '2' && !gV[0].chips.some((c) => c.pid === '1'));
+    checar('voltas: o chip diz vencidas e as de hoje, e abre a gaveta da pessoa', gV[0].chips[1].s === '4 vencidas · hoje 1 de 3' && gV[0].chips[1].a === 'v5gav:voltas:2' && gV[0].chips[1].sinal === '4 voltas vencidas', JSON.stringify(gV[0].chips[1]));
+    checar('voltas: o resumo do grupo soma as de hoje do time inteiro', /^hoje 3 de 5 · /.test(gV[0].curta), gV[0].curta);
+    GV2.voltas.d.pessoas['2'].lista = [{ deal: '10', nome: 'Bar do Zé', etapa: 'Visita', bairro: 'Méier', dia: '2026-11-13', visitou: '2026-11-10', feita: false, horario_dono: '10h_11h30' }, { deal: '11', nome: 'Pizzaria Sol', etapa: 'Visita', bairro: 'Anil', dia: '2026-11-03', visitou: '2026-10-27', feita: false, horario_dono: null }];
+    const hV = GV2.p3Voltas(P[1]);
+    checar('voltas: a gaveta lista pelo nome, com a de hoje, os dias de atraso e o horário do dono', hV.includes('Bar do Zé') && hV.includes('é hoje') && hV.includes('venceu há 10 dias') && hV.includes('dono: 10h 11h30') && hV.includes('record/0-3/11'), hV.slice(0, 200));
+    checar('voltas: quem não deve nada tem a gaveta dizendo isso', GV2.p3Voltas(P[0]).includes('não tem volta vencida nem volta para hoje'));
+    checar('voltas: o grupo entra no Hoje e a linha da pessoa mostra o sinal com o número', tpl.includes('if (GV2.voltasGrupo) GV2.voltasGrupo(g, b, chip);') && tpl.includes('t: c.sinal || GV2.V5_SINAL[g.k]') && tpl.includes("volta: 'volta vencida'"));
+    GV2.voltas = { d: null, em: Date.now(), lendo: false, erro: null };
+  }
   console.log(falhas.length ? 'auditoria de números: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length) + '\n  ✗ ' + falhas.join('\n  ✗ ') : 'auditoria de números: ' + ok + ' verificações · tudo certo.');
   process.exit(falhas.length ? 1 : 0);
 })().catch((e) => { console.log('auditoria de números: quebrou — ' + (e && e.stack || e)); process.exit(1); });
