@@ -11197,6 +11197,8 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .kb7-passo b{font:600 12px/1.35 var(--font-body);color:var(--ink);overflow-wrap:anywhere;}
   .kb7-passo span{font:600 11px/1.35 var(--font-body);color:var(--muted);}
   .kb7-passo.is-falta b{color:var(--red);}
+  .kb7-passo.is-vencido{background:var(--aviso-bg);}
+  .kb7-passo.is-vencido b{color:var(--amber-ink, var(--amber));}
   .kb7-passo.is-trava{background:var(--aviso-bg);color:var(--amber);}
   .kb7-passo.is-trava svg{flex:none;margin-top:1px;}
   .kb7-passo.is-ok{background:var(--ok-bg);}
@@ -26501,6 +26503,37 @@ function kb7Coluna(col, itens, acesos) {
     + '</div>';
 }
 
+function kb7PassoHTML(l, et) {
+  const pp = v5ProximoPasso(l);
+  return '<div class="kb7-passo' + (pp.falta ? ' is-falta' : '') + (pp.vencido ? ' is-vencido' : '') + '"><div><b>' + esc(pp.vencido ? pp.texto : pp.falta ? (et === KB7_RECIC ? 'sem retorno marcado' : 'sem próximo passo') : pp.texto) + '</b>'
+    + (pp.data ? '<span>' + esc(pp.data) + '</span>' : '') + '</div></div>';
+}
+/* O PASSO APARECE NO CARTÃO NA HORA (16/11/26, Julyan: "quando eles colocam próximo passo já tem que
+   atualizar na hora, sem o executivo ter que dar F5"). O dado já era espelhado na memória
+   (espelharPassoNoFunilLocal); faltava a tela. Troca só a faixa do passo do cartão que mudou: não
+   redesenha o quadro, não perde a rolagem e não fecha a ficha aberta por cima. */
+function kb7AtualizarPassoDoCartao(id) {
+  try {
+    const alvo = String(id == null ? '' : id);
+    if (!alvo || typeof document === 'undefined') return 0;
+    let lead = null;
+    Object.values((typeof DATA !== 'undefined' && DATA.funilLeads) || {}).forEach(function (lista) {
+      (lista || []).forEach(function (x) { if (!lead && x && String(x.id) === alvo) lead = x; });
+    });
+    if (!lead) return 0;
+    let n = 0;
+    document.querySelectorAll('[data-kb7-card]').forEach(function (el) {
+      if (el.getAttribute('data-kb7-card') !== alvo) return;
+      const et = el.getAttribute('data-kb7-de');
+      if (et === KB7_PAGTO || et === KB7_GANHO || et === KB7_ONB) return;
+      const faixa = el.querySelector('.kb7-passo');
+      if (!faixa) return;
+      faixa.outerHTML = kb7PassoHTML(lead, et);
+      n++;
+    });
+    return n;
+  } catch (e) { console.error('passo no cartão:', e && e.message); return 0; }
+}
 function kb7Card(item, acesos) {
   const l = item.lead;
   const id = String(l.id);
@@ -26522,9 +26555,7 @@ function kb7Card(item, acesos) {
   } else if (et === KB7_ONB) {
     passo = '<div class="kb7-passo"><div><b>Com o onboarding</b><span>' + (dias ? 'enviado há ' + dias + (dias === 1 ? ' dia' : ' dias') : 'enviado hoje') + '</span></div></div>';
   } else {
-    const pp = v5ProximoPasso(l);
-    passo = '<div class="kb7-passo' + (pp.falta ? ' is-falta' : '') + '"><div><b>' + esc(pp.falta ? (et === KB7_RECIC ? 'sem retorno marcado' : 'sem próximo passo') : pp.texto) + '</b>'
-      + (pp.data ? '<span>' + esc(pp.data) + '</span>' : '') + '</div></div>';
+    passo = kb7PassoHTML(l, et);
   }
   const sem = v5DiasSemToque(l);
   const toque = sem == null ? 'sem toque registrado' : sem === 0 ? 'tocado hoje' : sem + (sem === 1 ? ' dia' : ' dias') + ' sem toque';
@@ -38232,6 +38263,7 @@ function registrarAgendamentoLocal(lead, dataISO, hora, ownerId, tipo) {
   const rot = tipo === 'rota' ? 'Visita' : tipo === 'reuniao' ? 'Reunião' : 'Follow-up';
   try { espelharPassoNoFunilLocal(lead.id, dataISO, hora, rot); }
   catch (e) { console.error('espelho do passo no cartão do funil:', e && e.message); }
+  if (typeof kb7AtualizarPassoDoCartao === 'function') kb7AtualizarPassoDoCartao(lead.id);
   const jaTem = agendaAgendadosLocal.some(a => String(a.leadId) === chaveLead && a.dataISO === dataISO && a.hora === hora);
   if (jaTem) return;
   agendaAgendadosLocal.push({
@@ -50064,6 +50096,7 @@ function aplicarProximoPassoNoDataLocal(leadId, tarefa) {
   Object.values(DATA.funilLeads || {}).forEach(lista => (lista || []).forEach(anexar));
   (DATA.reps || []).forEach(r => ['travados', 'criticos', 'quentes'].forEach(k => (r[k] || []).forEach(anexar)));
   if (DATA.temperatura) { (DATA.temperatura.quentes || []).forEach(anexar); (DATA.temperatura.frios || []).forEach(anexar); }
+  if (typeof kb7AtualizarPassoDoCartao === 'function') kb7AtualizarPassoDoCartao(leadId);
 }
 
 /* QUALIFICAÇÃO FALTANTE (28/08/26) — fonte única.
@@ -63486,7 +63519,19 @@ function v5ProximoPasso(lead) {
      "N sem próximo passo" do topo: o cartão passa a usar a mesma. */
   const pl = (lead && typeof proximoPassoDoLead === 'function') ? proximoPassoDoLead(lead) : null;
   const p = pl ? pl.data : (lead && lead.proximaAtividade);
-  if (!p) return { texto: 'sem próximo passo', data: '', falta: true };
+  if (!p) {
+    /* SEM PASSO × PASSO VENCIDO (16/11/26, Julyan: "o que mais reclamam é sobre os leads sem próximo
+       passo e vencidos, precisamos deixar isso mais claro"). Os dois saíam com o mesmo rótulo, e quem
+       tinha marcado um passo lia "sem próximo passo" e concluía que o Cockpit não gravou. Tarefa em
+       aberto com data passada é passo VENCIDO: o cartão diz isso e diz de quando era. */
+    const venc = (Array.isArray(lead && lead.tarefas) ? lead.tarefas : [])
+      .map(function (x) { return x && x.timestamp ? new Date(x.timestamp) : null; })
+      .filter(function (x) { return x && !isNaN(x); })
+      .sort(function (a, b) { return b - a; })[0];
+    if (venc) return { texto: 'passo vencido', vencido: true, falta: true,
+      data: 'era ' + venc.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }) + ' · remarque' };
+    return { texto: 'sem próximo passo', data: '', falta: true };
+  }
   const d = new Date(p);
   const rot = pl && pl.rotulo;
   const txt = (rot === 'no plano') ? 'no plano'
