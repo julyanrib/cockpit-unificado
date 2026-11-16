@@ -4972,6 +4972,26 @@
      tem cor própria — é o teste de esguelha da prancha.
      ══════════════════════════════════════════════════════════════════════════════════ */
   .fn2-shell{display:flex;flex-direction:column;gap:16px;}
+  .fn2-resumo{display:flex;flex-direction:column;gap:8px;}
+  .fn2-resumo small{font:500 11.5px var(--font-body);color:var(--muted2);}
+  .fn2-res-linha{display:flex;gap:8px;flex-wrap:wrap;}
+  .fn2-res-b{flex:1 1 150px;display:flex;align-items:baseline;gap:8px;min-height:48px;padding:10px 14px;border-radius:12px;border:1.5px solid transparent;background:var(--chip);color:var(--ink);cursor:pointer;text-align:left;font:inherit;}
+  .fn2-res-b b{font:700 20px/1 var(--font-body);font-variant-numeric:tabular-nums;}
+  .fn2-res-b span{font:600 12.5px/1.3 var(--font-body);}
+  .fn2-res-b.is-venc{background:var(--aviso-bg);}
+  .fn2-res-b.is-venc b{color:var(--amber-ink, var(--amber));}
+  .fn2-res-b.is-falta{background:var(--red-soft);}
+  .fn2-res-b.is-falta b{color:var(--red);}
+  .fn2-res-b.is-ok{cursor:default;color:var(--muted);}
+  .fn2-res-b.is-on{border-color:var(--ink);}
+  .fn2-mais{border:1px solid var(--line);border-radius:14px;background:var(--panel);}
+  .fn2-mais > summary{cursor:pointer;list-style:none;padding:14px 16px;font:600 13px var(--font-body);color:var(--ink);display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+  .fn2-mais > summary::-webkit-details-marker{display:none;}
+  .fn2-mais > summary::after{content:'abrir ▾';margin-left:auto;font:600 11.5px var(--font-body);color:var(--muted);}
+  .fn2-mais[open] > summary::after{content:'recolher ▴';}
+  .fn2-mais > summary span{font:500 11.5px var(--font-body);color:var(--muted2);}
+  .fn2-mais[open]{padding:0 14px 14px;display:flex;flex-direction:column;gap:16px;}
+  .fn2-mais[open] > summary{padding:14px 2px 0;}
 
 
 
@@ -11192,7 +11212,8 @@ foi escrita para jogar o "0 de 27 resolvidos"
     border-radius:var(--r-pill);padding:1px 7px;font:800 11px var(--font-body);color:var(--ink);font-variant-numeric:tabular-nums;}
   .kb7-temp i{width:7px;height:7px;border-radius:50%;}
   .kb7-passo{display:flex;gap:7px;align-items:flex-start;background:var(--chip);border-radius:10px;padding:8px 10px;}
-  .kb7-sempino{display:block;margin-top:6px;padding:4px 8px;border-radius:8px;background:var(--amber-soft);color:var(--amber);font:700 10.5px var(--font-body);}
+  /* um alerta principal por cartão (o do passo): este virou texto de apoio (16/11/26) */
+  .kb7-sempino{display:block;margin-top:5px;padding:0;background:transparent;color:var(--muted2);font:500 10.5px var(--font-body);}
   .kb7-passo > div{display:flex;flex-direction:column;gap:1px;min-width:0;}
   .kb7-passo b{font:600 12px/1.35 var(--font-body);color:var(--ink);overflow-wrap:anywhere;}
   .kb7-passo span{font:600 11px/1.35 var(--font-body);color:var(--muted);}
@@ -15666,6 +15687,9 @@ b.hj4-rn{color:var(--gv2-ink);font-weight:700;}
 .pv3-sug-it > span > .pv3-c-ctx{width:100%;}
 .pv3-sug-it > i{flex:none;width:22px;height:22px;border-radius:50%;background:var(--gv2-chip);display:grid;place-items:center;font:600 13px/1 var(--gv2-font);font-style:normal;color:var(--gv2-ink);}
 .pv3-sug-it.is-gestor{border-color:var(--gv2-rota);}
+.pv3-sug-it.is-abre{cursor:pointer;box-sizing:border-box;}
+.pv3-sug-mais{flex:none;width:28px;height:28px;border:0;border-radius:50%;background:var(--gv2-chip);display:grid;place-items:center;font:600 15px/1 var(--gv2-font);color:var(--gv2-ink);cursor:pointer;padding:0;}
+.pv3-l-c[data-pv3-acao]{cursor:pointer;}
 /* soltar aqui: cobre o dia durante o arraste */
 .pv3-solta-aqui{position:absolute;inset:0;z-index:5;display:grid;place-items:center;border:2px dashed var(--gv2-acao);border-radius:14px;background:rgba(229,26,49,.08);font:700 11px var(--gv2-font);letter-spacing:.04em;color:var(--gv2-acao);pointer-events:none;text-align:center;padding:8px;}
 .pv3-solta-aqui.is-nao{border-color:var(--gv2-line-btn);background:var(--pv3-col);color:var(--gv2-dim);}
@@ -23682,6 +23706,7 @@ function fn2ConversaoTexto(c) {
 const FN2_VISIVEIS_POR_COLUNA = 60;
 const FN2_NA_GAVETA = 5;
 
+let fn2MaisAberto = false;   /* "mais leituras do funil" (comando, dinheiro, perdidos, reciclagem): recolhido até pedirem */
 let fn2Movimento = null;      /* 'sem-passo' | 'estourou' | 'decide-semana' | null */
 let fn2GavetaEtapa = null;    /* stageId com a gaveta aberta */
 let fn2GavetaOrdem = 'risco'; /* 'risco' | 'novos' */
@@ -26572,7 +26597,7 @@ function kb7Card(item, acesos) {
     passo = kb7PassoHTML(l, et);
   }
   const sem = v5DiasSemToque(l);
-  const toque = sem == null ? 'sem toque registrado' : sem === 0 ? 'tocado hoje' : sem + (sem === 1 ? ' dia' : ' dias') + ' sem toque';
+  const toque = v5ToqueEhSoTarefa(l) ? 'toque não medido' : sem == null ? 'sem toque registrado' : sem === 0 ? 'tocado hoje' : sem + (sem === 1 ? ' dia' : ' dias') + ' sem toque';
   const prox = kb7Proxima(et);
   const podeAvancar = prox && !kb7Pode(et, prox) && !item.naFila;
   const arrasta = et !== KB7_ONB && !item.naFila;
@@ -27327,6 +27352,33 @@ async function fn2PintarDemoGanho(r) {
     + '<p class="fn2-dg-l">' + linhaMeta + '</p>';
 }
 
+/* ══ O RESUMO QUE FILTRA, E O KANBAN PRIMEIRO (16/11/26) ═══════════════════════════════════
+   Julyan: "na aba Meu funil também tá confuso?". Medido na tela: o kanban vinha depois de quatro
+   blocos, "N sem próximo passo" aparecia três vezes e misturava passo vencido com quem nunca teve.
+   Agora a aba abre com UMA linha (os três números que pedem ação, cada um acende os seus cartões)
+   e o quadro logo abaixo. A mesma regra do cartão e da ficha: v5ProximoPasso. */
+function fn2MovimentosDoPasso(itens) {
+  const sem = fn2SemPasso(itens);
+  const venc = sem.filter(function (x) { return v5ProximoPasso(x.lead).vencido; });
+  const nunca = sem.filter(function (x) { return !v5ProximoPasso(x.lead).vencido; });
+  return [
+    { id: 'passo-vencido', n: venc.length, rot: venc.length === 1 ? 'com passo vencido' : 'com passo vencido', grave: false, itens: venc,
+      frase: 'você marcou e a data passou. Abra o cartão e remarque.' },
+    { id: 'nunca-passo', n: nunca.length, rot: nunca.length === 1 ? 'nunca teve próximo passo' : 'nunca tiveram próximo passo', grave: true, itens: nunca,
+      frase: 'negócio sem nenhuma data marcada. Abra o cartão e marque o primeiro passo.' }
+  ];
+}
+function fn2ResumoHTML(itens, movimentos, doPasso) {
+  const est = movimentos.find(function (m) { return m.id === 'estourou'; });
+  const B = function (m, rot, tom) {
+    if (!m) return '';
+    const on = fn2Movimento === m.id;
+    return '<button type="button" class="fn2-res-b is-' + (m.n ? tom : 'ok') + (on ? ' is-on' : '') + '" data-fn2-mov="' + m.id + '" aria-pressed="' + on + '"'
+      + (m.n ? '' : ' disabled') + '><b>' + m.n + '</b><span>' + esc(rot) + '</span></button>';
+  };
+  return '<div class="fn2-resumo" role="group" aria-label="o que pede ação no seu funil"><small>' + itens.length + (itens.length === 1 ? ' negócio aberto' : ' negócios abertos') + ' · toque num número para ver só eles</small>'
+    + '<div class="fn2-res-linha">' + B(doPasso[0], 'passo vencido', 'venc') + B(doPasso[1], 'sem próximo passo', 'falta') + B(est, 'passaram da régua', 'regua') + '</div></div>';
+}
 function fn2ShellHTML(r) {
   fn2OwnerAtual = r.ownerId || null;
   /* todos = as 7 colunas do kanban (inclui Perdido). itens = o FUNIL, que é o que o hero,
@@ -27340,7 +27392,8 @@ function fn2ShellHTML(r) {
      e por isso um apaga o outro — dois estados separados deixariam dois filtros acesos
      ao mesmo tempo, e a esteira nao saberia qual conjunto acender. */
   const dinheiro = fn2Dinheiro(itens);
-  const mov = movimentos.concat(dinheiro).find(m => m.id === fn2Movimento);
+  const doPasso = fn2MovimentosDoPasso(itens);
+  const mov = movimentos.concat(dinheiro, doPasso).find(m => m.id === fn2Movimento);
   const acesos = mov ? new Set(mov.itens.map(x => String(x.lead.id))) : null;
   /* O PULSO NOS CARTOES so vale para os filtros do DINHEIRO: os do hero acendem para
      ele ver a fila, e os do dinheiro acendem para ele AGIR naquele lead. */
@@ -27348,11 +27401,14 @@ function fn2ShellHTML(r) {
 
   return `<div class="fn2-shell" data-fn2-owner="${esc(String(r.ownerId || ''))}"
       data-fn2-pulsa="${esc(pulsando)}">
-    ${fn2Hero(r, itens, movimentos)}
-    <div id="fn2DemoGanho" class="fn2-dg" aria-live="polite"></div>
-    ${fn2Contexto(movimentos, itens.length)}
+    ${fn2ResumoHTML(itens, movimentos, doPasso)}
+    ${fn2Contexto(movimentos.concat(doPasso), itens.length)}
     ${kb7QuadroHTML(r, todos, acesos, fn2LeadsDasEtapas(r, FN3_ETAPAS_LATERAIS))}
     ${fn2PosVenda(r)}
+    ${fn2Hero(r, itens, movimentos)}
+    <div id="fn2DemoGanho" class="fn2-dg" aria-live="polite"></div>
+    <details class="fn2-mais" id="fn2Mais"${fn2MaisAberto || (mov && dinheiro.indexOf(mov) >= 0) ? ' open' : ''}>
+    <summary>Mais leituras do funil <span>comando de vendas · onde o dinheiro para · perdidos · reciclagem</span></summary>
     <!-- OS TRES BLOCOS DA PRANCHA 12b, na proporcao dela (1.25fr 1fr 1fr): o Comando e
          mais largo porque tem sete barras com rotulo; os outros dois sao listas. -->
     <div class="fn2-trio">
@@ -27383,6 +27439,7 @@ function fn2ShellHTML(r) {
       automação de WhatsApp; esta coluna não edita nada) · abaixo de 1240px as colunas
       viram acordeão, com as estouradas abertas primeiro ·
       <b class="fn2-pe-marca">takeat</b> — vender mais servindo com excelência.</div>
+    </details>
     ${fn2Gaveta(todos)}
   </div>`;
 }
@@ -27421,6 +27478,9 @@ function fn2Ligar(el, r) {
       redesenhar();
     });
   });
+
+  const fn2MaisEl = el.querySelector('#fn2Mais');
+  if (fn2MaisEl) fn2MaisEl.addEventListener('toggle', function () { fn2MaisAberto = fn2MaisEl.open; });
 
   const limpar = el.querySelector('#fn2LimparMov');
   if (limpar) limpar.addEventListener('click', () => { fn2Movimento = null; fn2Resolvidos = 0; redesenhar(); });
@@ -63554,7 +63614,21 @@ function v5DiasSemToque(lead) {
   if (!Number.isFinite(t)) return null;
   return Math.max(0, Math.floor((Date.now() - t) / 86400000));
 }
+/* O "TOQUE" QUE ERA A TAREFA (16/11/26). ultimaInteracao é a "última atividade" do HubSpot, e uma
+   tarefa em aberto conta lá na HORA MARCADA dela: marcar visita para hoje às 9h fazia o cartão dizer
+   "tocado hoje" sem ninguém ter tocado. Quando a última atividade coincide com uma tarefa em aberto,
+   o toque real não é conhecido, e a tela diz isso em vez de afirmar. */
+function v5ToqueEhSoTarefa(lead) {
+  const t = lead && lead.ultimaInteracao ? Date.parse(lead.ultimaInteracao) : NaN;
+  if (!Number.isFinite(t)) return false;
+  return (Array.isArray(lead.tarefas) ? lead.tarefas : []).some(function (x) {
+    const q = x && x.timestamp ? Date.parse(x.timestamp) : NaN;
+    /* só a tarefa de HOJE em diante: a vencida continua valendo como "N dias sem toque" (nada aconteceu depois dela) */
+    return Number.isFinite(q) && Math.abs(q - t) < 60000 && isoDate(new Date(q)) >= isoDate(new Date());
+  });
+}
 function v5TagToque(lead) {
+  if (v5ToqueEhSoTarefa(lead)) return '<span class="v5-tag is-nm">toque não medido</span>';
   const d = v5DiasSemToque(lead);
   if (d == null) return '<span class="v5-tag is-nm">sem toque registrado</span>';
   if (d === 0) return '<span class="v5-tag is-toque-hoje">tocado hoje</span>';
@@ -95262,7 +95336,9 @@ function pv3LinhaHTML(D, l) {
   const titulo = selos.map(function (x) { return x[0]; }).concat(['arraste pro dia']).join(' · ');
   const curto = selos.length ? String(selos[0][0]).split(' · há ')[0] : '';
   return '<div class="pv3-l' + (l.quente ? ' is-q' : '') + (aberto ? ' is-aberta' : st.foco === l.ref ? ' is-foco' : '') + '" draggable="true" data-pv3-arraste="' + e(l.ref) + '" title="' + e(titulo) + '"' + (l.quente ? ' data-pv3-quente="' + e(l.ref) + '"' : '') + '>'
-    + '<i class="pv3-dot" style="background:' + (l.alvo ? '#94A3B8' : et[1]) + '"></i><div class="pv3-l-c"><div class="pv3-l-1"><b class="pv3-l-nome">' + e(l.nome) + '</b>' + (rs ? '<span class="pv3-l-rs">' + e(rs) + '</span>' : '') + '</div>'
+    /* CLICAR NO LEAD ABRE A FICHA, COMO EM TODA TELA (16/11/26, Julyan). Negócio: a ficha completa (a do Meu
+       funil). Conta-alvo, que não tem negócio no HubSpot: a ficha da linha. Os botões da linha seguem com a sua ação. */
+    + '<i class="pv3-dot" style="background:' + (l.alvo ? '#94A3B8' : et[1]) + '"></i><div class="pv3-l-c" role="button" tabindex="0" data-pv3-acao="' + (l.dealId && /^[cr]-/.test(String(l.ref)) ? 'ficha:' + e(l.ref) : 'menu:' + e(l.ref) + ':fic') + '"><div class="pv3-l-1"><b class="pv3-l-nome">' + e(l.nome) + '</b>' + (rs ? '<span class="pv3-l-rs">' + e(rs) + '</span>' : '') + '</div>'
     + '<div class="pv3-l-2">' + (selos.length ? PLV3.tagHTML(curto, selos[0][1]) : '') + '<span class="pv3-l-ctx">' + e(subT) + '</span>' + atalho + '</div></div>' + icones + '</div>';
 };
 /* a ficha da linha: os campos da ficha da v2 (pl6FichaCamposFinal), sem o formulário de endereço dela — o daqui
@@ -95427,6 +95503,11 @@ PLV3.diaHTML = function (D, i) {
         /* Território v3: a conta-alvo que o gestor sugeriu leva o selo RECÉM-ABERTO e o porquê */
         const ga = s.origem === 'alvo' ? (D.alvos.filter(function (a) { return a.ref === s.ref; })[0] || {}).gestor : null;
         const pq = s.origem === 'alvo' ? (ga ? 'sugerido pelo gestor · até sex' : 'conta-alvo') : et[0] + (s.mesmo ? '' : ' · ' + (lw && lw.bairroNome ? lw.bairroNome : D.nomeB(s.bairro)));
+        /* sugestão de NEGÓCIO: o cartão abre a ficha e o "+" põe no dia (16/11/26); a de conta-alvo segue pondo no clique */
+        const ehNeg = s.origem !== 'alvo' && /^[cr]-/.test(String(s.ref));
+        if (ehNeg) return '<div class="pv3-sug-it is-abre" role="button" tabindex="0" data-pv3-acao="ficha:' + e(s.ref) + '"><span><b class="pv3-c-nome">' + e(s.nome) + '</b>'
+          + '<span class="pv3-c-ctx"><i class="pv3-dot" style="background:' + et[1] + '"></i><span class="pv3-ellip">' + e(pq) + '</span></span>'
+          + PLV3.tagHTML(TG[s.origem][0], TG[s.origem][1]) + '</span><button type="button" class="pv3-sug-mais" data-pv3-acao="por:' + e(s.ref) + ':' + i + '" aria-label="' + e('pôr ' + s.nome + ' no dia') + '" title="pôr no dia">+</button></div>';
         return '<button type="button" class="pv3-sug-it' + (ga ? ' is-gestor' : '') + '" data-pv3-acao="por:' + e(s.ref) + ':' + i + '"><span><b class="pv3-c-nome">' + e(s.nome) + '</b>'
           + '<span class="pv3-c-ctx"><i class="pv3-dot" style="background:' + (s.origem === 'alvo' ? '#94A3B8' : et[1]) + '"></i><span class="pv3-ellip">' + e(pq) + '</span></span>'
           + (ga ? PLV3.tagHTML('RECÉM-ABERTO', 'is-rota') : PLV3.tagHTML(TG[s.origem][0], TG[s.origem][1])) + '</span><i>+</i></button>';
