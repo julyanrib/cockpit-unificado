@@ -63478,10 +63478,21 @@ function v5DiscoTemperatura(lead, tam) {
 
 /* ── Cartão único, tamanho LINHA (listas) ── clique no corpo abre a ficha (o painel) */
 function v5ProximoPasso(lead) {
-  const p = lead && lead.proximaAtividade;
+  /* 16/11/26 (Julyan: "o Sérgio colocou esse Quatro pra visita hoje e continua sem próximo passo").
+     O cartão lia só lead.proximaAtividade, que é a "próxima atividade" do HubSpot: ela só vale com
+     HORA FUTURA. A visita do plano vira tarefa às 09:00; às 09:01 o HubSpot a apaga dali e o cartão
+     dizia "sem próximo passo" o dia útil inteiro, com a tarefa em aberto. A regra certa já existia
+     (proximoPassoDoLead: por DIA, olha as tarefas em aberto e o Planejamento) e é a que conta o
+     "N sem próximo passo" do topo: o cartão passa a usar a mesma. */
+  const pl = (lead && typeof proximoPassoDoLead === 'function') ? proximoPassoDoLead(lead) : null;
+  const p = pl ? pl.data : (lead && lead.proximaAtividade);
   if (!p) return { texto: 'sem próximo passo', data: '', falta: true };
   const d = new Date(p);
-  const txt = (lead.proximaAtividadeAssunto || lead.proximoPasso || 'próximo passo');
+  const rot = pl && pl.rotulo;
+  const txt = (rot === 'no plano') ? 'no plano'
+    : (rot && rot !== 'atividade' && rot !== 'reunião') ? rot
+    : (rot === 'reunião') ? 'reunião'
+    : (lead.proximaAtividadeAssunto || lead.proximoPasso || 'próximo passo');
   return { texto: txt, data: isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }), falta: false };
 }
 function v5CartaoLinha(lead, opcoes) {
