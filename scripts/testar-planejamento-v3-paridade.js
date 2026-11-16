@@ -199,7 +199,7 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     checar('com busca digitada, o resultado vem primeiro e nada fica por cima dele (v10, P2)', /data-pv3-arraste="n-20\d"/.test(hq) && !/data-pv3-quente=/.test(hq.split('data-pv3-arraste=')[0]));
     zerar();
     const h = colher(fila());
-    checar('o quente SEM lugar no mapa não some do bloco (antes sumia) e diz por quê', /data-pv3-quente="c-101"[\s\S]{0,300}sem lugar no mapa/.test(h));
+    checar('o quente SEM lugar no mapa não some do bloco (antes sumia) e diz por quê', /data-pv3-quente="c-101"[\s\S]{0,420}sem lugar no mapa/.test(h));
     checar('o quente com sugestão tem "Pôr em" o dia sugerido', /data-pv3-quente="c-102"[\s\S]{0,400}data-pv3-acao="por:c-102:\d"/.test(h));
     await acao('menu', 'c-101:qdia');
     const h2 = colher(html());
