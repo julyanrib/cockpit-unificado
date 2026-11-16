@@ -11198,6 +11198,19 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .kb7-passo span{font:600 11px/1.35 var(--font-body);color:var(--muted);}
   .kb7-passo.is-falta b{color:var(--red);}
   .kb7-passo.is-vencido{background:var(--aviso-bg);}
+  .ficha-passo-topo{display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:12px;padding:10px 12px;margin:0 0 12px;background:var(--ok-bg);}
+  .ficha-passo-topo > div{display:flex;flex-direction:column;gap:1px;min-width:0;}
+  .ficha-passo-topo small{font:700 10px/1.3 var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+  .ficha-passo-topo b{font:600 13px/1.35 var(--font-body);color:var(--ink);overflow-wrap:anywhere;}
+  .ficha-passo-topo button{flex:none;border:1px solid var(--line-btn);background:var(--panel);color:var(--ink);border-radius:999px;padding:8px 14px;min-height:36px;font:600 12px var(--font-body);cursor:pointer;}
+  .ficha-passo-topo.is-vencido{background:var(--aviso-bg);}
+  .ficha-passo-topo.is-vencido small{color:var(--amber-ink, var(--amber));}
+  .ficha-passo-topo.is-falta{background:var(--red-soft);}
+  .ficha-passo-topo.is-falta small{color:var(--red);}
+  .ficha-passo-topo.is-falta button,.ficha-passo-topo.is-vencido button{background:var(--ink);color:var(--panel);border-color:var(--ink);}
+  .ficha-tarefa{display:flex;justify-content:space-between;gap:10px;background:var(--panel2);border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--ink);}
+  .ficha-tarefa em{font-style:normal;color:var(--muted2);white-space:nowrap;}
+  .ficha-tarefa.is-vencida em{color:var(--amber-ink, var(--amber));font-weight:700;}
   .kb7-passo.is-vencido b{color:var(--amber-ink, var(--amber));}
   .kb7-passo.is-trava{background:var(--aviso-bg);color:var(--amber);}
   .kb7-passo.is-trava svg{flex:none;margin-top:1px;}
@@ -15487,6 +15500,7 @@ b.hj4-rn{color:var(--gv2-ink);font-weight:700;}
 .pv3-sec{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:30px;padding:8px 14px 2px;font:600 11px var(--gv2-font);letter-spacing:.04em;color:var(--gv2-dim);}
 .pv3-sec > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .pv3-sec.is-quente{color:var(--pv3-acao-tx);}
+.pv3-sec.is-venc{color:#92400E;}
 .pv3-sec button{flex:none;border:0;background:transparent;color:var(--pv3-acao-tx);font:600 11.5px var(--gv2-font);padding:4px 0;}
 .pv3-fila-pe{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:7px 10px;border-top:1px solid var(--gv2-line);flex:none;}
 .pv3-fila-pe button{min-height:34px;padding:0 6px;border-radius:10px;border:1px solid var(--gv2-line-btn);background:transparent;color:var(--gv2-ink);font:600 12px var(--gv2-font);white-space:nowrap;}
@@ -48795,11 +48809,63 @@ function ligarPropsFichaEditaveis(container, lead) {
   });
 }
 
+/* ══ A FICHA DIZ, NO TOPO, COMO ESTÁ O PRÓXIMO PASSO (16/11/26) ═══════════════════════════
+   Julyan: "quando eles abrem o card e colocam próximo passo fica meio confuso". Medido na tela: o
+   estado do passo não aparecia em lugar nenhum da ficha, o campo ficava depois de tudo (uma rolagem
+   inteira) e a tarefa vencida saía sem data. Esta faixa usa a MESMA regra do cartão (v5ProximoPasso):
+   verde = tem passo, âmbar = passo vencido, vermelho = nunca teve; e o botão leva ao campo. */
+function fichaPassoTopoHTML(l) {
+  if (!l || typeof v5ProximoPasso !== 'function') return '';
+  const et = String(l.stageId || '');
+  if (typeof KB7_PAGTO !== 'undefined' && (et === KB7_PAGTO || et === KB7_GANHO || et === KB7_ONB)) return '';
+  const pp = v5ProximoPasso(l);
+  const tom = pp.vencido ? 'vencido' : pp.falta ? 'falta' : 'ok';
+  const rot = pp.vencido ? 'Passo vencido' : pp.falta ? 'Sem próximo passo' : 'Próximo passo';
+  const det = pp.vencido ? pp.data.replace(' · remarque', '') : pp.falta ? 'nada marcado para este negócio' : (pp.texto + (pp.data ? ' · ' + pp.data : ''));
+  const bt = pp.vencido ? 'Remarcar' : pp.falta ? 'Marcar agora' : 'Mudar';
+  return '<div class="ficha-passo-topo is-' + tom + '" data-ficha-passo-topo="1"><div><small>' + esc(rot) + '</small><b>' + esc(det) + '</b></div>'
+    + '<button type="button" data-ficha-passo-ir="1">' + bt + '</button></div>';
+}
+function fichaTarefasHTML(l) {
+  const tarefas = Array.isArray(l && l.tarefas) ? l.tarefas : [];
+  if (!tarefas.length) return '<div data-ficha-tarefas="1"></div>';
+  const hojeK = isoDate(new Date());
+  const linhas = tarefas.map(function (t) {
+    /* o timestamp chega como texto ISO; Number() dele é NaN e a data saía "—" em toda tarefa */
+    const bruto = t && t.timestamp;
+    const dt = bruto == null ? null : new Date(/^[0-9]+$/.test(String(bruto)) ? Number(bruto) : bruto);
+    const ok = dt && !isNaN(dt.getTime());
+    const k = ok ? isoDate(dt) : '';
+    const ddmm = ok ? dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
+    const quando = !ok ? 'sem data' : k < hojeK ? 'vencida · ' + ddmm : k === hojeK ? 'hoje' : ddmm;
+    const tom = ok && k < hojeK ? ' is-vencida' : '';
+    return { k: k, html: '<div class="ficha-tarefa' + tom + '"><span>' + esc(t.subject || 'tarefa') + '</span><em>' + esc(quando) + '</em></div>' };
+  }).sort(function (a, b) { return a.k < b.k ? 1 : a.k > b.k ? -1 : 0; });
+  return '<div data-ficha-tarefas="1" style="margin:16px 0;">'
+    + '<label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Tarefas em aberto no HubSpot</label>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;">' + linhas.map(function (x) { return x.html; }).join('') + '</div></div>';
+}
+/* depois de salvar: a faixa do topo e a lista de tarefas trocam na hora, com o dado que já está na memória */
+function fichaPassoAtualizar(container, leadId) {
+  try {
+    let lead = null;
+    Object.values((typeof DATA !== 'undefined' && DATA.funilLeads) || {}).forEach(function (lista) {
+      (lista || []).forEach(function (x) { if (!lead && x && String(x.id) === String(leadId)) lead = x; });
+    });
+    if (!lead || !container) return false;
+    const topo = container.querySelector('[data-ficha-passo-topo]');
+    if (topo) topo.outerHTML = fichaPassoTopoHTML(lead);
+    const tar = container.querySelector('[data-ficha-tarefas]');
+    if (tar) tar.outerHTML = fichaTarefasHTML(lead);
+    return true;
+  } catch (e) { console.error('faixa do passo na ficha:', e && e.message); return false; }
+}
 function fichaLeadFunilBodyHTML(l) {
   const idxAtual = ORDEM_FUNIL_FICHA.indexOf(l.stageId);
   const slaDias = (l.stageId && DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
   const recomendacao = proximaMelhorAcaoLead(l);
   return `
+    ${fichaPassoTopoHTML(l)}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
       <span style="background:${l.slaBreach ? 'var(--red-soft)' : 'var(--panel2)'};color:${l.slaBreach ? 'var(--red)' : 'var(--muted)'};border-radius:var(--r-pill);padding:4px 12px;font-size:11px;font-weight:700;">${esc(l.stage || l.label || STAGE_LABELS[l.stageId] || '')}${slaDias ? ` · SLA ${slaDias}d` : ''}</span>
       <span style="background:${l.slaBreach ? 'var(--red-soft)' : 'var(--panel2)'};color:${l.slaBreach ? 'var(--red)' : 'var(--muted)'};border-radius:var(--r-pill);padding:4px 12px;font-size:11px;font-weight:700;">${l.dias}d na etapa${l.slaBreach ? ' · SLA estourado' : ''}</span>
@@ -48833,23 +48899,7 @@ function fichaLeadFunilBodyHTML(l) {
          valor que já existe mesmo que o negócio tenha pulado etapa fora de ordem. -->
     <div style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ter);margin:0 0 8px;">Dados do negócio · HubSpot <span style="font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted2);">— toque num campo pra editar</span></div>
     <div class="ficha-props-grade">${propsFichaHTML(l, idxAtual)}</div>
-    ${(() => {
-      const tarefas = Array.isArray(l.tarefas) ? l.tarefas : [];
-      return tarefas.length ? `
-    <div style="margin:16px 0;">
-      <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Tarefas agendadas no HubSpot</label>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        ${tarefas.map(t => {
-          const dt = t.timestamp ? new Date(Number(t.timestamp)) : null;
-          const temData = dt && !isNaN(dt.getTime());
-          return `<div style="display:flex;justify-content:space-between;gap:10px;background:var(--panel2);border-radius:var(--r-md);padding:8px 12px;font-size:12px;">
-            <span style="color:var(--ink);">${esc(t.subject)}</span>
-            <span style="color:var(--muted2);white-space:nowrap;">${temData ? dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—'}</span>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>` : '';
-    })()}
+    ${fichaTarefasHTML(l)}
     <!-- ══ AS INTERAÇÕES DO EXPOGO, DO PWA E DO HUBSPOT (04/09/26, Julyan) ═══════════
          "tem q puxar tudo q ele escreveu para o cockpit e os leads, tudo, tem q aparecer
          ja q aparece no hubspot as interações."
@@ -48935,7 +48985,7 @@ function fichaLeadFunilBodyHTML(l) {
           <input type="text" class="ficha-passo-hora" list="fpHorasLista" inputmode="numeric" autocomplete="off" placeholder="hora · ex.: 9:40" aria-label="Hora do próximo passo — digite ou escolha" style="width:130px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;font-variant-numeric:tabular-nums;">
         </div>
         ${fpAtalhosHTML()}
-        <div style="font-size:10px;color:var(--muted2);margin-top:6px;line-height:1.5;">A hora é opcional — sem ela o compromisso entra às 9h, como sempre. Com ela, ele cai na faixa daquele horário no seu Planejamento e na sua Daily.</div>
+        <div style="font-size:10px;color:var(--muted2);margin-top:6px;line-height:1.5;">Escolha o dia. A hora é opcional: sem ela, fica às 9h.</div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:7px;">
           <button type="button" class="ficha-passo-salvar btn-prim" style="padding:8px 16px;">Salvar próximo passo</button>
           <span class="ficha-passo-status" style="font-size:11px;color:var(--muted2);"></span>
@@ -50464,6 +50514,19 @@ function wireFichaLeadFunilEdicao(container, l) {
     });
   });
   const btnPasso = container.querySelector('.ficha-passo-salvar');
+  if (!container.__fichaPassoIr) {
+    container.__fichaPassoIr = true;
+    container.addEventListener('click', function (ev) {
+      const ir = ev.target && ev.target.closest ? ev.target.closest('[data-ficha-passo-ir]') : null;
+      if (!ir) return;
+      const aba = container.querySelector('[data-ficha-edit-tab="passo"]');
+      if (aba && aba.getAttribute('aria-pressed') === 'false') aba.click();
+      const campo = container.querySelector('.ficha-passo-data');
+      if (!campo) return;
+      try { campo.scrollIntoView({ block: 'center' }); } catch (e) { campo.scrollIntoView(); }
+      try { campo.focus({ preventScroll: true }); } catch (e) {}
+    });
+  }
   /* os atalhos de dia e hora (o mesmo jeito do Planejamento) preenchem os campos de cima */
   if (typeof fpLigar === 'function') fpLigar(container);
   if (btnPasso) btnPasso.addEventListener('click', async () => {
@@ -50600,9 +50663,11 @@ function wireFichaLeadFunilEdicao(container, l) {
            ownerId. Quem escreve sobre o Planejamento agora e espelharPassoNasTelas, que
            e quem sabe se entrou, em que dia e em que faixa. Aqui fica o que este handler
            realmente conferiu: a resposta do HubSpot. */
-        statusEl.textContent = `Próximo passo salvo no HubSpot — ${quandoBR}.`;
+        statusEl.textContent = `Salvo: ${quandoBR}. Já aparece no cartão, na Agenda e no HubSpot.`;
         statusEl.style.color = 'var(--green)';
-        mostrarToast(`Próximo passo de "${l.name}" marcado pra ${quandoBR} — está no HubSpot e na sua Agenda.`, 'sucesso');
+        /* UM AVISO SÓ (16/11/26): saíam dois em sequência (este e o do Planejamento) e a ficha continuava
+           igual. Agora a própria ficha muda (faixa do topo e tarefas) e quem fala é o Planejamento. */
+        fichaPassoAtualizar(container, dealId);
       }
       btnPasso.disabled = false;
     } catch (e) {
@@ -95134,7 +95199,12 @@ PLV3.blocoFilaHTML = function (D) {
             + (hotSug.length ? '<button type="button" data-pv3-acao="quentes">' + e((hotSug.length === 1 ? 'pôr no dia' : 'pôr os ' + hotSug.length) + ' ›') + '</button>' : '') + '</div>'
             + hot.map(function (l) { return PLV3.linhaHTML(D, l); }).join('');
         }
-        if (resto.length) corpo += '<div class="pv3-sec"><span>' + e('POR DINHEIRO · ' + resto.length) + '</span></div>' + resto.map(function (l) { return PLV3.linhaHTML(D, l); }).join('');
+        /* VENCIDO × NUNCA TEVE (16/11/26, Julyan: "o que mais reclamam é sobre os leads sem próximo passo e
+           vencidos"): eram uma lista só, "por dinheiro". Quem marcou e deixou passar vem antes e diz isso. */
+        const vencs = resto.filter(function (l) { return l.venc || l.ficou; });
+        const nunca = resto.filter(function (l) { return !(l.venc || l.ficou); });
+        if (vencs.length) corpo += '<div class="pv3-sec is-venc"><span>' + e('PASSO VENCIDO · ' + vencs.length + ' · remarque') + '</span></div>' + vencs.map(function (l) { return PLV3.linhaHTML(D, l); }).join('');
+        if (nunca.length) corpo += '<div class="pv3-sec"><span>' + e('NUNCA TEVE PASSO · ' + nunca.length) + '</span></div>' + nunca.map(function (l) { return PLV3.linhaHTML(D, l); }).join('');
       } else {
         corpo += vis.map(function (l) { return PLV3.linhaHTML(D, l); }).join('');
       }
