@@ -417,23 +417,28 @@ tabelas.gv2_falta_etapa = [
     global.sessaoAtual = antS;
     checar('auditoria 02/11 · G12: "Ver como executivo" some sem ownerId na sessão', navSem.indexOf('menu:executivo') < 0 && GV2.navHTML().indexOf('menu:executivo') > 0);
     /* G3: "sem próximo passo" por pessoa é GV2.semProximoPasso; o que é só dos quentes diz "quentes sem passo" */
-    const pp = GV2.render.v8PorPessoa();
     const spAna = GV2.semProximoPasso(ana.negocios).length;
-    checar('auditoria 02/11 · G3: Funil › Por pessoa tem a coluna "Sem próx. passo" com o número da regra canônica',
-      pp.indexOf('<span>Sem próx. passo</span>') > 0 && new RegExp('data-gv2="v8neg:sempasso:1"[^>]*><span><b class="num[^"]*">' + spAna + '</b>').test(pp), String(spAna));
     const rx = GV2.render.raiox();
+    {
+      const cv0 = Object.assign({}, GV2.cvEstado()), aba0 = GV2.estado.aba, pintar0 = GV2.pintar;
+      GV2.pintar = function () {};
+      const fechado = GV2.render.raiox();
+      Object.assign(GV2.cvEstado(), { recorte: 'pessoa', mais: false });
+      const st0 = global.setTimeout; global.setTimeout = function () {};
+      const tratou = GV2.g0Comando('g0', ['g0', 'funil']);
+      global.setTimeout = st0;
+      const aberto = GV2.render.raiox(), cv1 = GV2.cvEstado();
+      checar('17/11/26 · "Ver os N no Funil" do Hoje abre o Funil do time com a lista de quentes parados à vista (antes levava a um Funil sem a lista)',
+        tratou === true && GV2.estado.aba === 'raiox' && cv1.recorte === 'time' && cv1.mais === true && fechado.indexOf('id="gv2-g0-quente"') < 0 && aberto.indexOf('id="gv2-g0-quente"') > 0);
+      checar('17/11/26 · faxina: as telas antigas do Funil saíram do arquivo',
+        ['funil', 'ciclo', 'demoGanho', 'funilPorPessoa', 'v8PorPessoa', 'g0Funil'].every(function (n) { return typeof GV2.render[n] === 'undefined'; }));
+      GV2.pintar = pintar0; GV2.estado.aba = aba0; Object.assign(GV2.cvEstado(), cv0, { mais: !!cv0.mais });
+    }
     checar('16/11/26 · as listas de cobrar saíram do Funil: nada de "Negócios para puxar" nem botão Cobrar no meio dos números; o botão leva ao Hoje',
       !/Negócios para puxar/.test(rx) && !/data-gv2="cobrar:/.test(rx) && !/data-gv2="v5lote:/.test(rx) && rx.indexOf('data-gv2="cv:ir:time"') > 0);
     const pes = GV2.render.v5Pessoa(ana), hj = GV2.render.time();
     checar('auditoria 02/11 · G3: os cartões de Quentes (Pessoas e Hoje) dizem "quentes sem passo" e não chamam isso de "sem próximo passo"',
       !/[0-9]+ sem próximo passo<\/span>/.test(pes) && /sem próximo passo no funil/.test(pes) && /quentes? sem passo/.test(hj) && !/>[0-9]+ sem próximo passo</.test(hj));
-    /* G6: o mini do Por pessoa mostra o esperado E a meta; esperado 0 é "mês começando", não "0 de 0" */
-    const rOrig = GV2.v8Ritmo;
-    GV2.v8Ritmo = function (p, b2) { const R = rOrig(p, b2); if (p && R) { R.cli = Object.assign({}, R.cli, { feito: 0, esp: 0, meta: 8 }); } return R; };
-    const pp0 = GV2.render.v8PorPessoa();
-    GV2.v8Ritmo = rOrig;
-    checar('auditoria 02/11 · G6: com esperado 0, o Por pessoa diz "mês começando · meta 8" e nunca "0 de 0"',
-      /mês começando · meta 8/.test(pp0) && !/<\/b> de 0</.test(pp0));
     /* G7: sem meta é "sem meta" — nada de "N de 0", da meta 8 do "|| 8" nem do MRR de reserva 1500/3000 */
     const metaEra = ana.meta_clientes_mes;
     ana.meta_clientes_mes = 0;
@@ -843,9 +848,6 @@ tabelas.gv2_falta_etapa = [
       ['Portas', 'Decisor', 'Demo', 'Negociação', 'Cliente'].every(function (r) { return fu.indexOf('<small>' + r + '</small>') > 0; })
       && ['cv:recorte:time', 'cv:recorte:praca', 'cv:recorte:pessoa', 'cv:conta:mes', 'cv:conta:turma', 'cv:menu', 'cv:comparar'].every(function (c) { return fu.indexOf('data-gv2="' + c + '"') > 0; })
       && fu.indexOf('data-gv2="rxm:') < 0 && /<h1>Funil<\/h1>/.test(fu));
-    const fpp = GV2.render.funilPorPessoa();
-    const algumMenor = GV2.base.pessoas.some(function (p) { return p.funil_mes.portas > 0 && p.funil_mes.portas < 3 && p.funil_mes.decisor > 0; });
-    checar('v5 · Funil por pessoa: a taxa só aparece com 3 ou mais no passo anterior (senão "—", nunca 400%)', !/>[0-9]{3,}%</.test(fpp) && /a taxa só aparece com 3 ou mais/.test(fpp) && (!algumMenor || /<small>—<\/small>/.test(fpp)));
     /* 02/11/26: o Abastecer do Território v5/v9 (v5Abastecer, v5Estoque) saiu como código morto — o
        Território v10 (t10) não o usa */
     /* a leitura da praça repinta o Território quando termina (só repintava o Raio X › Praça) */
@@ -929,8 +931,6 @@ tabelas.gv2_falta_etapa = [
     const fm = Object.assign({}, p1.funil_mes), tr = p1.travados, qs = p1.quentes, ord = GV2.estado.daily;
     /* 5 · taxa acima de 100% vira — */
     p1.funil_mes = Object.assign({}, fm, { portas: 20, decisor: 4, demo: 5, proposta: 1, fechado: 0 });
-    let fpp = ''; try { fpp = GV2.render.funilPorPessoa(); } catch (e) { falhas.push('funil por pessoa: ' + e.message); }
-    checar('Funil por pessoa: demo maior que decisor não mostra 125%', fpp.indexOf('125%') < 0);
     /* 4 · coaching: visita que não vira demo pesa mais que reunião sem desfecho */
     p1.funil_mes = Object.assign({}, fm, { portas: 40, decisor: 10, demo: 0, proposta: 0, fechado: 0 });
     const c4 = GV2.v5Coaching(p1);
@@ -1327,9 +1327,8 @@ tabelas.gv2_falta_etapa = [
       (cab.match(/gv2-v5-btn is-prim/g) || []).length === 1 && (cab.match(/gv2-v5-btn is-leve/g) || []).length === 3 && /data-gv2="ap:abrir"/.test(cab) && /data-gv2="hsatu"/.test(cab) && /data-gv2="v6gav:com"/.test(cab));
     const p = b.pessoas[0];
     let gp = null; try { gp = GV2.v8GavPessoa(p.id); } catch (e) { falhas.push('acab gaveta: ' + e.message); }
-    let fp = ''; try { fp = GV2.render.v8PorPessoa(); } catch (e) { falhas.push('acab funil pp: ' + e.message); }
-    checar('v9 Acabamento · os passos do funil são degraus (gaveta da Pessoa e Funil › Por pessoa), não a frase "portas → n (x%)"',
-      gp && (gp.corpo.match(/class="cv-fp-l[^"]*"/g) || []).length >= 5 && /class="gv2-v9-passos is-compacto"/.test(fp) && !/portas → [0-9]+ \(/.test(gp.corpo + fp));
+    checar('v9 Acabamento · os passos do funil são degraus na gaveta da Pessoa, não a frase "portas → n (x%)"',
+      gp && (gp.corpo.match(/class="cv-fp-l[^"]*"/g) || []).length >= 5 && !/portas → [0-9]+ \(/.test(gp.corpo));
     /* A FICHA ÚNICA (16/11/26): os blocos na ordem do handoff e um único botão que grava */
     {
       const c = gp ? gp.corpo : '';
@@ -2351,7 +2350,7 @@ tabelas.gv2_falta_etapa = [
     const eo = console.error; console.error = () => {};
     const provaV = GV2.testes.prova();
     console.error = eo;
-    const hj = GV2.render.time(), pv = GV2.render.prova(), pp = GV2.render.v8PorPessoa();
+    const hj = GV2.render.time(), pv = GV2.render.prova();
     const grupos = JSON.stringify(GV2.v5Grupos().grupos);
     GV2.base = antes.base; DATA.funilDoGestor = antes.gav;
     checar('auditoria 02/11 · G13: a carteira do gestor vira b.voce (quentes 3 com Ag. Pag., travado 1, sem próximo passo 2 = g1 e g3)',
@@ -2359,7 +2358,7 @@ tabelas.gv2_falta_etapa = [
     checar('auditoria 02/11 · G13: "você" fica FORA de b.pessoas, dos totais do time, da meta e do "Quem precisa de você"',
       !bV.pessoas.some(p => p.id === '99') && bV.time.quentes === semVoce.time.quentes && bV.time.travados === semVoce.time.travados && bV.time.metaMes === semVoce.time.metaMes && !bV.negocios.some(n => n.dono === '99') && grupos.indexOf('"99"') < 0 && provaV.length === 0, provaV.join(' · '));
     checar('auditoria 02/11 · G13: a Hoje mostra "+ você N" ao lado do time, a Prova e o Por pessoa têm a linha "Você" à parte',
-      /\+ você 3/.test(hj) && /\+ você 1/.test(hj) && pv.indexOf('Você (fora do time · não soma no topo)') > 0 && pp.indexOf('sua carteira · fora da meta do time') > 0);
+      /\+ você 3/.test(hj) && /\+ você 1/.test(hj) && pv.indexOf('Você (fora do time · não soma no topo)') > 0);
   })();
   /* G11 (auditoria 02/11/26): a pintura que lança no boot vira estado de erro com "Tentar de novo"
      (antes ficava no esqueleto). Por último: o await deixa as leituras pendentes resolverem. */
