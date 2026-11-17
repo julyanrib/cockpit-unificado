@@ -77071,7 +77071,7 @@ GV2.cvMesAtual = function () { return GV2.base.agora.iso.slice(0, 7); };
 GV2.cvMesNome = function (m) { return GV2.MESES[Number(String(m).slice(5, 7)) - 1] || ''; };
 GV2.cvMesNomeM = function (m) { const n = GV2.cvMesNome(m); return n.charAt(0).toUpperCase() + n.slice(1); };
 GV2.cvMesAnterior = function (m, n) {
-  let a = Number(m.slice(0, 4)), b = Number(m.slice(5, 7)) - (n || 1);
+  let a = Number(m.slice(0, 4)), b = Number(m.slice(5, 7)) - (n == null ? 1 : n);
   while (b < 1) { b += 12; a -= 1; }
   return a + '-' + (b < 10 ? '0' : '') + b;
 };
@@ -77286,7 +77286,7 @@ GV2.cvProtagonista = function () {
       frase = !T.demos ? 'Nenhuma demo' + quem + ' em ' + GV2.cvMesNome(mes) : tx.pct != null
         ? tx.pct + ' de cada 100 demos' + quem + ' de ' + GV2.cvMesNome(mes) + (T.est.k === 'fechada' ? ' viraram cliente' : ' já viraram cliente')
         : T.cli + ' de ' + T.demos + ' demos' + quem + ' de ' + GV2.cvMesNome(mes) + ' viraram cliente';
-      ctx = T.cli + ' de ' + T.demos + ' · ' + T.est.t + (T.est.k === 'aberta' ? ', fecha 30 dias depois do fim do mês' : T.est.k === 'fechando' ? ', ainda pode subir' : '') + (onde ? ' · ' + onde : '');
+      ctx = T.cli + ' de ' + T.demos + (p1 ? '' : ' · quem está no time hoje') + ' · ' + T.est.t + (T.est.k === 'aberta' ? ', fecha 30 dias depois do fim do mês' : T.est.k === 'fechando' ? ', ainda pode subir' : '') + (onde ? ' · ' + onde : '');
       corrente = (s.recorte === 'time' ? GV2.cvLeadHTML(null) : '')
         + GV2.cvPassoHTML({ rot: 'Portas', n: null, acao: 'cv:exp:semturma' }) + '<span class="cv-taxa is-nd" aria-hidden="true">›</span>'
         + GV2.cvPassoHTML({ rot: 'Decisor', n: null, acao: 'cv:exp:semturma' }) + '<span class="cv-taxa is-nd" aria-hidden="true">›</span>'
@@ -77322,7 +77322,7 @@ GV2.cvProtagonista = function () {
         const R = p1 ? GV2.v8Ritmo(p1) : GV2.v8Ritmo(null, s.recorte === 'praca' ? Object.assign({}, b, GV2.agregar(pessoas, b.negocios.filter(function (n) { return pessoas.some(function (x) { return x.id === n.dono; }); }), b.funilItens, true)) : b);
         const G = GV2.v8Gargalo(R);
         faixa = G.t; faixaK = G.k === 'mal' ? 'erro' : G.k;
-        if (R.vis.meta && R.vis.selo.k !== 'ok') { opts.portasAv = true; opts.portasSub = R.vis.selo.t; }
+        if (R.vis.meta && R.vis.selo.k !== 'ok') { opts.portasAv = true; opts.portasSub = (p1 ? '' : 'plenos ') + R.vis.selo.t; }
         if (!p1 && R.vis.meta) faixa += ' · plenos: ' + R.vis.feito + ' de ' + GV2.v8Num(R.vis.esp) + ' visitas esperadas até hoje';
       } else {
         faixa = 'Mês fechado: decisor e negociação não têm histórico por mês; portas, demos e clientes vêm dos eventos de pontos.'; faixaK = 'neutra';
@@ -77401,6 +77401,12 @@ GV2.render.cvDemoContrato = function () {
     + '<div class="cv-pilha-n">' + B.map(function (n, i) { return i === 4 && !n ? '' : '<button type="button" data-gv2="cv:contratos:' + mes + ':' + i + '"><b class="num">' + n + '</b><span>' + ROT[i] + '</span></button>'; }).join('') + '</div>'
     + ciclo + '</section>';
 };
+GV2.cvMetaPessoaHTML = function (p) {
+  const R = GV2.v8Ritmo(p);
+  return '<section class="card gv2-v8-mm"><div class="gv2-v8-mm-cab"><b>' + GV2.e('O mês de ' + GV2.prim(p.nome) + ' contra a meta') + '</b><span>' + GV2.e('dia útil ' + R.M.hoje + ' de ' + R.M.uteis + (R.metaCli ? ' · meta ' + R.metaCli + ' clientes' : ' · sem meta de clientes')) + '</span></div>'
+    + '<div class="gv2-v8-mm-bars">' + GV2.v8BarraHTML(R.vis) + GV2.v8BarraHTML(R.dem, 'rxg:passo:2:' + p.id) + GV2.v8BarraHTML(R.cli, 'v8neg:mes:' + p.id) + '</div>'
+    + '<div class="cv-g-pe"><button type="button" class="gv2-v5-btn" data-gv2="pessoa:' + p.id + '">' + GV2.e('Abrir a ficha de ' + GV2.prim(p.nome)) + '</button></div></section>';
+};
 
 GV2.render.raiox = function () {
   if (GV2.estado.rxm === 'praca') GV2.estado.rxm = 'funil';
@@ -77408,9 +77414,11 @@ GV2.render.raiox = function () {
 
   GV2.estado.prf = s.recorte === 'praca' ? GV2.cvPraca() : 'todas';
   const ehAtual = !s.mes || s.mes === GV2.cvMesAtual();
-  const meta = GV2.render.v8MesMeta('').replace('<b>1 · O mês contra a meta</b>', '<b>O mês contra a meta</b>');
+  const p1 = s.recorte === 'pessoa' ? GV2.cvPessoa() : null;
+
+  const meta = p1 ? GV2.cvMetaPessoaHTML(p1) : GV2.render.v8MesMeta('').replace('<b>1 · O mês contra a meta</b>', '<b>O mês contra a meta</b>');
   const segunda = ehAtual
-    ? '<div class="cv-g2">' + GV2.render.v8MesAnterior() + meta + GV2.render.cvDemoContrato() + GV2.render.perdas() + GV2.render.dinheiro() + '</div>'
+    ? '<div class="cv-g2">' + GV2.render.v8MesAnterior() + meta + GV2.render.cvDemoContrato() + (p1 ? '' : GV2.render.perdas() + GV2.render.dinheiro()) + '</div>'
     : '<div class="cv-g2">' + GV2.render.cvDemoContrato() + '</div>';
   return GV2.cvCab() + '<div class="gv2-corpo gv2-v5 gv2-v4-rx cv">' + GV2.cvProtagonista()
     + (s.recorte === 'pessoa' ? '' : GV2.render.cvPorPessoa()) + segunda + GV2.faltaHTML() + '</div>';
@@ -77460,6 +77468,7 @@ GV2.cvContaConteudo = function (o) {
         + bloco('De quando é', 'Turma de ' + GV2.cvMesNome(mes) + ' · ' + (T.est.k === 'fechada' ? 'fechada: o número não muda mais.' : T.est.k === 'fechando' ? 'ainda fechando: o mês acabou, mas as demos do fim do mês ainda têm prazo.' : 'aberta: o mês está correndo e o número ainda sobe.'))
         + (T.cli ? nota(mesmoDia + ' de ' + T.cli + ' têm a demo e o contrato no mesmo dia. Pode ser venda fechada na demo; pode ser demo registrada só na hora de fechar.') : '')
         + nota('O número de demos da turma (' + T.demos + ') vem do evento "demo realizada". O da conta do mês vem da entrada na etapa Demo/Proposta no HubSpot. Podem diferir em poucas unidades.')
+        + nota('Entram só as demos de quem está no time hoje: a turma de um mês antigo não conta quem já saiu.')
         + nota('Referência do playbook: ' + GV2.CV.PLAYBOOK + '% (2,5 demos por cliente).')
         + btn('Ver as demos desta turma', 'cv:turma:' + mes) };
   }
