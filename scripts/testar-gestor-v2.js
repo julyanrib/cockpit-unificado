@@ -958,6 +958,17 @@ tabelas.gv2_falta_etapa = [
       const F = GV2.base.time.funil, somaP = GV2.base.pessoas.reduce(function (a, p) { return a + p.funil_mes.portas; }, 0);
       const fT = GV2.cvFunil(GV2.base.pessoas, null);
       checar('conversão: a porta do time é a soma das portas de todo mundo (com quem está em rampa), a mesma por pessoa', fT[0] === somaP && fT[0] === F[0] && fT[4] === GV2.base.pessoas.reduce(function (a, p) { return a + p.funil_mes.fechado; }, 0), fT.join() + ' × ' + somaP);
+      /* quem entra em rampa sai da META de visitas (v8Ritmo), mas a porta da conversão continua contando */
+      {
+        const quem = GV2.base.pessoas.filter(function (p) { return p.funil_mes.portas > 0; })[0];
+        if (quem) {
+          const fase0 = quem.fase, antes = GV2.v8Ritmo(null).vis.feito;
+          quem.fase = 'Preparação';
+          const fR = GV2.cvFunil(GV2.base.pessoas, null), depois = GV2.v8Ritmo(null).vis.feito;
+          quem.fase = fase0;
+          checar('conversão: com alguém em rampa, a porta da conversão não muda (time inteiro) e só a da meta diminui (plenos)', fR[0] === somaP && depois === antes - quem.funil_mes.portas && depois < fR[0], fR[0] + ' × ' + somaP + ' · meta ' + antes + ' → ' + depois);
+        } else checar('conversão: a fixture tem alguém com porta para provar a regra da rampa', false);
+      }
       checar('conversão: taxa só com 3 ou mais atrás e sem passar de 100%; sem dado é "não medido", zero é número',
         GV2.cvTaxa(191, 84).v === '44%' && GV2.cvTaxa(191, 84).s === '84 de 191' && GV2.cvTaxa(2, 1).v === '1 de 2' && GV2.cvTaxa(6, 7).v === '7 de 6' && GV2.cvTaxa(6, 7).cont === true
         && GV2.cvTaxa(null, 3).nd === true && GV2.cvTaxa(10, 0).v === '0%' && GV2.cvDeCada100(304, 30) === 10);
