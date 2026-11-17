@@ -96,6 +96,9 @@ const texto = h => String(h).replace(/<[^>]+>/g, ' ');
   relogio('2026-10-06T14:20:00Z'); // terça 11:20 em São Paulo
   const GV2 = new Function(codigo + '\nreturn GV2;')();
   GV2.pintar = function () {};
+  /* A PÁGINA DA PESSOA TEM SETE ABAS (18/11/26): estas conferências foram escritas para a página numa rolagem só.
+     Para provar que nada sumiu, com a página aberta o teste monta as sete abas e junta. */
+  (function () { const rp = GV2.render.pessoas; GV2.render.pessoas = function () { if (!GV2.estado.pv2Pan || !GV2.PG) return rp(); const s = GV2.pgS(), a0 = s.aba; const h = GV2.PG.ABAS.map(function (a) { s.aba = a[0]; return rp(); }).join('\n'); s.aba = a0; return h; }; })();
   GV2.toast = function () {};
   const b = await GV2.montar();
   GV2.pessoasMontar(b);
@@ -214,10 +217,10 @@ const texto = h => String(h).replace(/<[^>]+>/g, ' ');
   GV2.pv2Abrir('1', 'placa', 'um');
   const pan = GV2.render.pessoas();
   {
-    checar('painel: o resumo de 5 (Hoje · Mês · Ritmo · Disciplina · Carteira), cada um leva ao bloco', (pan.match(/class="pv2-r"/g) || []).length === 5 && ['HOJE', 'MÊS', 'RITMO', 'DISCIPLINA', 'CARTEIRA'].every(k => pan.indexOf('<small>' + k + '</small>') > 0) && /data-gv2="pv2:anc:funil"/.test(pan));
-    checar('painel: as âncoras 1:1 · Agora · Mapa · Ritmo · Disciplina · Funil · Desenvolvimento · Campo', ['um', 'agora', 'mapa', 'ritmo', 'disc', 'funil', 'dev', 'campo'].every(k => pan.indexOf('data-gv2="pv2:anc:' + k + '"') > 0 && pan.indexOf('id="pv2b-' + k + '"') > 0));
+    checar('página: os cinco do topo (Hoje · Mês · Ritmo · Disciplina · Carteira), cada um leva à aba dele', ['Hoje', 'Mês', 'Ritmo', 'Disciplina', 'Carteira'].every(k => pan.indexOf('<small>' + k + '</small>') > 0) && /class="pg-c5" data-gv2="pg:aba:parado"/.test(pan) && /class="pg-c5" data-gv2="pg:aba:hoje"/.test(pan));
+    checar('página: os dez atalhos viraram sete abas, e cada bloco de antes continua existindo em alguma delas', ['resumo', 'conv', 'parado', 'campo', 'hoje', 'evo', 'um'].every(k => pan.indexOf('data-gv2="pg:aba:' + k + '"') > 0) && ['um', 'agora', 'mapa', 'ritmo', 'disc', 'funil', 'dev', 'campo'].every(k => pan.indexOf('id="pv2b-' + k + '"') > 0) && Object.keys(GV2.PG.ANC).length === 10, ['um', 'agora', 'mapa', 'ritmo', 'disc', 'funil', 'dev', 'campo'].filter(k => pan.indexOf('id="pv2b-' + k + '"') < 0).join());
     checar('painel: a pauta pronta e o Registrar 1:1 na coluna da esquerda', /PAUTA DO 1:1 PRONTA/.test(pan) && /Registrar 1:1/.test(pan) && /1 · O que conquistou/.test(pan) && /4 · Pergunta sugerida/.test(pan));
-    checar('painel: a barra do pé com "Pauta no WhatsApp" e a ação principal', /data-gv2="pauta:wa:1">Pauta no WhatsApp/.test(pan) && /class="pv2-pe"/.test(pan));
+    checar('página: "Pauta no WhatsApp" e "Registrar 1:1" no topo, com voltar ao time', /data-gv2="pauta:wa:1">Pauta no WhatsApp/.test(pan) && /data-gv2="pg:reg:1">Registrar 1:1</.test(pan) && /data-gv2="pv2:fechar">‹ voltar ao time</.test(pan));
     checar('painel: as reuniões sem desfecho com Aconteceu · Remarcar · Não aconteceu (a RPC do app)', (function () { GV2.pv2Abrir('2', 'placa', 'um'); const h = GV2.render.pessoas(); GV2.pv2Abrir('1', 'placa', 'um'); return /v4:desf:2:m1:realizada/.test(h) && /v4:rem:m1/.test(h) && /v4:desf:2:m1:nao_aconteceu/.test(h) && /Cobrar a disciplina/.test(h); })());
     checar('painel: o "sem passo" do resumo, do Funil e da placa é o mesmo número', (function () { GV2.pv2Abrir('2', 'placa'); const h = GV2.render.pessoas(); GV2.pv2Abrir('1', 'placa', 'um'); return h.indexOf('12 sem passo') > 0 && /<small>sem próximo passo<\/small><b class="num t-acao">12<\/b>/.test(h); })());
     /* os 7 combinados e o cliente que fica abrem pelos indicadores do topo (gavetas próprias) */
