@@ -66,10 +66,10 @@ const abrir = async (cod) => {
   const pessoas = ex.map(e => ({ id: e.owner_id, nome: e.nome, praca: 'Rio de Janeiro', iniciais: 'E' }));
   GV2.base = { agora: { iso: '2026-11-06', min: 12 * 60, dow: 5 }, pessoas, porId: Object.fromEntries(pessoas.map(p => [p.id, p])), negocios: [], cru: { fichas: [] }, faltas: [] };
   GV2.estado = Object.assign(GV2.estado || {}, { aba: 'terr', cobrados: {} });
-  GV2.render.terr();
+  GV2.render.t4();
   await new Promise(r => setTimeout(r, 5));
   await (GV2.t4 && GV2.t4.cache.todas && GV2.t4.cache.todas.lendo);
-  const h = GV2.render.terr();
+  const h = GV2.render.t4();
   return { GV2, pedidos, tabelas, h };
 };
 
@@ -83,18 +83,18 @@ const abrir = async (cod) => {
   checar('a tela montou com o resumo', /4 · GERIR O TERRITÓRIO/.test(A.h));
   /* repintar (cada clique repinta) não relê */
   const n0 = A.pedidos.length;
-  for (let i = 0; i < 5; i++) A.GV2.render.terr();
+  for (let i = 0; i < 5; i++) A.GV2.render.t4();
   await new Promise(r => setTimeout(r, 5));
   checar('repintar 5 vezes não lê de novo (cache de 5 minutos) nem mede de novo no mesmo dia', A.pedidos.length === n0, A.pedidos.slice(n0).join(', '));
   /* trocar de praça: uma leitura, só dela */
   A.GV2.t4Comando('t4pr', ['t4pr', 'sp']);
-  A.GV2.render.terr();
+  A.GV2.render.t4();
   await new Promise(r => setTimeout(r, 5));
   await (A.GV2.t4.cache.sp && A.GV2.t4.cache.sp.lendo);
   checar('trocar para SP faz 1 leitura (territorio_resumo de SP) e nenhuma tabela', A.pedidos.slice(n0).join() === 'territorio_resumo:sp' && A.tabelas.length === 0, A.pedidos.slice(n0).join(', '));
   /* o mapa da praça vem no resumo: trocar RJ/SP/ES no cartão não lê */
   const n1 = A.pedidos.length;
-  A.GV2.t4Comando('t4pr', ['t4pr', 'todas']); A.GV2.t4Comando('t4mp', ['t4mp', 'vv']); A.GV2.render.terr();
+  A.GV2.t4Comando('t4pr', ['t4pr', 'todas']); A.GV2.t4Comando('t4mp', ['t4mp', 'vv']); A.GV2.render.t4();
   await new Promise(r => setTimeout(r, 5));
   checar('voltar para Todas e trocar o mapa para ES não lê nada (está no cache e no resumo)', A.pedidos.length === n1, A.pedidos.slice(n1).join(', '));
 

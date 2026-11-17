@@ -1264,7 +1264,7 @@ tabelas.gv2_falta_etapa = [
        scripts/testar-territorio-orcamento.js, as leituras); aqui, sem o banco, ela desenha o cabeçalho e o
        esqueleto ou a fonte fora, nunca um número inventado */
     checar('Território v4: cabeçalho com o filtro de praça e, sem o banco, esqueleto ou fonte fora',
-      /<h1>Território<\/h1>/.test(h) && /data-gv2="t4pr:rj"/.test(h) && (/gv2-t4-lendo/.test(h) || /Fonte fora · territorio_resumo/.test(h)), h.slice(0, 300));
+      /<h1>Território<\/h1>/.test(h) && /data-gv2="tn:pr:rj"/.test(h) && (/tn-mapa is-lendo/.test(h) || /Fonte fora · territorio_resumo/.test(h)), h.slice(0, 300));
     checar('Território v2: nenhum botão abre a tela antiga nem a busca paga (v5rt7, v9g, Importar, munição)',
       !/data-gv2="v5rt7|data-gv2="v9g|Importar|Prospecção completa|munição|torneira/.test(h));
     const P = GV2.v9Pendencias();

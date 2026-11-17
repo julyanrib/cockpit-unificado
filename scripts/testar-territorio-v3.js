@@ -128,11 +128,11 @@ const espera = (ms) => new Promise(r => setTimeout(r, ms));
   checar('as funções da v5 existem', ['t4Ler', 't4Modelo', 't5Praca', 't5Frase', 't5Passar', 't4Comando', 't4PorNoPlano', 't4Redistribuir', 't4Sair', 't4DarDono', 't4Equilibrar', 't4Abrir'].every(k => typeof GV2[k] === 'function'));
 
   /* ── 0 · a abertura: esqueleto, uma leitura, Todas ── */
-  let h = GV2.render.terr();
+  let h = GV2.render.t4();
   checar('antes da leitura: esqueleto por bloco, nunca número', /gv2-t4-lendo/.test(h) && !/class="num"/.test(h));
   await espera(5);
   await (GV2.t4.cache.todas && GV2.t4.cache.todas.lendo);
-  h = GV2.render.terr();
+  h = GV2.render.t4();
   checar('Todas: um cartão por praça (RJ e ES) e o gerir de todas', (h.match(/class="card gv2-t4-card gv2-t5-pc/g) || []).length === 2 && /4 · GERIR O TERRITÓRIO · TODAS AS PRAÇAS/.test(h), h.slice(0, 300));
   checar('Todas: a praça com o pior "caem onde anda" ganha o selo MAIOR BURACO (ES 20%)', /<section class="card gv2-t4-card gv2-t5-pc is-ruim"><div class="gv2-t5-pch"><b>ES<\/b>/.test(h) && (h.match(/MAIOR BURACO/g) || []).length === 1);
   checar('Todas: a frase soma as praças e aponta o buraco', /Dos 120 recém-abertos de 30 dias, 62% caem onde o time anda\. ES é o maior buraco/.test(h), (h.match(/gv2-t5-frase[\s\S]{0,400}/) || [''])[0]);
@@ -141,8 +141,8 @@ const espera = (ms) => new Promise(r => setTimeout(r, ms));
 
   /* ── 1 · a praça ── */
   GV2.t4Comando('t4pr', ['t4pr', 'rj']);
-  GV2.render.terr(); await espera(5); await (GV2.t4.cache.rj && GV2.t4.cache.rj.lendo);
-  h = GV2.render.terr();
+  GV2.render.t4(); await espera(5); await (GV2.t4.cache.rj && GV2.t4.cache.rj.lendo);
+  h = GV2.render.t4();
   const M = GV2.t4M, Pr = M.P;
   checar('a praça lê o resumo dela (p_praca rj)', chamadas.some(c => c.nome === 'territorio_resumo' && c.args.p_praca === 'rj'));
   checar('os 4 blocos e o gerir da praça', ['1 · O MAPA DA PRAÇA', '1 · ONDE CADA UM ATUA', '2 · ONDE CHEGAM OS LEADS QUE EU ABASTEÇO', '3 · O QUE A PRAÇA ENSINA', '4 · GERIR O TERRITÓRIO · RJ'].every(k => h.indexOf(k) >= 0));
@@ -241,8 +241,8 @@ const espera = (ms) => new Promise(r => setTimeout(r, ms));
   /* ── 5 · fonte fora: "—" e o nome da fonte, nunca 0 ── */
   fora = true;
   GV2.t4.cache = {};
-  GV2.render.terr(); await espera(5); await (GV2.t4.cache.rj && GV2.t4.cache.rj.lendo);
-  h = GV2.render.terr();
+  GV2.render.t4(); await espera(5); await (GV2.t4.cache.rj && GV2.t4.cache.rj.lendo);
+  h = GV2.render.t4();
   checar('fonte fora: cada bloco com "—" e "Fonte fora · territorio_resumo"', (h.match(/Fonte fora · territorio_resumo/g) || []).length >= 8 && /FONTE FORA/.test(h), h.slice(0, 400));
   checar('fonte fora: nenhum número zero na tela', !/class="num[^"]*">0</.test(h));
   fora = false;
