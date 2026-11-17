@@ -228,7 +228,7 @@ tabelas.gv2_falta_etapa = [
     const g4 = GV2.estado.rxGav === null && GV2.estado.veu === null && GV2.estado.passo === null;
     const h = GV2.render.raiox();
     const mortos = (h.match(/<button[^>]*data-gv2=""/g) || []).length;
-    checar('raio x: passo, etapa sem valor e KPI abrem a gaveta; fechar limpa; nenhum botão sem destino', g1 && g2 && g3 && g4 && mortos === 0 && /data-gv2="rxg:passo:\d+:\d+"/.test(h) && /data-gv2="rxg:etapa:/.test(h) && /class="gv2-v4-funil-lin[^"]*" data-gv2="rxg:passo:\d+"/.test(h) && /data-gv2="rxg:passo:[0-9]" class="gv2-v5-kpi"/.test(h) && /data-gv2="rxg:filtro:todos"/.test(h), JSON.stringify({ g1: g1, g2: g2, g3: g3, g4: g4, mortos: mortos, a: /data-gv2="rxg:passo:\d+:\d+"/.test(h), b: /data-gv2="rxg:etapa:/.test(h), c: /class="gv2-v4-funil-lin[^"]*" data-gv2="rxg:passo:\d+"/.test(h), d: /data-gv2="rxg:passo:[0-9]" class="gv2-v5-kpi"/.test(h), e: /data-gv2="rxg:filtro:todos"/.test(h) }));
+    checar('raio x: passo, etapa sem valor e KPI abrem a gaveta; fechar limpa; nenhum botão sem destino', g1 && g2 && g3 && g4 && mortos === 0 && /class="cv-passo[^"]*"/.test(h) && /data-gv2="rxg:passo:\d+"/.test(h) && /data-gv2="rxg:etapa:/.test(h) && /data-gv2="cv:exp:taxa:[1-4]"/.test(h) && /data-gv2="cv:funil:\d+"/.test(h), JSON.stringify({ g1: g1, g2: g2, g3: g3, g4: g4, mortos: mortos, a: /data-gv2="rxg:passo:\d+"/.test(h), b: /data-gv2="rxg:etapa:/.test(h), c: /data-gv2="cv:exp:taxa:[1-4]"/.test(h), d: /data-gv2="cv:funil:\d+"/.test(h) }));
   })();
   (function () {
     GV2.estado.veu = null; GV2.estado.rxGav = null;
@@ -236,7 +236,7 @@ tabelas.gv2_falta_etapa = [
     const c = GV2.rxGavConteudo();
     const tempo = GV2.render.time ? GV2.render.time() : '';
     GV2.rxGavClique(['rxg', 'fechar']);
-    checar('planejamento: o cartão do Hoje abre a gaveta, o Funil leva à Rua › Semana (v8); o plano de cada um abre o dia na Rua', /^Planejamento de /.test(c.tit) && c.corpo.indexOf('gv2-rt') > 0 && tempo.indexOf('v5dia:' + ana.id + ':') > 0 && tempo.indexOf('data-gv2="rxg:plano"') > 0 && GV2.render.raiox().indexOf('data-gv2="v8ir:rua:semana"') > 0, c.tit);
+    checar('planejamento: o cartão do Hoje abre a gaveta; o Funil leva ao Hoje, onde moram as cobranças (16/11/26); o plano de cada um abre o dia na Rua', /^Planejamento de /.test(c.tit) && c.corpo.indexOf('gv2-rt') > 0 && tempo.indexOf('v5dia:' + ana.id + ':') > 0 && tempo.indexOf('data-gv2="rxg:plano"') > 0 && GV2.render.raiox().indexOf('data-gv2="cv:ir:time"') > 0, c.tit);
   })();
   (function () {
     GV2.estado.rotaSem = -1; GV2.estado.rotaDia = '2026-09-30';
@@ -297,6 +297,8 @@ tabelas.gv2_falta_etapa = [
   checar('a rotação proposta é uma praça por semana, a mais urgente primeiro', (function () { const r = GV2.propostaRotacao(false); return r.length === 5 && r[0].inicio === '2026-10-05' && r[1].inicio === '2026-10-12'; })());
   /* Pessoas v3 (06/10/26): uma página com 5 seções fixas, a lista e a barra do pé; a rotação vira folha */
   let p3 = '';
+  /* 16/11/26: os rituais do gestor (contadores, placa, rotação) moram na gaveta "Minha semana de líder" */
+  GV2.estado.cvPg = 'semana';
   try { p3 = GV2.render.pessoas(); } catch (e) { falhas.push('pessoas v3: ' + e.message); }
   const melhor = GV2.melhorV4(b.pessoas, b.time.funil);
   checar('v4 · 2: "melhor" nunca mostra taxa menor ou igual à do time nem amostra < 3', melhor.slice(1).every(function (m, j) {
@@ -321,6 +323,29 @@ tabelas.gv2_falta_etapa = [
       && ['um', 'disc', 'campo', 'funil'].every(function (t) { return p3pan.indexOf('data-gv2="v5gav:' + t + ':') > 0; }) && /data-gv2="p3:rotacao"/.test(p3) && !/Sua rotação de campo/.test(p3));
   let telas = p3; try { telas += GV2.render.time(); } catch (e) { falhas.push('time: ' + e.message); }
   checar('v4 · 8: "0 de 0" não aparece em lugar nenhum (Pessoas e Time)', !/(^|[^0-9])0 de 0([^0-9]|$)/.test(telas.replace(/<[^>]+>/g, ' ')), (function () { const t = telas.replace(/<[^>]+>/g, ' '); const i = t.search(/(^|[^0-9])0 de 0([^0-9]|$)/); return i < 0 ? '' : t.slice(Math.max(0, i - 80), i + 40).replace(/s+/g, ' '); })());
+  {
+    const pg0 = GV2.estado.cvPg; GV2.estado.cvPg = null;
+    const pn = GV2.render.pessoas();
+    GV2.estado.cvPg = pg0;
+    checar('Pessoas (16/11/26): a primeira tela informa — três indicadores e uma linha por pessoa; sem "Abrir 1:1", sem botão vermelho, sem os zeros dos rituais',
+      (pn.match(/class="card cv-ind"/g) || []).length >= 1 && pn.indexOf('O cliente que fica') > 0 && !/Abrir 1:1/.test(pn) && !/cv-vermelho/.test(pn) && !/MINHA SEMANA DE LÍDER/.test(pn) && pn.indexOf('data-gv2="cv:pg:semana"') > 0 && pn.indexOf('data-gv2="cv:pg:mapa"') > 0);
+    checar('Pessoas: em cada linha o nome abre a ficha, as barras abrem o funil dela e o "sem próximo passo" abre a lista, com o número da regra canônica',
+      GV2.pv2Time().every(function (pp) { return pn.indexOf('data-gv2="pessoa:' + pp.id + '"') > 0 && pn.indexOf('data-gv2="cv:funil:' + pp.id + '"') > 0 && new RegExp('data-gv2="v8neg:sempasso:' + pp.id + '"[^>]*>' + GV2.semProximoPasso(pp.negocios).length + '<').test(pn); }));
+    /* a trilha de mentira: 2 capítulos; a 1ª pessoa leu tudo, a 2ª parou no 2º, as outras nunca abriram */
+    const pb0 = GV2.base.playbook, pbP0 = GV2.base.pessoas.map(function (pp) { return pp.playbook; });
+    GV2.base.playbook = { ok: true, erro: null, capitulos: [{ titulo: 'Comece aqui', cor: 'var(--gv2-ok)', paginas: ['a1'] }, { titulo: 'Venda na rua', cor: 'var(--gv2-acao)', paginas: ['b1', 'b2'] }] };
+    GV2.base.pessoas.forEach(function (pp, i) { pp.playbook = i === 0 ? { nivel: 3, feitos: [true, true], dias_parado: 2, nunca: false, parado: false } : i === 1 ? { nivel: 2, feitos: [true, false], dias_parado: 30, nunca: false, parado: true } : { nivel: 1, feitos: [false, false], dias_parado: null, nunca: true, parado: true }; });
+    GV2.estado.aba = 'playbook';
+    const pbh = GV2.render.playbook(), nCap = GV2.base.playbook.capitulos.length;
+    GV2.estado.aba = 'pessoas';
+    checar('Playbook do gestor (16/11/26): o nome abre a ficha, a barra abre o que a pessoa leu, o capítulo abre quem leu; o botão "1:1" saiu',
+      GV2.base.pessoas.every(function (pp) { return pbh.indexOf('data-gv2="pessoa:' + pp.id + '"') > 0 && pbh.indexOf('data-gv2="cv:pb:pes:' + pp.id + '"') > 0; }) && (pbh.match(/data-gv2="cv:pb:cap:\d+"/g) || []).length === nCap && !/>1:1</.test(pbh) && pbh.indexOf('data-gv2="menu:playbook"') > 0 && pbh.indexOf('Quem estuda converte mais?') > 0);
+    const E = GV2.cvPbEstudo();
+    checar('Playbook: "quem estuda converte mais?" não conclui com amostra pequena (menos de 3 pessoas de um lado ou menos de 30 portas)', (E.da === false && /Ainda não dá para dizer/.test(pbh)) || (E.da === true && E.A.n >= 3 && E.B.n >= 3 && E.A.portas >= 30 && E.B.portas >= 30));
+    const cap = GV2.cvPbConteudo({ k: 'cap', i: 0 }), pes = GV2.cvPbConteudo({ k: 'pes', id: GV2.base.pessoas[0].id });
+    checar('Playbook: a gaveta do capítulo tem quem leu e quem não leu e o botão que abre o capítulo certo; a da pessoa lista os capítulos', cap.corpo.indexOf('data-gv2="cv:pb:abrir:0"') > 0 && (cap.corpo.match(/data-gv2="pessoa:/g) || []).length === GV2.base.pessoas.length && (pes.corpo.match(/data-gv2="cv:pb:cap:\d+"/g) || []).length === nCap && /parou aqui/.test(GV2.cvPbConteudo({ k: 'pes', id: GV2.base.pessoas[1].id }).corpo) && /parado há 30 dias/.test(pbh) && /trilha completa/.test(pbh) && /não começou a trilha/.test(pbh));
+    GV2.base.playbook = pb0; GV2.base.pessoas.forEach(function (pp, i) { pp.playbook = pbP0[i]; });
+  }
   GV2.estado.p3rotacao = true;
   checar('Pessoas v3: a rotação abre numa folha lateral, com o mesmo componente', /class="gv2-p3-folha"/.test(GV2.render.pessoas()) && /Sua rotação de campo/.test(GV2.render.pessoas()));
   GV2.estado.p3rotacao = false;
@@ -367,8 +392,8 @@ tabelas.gv2_falta_etapa = [
     checar('auditoria 02/11 · G3: Funil › Por pessoa tem a coluna "Sem próx. passo" com o número da regra canônica',
       pp.indexOf('<span>Sem próx. passo</span>') > 0 && new RegExp('data-gv2="v8neg:sempasso:1"[^>]*><span><b class="num[^"]*">' + spAna + '</b>').test(pp), String(spAna));
     const rx = GV2.render.raiox();
-    checar('auditoria 02/11 · G3: "Negócios para puxar" diz "em Negociação sem passo", não "sem próximo passo (no prazo"',
-      /em Negociação sem passo \(no prazo/.test(rx) && !/sem próximo passo \(no prazo/.test(rx));
+    checar('16/11/26 · as listas de cobrar saíram do Funil: nada de "Negócios para puxar" nem botão Cobrar no meio dos números; o botão leva ao Hoje',
+      !/Negócios para puxar/.test(rx) && !/data-gv2="cobrar:/.test(rx) && !/data-gv2="v5lote:/.test(rx) && rx.indexOf('data-gv2="cv:ir:time"') > 0);
     const pes = GV2.render.v5Pessoa(ana), hj = GV2.render.time();
     checar('auditoria 02/11 · G3: os cartões de Quentes (Pessoas e Hoje) dizem "quentes sem passo" e não chamam isso de "sem próximo passo"',
       !/[0-9]+ sem próximo passo<\/span>/.test(pes) && /sem próximo passo no funil/.test(pes) && /quentes? sem passo/.test(hj) && !/>[0-9]+ sem próximo passo</.test(hj));
@@ -425,7 +450,7 @@ tabelas.gv2_falta_etapa = [
     checar('v5 · o clique no sistema abre o Território na praça, com o concorrente', GV2.estado.aba === 'terr' && GV2.estado.pr === 'vv' && GV2.estado.cz === 'Saipos');
     GV2.estado.aba = 'raiox'; GV2.estado.cz = null;
   }
-  checar('Funil do mês diz que é contagem por passo, não a mesma turma (v4)', /não a mesma turma/.test(rxf));
+  checar('Funil do mês diz que é contagem do mês, não a mesma turma (v4; frase nova em 16/11/26)', /Não é a mesma turma/.test(rxf) && /contagem do mês/.test(rxf));
   checar('a ficha do negócio carrega o bloco das armas (Meu funil do executivo)', tpl.indexOf("GV2.armasNaFicha(l, document.getElementById('gv2ArmasFicha'))") > 0);
   const C = GV2.pracaContra('vv');
   checar('Contra quem: abertos por sistema = lista do painel', C.lista.every(x => x.ab === x.abertos.length));
@@ -784,7 +809,10 @@ tabelas.gv2_falta_etapa = [
       navMenu.indexOf('data-gv2="menu:sair">Sair da conta<') > 0 && tpl.indexOf("if (o === 'sair') { const bt = document.getElementById('perfilSairBtn');") > 0);
     GV2.estado.aba = 'raiox'; GV2.estado.prf = 'todas';
     const fu = GV2.render.raiox();
-    checar('v5 · Funil: 5 cartões do funil (Demo → cliente desde 12/11/26), sem o "Funil · Praça" e com "Negócios para puxar" (travado separado de sem passo)', (fu.match(/class="gv2-v5-kpi( is-fixo)?"/g) || []).length === 5 && fu.indexOf('data-gv2="rxg:demo"') > 0 && fu.indexOf('data-gv2="rxm:') < 0 && /Negócios para puxar/.test(fu) && /passou do prazo da etapa/.test(fu) && /<h1>Funil<\/h1>/.test(fu));
+    checar('Funil (16/11/26): a corrente tem os 5 passos, as chaves Time · Praça · Pessoa e Do mês · Por turma, o mês e o Comparar; sem o "Funil · Praça"',
+      ['Portas', 'Decisor', 'Demo', 'Negociação', 'Cliente'].every(function (r) { return fu.indexOf('<small>' + r + '</small>') > 0; })
+      && ['cv:recorte:time', 'cv:recorte:praca', 'cv:recorte:pessoa', 'cv:conta:mes', 'cv:conta:turma', 'cv:menu', 'cv:comparar'].every(function (c) { return fu.indexOf('data-gv2="' + c + '"') > 0; })
+      && fu.indexOf('data-gv2="rxm:') < 0 && /<h1>Funil<\/h1>/.test(fu));
     const fpp = GV2.render.funilPorPessoa();
     const algumMenor = GV2.base.pessoas.some(function (p) { return p.funil_mes.portas > 0 && p.funil_mes.portas < 3 && p.funil_mes.decisor > 0; });
     checar('v5 · Funil por pessoa: a taxa só aparece com 3 ou mais no passo anterior (senão "—", nunca 400%)', !/>[0-9]{3,}%</.test(fpp) && /a taxa só aparece com 3 ou mais/.test(fpp) && (!algumMenor || /<small>—<\/small>/.test(fpp)));
@@ -900,7 +928,7 @@ tabelas.gv2_falta_etapa = [
     GV2.v8Comando('pessoa', ['pessoa', '1']);
     checar('v8: o nome no Hoje abre a gaveta da Pessoa, sem trocar de aba', GV2.estado.rxGav && GV2.estado.rxGav.t === 'pessoa' && GV2.estado.aba === 'time', JSON.stringify(GV2.estado.rxGav));
     let gp = {}; try { gp = GV2.rxGavConteudo(); } catch (e) { falhas.push('gaveta da pessoa: ' + e.message); }
-    checar('v8: a gaveta da Pessoa tem hoje, semana, mês, quentes, travados, o funil contra o esperado e a página completa', /Funil do mês contra o esperado/.test(gp.corpo || '') && (gp.corpo.match(/class="gv2-v8-tile[ "]/g) || []).length === 5 && /v8pagina:1/.test(gp.corpo) && /Ver o dia na Rua/.test(gp.corpo), gp.tit + ' :: ' + [/Funil do mês contra o esperado/.test(gp.corpo || ''), (gp.corpo.match(/gv2-v8-tile/g) || []).length, /v8pagina:1/.test(gp.corpo), /Ver o dia na Rua/.test(gp.corpo)].join());
+    checar('v8: a gaveta da Pessoa tem hoje, semana, mês, quentes, travados, o funil contra o esperado e a página completa', /Funil do mês contra o esperado/.test(gp.corpo || '') && (gp.corpo.match(/class="gv2-v8-tile[ "]/g) || []).length === 5 && /v8pagina:1/.test(gp.corpo) && /data-gv2="v5dia:1:[0-9-]+">Rua →</.test(gp.corpo), gp.tit + ' :: ' + [/Funil do mês contra o esperado/.test(gp.corpo || ''), (gp.corpo.match(/gv2-v8-tile/g) || []).length, /v8pagina:1/.test(gp.corpo), /Rua →/.test(gp.corpo)].join());
     GV2.rxGavFechar();
     GV2.estado.aba = 'raiox'; GV2.v8Comando('rx', ['rx', 'pessoa', '2']);
     checar('v8: o nome no Funil por pessoa abre a gaveta (não pula para Pessoas)', GV2.estado.rxGav && GV2.estado.rxGav.t === 'pessoa' && GV2.estado.rxGav.id === '2' && GV2.estado.aba === 'raiox');
@@ -911,7 +939,8 @@ tabelas.gv2_falta_etapa = [
     GV2.rxGavFechar();
     const ir0 = GV2.ir; GV2.ir = function (x) { GV2.estado.aba = x; }; GV2.v8Comando('v8pagina', ['v8pagina', '3']); GV2.ir = ir0;
     checar('v8: "Abrir a página completa" vai para a Pessoas na pessoa certa', GV2.estado.aba === 'pessoas' && GV2.estado.pessoa === '3');
-    checar('v8: dentro da Pessoas, o nome continua escolhendo a pessoa da página', GV2.v8Comando('pessoa', ['pessoa', '1']) === false);
+    checar('16/11/26: dentro da Pessoas o nome abre a MESMA ficha das outras abas (antes abria a página larga)', GV2.v8Comando('pessoa', ['pessoa', '1']) === true && GV2.estado.rxGav && GV2.estado.rxGav.t === 'pessoa' && GV2.estado.rxGav.id === '1' && GV2.estado.aba === 'pessoas');
+    GV2.rxGavFechar();
     const R = GV2.v8Ritmo(GV2.base.porId['3']), M = GV2.v8Mes();
     checar('v8: visitas esperadas = 6 por dia útil para todos; demos = meta ÷ 40%; clientes = meta', R.vis.meta === 6 * M.uteis && Math.abs(R.vis.esp - 6 * M.passados) < 1e-9 && R.dem.meta === R.cli.meta / 0.4, JSON.stringify({ meta: R.vis.meta, esp: R.vis.esp, uteis: M.uteis, passados: M.passados }));
     checar('v8: taxa acima de 100% vira — e só com 3 ou mais no passo anterior', GV2.v8Tx(4, 5) === '—' && GV2.v8Tx(2, 1) === '—' && GV2.v8Tx(10, 3) === '30%');
@@ -920,10 +949,62 @@ tabelas.gv2_falta_etapa = [
   /* v8 etapa 2 (13/10/26): o Funil lido de cima para baixo, e nenhum clique da grade antiga se perde */
   {
     let fu = ''; try { fu = GV2.render.raiox(); } catch (e) { falhas.push('funil v8: ' + e.message); }
-    const pos = ['1 · O mês contra a meta', 'Funil do mês', '3 · Por pessoa', '4 · Negócios para puxar', 'gv2-v8-fl5'].map(function (x) { return fu.indexOf(x); });
-    checar('v8 Funil: o mês contra a meta → funil e dinheiro → por pessoa → para puxar → perdas', pos.every(function (x, i) { return x > 0 && (i === 0 || x > pos[i - 1]); }), pos.join());
-    checar('v8 Funil: cada pessoa tem o nome que abre a gaveta e os passos que abrem os parados dela', GV2.base.pessoas.every(function (pp) { return fu.indexOf('data-gv2="pessoa:' + pp.id + '"') > 0; }) && /data-gv2="rxg:passo:[0-9]:[0-9]+"/.test(fu));
-    checar('v8 Funil: os 4 KPIs de antes continuam (porta → fechado, decisor → demo, ciclo, perdas)', /Porta → fechado/.test(fu) && /Decisor → Demo/.test(fu) && /Ciclo · mediana/.test(fu) && /Perdas do mês/.test(fu));
+    const pos = ['class="card cv-prot"', 'class="card cv-pp"', 'O mês contra a meta', 'Da demo ao contrato', 'Perdas do mês', 'Onde o dinheiro trava'].map(function (x) { return fu.indexOf(x); });
+    checar('Funil (16/11/26): a corrente → por pessoa → e, na segunda tela, meta, demo ao contrato, perdas e dinheiro', pos.every(function (x, i) { return x > 0 && (i === 0 || x > pos[i - 1]); }), pos.join());
+    checar('Funil: cada pessoa tem o nome que abre a ficha e o desenho do funil que abre os números dela', GV2.base.pessoas.every(function (pp) { return fu.indexOf('data-gv2="pessoa:' + pp.id + '"') > 0 && fu.indexOf('data-gv2="cv:funil:' + pp.id + '"') > 0; }));
+    checar('Funil: os números de antes continuam a 1 clique (porta → cliente na frase, as 4 taxas, demo ao contrato, perdas)', fu.indexOf('data-gv2="cv:exp:frase"') > 0 && [1, 2, 3, 4].every(function (i) { return fu.indexOf('data-gv2="cv:exp:taxa:' + i + '"') > 0 || GV2.cvTaxa(GV2.base.time.funil[i - 1], GV2.base.time.funil[i]).nd; }) && /Da demo ao contrato/.test(fu) && /Perdas do mês/.test(fu));
+    /* A PORTA OFICIAL (16/11/26): a frase usa o time inteiro, o mesmo número da soma das pessoas */
+    {
+      const F = GV2.base.time.funil, somaP = GV2.base.pessoas.reduce(function (a, p) { return a + p.funil_mes.portas; }, 0);
+      const fT = GV2.cvFunil(GV2.base.pessoas, null);
+      checar('conversão: a porta do time é a soma das portas de todo mundo (com quem está em rampa), a mesma por pessoa', fT[0] === somaP && fT[0] === F[0] && fT[4] === GV2.base.pessoas.reduce(function (a, p) { return a + p.funil_mes.fechado; }, 0), fT.join() + ' × ' + somaP);
+      /* quem entra em rampa sai da META de visitas (v8Ritmo), mas a porta da conversão continua contando */
+      {
+        const quem = GV2.base.pessoas.filter(function (p) { return p.funil_mes.portas > 0; })[0];
+        if (quem) {
+          const fase0 = quem.fase, antes = GV2.v8Ritmo(null).vis.feito;
+          quem.fase = 'Preparação';
+          const fR = GV2.cvFunil(GV2.base.pessoas, null), depois = GV2.v8Ritmo(null).vis.feito;
+          quem.fase = fase0;
+          checar('conversão: com alguém em rampa, a porta da conversão não muda (time inteiro) e só a da meta diminui (plenos)', fR[0] === somaP && depois === antes - quem.funil_mes.portas && depois < fR[0], fR[0] + ' × ' + somaP + ' · meta ' + antes + ' → ' + depois);
+        } else checar('conversão: a fixture tem alguém com porta para provar a regra da rampa', false);
+      }
+      checar('conversão: taxa só com 3 ou mais atrás e sem passar de 100%; sem dado é "não medido", zero é número',
+        GV2.cvTaxa(191, 84).v === '44%' && GV2.cvTaxa(191, 84).s === '84 de 191' && GV2.cvTaxa(2, 1).v === '1 de 2' && GV2.cvTaxa(6, 7).v === '7 de 6' && GV2.cvTaxa(6, 7).cont === true
+        && GV2.cvTaxa(null, 3).nd === true && GV2.cvTaxa(10, 0).v === '0%' && GV2.cvDeCada100(304, 30) === 10);
+      /* a turma: demo de um mês que virou contrato em até 30 dias; estorno tira; fora do time não conta */
+      const ev = [
+        { owner_id: '1', tipo: 'demo_realizada', ref_em: '2026-09-10T15:00:00Z', negocio_id: 'a', negocio_nome: 'A' },
+        { owner_id: '1', tipo: 'contrato', ref_em: '2026-09-10T18:00:00Z', negocio_id: 'a', negocio_nome: 'A' },
+        { owner_id: '1', tipo: 'demo_realizada', ref_em: '2026-09-28T15:00:00Z', negocio_id: 'b', negocio_nome: 'B' },
+        { owner_id: '1', tipo: 'contrato', ref_em: '2026-10-20T15:00:00Z', negocio_id: 'b', negocio_nome: 'B' },
+        { owner_id: '2', tipo: 'demo_realizada', ref_em: '2026-09-05T15:00:00Z', negocio_id: 'c', negocio_nome: 'C' },
+        { owner_id: '2', tipo: 'contrato', ref_em: '2026-10-20T15:00:00Z', negocio_id: 'c', negocio_nome: 'C' },
+        { owner_id: '2', tipo: 'demo_realizada', ref_em: '2026-09-06T15:00:00Z', negocio_id: 'd', negocio_nome: 'D' },
+        { owner_id: '2', tipo: 'demo_realizada', ref_em: '2026-09-07T15:00:00Z', negocio_id: 'e', negocio_nome: 'E' },
+        { owner_id: '2', tipo: 'contrato', ref_em: '2026-09-08T15:00:00Z', negocio_id: 'e', negocio_nome: 'E' },
+        { owner_id: '2', tipo: 'estorno', ref_em: '2026-09-20T15:00:00Z', negocio_id: 'e' },
+        { owner_id: '9', tipo: 'demo_realizada', ref_em: '2026-09-07T15:00:00Z', negocio_id: 'z', negocio_nome: 'Z' }
+      ];
+      const D = GV2.cvMontar(ev, [{ owner_id: '1', ref_em: '2026-09-10T15:00:00Z' }, { owner_id: '9', ref_em: '2026-09-10T15:00:00Z' }], function (o) { return o === '1' || o === '2'; });
+      const T = D.turma['2026-09'];
+      checar('turma: 5 demos de setembro, 2 clientes em até 30 dias (um no mesmo dia, um em 22 dias); 45 dias fica fora, estornado fica fora, quem não é do time não entra',
+        T.demos === 5 && T.cli === 2 && T.cli14 === 1 && T.por['1'].demos === 2 && T.por['1'].cli === 2 && T.por['2'].demos === 3 && T.por['2'].cli === 0
+        && D.meses['2026-09'].vis['1'] === 1 && !D.meses['2026-09'].vis['9'] && D.meses['2026-10'].con['1'] === 1 && D.meses['2026-10'].con['2'] === 1 && !D.meses['2026-09'].con['2'],
+        JSON.stringify({ d: T.demos, c: T.cli, c14: T.cli14, por: T.por }));
+      const hoje0 = GV2.base.agora.iso;
+      GV2.base.agora.iso = '2026-11-16';
+      const est = ['2026-11', '2026-10', '2026-09'].map(function (m) { return GV2.cvEstadoDaTurma(m).k; }).join();
+      GV2.base.agora.iso = hoje0;
+      checar('turma: em 16/11, novembro está aberta, outubro ainda fechando (30 dias depois do dia 31) e setembro fechada', est === 'aberta,fechando,fechada', est);
+      /* por turma, porta e decisor são "não medido" (tracejado e clicável), nunca zero */
+      const cv0 = GV2.estado.cv; GV2.cv.d = D; GV2.cv.em = Date.now();
+      GV2.estado.cv = { recorte: 'time', conta: 'turma', pessoa: null, praca: null, mes: null, comparar: true, menu: false };
+      const ft = GV2.render.raiox();
+      GV2.estado.cv = cv0; GV2.cv.d = null; GV2.cv.em = 0;
+      checar('por turma: Portas e Decisor aparecem como "não medido" e explicam por quê; o Comparar mostra a régua mês a mês com o playbook',
+        (ft.match(/class="cv-passo is-nd" data-gv2="cv:exp:semturma"/g) || []).length === 2 && ft.indexOf('Antes da demo não há turma') > 0 && ft.indexOf('class="cv-regua"') > 0 && ft.indexOf('<span>Playbook</span>') > 0 && ft.indexOf('data-gv2="cv:exp:turma"') > 0);
+    }
   }
   /* v8 etapa 3 (13/10/26): a Daily · fila pelo motivo, 6 blocos, o dinheiro primeiro, compromisso do último dia útil e o resumo */
   await (async function () {
@@ -1092,6 +1173,7 @@ tabelas.gv2_falta_etapa = [
     let hs = ''; try { hs = GV2.render.rua(); } catch (e) { falhas.push('rua semana v8: ' + e.message); }
     checar('v8 Rua › Semana: o título é o Planejamento do time', /Planejamento do time · semana de/.test(hs));
     GV2.estado.pessoa = b.pessoas[0].id; GV2.estado.aba = 'pessoas';
+    GV2.estado.pv2Pan = GV2.estado.pessoa; /* a página completa (16/11/26: o nome abre a ficha; a página abre pelo botão dela) */
     let hp = ''; try { hp = GV2.render.pessoas(); } catch (e) { falhas.push('pessoas v8: ' + e.message); }
     const p0 = b.porId[GV2.estado.pessoa];
     checar('v8 Pessoas: a página começa pelo resumo da gaveta (Mês, Quentes e Travados abrem os negócios dela) e o funil contra o esperado está à vista',
@@ -1216,7 +1298,17 @@ tabelas.gv2_falta_etapa = [
     let gp = null; try { gp = GV2.v8GavPessoa(p.id); } catch (e) { falhas.push('acab gaveta: ' + e.message); }
     let fp = ''; try { fp = GV2.render.v8PorPessoa(); } catch (e) { falhas.push('acab funil pp: ' + e.message); }
     checar('v9 Acabamento · os passos do funil são degraus (gaveta da Pessoa e Funil › Por pessoa), não a frase "portas → n (x%)"',
-      gp && /class="gv2-v9-passos"/.test(gp.corpo) && /class="gv2-v9-passos is-compacto"/.test(fp) && !/portas → [0-9]+ \(/.test(gp.corpo + fp));
+      gp && (gp.corpo.match(/class="cv-fp-l[^"]*"/g) || []).length >= 5 && /class="gv2-v9-passos is-compacto"/.test(fp) && !/portas → [0-9]+ \(/.test(gp.corpo + fp));
+    /* A FICHA ÚNICA (16/11/26): os blocos na ordem do handoff e um único botão que grava */
+    {
+      const c = gp ? gp.corpo : '';
+      const ordem = ['A conversão · ', p.meta_clientes_mes ? 'Para a meta de ' : 'A conversão · ', 'Funil do mês contra o esperado', 'O cliente que fica', 'Rituais', 'Registrar 1:1', 'Travados e quentes'].map(function (x) { return c.indexOf(x); });
+      checar('ficha única: conversão → meta → o mês contra o esperado → cliente que fica → rituais → Registrar 1:1 → travados', ordem.every(function (x, i) { return x > 0 && (i === 0 || x >= ordem[i - 1]); }), ordem.join());
+      checar('ficha única: "Registrar 1:1" é o único botão vermelho, e o nome do negócio abre a ficha do negócio', (c.match(/class="gv2-v5-btn cv-vermelho"/g) || []).length === 1 && /data-gv2="cv:um:[^"]+:um">Registrar 1:1</.test(c) && gp.rot === 'Ficha da pessoa');
+      const J = GV2.cvProjecao({ portas: 58, demo: 7, fechado: 4 }, 8), J0 = GV2.cvProjecao({ portas: 41, demo: 6, fechado: 0 }, 2), J1 = GV2.cvProjecao({ portas: 25, demo: 12, fechado: 9 }, 8);
+      checar('ficha única: o que falta para a meta na taxa de hoje (4 clientes pedem 58 portas e 7 demos); sem venda não projeta; meta batida não falta nada',
+        J.faltam === 4 && J.portas === 58 && J.demos === 7 && J0.faltam === 2 && J0.semTaxa === true && J0.portas === undefined && J1.faltam === 0 && GV2.cvProjecao({}, 0) === null, JSON.stringify([J, J0, J1]));
+    }
     GV2.estado.daily = 0;
     let dl = ''; try { dl = GV2.render.daily(); } catch (e) { falhas.push('acab daily: ' + e.message); }
     checar('v9 Acabamento · Daily: o bloco 2 é o funil curto (visitas → demos → clientes, com as duas taxas) e a barra de Clientes não se repete',
