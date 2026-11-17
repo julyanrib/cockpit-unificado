@@ -12675,6 +12675,18 @@ button.gv2-v5-tl-l:hover .gv2-v5-tl-trilho{box-shadow:inset 0 0 0 1px var(--gv2-
 .gv2-v5-tl-x{display:flex;flex-direction:column;align-items:flex-end;min-width:0;}
 .gv2-v5-tl-x b{font:700 12.5px var(--gv2-font);white-space:nowrap;}
 .gv2-v5-tl-x small{font:500 10.5px var(--gv2-font);color:var(--gv2-dim);white-space:nowrap;}
+.gv2-v5-tl-x small.t-av{color:var(--gv2-av);font-weight:700;}
+.gv2-v5-tl .gv2-v5-tl-l{grid-template-columns:128px minmax(0,1fr) 112px;}
+.gv2-v5-ler{display:flex;flex-direction:column;gap:10px;margin:8px 0 6px;}
+.gv2-v5-ler p{margin:0;font:600 14px/1.45 var(--gv2-font);color:var(--gv2-ink);}
+.gv2-v5-ler.is-av p{padding:8px 12px;border-radius:10px;background:var(--gv2-av-soft);color:var(--gv2-av);}
+.gv2-v5-lqs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+.gv2-v5-lq{display:flex;flex-direction:column;gap:1px;padding:8px 12px;border:1px solid var(--gv2-line);border-radius:12px;min-width:0;}
+.gv2-v5-lq small{font:700 11px/1.3 var(--gv2-font);letter-spacing:.06em;text-transform:uppercase;color:var(--gv2-dim);}
+.gv2-v5-lq b{font:700 20px/1.2 var(--gv2-font);}
+.gv2-v5-lq.is-av b{color:var(--gv2-av);}
+.gv2-v5-lq span{font:500 12px/1.35 var(--gv2-font);color:var(--gv2-mute);}
+@media (max-width:760px){.gv2-v5-lqs{grid-template-columns:repeat(2,minmax(0,1fr));}.gv2-v5-tl .gv2-v5-tl-l{grid-template-columns:70px minmax(0,1fr) 64px;}.gv2-v5-tl-desde{display:none;}}
 .gv2-v5-vivo{padding:12px 14px;display:flex;flex-direction:column;gap:10px;min-width:0;}
 .gv2-v5-vivo .gv2-v5-chip{height:28px;padding:0 10px;border-radius:14px;font-size:11.5px;}
 .gv2-v5-mapa-cx{position:relative;height:340px;border-radius:12px;overflow:hidden;border:1px solid var(--gv2-line);background:var(--gv2-sub);}
@@ -84619,9 +84631,55 @@ GV2.v5Lendo = function (c, alt) {
 /* ── RUA › HOJE (2a, 2b, 2i): a linha do tempo 08h–20h e o mapa ao vivo ── */
 GV2.V5_EIXO = { ini: 480, fim: 1200 };
 GV2.v5X = function (min) { const e = GV2.V5_EIXO; return Math.max(0, Math.min(100, (min - e.ini) / (e.fim - e.ini) * 100)).toFixed(2) + '%'; };
+/* A LEITURA DO DIA (17/11/26, auditoria da Rua). A linha do tempo mostrava o dia e não dizia nada: em 4 semanas, o
+   primeiro check-in do time saiu às 13h ou depois em 73 de 118 dias de rua, e a tela deixava isso para o gestor
+   deduzir olhando as bolinhas. Agora uma frase lê o dia e quatro números ficam à vista: a que horas o dia começou,
+   quantas horas de rua (do primeiro ao último check-in com prova), em quantas visitas falou com o decisor (fichas de
+   rua) e as paradas sem hora (plano sem horário). Tudo sai do que a aba já tem: nenhuma leitura nova. */
+GV2.v5LeituraDoDia = function (iso) {
+  const b = GV2.base, hoje = iso === b.agora.iso, agora = b.agora.min;
+  const hh = function (m) { return GV2.hhmm(m).replace(':', 'h'); };
+  const L = b.pessoas.map(function (p) {
+    const d = GV2.v5Dia(p, iso), j = d.jornada || null;
+    const fichas = (b._v5fichas && b._v5fichas[p.id + '|' + iso]) || [];
+    return { p: p, ini: j ? j.ini : null, min: j && j.n > 1 ? j.min : null, n: j ? j.n : 0, y: d.y || 0, semHora: d.semHora || 0,
+      fichas: fichas.length, dec: fichas.filter(function (x) { return x.como_foi === 'falou_com_decisor'; }).length };
+  });
+  const por = {}; L.forEach(function (x) { por[x.p.id] = x; });
+  const com = L.filter(function (x) { return x.ini != null; });
+  const inis = com.map(function (x) { return x.ini; }).sort(function (a, c) { return a - c; });
+  const meio = inis.length ? inis[Math.floor(inis.length / 2)] : null;
+  const tarde = com.filter(function (x) { return x.ini >= 13 * 60; }).length;
+  const durs = L.filter(function (x) { return x.min != null; }).map(function (x) { return x.min; });
+  const horas = durs.length ? durs.reduce(function (a, x) { return a + x; }, 0) / durs.length / 60 : null;
+  const soma = function (k) { return L.reduce(function (a, x) { return a + x[k]; }, 0); };
+  const vis = soma('n'), fichas = soma('fichas'), dec = soma('dec'), semHora = soma('semHora');
+  const comSemHora = L.filter(function (x) { return x.semHora > 0; }).length;
+  const semSair = hoje && agora >= 10 * 60 ? L.filter(function (x) { return x.ini == null && x.y > 0; }) : [];
+  let frase, tom = '';
+  if (!com.length) { frase = hoje && agora < 10 * 60 ? 'Ninguém fez check-in ainda.' : 'Ninguém fez check-in com prova' + (hoje ? ' até agora.' : ' neste dia.'); tom = hoje && agora < 10 * 60 ? '' : 'is-av'; }
+  else {
+    frase = GV2.pl(vis, 'visita com prova', 'visitas com prova') + ', de ' + com.length + ' de ' + GV2.pl(L.length, 'pessoa', 'pessoas') + '. '
+      + (tarde * 2 > com.length ? 'O dia começou tarde: ' + tarde + ' de ' + com.length + ' só fizeram o primeiro check-in depois das 13h.' : tarde ? tarde + ' de ' + com.length + (tarde === 1 ? ' começou' : ' começaram') + ' depois das 13h.' : (com.length === 1 ? 'Começou' : 'Todos começaram') + ' antes das 13h.');
+    if (tarde * 2 > com.length) tom = 'is-av';
+  }
+  if (semSair.length) frase += ' Com plano e sem check-in: ' + GV2.lista(semSair.map(function (x) { return GV2.prim(x.p.nome); })) + '.';
+  const T = fichas >= 3 ? Math.round(dec / fichas * 100) + '% · ' + dec + ' de ' + fichas : fichas ? dec + ' de ' + fichas : '—';
+  const q = function (rot, v, sub, cls) { return '<div class="gv2-v5-lq' + (cls ? ' ' + cls : '') + '"><small>' + GV2.e(rot) + '</small><b class="num">' + GV2.e(v) + '</b><span>' + GV2.e(sub) + '</span></div>'; };
+  const html = '<div class="gv2-v5-ler' + (tom ? ' ' + tom : '') + '"><p>' + GV2.e(frase) + '</p><div class="gv2-v5-lqs">'
+    + q('Início do dia', meio == null ? '—' : hh(meio), meio == null ? 'sem check-in com prova' : 'o primeiro check-in do meio do time', meio != null && meio >= 13 * 60 ? 'is-av' : '')
+    + q('Horas de rua', horas == null ? '—' : String(Math.round(horas * 10) / 10).replace('.', ',') + ' h', 'do primeiro ao último check-in, em média')
+    + q('Falou com o decisor', T, fichas ? GV2.pl(fichas, 'ficha', 'fichas') + ' em ' + GV2.pl(vis, 'visita', 'visitas') : 'nenhuma ficha de rua ainda')
+    + q('Parada sem hora', String(semHora), semHora ? 'em ' + GV2.pl(comSemHora, 'pessoa', 'pessoas') + ' · plano sem horário' : 'todo plano de hoje tem horário', semHora ? 'is-av' : '')
+    + '</div></div>';
+  return { html: html, por: por, hh: hh };
+};
 GV2.render.v5Hoje = function () {
   const b = GV2.base, iso = b.agora.iso;
   const c = GV2.v5Semana(iso);
+  /* a leitura nunca derruba a linha do tempo: se falhar, a aba segue como era */
+  let LD = null;
+  if (c.estado === 'ok') { try { LD = GV2.v5LeituraDoDia(iso); } catch (e) { console.warn('[rua] leitura do dia', e && e.message); LD = null; } }
   const horas = [8, 10, 12, 14, 16, 18, 20];
   const eixo = '<div class="gv2-v5-tl-l is-eixo"><span></span><div class="gv2-v5-tl-horas">' + horas.map(function (h) { return '<span style="left:' + GV2.v5X(h * 60) + '">' + String(h).padStart(2, '0') + 'h</span>'; }).join('') + '</div><span></span></div>';
   const grade = horas.map(function (h) { return '<i class="gv2-v5-tl-g" style="left:' + GV2.v5X(h * 60) + '"></i>'; }).join('');
@@ -84647,13 +84705,16 @@ GV2.render.v5Hoje = function () {
     /* a inicial do último sobrenome, como no placar do app (auditoria 01/11/26: "Júlio P." aqui e "Júlio S." lá) */
     const pn = String(p.nome || '').trim().split(/\s+/), nome = GV2.prim(p.nome) + (pn.length > 1 ? ' ' + pn[pn.length - 1][0] + '.' : '');
     const sub = d.y ? (d.semHora ? '+' + d.semHora + ' sem hora' : 'com prova') : (d.agenda.n ? 'sem rota · agenda' : 'sem rota');
+    /* o início do dia e as horas de rua de cada um, ao lado do x de y; a parada sem hora ganha a cor de atenção */
+    const lx = LD && LD.por[p.id] ? LD.por[p.id] : null;
+    const desde = lx && lx.ini != null ? 'desde ' + LD.hh(lx.ini) + (lx.min != null && lx.min >= 30 ? ' · ' + String(Math.round(lx.min / 6) / 10).replace('.', ',') + ' h' : '') : '';
     return '<button type="button" class="gv2-v5-tl-l is-linha" data-gv2="v5dia:' + p.id + ':' + iso + '" title="' + GV2.e('Abrir o dia de ' + GV2.prim(p.nome)) + '">'
       + '<span class="gv2-v5-tl-nome"><i style="background:' + st.cor + '"></i><b>' + GV2.e(nome) + '</b></span>'
       + '<span class="gv2-v5-tl-trilho">' + grade + banda + marcas + cis + ags + agoraX + '</span>'
-      + '<span class="gv2-v5-tl-x"><b class="num' + (d.x ? '' : ' t-dim') + '">' + GV2.e(d.y ? GV2.v5Xdy(d) : '—') + '</b><small>' + GV2.e(sub) + '</small></span></button>';
+      + '<span class="gv2-v5-tl-x"><b class="num' + (d.x ? '' : ' t-dim') + '">' + GV2.e(d.y ? GV2.v5Xdy(d) : '—') + '</b><small' + (d.y && d.semHora ? ' class="t-av"' : '') + '>' + GV2.e(sub) + '</small>' + (desde ? '<small class="gv2-v5-tl-desde">' + GV2.e(desde) + '</small>' : '') + '</span></button>';
   }).join('');
   const leg = '<div class="gv2-v5-leg"><span><i class="lg-ci"></i>check-in com prova</span><span><i class="lg-ci is-vazio"></i>sem prova (não conta)</span><span><i class="lg-m"></i>parada planejada com hora</span><span><i class="lg-m is-semlugar"></i>sem lugar no mapa</span><span><i class="lg-ag"></i>agenda do HubSpot</span><span><i class="lg-jan"></i>janela de rua</span><span><i class="lg-agora"></i>agora ' + GV2.e(b.horaTxt) + '</span></div>';
-  const tl = '<section class="card gv2-v5-tl"><div class="gv2-v5-cab"><b>O dia do time</b><span>08h–20h · uma faixa por pessoa · toque para abrir o dia</span></div>' + eixo + linhas + leg + '</section>';
+  const tl = '<section class="card gv2-v5-tl"><div class="gv2-v5-cab"><b>O dia do time</b><span>08h–20h · uma faixa por pessoa · toque para abrir o dia</span></div>' + (LD ? LD.html : '') + eixo + linhas + leg + '</section>';
   return '<div class="gv2-v5-hoje">' + tl + GV2.render.v5AoVivo(c) + '</div>';
 };
 GV2.render.v5AoVivo = function (c) {
