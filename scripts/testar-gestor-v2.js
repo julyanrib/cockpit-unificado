@@ -969,7 +969,10 @@ tabelas.gv2_falta_etapa = [
     GV2.rxGavFechar();
     const ir0 = GV2.ir; GV2.ir = function (x) { GV2.estado.aba = x; }; GV2.v8Comando('v8pagina', ['v8pagina', '3']); GV2.ir = ir0;
     checar('v8: "Abrir a página completa" vai para a Pessoas na pessoa certa', GV2.estado.aba === 'pessoas' && GV2.estado.pessoa === '3');
-    checar('16/11/26: dentro da Pessoas o nome abre a MESMA ficha das outras abas (antes abria a página larga)', GV2.v8Comando('pessoa', ['pessoa', '1']) === true && GV2.estado.rxGav && GV2.estado.rxGav.t === 'pessoa' && GV2.estado.rxGav.id === '1' && GV2.estado.aba === 'pessoas');
+    checar('17/11/26: dentro da Pessoas o clique na pessoa abre a PÁGINA COMPLETA dela, não a gaveta (pedido do Julyan)', GV2.v8Comando('pessoa', ['pessoa', '1']) === true && !GV2.estado.rxGav && GV2.estado.pv2Pan === '1' && GV2.estado.aba === 'pessoas');
+    GV2.estado.pv2Pan = null; GV2.estado.aba = 'time';
+    checar('17/11/26: nas outras abas o nome segue abrindo a ficha de resumo', GV2.v8Comando('pessoa', ['pessoa', '1']) === true && GV2.estado.rxGav && GV2.estado.rxGav.t === 'pessoa' && GV2.estado.rxGav.id === '1');
+    GV2.estado.aba = 'pessoas';
     GV2.rxGavFechar();
     const R = GV2.v8Ritmo(GV2.base.porId['3']), M = GV2.v8Mes();
     checar('v8: visitas esperadas = 6 por dia útil para todos; demos = meta ÷ 40%; clientes = meta', R.vis.meta === 6 * M.uteis && Math.abs(R.vis.esp - 6 * M.passados) < 1e-9 && R.dem.meta === R.cli.meta / 0.4, JSON.stringify({ meta: R.vis.meta, esp: R.vis.esp, uteis: M.uteis, passados: M.passados }));
