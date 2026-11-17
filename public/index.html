@@ -73383,7 +73383,7 @@ PLV3.dados = function (rep) {
   if (st.q) {
     const qk = PLV3.chave(st.q);
     todos.forEach(function (l) {
-      if (!naGrade[l.id] || PLV3.chave(l.nome).indexOf(qk) < 0 && PLV3.chave(l.regiaoNome || '').indexOf(qk) < 0) return;
+      if (!naGrade[l.id] || !PLV3.casaBusca(qk, PLV3.chaveDaConta(l))) return;
       for (let di = 0; di < cartoes.length; di++) {
         const c = cartoes[di].planejados.filter(function (x) { return x.ref === l.id; })[0];
         if (c) { noPlano.push({ ref: l.id, nome: l.nome, di: di, si: c.si, quando: PLV3.rotDia(dias[di]), passou: dias[di].passou, feita: c.feita }); return; }
@@ -73571,7 +73571,7 @@ PLV3.linhasDoFiltro = function (D) {
   if (q) {
     const vistos = {};
     return D.semL.concat(D.cobrar, D.relac, D.recicl, D.alvos, D.funil || [], D.busca || []).filter(function (l) {
-      if (vistos[l.ref] || PLV3.chave(l.nome).indexOf(q) < 0 && PLV3.chave(l.bairroNome).indexOf(q) < 0) return false;
+      if (vistos[l.ref] || !PLV3.casaBusca(q, PLV3.chaveDaLinha(l, D))) return false;
       vistos[l.ref] = 1; return true;
     });
   }
@@ -73580,6 +73580,20 @@ PLV3.linhasDoFiltro = function (D) {
   return fx ? base.filter(fx.fn) : base;
 };
 PLV3.chave = function (t) { return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); };
+
+PLV3.casaBusca = function (q, chave) {
+  const ps = PLV3.chave(q).split(/\s+/).filter(Boolean), c = String(chave || '');
+  return ps.length > 0 && ps.every(function (p) { return c.indexOf(p) >= 0; });
+};
+PLV3.chaveDaConta = function (l) {
+  const b = (l && l._bruto) || {};
+  return PLV3.chave([l && l.nome, l && l.regiaoNome, b.bairro, b.cidade, b.logradouro, b.endereco].filter(Boolean).join(' '));
+};
+
+PLV3.chaveDaLinha = function (l, D) {
+  const c = D && D.porId && D.porId.get ? D.porId.get(l.ref) : null;
+  return PLV3.chave([l.nome, l.bairroNome].filter(Boolean).join(' ')) + (c ? ' ' + PLV3.chaveDaConta(c) : '');
+};
 PLV3.TITULOS = { alvo: 'Contas-alvo', quentes: 'Quentes sem próximo passo', cnpj: 'CNPJ novo · 90 d', recicl: 'Reciclagem', venc: 'Follow-up vencido', cobrar: 'Ag. Pagamento · cobrar',
   relac: 'Relacionamento · clientes', funil: 'Todo o funil', mapa: 'Sem lugar no mapa' };
 
@@ -73687,7 +73701,7 @@ PLV3.blocoFilaHTML = function (D) {
   const busca = '<div class="pv3-busca' + (st.q ? ' is-on' : '') + '">' + PLV3.ic.lupa + '<input type="search" data-pv3-busca="1" placeholder="Buscar em tudo: carteira, alvo, reciclagem" value="' + e(st.q || '') + '" autocomplete="off" aria-label="Buscar lead, cliente ou bairro">'
     + (st.q ? '<button type="button" class="pv3-busca-x" data-pv3-acao="limparbusca" aria-label="limpar a busca">×</button>' : '') + '</div>';
   const fx = st.q ? [] : PLV3.faixas(D, st.filtro);
-  const lentes = st.q ? '<p class="pv3-busca-nota">em tudo: carteira, contas-alvo, reciclagem e o seu plano</p>'
+  const lentes = st.q ? '<p class="pv3-busca-nota">por nome, bairro, cidade ou rua · em tudo: carteira, contas-alvo, reciclagem e o seu plano</p>'
     : '<div class="pv3-lentes pv3-arrasta" data-pv3-arrasta="lentes">' + L('sem', 'Sem passo') + L('quentes', 'Quentes') + L('alvo', 'Contas-alvo') + L('funil', 'Todo o funil')
       + '<button type="button" class="pv3-lente' + (maisOn ? ' is-on' : '') + '" data-pv3-acao="mais" aria-expanded="' + !!st.maisAberto + '">' + e(maisOn ? PLV3.ROT_MAIS[st.filtro] : 'mais') + (maisOn ? ' <b>' + PLV3.contaFiltro(D, st.filtro) + '</b>' : '') + ' ▾</button></div>'
       + (fx.length ? '<div class="pv3-recortes pv3-arrasta" data-pv3-arrasta="recortes"><button type="button" class="' + (!st.faixa ? 'is-on' : '') + '" data-pv3-acao="faixa:" aria-pressed="' + !st.faixa + '">todos</button>'
