@@ -101,6 +101,9 @@ const texto = h => String(h).replace(/<[^>]+>/g, ' ');
   GV2.pessoasMontar(b);
   GV2.base = b;
   GV2.estado.aba = 'pessoas';
+  /* 16/11/26: a primeira tela de Pessoas informa; os rituais do gestor (os 4 contadores e a placa) moram na
+     gaveta "Minha semana de líder". Os testes abaixo leem a aba com essa gaveta aberta. */
+  GV2.estado.cvPg = 'semana';
   const DV2 = GV2.DV2;
   checar('as 5 funções da etapa 1 existem', ['semanaDoLider', 'oQuePrecisaDeMim', 'pautaDo1a1', 'mapaDeCalor', 'mapaDeHorarios'].every(k => typeof GV2[k] === 'function'));
 
@@ -136,7 +139,7 @@ const texto = h => String(h).replace(/<[^>]+>/g, ' ');
   DV2.gestor['1'] = { q: qQuarta }; DV2.gestor['2'] = { q: qMissao }; DV2.gestor['3'] = { q: qQuarta }; DV2.gestor['4'] = { erro: 'fora do ar' };
   DV2.capitulos = function () { return FD.capitulos; };
   let aba = GV2.render.pessoas();
-  const linha = function (h, nome) { const i = h.indexOf(nome); const j = h.indexOf('class="pv2-lin', i - 2000 > 0 ? i - 2000 : 0); const lin = h.slice(h.lastIndexOf('<div class="pv2-lin', i), h.indexOf('</div>', h.indexOf('pv2-bt', i)) + 6); return lin; };
+  const linha = function (h, nome) { const i = h.indexOf(nome, Math.max(0, h.indexOf('class="gv2-rxg cv-pg'))); const j = h.indexOf('class="pv2-lin', i - 2000 > 0 ? i - 2000 : 0); const lin = h.slice(h.lastIndexOf('<div class="pv2-lin', i), h.indexOf('</div>', h.indexOf('pv2-bt', i)) + 6); return lin; };
   {
     const l1 = linha(aba, 'Alfa Teste');
     const mEsp = ED.quarta.vm.missao.cumprida ? 'cumprida' : ED.quarta.vm.missao.contagem;
@@ -217,6 +220,8 @@ const texto = h => String(h).replace(/<[^>]+>/g, ' ');
     checar('painel: a barra do pé com "Pauta no WhatsApp" e a ação principal', /data-gv2="pauta:wa:1">Pauta no WhatsApp/.test(pan) && /class="pv2-pe"/.test(pan));
     checar('painel: as reuniões sem desfecho com Aconteceu · Remarcar · Não aconteceu (a RPC do app)', (function () { GV2.pv2Abrir('2', 'placa', 'um'); const h = GV2.render.pessoas(); GV2.pv2Abrir('1', 'placa', 'um'); return /v4:desf:2:m1:realizada/.test(h) && /v4:rem:m1/.test(h) && /v4:desf:2:m1:nao_aconteceu/.test(h) && /Cobrar a disciplina/.test(h); })());
     checar('painel: o "sem passo" do resumo, do Funil e da placa é o mesmo número', (function () { GV2.pv2Abrir('2', 'placa'); const h = GV2.render.pessoas(); GV2.pv2Abrir('1', 'placa', 'um'); return h.indexOf('12 sem passo') > 0 && /<small>sem próximo passo<\/small><b class="num t-acao">12<\/b>/.test(h); })());
+    /* os 7 combinados e o cliente que fica abrem pelos indicadores do topo (gavetas próprias) */
+    (function () { const k = GV2.estado.cvPg; GV2.estado.cvPg = 'comb'; GV2.render.pessoas(); GV2.estado.cvPg = 'fica'; GV2.render.pessoas(); GV2.estado.cvPg = k; })();
     checar('nada some: Rua · 7 dias, os 7 combinados, a habilidade, o padrinho e o fim da aba seguem chamados', spy.cbPessoa > 0 && spy.hbPessoa > 0 && spy.ldPessoa > 0 && spy.v6Rua7 > 0 && spy.cbTime > 0 && spy.hbTime > 0 && spy.ldTime > 0 && spy.cfTime > 0, JSON.stringify(spy));
     checar('nada some: a página de antes inteira (Agora e semana, Coaching, Evolução, PDI) no fim do painel', /A página de antes, inteira/.test(pan) && /1 · Agora e semana/.test(pan) && /3 · Coaching/.test(pan) && /4 · Evolução/.test(pan) && /5 · PDI/.test(pan));
     checar('nada some: as gavetas (1:1 completo, disciplina, funil com o Como contamos, campo, PDI) e a rotação', ['um', 'disc', 'funil', 'campo', 'pdi'].every(t => pan.indexOf('data-gv2="v5gav:' + t + ':1"') > 0) && /data-gv2="p3:rotacao"/.test(pan)
@@ -293,14 +298,15 @@ const texto = h => String(h).replace(/<[^>]+>/g, ' ');
     ];
     const MT = GV2.mapaDeCalor(null, 'visitas');
     checar('mapa do time: bairros pela contagem de visitas com prova, sem a carteira do gestor', MT.lista[0].b === 'Centro' && MT.lista[0].n === 3 && MT.total === 5 && MT.lista[0].quem[0] === 'Alfa', JSON.stringify(MT.lista));
-    checar('mapa do time: bairro da carteira sem visita aparece tracejado', (function () { const h = GV2.render.pessoas(); return MT.semVisita.length === 0 || /pv2-bl is-sem/.test(h); })());
+    checar('mapa do time: bairro da carteira sem visita aparece tracejado', (function () { GV2.estado.cvPg = 'mapa'; const h = GV2.render.pessoas(); GV2.estado.cvPg = 'semana'; return MT.semVisita.length === 0 || /pv2-bl is-sem/.test(h); })());
     const Hr = GV2.mapaDeHorarios(b.porId['1']);
     checar('mapa de horários: seg 10h e seg 11h (fuso de São Paulo), qui 9h, feriado fora', Hr.grade[0][2] === 1 && Hr.grade[0][3] === 1 && Hr.grade[3][1] === 1 && Hr.n === 3, JSON.stringify(Hr.grade));
     const MC = GV2.mapaDeCalor(beta, 'carteira');
     checar('lente "carteira sem visita": os negócios abertos em bairro sem nenhuma visita', MC.semVisita.some(z => z.b === 'Centro' && z.neg === 12) && MC.pts.length === 12, JSON.stringify(MC.semVisita));
     checar('o km por dia e o "no bairro do dia" saem das visitas com prova', GV2.pv2KmDia(GV2.pv2Visitas('1')) != null && GV2.pv2NoBairroDoDia(GV2.pv2Visitas('1')) === 100);
-    GV2.estado.pv2TPes = '1';
+    GV2.estado.pv2TPes = '1'; GV2.estado.cvPg = 'mapa';
     const ht = GV2.render.pessoas();
+    GV2.estado.cvPg = 'semana';
     checar('o chip de uma pessoa: "ele vai aqui" e "abrir a página do Alfa"', /ele vai aqui/.test(ht) && /abrir a página do Alfa/.test(ht));
     GV2.estado.pv2TPes = null;
   }
