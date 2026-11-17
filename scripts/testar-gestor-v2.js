@@ -1001,7 +1001,8 @@ tabelas.gv2_falta_etapa = [
       }
       checar('conversão: taxa só com 3 ou mais atrás e sem passar de 100%; sem dado é "não medido", zero é número',
         GV2.cvTaxa(191, 84).v === '44%' && GV2.cvTaxa(191, 84).s === '84 de 191' && GV2.cvTaxa(2, 1).v === '1 de 2' && GV2.cvTaxa(6, 7).v === '7 de 6' && GV2.cvTaxa(6, 7).cont === true
-        && GV2.cvTaxa(null, 3).nd === true && GV2.cvTaxa(10, 0).v === '0%' && GV2.cvDeCada100(304, 30) === 10);
+        && GV2.cvTaxa(null, 3).nd === true && GV2.cvTaxa(10, 0).v === '0%' && GV2.cvDeCada100(304, 30) === 10
+        && GV2.cvTaxa(0, 0).nd === true && GV2.cvTaxa(0, 0).v === '—' && GV2.cvTaxa(0, 2).v === '2 de 0');
       /* a turma: demo de um mês que virou contrato em até 30 dias; estorno tira; fora do time não conta */
       const ev = [
         { owner_id: '1', tipo: 'demo_realizada', ref_em: '2026-09-10T15:00:00Z', negocio_id: 'a', negocio_nome: 'A' },
