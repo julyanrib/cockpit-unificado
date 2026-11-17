@@ -346,6 +346,36 @@ tabelas.gv2_falta_etapa = [
     checar('Playbook: a gaveta do capítulo tem quem leu e quem não leu e o botão que abre o capítulo certo; a da pessoa lista os capítulos', cap.corpo.indexOf('data-gv2="cv:pb:abrir:0"') > 0 && (cap.corpo.match(/data-gv2="pessoa:/g) || []).length === GV2.base.pessoas.length && (pes.corpo.match(/data-gv2="cv:pb:cap:\d+"/g) || []).length === nCap && /parou aqui/.test(GV2.cvPbConteudo({ k: 'pes', id: GV2.base.pessoas[1].id }).corpo) && /parado há 30 dias/.test(pbh) && /trilha completa/.test(pbh) && /não começou a trilha/.test(pbh));
     GV2.base.playbook = pb0; GV2.base.pessoas.forEach(function (pp, i) { pp.playbook = pbP0[i]; });
   }
+  /* MINHA CONVERSÃO (16/11/26): a aba do executivo. A conta entra pelo modelo, sem tela. */
+  {
+    const MC = GV2.MC;
+    const ids = function (n, p) { return Array.from({ length: n }, function (z, i) { return { id: p + i, em: '2026-11-0' + (1 + (i % 9)) + 'T12:00:00Z' }; }); };
+    const F = { me: '7', nome: 'Sandro Teste', reps: ['7', '8', '9'], leads: null,
+      q: { habilidade: { total: { atual: { p: 58, f: 40, o: 12, m: 7, c: 4 } }, time: { atual: { p: 191, f: 156, o: 89, m: 39, c: 22, pessoas: 5 } } }, variavel: { mes: '2026-11', vendas: 4, meta: 8 } },
+      passos: { mes: '2026-11', porOwner: { 7: { decisor: ids(9, 'a'), demo: ids(7, 'b'), proposta: ids(6, 'c') }, 8: { decisor: ids(40, 'd'), demo: ids(30, 'e'), proposta: ids(28, 'f') }, 9: { decisor: ids(35, 'g'), demo: ids(27, 'h'), proposta: ids(24, 'i') }, 99: { decisor: ids(50, 'x'), demo: ids(50, 'y'), proposta: ids(50, 'z') } } },
+      vendas: { mes: '2026-11', porRep: [{ ownerId: '7', count: 4, clientes: ['Bar A', 'Bar B', 'Bar C', 'Bar D'] }, { ownerId: '8', count: 14, clientes: [] }, { ownerId: '9', count: 12, clientes: [] }] } };
+    const M = MC.modelo(F, '2026-11-16');
+    checar('Minha conversão: os 5 passos dele (porta do quadro, etapas do snapshot, clientes das vendas) e o time em total, só com quem é do time',
+      M.f.join() === '58,9,7,6,4' && M.t.join() === ',84,64,58,30' && M.meta === 8 && M.cli === 4, JSON.stringify({ f: M.f, t: M.t }));
+    checar('Minha conversão: faltam 4 clientes; na taxa dele, 58 portas e 7 demos; na dos plenos (22 de 191), 35 portas',
+      M.J.faltam === 4 && M.J.portas === 58 && M.J.demos === 7 && M.custo.portas === 35 && M.custo.de100 === 12 && M.custo.pessoas === 5, JSON.stringify({ J: M.J, c: M.custo }));
+    checar('Minha conversão: o âmbar só marca passo com 10 pontos ou mais abaixo do time (86 contra 91 não marca; 30 contra 52 marca)',
+      M.pior === null && MC.modelo(Object.assign({}, F, { vendas: { mes: '2026-11', porRep: [{ ownerId: '7', count: 2, clientes: [] }, { ownerId: '8', count: 14 }, { ownerId: '9', count: 14 }] } }), '2026-11-16').pior.i === 4);
+    const semQ = MC.modelo(Object.assign({}, F, { q: null }), '2026-11-16'), outroMes = MC.modelo(F, '2026-12-01');
+    checar('Minha conversão: sem o quadro a porta é "não medido" (null), nunca zero; com o snapshot de outro mês, decisor, demo e negociação também',
+      semQ.f[0] === null && semQ.temQuadro === false && outroMes.f[1] === null && outroMes.f[2] === null && outroMes.f[3] === null && outroMes.t[1] === null);
+    const h = MC.html(M, { curto: 'perde na demo', longo: 'Visitas em 107%, demos em 74%: volume ok, perde entre a visita e a demo (decisor → demo 78%)', k: 'mal', uteis: 19, hoje: 10 }, F.nome);
+    checar('Minha conversão: a tela diz "Faltam 4 clientes", 58 portas e 7 demos, a frase da regra e o custo; sem botão vermelho e sem nome de colega',
+      /Faltam 4 clientes/.test(h) && /<b class="num">58<\/b>portas/.test(h) && /<b class="num">7<\/b>demos/.test(h) && /perde entre a visita e a demo/.test(h) && /pediriam 35 portas, não 58/.test(h) && !/cv-vermelho/.test(h) && /só os seus números/.test(h) && /Sandro/.test(h));
+    checar('Minha conversão: cada número abre a lista, cada taxa abre a conta, e Comissão, Carreira e Bônus abrem a gaveta',
+      [0, 1, 2, 3, 4].every(function (i) { return h.indexOf('data-mc="lista:' + i + '"') > 0; }) && [1, 2, 3, 4].every(function (i) { return h.indexOf('data-mc="exp:taxa:' + i + '"') > 0; })
+      && ['gaveta:comissao', 'gaveta:carreira', 'gaveta:bonus', 'conta:mes', 'conta:turma', 'exp:projecao'].every(function (c) { return h.indexOf('data-mc="' + c + '"') > 0; }));
+    const zero = MC.html(MC.modelo(Object.assign({}, F, { vendas: { mes: '2026-11', porRep: [{ ownerId: '7', count: 0, clientes: [] }, { ownerId: '8', count: 14 }] } }), '2026-11-16'), null, F.nome);
+    checar('Minha conversão: sem venda no mês não projeta pela taxa dele (diz isso) e mostra a referência do playbook', /não há taxa sua para projetar/.test(zero) && /Pelo playbook: 120 portas e 20 demos/.test(zero) && zero.indexOf('data-mc="exp:projecao"') < 0);
+    checar('a aba do executivo chama "Minha conversão" e a tela nova entra antes do Desenvolvimento v2 (que volta pela chave local)',
+      tpl.indexOf('<span class="tab-btn-label">Minha conversão</span>') > 0 && tpl.indexOf("souGestorSessao ? 'Pessoas' : 'Minha conversão'") > 0
+      && tpl.indexOf('return GV2.MC.render(el);') > 0 && tpl.indexOf('return GV2.MC.render(el);') < tpl.indexOf('return GV2.DV2.render(el);') && tpl.indexOf("localStorage.getItem('minha-conversao-v0') === '1'") > 0);
+  }
   GV2.estado.p3rotacao = true;
   checar('Pessoas v3: a rotação abre numa folha lateral, com o mesmo componente', /class="gv2-p3-folha"/.test(GV2.render.pessoas()) && /Sua rotação de campo/.test(GV2.render.pessoas()));
   GV2.estado.p3rotacao = false;
@@ -971,7 +1001,8 @@ tabelas.gv2_falta_etapa = [
       }
       checar('conversão: taxa só com 3 ou mais atrás e sem passar de 100%; sem dado é "não medido", zero é número',
         GV2.cvTaxa(191, 84).v === '44%' && GV2.cvTaxa(191, 84).s === '84 de 191' && GV2.cvTaxa(2, 1).v === '1 de 2' && GV2.cvTaxa(6, 7).v === '7 de 6' && GV2.cvTaxa(6, 7).cont === true
-        && GV2.cvTaxa(null, 3).nd === true && GV2.cvTaxa(10, 0).v === '0%' && GV2.cvDeCada100(304, 30) === 10);
+        && GV2.cvTaxa(null, 3).nd === true && GV2.cvTaxa(10, 0).v === '0%' && GV2.cvDeCada100(304, 30) === 10
+        && GV2.cvTaxa(0, 0).nd === true && GV2.cvTaxa(0, 0).v === '—' && GV2.cvTaxa(0, 2).v === '2 de 0');
       /* a turma: demo de um mês que virou contrato em até 30 dias; estorno tira; fora do time não conta */
       const ev = [
         { owner_id: '1', tipo: 'demo_realizada', ref_em: '2026-09-10T15:00:00Z', negocio_id: 'a', negocio_nome: 'A' },
