@@ -100028,7 +100028,7 @@ GV2.MC = (function () {
     const D = typeof DATA !== 'undefined' && DATA ? DATA : {};
     const PM = (D.historicoEtapas && D.historicoEtapas.passosDoMes) || null;
     return { q: GV2.DV2.estado.q, passos: PM, vendas: D.vendasMes || null, reps: (D.reps || []).filter(function (r) { return r && r.ownerId && !/DESATIVADO/i.test(r.name || ''); }).map(function (r) { return String(r.ownerId); }),
-      me: MC.meuId(), nome: (typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.name) || '', leads: D.funilLeads || null };
+      me: MC.meuId(), nome: (function () { const me = MC.meuId(), r = (D.reps || []).filter(function (x) { return x && String(x.ownerId) === me; })[0]; return (r && r.name) || (typeof sessaoAtual !== 'undefined' && sessaoAtual && (sessaoAtual.nome || sessaoAtual.name)) || ''; })(), leads: D.funilLeads || null };
   };
   /* a conta inteira, sem tela (o teste entra por aqui) */
   MC.modelo = function (F, hojeIso) {
@@ -100045,13 +100045,13 @@ GV2.MC = (function () {
     const t = [null, pmOk ? soma('decisor') : null, pmOk ? soma('demo') : null, pmOk ? soma('proposta') : null, por ? F.reps.reduce(function (a, o) { return a + vendaDe(o); }, 0) : null];
     const meta = Number(V.meta) || 0;
     const J = cli == null ? null : GV2.cvProjecao({ portas: f[0] || 0, demo: f[2] || 0, fechado: cli }, meta);
-    /* o passo em que ele fica mais abaixo do time (5 pontos ou mais, com 3 ou mais atrás dos dois lados) */
+    /* o passo em que ele fica mais abaixo do time (10 pontos ou mais, com 3 ou mais atrás dos dois lados) */
     let pior = null;
     for (let i = 2; i <= 4; i++) {
       const a = GV2.cvTaxa(f[i - 1], f[i]), b = GV2.cvTaxa(t[i - 1], t[i]);
       if (a.pct == null || b.pct == null) continue;
       const gap = b.pct - a.pct;
-      if (gap >= 5 && (!pior || gap > pior.gap)) pior = { i: i, gap: gap, meu: a.pct, time: b.pct };
+      if (gap >= 10 && (!pior || gap > pior.gap)) pior = { i: i, gap: gap, meu: a.pct, time: b.pct };
     }
     /* o custo: quantas portas a mesma falta pediria na taxa dos plenos (porta › cliente) */
     let custo = null;
@@ -100067,7 +100067,8 @@ GV2.MC = (function () {
     if (M.f[0] == null) return null;
     return MC.com(function () {
       const R = GV2.v8Ritmo({ funil_mes: { portas: M.f[0] || 0, decisor: M.f[1] || 0, demo: M.f[2] || 0, proposta: M.f[3] || 0, fechado: M.f[4] || 0 }, meta_clientes_mes: M.meta });
-      return { curto: GV2.v9GargaloCurto(R), k: GV2.v8Gargalo(R).k, uteis: R.M.uteis, hoje: R.M.hoje };
+      const G = GV2.v8Gargalo(R);
+      return { curto: GV2.v9GargaloCurto(R), longo: G.t, k: G.k, uteis: R.M.uteis, hoje: R.M.hoje };
     });
   };
   const ROT = ['Portas', 'Decisor', 'Demo', 'Negoc.', 'Cliente'], ROTL = ['portas com prova', 'conversas com decisor', 'demos', 'negociações', 'clientes'];
@@ -100117,9 +100118,9 @@ GV2.MC = (function () {
         corrente += MC.passo(ROT[i], M.f[i], M.f[i] == null ? 'exp:nd:' + i : 'lista:' + i, i === 4);
       }
       const P = M.pior, C = M.custo;
-      const onde = P ? ['', '', 'Você perde entre a conversa com o dono e a demo.', 'Você perde entre a demo e a negociação.', 'Você perde no fechamento.'][P.i] + ' No time, ' + P.time + ' de cada 100 passam deste passo; com você, ' + P.meu + '.' : '';
+      const onde = P ? ' ' + ['', '', 'Da conversa com o dono para a demo', 'Da demo para a negociação', 'Da negociação para o cliente'][P.i] + ', passam ' + P.meu + ' de cada 100 com você e ' + P.time + ' no time.' : '';
       const custo = C ? ' No time (plenos), ' + C.de100 + ' de cada 100 portas viram cliente. Nesse ritmo, ' + (J.faltam === 1 ? 'o cliente que falta pediria ' : 'os ' + J.faltam + ' clientes que faltam pediriam ') + GV2.pl(C.portas, 'porta', 'portas') + (C.portas !== J.portas ? ', não ' + J.portas : '') + '.' : '';
-      faixa = (L ? L.curto.charAt(0).toUpperCase() + L.curto.slice(1) + '. ' : '') + onde + custo;
+      faixa = (L ? L.longo + '.' : '') + onde + custo;
       faixaK = L ? (L.k === 'mal' ? 'erro' : L.k) : 'neutra';
       if (!faixa) faixa = 'Os seus números do mês ainda não chegaram.';
     }
