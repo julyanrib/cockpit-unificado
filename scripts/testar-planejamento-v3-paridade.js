@@ -169,6 +169,13 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     P.st.q = 'dubiel';
     const h2 = colher(fila());
     checar('a busca diz "já no seu plano" com o dia e o gesto de ir até ele', /já no seu plano/.test(h2) && /data-pv3-acao="irdia:1:c-105"/.test(h2) && !/Nenhum lead, cliente/.test(h2));
+    /* 17/11/26 · a mesma regra da busca do topo: palavras soltas, em qualquer ordem, e também rua e cidade */
+    TODOS.filter((l) => l.id === 'c-104')[0]._bruto = { bairro: 'Icaraí', cidade: 'Niterói', logradouro: 'Rua das Flores, 10' };
+    const acha = (q) => { P.st.q = q; return colher(fila()); };
+    checar('a busca casa palavra por palavra, em qualquer ordem e sem acento', /data-pv3-arraste="c-104"/.test(acha('coliseu restaurante')) && /data-pv3-arraste="c-102"/.test(acha('bistro tijuca')));
+    checar('a busca acha pela rua e pela cidade, como a do topo', /data-pv3-arraste="c-104"/.test(acha('flores')) && /data-pv3-arraste="c-104"/.test(acha('niteroi coliseu')));
+    checar('palavra que não existe na conta continua não achando', !/data-pv3-arraste="c-104"/.test(acha('coliseu madureira')));
+    checar('o que já está num dia também casa por palavras soltas', /data-pv3-acao="irdia:1:c-105"/.test(acha('dubiel barraca')));
     P.st.q = 'zzz inexistente';
     const h3 = colher(fila());
     checar('busca sem resultado explica a carga e oferece buscar dado novo, criar o lead e limpar', /carga de 03\/11 08:00/.test(h3) && /data-pv3-acao="dadonovo"/.test(h3) && /data-pv3-acao="novo:busca"/.test(h3) && /data-pv3-acao="limparbusca"/.test(h3));
