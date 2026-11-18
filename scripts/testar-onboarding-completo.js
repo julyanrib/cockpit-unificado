@@ -35,6 +35,23 @@ async function chama(body) {
   casos.push(['cardapio_da_loja não vem do navegador', s === 400 && patch === null]);
   [s, o] = await chama({ dealId: '1', novaEtapa: '1396006163', propriedades: props });
   casos.push(['sem anexo: os campos passam', s === 200 && patch && !patch.properties.cardapio_da_loja]);
+  // BÔNUS DE PARCEIRO (18/11/26): indicou_bonus_cliente + bonus_escolhido (caixas de seleção).
+  patch = null;
+  [s, o] = await chama({ dealId: '1', novaEtapa: '1396006163', propriedades: { ...props, indicou_bonus_cliente: 'true', bonus_escolhido: 'Foozi;DDR' } });
+  casos.push(['bônus com Sim: os dois chegam ao HubSpot, a múltipla escolha com ;', s === 200 && patch
+    && patch.properties.indicou_bonus_cliente === 'true' && patch.properties.bonus_escolhido === 'Foozi;DDR']);
+  patch = null;
+  [s, o] = await chama({ dealId: '1', novaEtapa: '1396006163', propriedades: { ...props, indicou_bonus_cliente: 'false' } });
+  casos.push(['bônus com Não: passa, sem bonus_escolhido', s === 200 && patch && patch.properties.indicou_bonus_cliente === 'false' && !('bonus_escolhido' in patch.properties)]);
+  patch = null;
+  [s, o] = await chama({ dealId: '1', novaEtapa: '1396006163', propriedades: { ...props, indicou_bonus_cliente: 'false', bonus_escolhido: 'Foozi' } });
+  casos.push(['bônus escolhido com Não: 400, nada grava', s === 400 && patch === null && /Sim/.test(o.erro)]);
+  patch = null;
+  [s, o] = await chama({ dealId: '1', novaEtapa: '1396006163', propriedades: { ...props, indicou_bonus_cliente: 'talvez' } });
+  casos.push(['indicou_bonus_cliente fora de Sim/Não: 400', s === 400 && patch === null]);
+  patch = null;
+  [s, o] = await chama({ dealId: '1', novaEtapa: '1396006163', propriedades: { ...props, indicou_bonus_cliente: 'true', bonus_escolhido: 'Parceiro Cadastrado Ontem' } });
+  casos.push(['parceiro novo no HubSpot não é barrado aqui (quem valida é o HubSpot)', s === 200 && patch && patch.properties.bonus_escolhido === 'Parceiro Cadastrado Ontem']);
   casos.forEach(c => console.log((c[1] ? 'ok   ' : 'FALHA') + ' ' + c[0]));
   process.exit(casos.every(c => c[1]) ? 0 : 1);
 })();
