@@ -104,7 +104,7 @@ checar('missão cumprida: o círculo entra com a escala e a coleção destaca a 
   /dv2-cel-c/.test(DV2.html(V('missao'))) && /dv2-med is-ganha is-nova/.test(DV2.html(V('missao'))));
 checar('a celebração dura 0,6 s e some com "reduzir movimento"',
   /\.dv2-cel-c\{[^}]*animation:dv2-entra \.6s/.test(tpl) && /@media \(prefers-reduced-motion:reduce\)\{\.dv2-cel-c,\.dv2-toast,\.dv2-med\.is-nova \.dv2-med-c\{animation:none !important;\}\}/.test(tpl));
-checar('alvo de clique ≥ 40 px nos botões da aba', /\.dv2-bt\{min-height:40px/.test(tpl) && /\.dv2-link\{min-height:40px/.test(tpl) && /\.dv2-pil\{min-height:40px/.test(tpl));
+checar('alvo de clique ≥ 40 px nos botões da aba', /\.dv2-bt\{min-height:40px/.test(tpl) && /\.dv2-link\{min-height:40px/.test(tpl));
 checar('nenhum bloco vazio: com tudo fora, cada bloco diz a fonte', ['placar_da_semana', 'HubSpot', 'rampa_quadro', 'conquistas'].every(f => DV2.html(V('fora')).indexOf(f) > 0));
 checar('a volta ao v1: localStorage desenvolvimento-v1 = 1 desenha o DV antigo',
   /if \(GV2\.DV2 && !GV2\.DV2\.querV1\(\)\) return GV2\.DV2\.render\(el\);\n    return GV2\.DV\.render\(el\);/.test(tpl) && /localStorage\.getItem\('desenvolvimento-v1'\) === '1'/.test(codigo));
@@ -112,8 +112,8 @@ checar('a volta ao v1: localStorage desenvolvimento-v1 = 1 desenha o DV antigo',
 /* ── as entradas ── */
 checar('selo no menu: "1 nova" ao lado de Desenvolvimento, e some quando a coleção grava a vista',
   /selo\.textContent = n === 1 \? '1 nova' : n \+ ' novas';/.test(codigo) && /marcar_conquistas_vistas/.test(codigo));
-checar('pílula no Hoje do Cockpit: o lugar no topo do Hoje e a pintura depois da Hoje',
-  tpl.indexOf('<span id="dv2PilHoje"></span>') > 0 && tpl.indexOf('GV2.DV2.pintarPilula();') > 0);
+checar('a missão e a sequência têm lugar no Hoje do executivo (o cartão do v5), e a pílula antiga saiu',
+  tpl.indexOf('H5.missaoHTML = function') > 0 && tpl.indexOf('dv2PilHoje') < 0 && tpl.indexOf('pintarPilula = function () {\n  if (typeof document') < 0);
 checar('toast ao vivo: o sinal do app chama o DV2, com 420 px no canto e 8 s',
   tpl.indexOf('GV2.DV2.aoVivo([String(s.tipo)]);') > 0 && /\.dv2-toast\{position:fixed;right:24px;bottom:24px;[^}]*width:420px/.test(tpl) && /setTimeout\(function \(\) \{ if \(el\.parentNode\) el\.remove\(\); \}, 8000\);/.test(codigo));
 checar('a medição: a abertura grava a origem (menu, selo_menu, pílula ou toast)',

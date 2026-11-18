@@ -49,15 +49,14 @@ checar('o módulo GV2.PLV3 existe', !!P && typeof P.sugestoes === 'function' && 
   ];
   const b = { negocios: negocios, agora: { iso: '2026-11-03', min: 600 } };
   const p = { id: '1' };
-  const hoje = GV2.EXH4.semPasso(p, b).length;
+  const hoje = GV2.semProximoPasso(negocios.filter((n) => n.dono === '1'), GV2.EXH4.estado.marcados).length;
   const v3 = P.contador(p, b);
   const gestor = GV2.filtroNegocios('sempasso', negocios.filter((n) => n.dono === '1')).length;
   checar('a Hoje, o Planejamento v3 e o Raio X do gestor dão o mesmo número', hoje === v3 && v3 === gestor, [hoje, v3, gestor].join(' / '));
   checar('o número é 3: Prospecção conta, passo vencido conta, Ag. Pagamento e quem tem passo não', v3 === 3, String(v3));
-  checar('o EXH4.semPasso chama GV2.semProximoPasso (uma regra só no código)', /EXH4\.semPasso = function \(p, b\) \{ return GV2\.semProximoPasso\(/.test(codigo));
   checar('o filtro "sempasso" do Raio X chama GV2.semProximoPasso', /if \(k === 'sempasso'\) return GV2\.semProximoPasso\(ns\);/.test(codigo));
   GV2.EXH4.estado.marcados.f = { tipo: 'visita', data: '2026-11-04' };
-  checar('o passo dado nesta sessão desce o número na hora, na Hoje e na v3 juntos', P.contador(p, b) === 2 && GV2.EXH4.semPasso(p, b).length === 2);
+  checar('o passo dado nesta sessão desce o número na hora, na Hoje e na v3 juntos', P.contador(p, b) === 2 && GV2.semProximoPasso(negocios.filter((n) => n.dono === '1'), GV2.EXH4.estado.marcados).length === 2);
   delete GV2.EXH4.estado.marcados.f;
 }
 
