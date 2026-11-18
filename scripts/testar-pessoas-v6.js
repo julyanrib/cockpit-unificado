@@ -121,7 +121,7 @@ vm.createContext(ctx);
 vm.runInContext('const FERIADOS_BR_CACHE = {};', ctx);
 [
   'feriadosDoAnoBR', 'ehFeriadoBR', 'isoLocalBR',
-  'cadenciaConfig', 'cadenciaMinimoToques', 'cadenciaDoLead', 'cadenciaMotivosDeSaida', 'cadDiaBRT', 'cadEhUtil', 'cadSomarUteis', 'cadUteisEntre', 'estadoDaCadencia',
+  'cadenciaConfig', 'cadenciaMinimoToques', 'cadenciaDoLead', 'cadDiaBRT', 'cadEhUtil', 'cadSomarUteis', 'cadUteisEntre', 'estadoDaCadencia',
   'pv6Abertos', 'pv6AbaixoDoPiso', 'pv6Piso', 'pv6PassosDa', 'pv6Cadencia', 'pv6UmAUmDoMes',
   'pv6Combinados', 'pv6ListaDoCard', 'pv6Funil', 'pv6Pct', 'pv6CorDoPace', 'pv6DataCurta'
 ].forEach(function (f) { vm.runInContext(recortar(tpl, f), ctx); });

@@ -217,7 +217,8 @@ checar('e o arquivo não guarda salário fixo',
    Se o gestor e o executivo mostrassem contagens diferentes, a primeira conversa sobre
    pagamento quebraria a confiança na tela inteira. */
 checar('gestor e executivo usam a mesma função',
-  (tpl.match(/comissaoDe\(comissaoClientesDoRep\(/g) || []).length === 2,
+  (tpl.match(/comissaoDe\(comissaoClientesDoRep\(/g) || []).length >= 1
+    && /const cli = typeof comissaoClientesDoRep === 'function' \? comissaoClientesDoRep\(rep\.ownerId\) : 0;/.test(tpl) && /const cm = typeof comissaoDe === 'function' \? comissaoDe\(cli\) : null;/.test(tpl),
   'duas contas para o mesmo pagamento é como as duas telas divergem');
 
 /* ══ 11. A IDENTIDADE: SEÇÃO DO CARD, E NÃO CARD DENTRO DE CARD ═══════════════════
@@ -265,8 +266,8 @@ Object.keys(REGRAS).forEach(function (sel) {
 const PALETA_DO_CARD = ['#E7E3DA', '#FBFAF6', '#FDFEFF', '#2B3440', '#7A8494', '#8B93A3',
   '#5B667A', '#E4E0D6'];
 const iCmt = tpl.indexOf('\n  .cmt{');
-/* o fim do bloco é o comentário da seção seguinte (Hoje v3, 09/10/26: a regra .h9-grade saiu com a Hoje antiga) */
-const iFimCmt = tpl.indexOf('/* ══ O HOJE DA REVISÃO GERAL (05/10/26)', iCmt);
+/* o fim do bloco é o comentário da seção seguinte (17/11/26: o Hoje antigo saiu inteiro, e com ele o marco anterior) */
+const iFimCmt = tpl.indexOf('/* ══ O HERO ESCURO', iCmt);
 checar('o bloco de css do variável do time foi encontrado inteiro',
   iCmt > -1 && iFimCmt > iCmt,
   'sem o recorte a checagem de paleta abaixo não mede nada');

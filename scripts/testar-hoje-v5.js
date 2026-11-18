@@ -42,17 +42,33 @@ checar('a grade da semana é a leitura leve do v4 (soGrade)', /pl6Carregar\(rep,
 checar('o quadro do desempenho é lido de onde já está (DV2.estado.q), sem pedir de novo', /GV2\.DV2\.estado\.q \? GV2\.DV2\.vm\(\)/.test(mod));
 
 /* ── 2 · a porta e o que é congelado ── */
-const porta = tpl.indexOf('GV2.H5.render(el, r)'), portaV4 = tpl.indexOf('GV2.HJ4.render(el, r)');
-checar('o Hoje v5 entra antes do v4, e o v4 continua inteiro atrás da chave', porta > 0 && portaV4 > porta && /getItem\('hoje-v4'\) === '1'/.test(mod));
-checar('"Pôr em [dia]" e o desfazer são os do v4 (a mesma gravação)', /HJ4\.por\(arg\.slice\(0, u\), Number\(arg\.slice\(u \+ 1\)\)\)/.test(mod) && /HJ4\.desfazer\(/.test(mod));
+checar('a porta do Hoje é uma só: o v5', /if \(typeof GV2 !== 'undefined' && GV2\.H5\) GV2\.H5\.render\(el, r\);\n\}/.test(tpl));
+const velhos = ["getItem('hoje-v4')", "getItem('hoje-v3')", "getItem('hoje-v2')", 'HJ4.render', 'HJ3.', 'h8Fila', 'gatesDoDia(', 'data-exh=', 'id="hj4Raiz"', 'class="hj4', 'EXH.pintar'].filter(function (x) { return tpl.indexOf(x) >= 0; });
+checar('os Hojes antigos (v2, v3 e v4) saíram do arquivo: nem tela, nem chave de volta', !velhos.length, 'achei ' + velhos.join(', '));
+checar('"Pôr em [dia]" e o desfazer são os de sempre (HJ4.por, HJ4.desfazer)', /HJ4\.por\(arg\.slice\(0, u\), Number\(arg\.slice\(u \+ 1\)\)\)/.test(mod) && /HJ4\.desfazer\(/.test(mod));
 checar('Comissão e Bônus abrem as gavetas de Minha conversão', /GV2\.MC\.gaveta\('comissao'\)/.test(mod) && /GV2\.MC\.gaveta\('bonus'\)/.test(mod));
 checar('a parada abre a ficha do negócio de sempre', /GV2\.PLV3\.acao\('ficha', arg\)/.test(mod));
 checar('a comissão é a da tabela (comissaoDe), sem faixa cravada aqui', /comissaoDe\(cli\)/.test(mod) && !/\b(250|300|400|500|550)\b/.test(mod));
 checar('a parada da rota diz de que cliente é (o cruzamento com a ficha do dia)', /const info = \{ cid: st\.client_id \|\| null, pos:/.test(tpl));
 checar('fonte fora mostra "—", nunca 0', /Fonte fora · /.test(mod) && /<b>—<\/b>/.test(mod));
 
+/* ── 2b · os dados que vieram do v4 (GV2.HJ4): o custo e as regras que a suíte dele guardava ── */
+const hIni = tpl.indexOf('const HJ4 = GV2.HJ4 = {};');
+const hFim = tpl.indexOf('/* DESENVOLVIMENTO v2 NA PESSOAS DO GESTOR', hIni);
+checar('o módulo de dados HJ4 existe', hIni > 0 && hFim > hIni);
+const hj4 = hIni > 0 && hFim > hIni ? tpl.slice(hIni, hFim).replace(/\/\*[\s\S]*?\*\//g, ' ') : '';
+const hPes = pesadas.filter(function (x) { return hj4.indexOf(x) >= 0; });
+checar('HJ4 não chama a montagem pesada nem o playbook', !hPes.length, 'achei ' + hPes.join(', '));
+const hRpc = (hj4.match(/rpc\('([a-z_0-9]+)'/g) || []).map(function (x) { return x.slice(5, -1); });
+checar('o banco que o HJ4 toca é só o placar', hRpc.length === 1 && hRpc[0] === 'placar_da_semana' && !/supa\.from\(/.test(hj4), 'achei ' + hRpc.join(', '));
+checar('HJ4 não pinta nada: quem grava avisa o v5', /HJ4\.pintarFunil = function \(\) \{ if \(GV2\.H5\) GV2\.H5\.pintar\(\); \};/.test(hj4) && /HJ4\.toast = function \(html, ms\) \{ if \(GV2\.H5\) GV2\.H5\.toast\(html, ms\); \};/.test(hj4) && !/innerHTML/.test(hj4));
+checar('os leads saem da fila do Planejamento (PLV3.dados), não de uma conta própria', /PL\.dados\(rep\)/.test(hj4));
+checar('"Pôr em [dia]" grava pelo caminho do Planejamento (PLV3.porNoDia)', /PL\.porNoDia\(ref, di\)/.test(hj4));
+checar('desfazer só no "sem passo" (no vencido apagaria a tarefa antiga)', /if \(!pz \|\| pz\.vencido\) return;/.test(hj4));
+checar('QUENTE é a regra do Planejamento (quenteCadencia), não o termômetro', /HJ4\.temp = function \(l\) \{ return l && l\.n && GV2\.quenteCadencia\(l\.n\)/.test(hj4) && !/tempFaixa/.test(hj4));
+
 /* ── 3 · o visual que não pode escorregar ── */
-checar('três colunas: 1fr · 370 · 370', /\.h5-grade\{display:grid;grid-template-columns:minmax\(0,1fr\) 370px 370px;gap:12px;/.test(css));
+checar('três colunas: 1fr · 370 · 370, e as de 370 encolhem até 300 antes de espremer a do dia', /\.h5-grade\{display:grid;grid-template-columns:minmax\(340px,1fr\) minmax\(300px,370px\) minmax\(300px,370px\);gap:12px;/.test(css));
 checar('menos de 1050 vira duas, menos de 760 vira uma', /@media \(max-width:1050px\)\{\s*\.h5-grade\{grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\);\}\s*\.h5-dia\{grid-column:1 \/ -1;\}/.test(css) && /@media \(max-width:760px\)\{[\s\S]*\.h5-grade\{grid-template-columns:minmax\(0,1fr\);\}/.test(css));
 const hex = (css.replace(/\/\*[\s\S]*?\*\//g, '').match(/#[0-9a-fA-F]{3,8}\b/g) || []).filter(function (x) { return x.toLowerCase() !== '#fff'; });
 checar('cor só pelos tokens (claro e escuro saem deles)', !hex.length, 'achei ' + hex.join(', '));

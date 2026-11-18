@@ -278,9 +278,6 @@ teste('desfecho manda mais que a etapa', () => {
 teste('recusa explícita tira o negócio da cadência', () => {
   const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
   igual(c.cadenciaDoLead(lead(), 'recusou'), null, 'cadência após recusa');
-  const sug = c.proximaAcaoSugerida('recusou', lead());
-  verdade(sug.encerra, 'sugestão de recusa encerra');
-  verdade(sug.motivos.length > 0, 'recusa oferece motivos de saída');
 });
 
 /* A régua conta DIA ÚTIL (05/10/26): "há 2 dias" depende do dia em que a suíte roda — numa
@@ -538,37 +535,10 @@ teste('tarefa datada no futuro tira o negócio do balde de cadência atrasada', 
 
 console.log('\n== Gates do dia e CTA (Escopo 1) ==');
 
-teste('dia vazio: gates abertos e CTA vira "Montar minha rota"', () => {
-  const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
-  const d = c.gatesDoDia(c.DATA.reps[0]);
-  igual(d.total, 7, 'sete gates');
-  falso(d.pronto, 'dia não está pronto');
-  igual(c.ctaDoDia(d).label, 'Montar minha rota', 'CTA da primeira pendência');
-});
-
 /* O teste da "Missão do Dia" saiu junto com a feature, em 03/09/26 (decisão do
    Julyan: "tira a missão do dia"). Ele cobria janelaDoDia() de tabela, e essa funcao
    FICOU — ela tem outro chamador. Se um dia alguem quiser voltar a cobrir as janelas,
    o teste e sobre janelaDoDia e nao sobre a missao. */
-
-teste('visita de hoje sem desfecho leva o CTA para "Registrar resultado pendente"', () => {
-  const paradas = [1, 2, 3].map(i => ({
-    id: 'p' + i, ownerId: OWNER, dealId: 'g' + (i - 1), tipo: 'rota', inicio: new Date(HOJE.getTime() - i * 3600000),
-    cliente: 'Cliente ' + i, desfecho: 'COMPLETED', registro: true, obs: '', decisor: null, lat: -20, lng: -40
-  }));
-  // a quarta parada é a que ficou sem desfecho
-  paradas.push({ id: 'p4', ownerId: OWNER, dealId: 'g3', tipo: 'rota', inicio: new Date(HOJE.getTime() - 3600000),
-    cliente: 'Cliente Pendente', desfecho: null, registro: false, obs: '', decisor: null, lat: -20, lng: -40 });
-  const leads = paradas.map((p, i) => lead({ id: 'g' + i, name: p.cliente, ultimaInteracao: diasAtras(1).toISOString(),
-    tarefas: [{ subject: 'Follow-up', timestamp: diasAFrente(2).toISOString() }] }));
-  const c = novoContexto(dados({ agenda: { eventos: paradas }, funilLeads: { '1396005401': leads } }), { ownerId: OWNER, role: 'rep' });
-  const d = c.gatesDoDia(c.DATA.reps[0]);
-  verdade(d.pronto, 'gates fechados: ' + d.pendentes.map(g => g.id + '(' + g.detalhe + ')').join(', '));
-  igual(c.ctaDoDia(d).label, 'Registrar resultado pendente');
-  const acoes = c.acoesDeAgora(c.DATA.reps[0], d);
-  igual(acoes[0].verbo, 'Registrar desfecho', 'a primeira ação é fechar o registro');
-  igual(acoes[0].cliente, 'Cliente Pendente');
-});
 
 /* O TETO É LIDO DO CÓDIGO, não repetido aqui (02/09/26). Este teste dizia "no máximo 3"
    com o 3 escrito à mão, e a mesma constante estava escrita em dois lugares no template.
@@ -576,44 +546,6 @@ teste('visita de hoje sem desfecho leva o CTA para "Registrar resultado pendente
    por causa do PARÂMETRO, não por causa de uma regra quebrada. Número duplicado em teste
    guarda a digitação, não o comportamento — o que precisa ser guardado é que existe um
    teto e que ele é respeitado, e isso se faz lendo o teto de onde ele mora. */
-teste('a fila de ações respeita o teto e traz os campos obrigatórios', () => {
-  const leads = [1, 2, 3, 4, 5, 6, 7, 8].map(i => lead({ id: 'm' + i, name: 'Lead ' + i, ultimaInteracao: diasAtras(6).toISOString() }));
-  const c = novoContexto(dados({ funilLeads: { '1396005401': leads } }), { ownerId: OWNER, role: 'rep' });
-  const d = c.gatesDoDia(c.DATA.reps[0]);
-  const acoes = c.acoesDeAgora(c.DATA.reps[0], d);
-  /* O teto é lido da FONTE, não do contexto do vm: `const` no topo de um script de vm não
-     vira propriedade do contexto (declaração de função vira, const não). Ler da fonte
-     tem uma vantagem extra — obriga que o número exista declarado UMA vez com nome. */
-  /* SEM REGEX AQUI. Escrever /(\d+)/ dentro de um patch perdeu a barra invertida pela
-     terceira vez hoje neste projeto — a expressão fica VÁLIDA e errada, e o teste reprova
-     um código correto. indexOf + parse não tem o que escapar. */
-  const marca = 'const HOJE_ACOES_VISIVEIS = ';
-  const i = codigoNucleo.indexOf(marca);
-  verdade(i >= 0, 'o teto tem que ser uma constante nomeada no @nucleo (HOJE_ACOES_VISIVEIS)');
-  const teto = parseInt(codigoNucleo.slice(i + marca.length), 10);
-  verdade(Number.isInteger(teto) && teto > 0, 'o teto declarado tem que ser um inteiro positivo');
-  /* e os DOIS cortes têm que usar o nome. Foi ter dois lugares com o número escrito que
-     me fez mudar um e a tela não mudar. */
-  verdade(codigoNucleo.indexOf('acoes.length >= HOJE_ACOES_VISIVEIS') > 0, 'o laço corta pelo nome');
-  verdade(codigoNucleo.indexOf('acoes.slice(0, HOJE_ACOES_VISIVEIS)') > 0, 'o slice final corta pelo nome');
-  verdade(acoes.length <= teto, 'no máximo ' + teto + ' (veio ' + acoes.length + ')');
-  /* com mais leads que o teto, o teto TEM que morder — senão não há teto nenhum */
-  igual(acoes.length, teto, 'com 8 candidatos, a lista enche até o teto');
-  verdade(acoes.length > 0, 'pelo menos 1');
-  acoes.forEach(a => {
-    ['verbo', 'cliente', 'motivo', 'prazo', 'ultimaInteracao', 'ctaLabel'].forEach(k => {
-      verdade(a[k], `ação sem campo ${k}`);
-    });
-    verdade(typeof a.acao === 'function', 'ação sem botão executável');
-  });
-});
-
-teste('quente sem próxima ação abre o gate de quentes', () => {
-  const q = lead({ id: 'QQ', stageId: '1395880473', ultimaInteracao: diasAtras(1).toISOString() });
-  const c = novoContexto(dados({ funilLeads: { '1395880473': [q] } }), { ownerId: OWNER, role: 'rep' });
-  const d = c.gatesDoDia(c.DATA.reps[0]);
-  falso(d.gates.find(g => g.id === 'quentes').ok, 'gate de quentes deveria estar aberto');
-});
 
 teste('visita sem associação de negócio no HubSpot é "não confirmada"', () => {
   const l = lead({ id: 'NC', name: 'Bar Sem Vínculo' });
@@ -626,46 +558,6 @@ teste('visita sem associação de negócio no HubSpot é "não confirmada"', () 
   const tp = c.touchpointsDoLead(l)[0];
   verdade(tp._clienteNaoConfirmado, 'marcado como não confirmado');
   igual(c.rotuloDeRegistroDaVisita(tp).id, 'nao_confirmada', 'não confirmada ganha de qualquer outro estado');
-});
-
-teste('uma parada só não é rota; duas são', () => {
-  const ev = (i, hora) => ({ id: 'r' + i, ownerId: OWNER, dealId: 'x' + i, tipo: 'rota',
-    inicio: new Date(HOJE.getTime() - hora * 3600000), cliente: 'C' + i, desfecho: null, registro: false, obs: '', decisor: null });
-  const um = novoContexto(dados({ agenda: { eventos: [ev(1, 2)] } }), { ownerId: OWNER, role: 'rep' });
-  falso(um.gatesDoDia(um.DATA.reps[0]).gates.find(g => g.id === 'rota').ok, 'uma parada: rota aberta');
-  const dois = novoContexto(dados({ agenda: { eventos: [ev(1, 2), ev(2, 1)] } }), { ownerId: OWNER, role: 'rep' });
-  verdade(dois.gatesDoDia(dois.DATA.reps[0]).gates.find(g => g.id === 'rota').ok, 'duas paradas: rota fechada');
-});
-
-teste('o gate de agenda respeita o alvo da fase de rampagem', () => {
-  const ev = i => ({ id: 'a' + i, ownerId: OWNER, dealId: 'y' + i, tipo: 'rota',
-    inicio: new Date(HOJE.getTime() - i * 3600000), cliente: 'C' + i, desfecho: null, registro: false, obs: '', decisor: null });
-  const tres = [ev(1), ev(2), ev(3)];
-  // Fase com alvo 3: três compromissos fecham o gate.
-  const rampa = novoContexto(dados({ rampAlvo: 3, agenda: { eventos: tres } }), { ownerId: OWNER, role: 'rep' });
-  verdade(rampa.gatesDoDia(rampa.DATA.reps[0]).gates.find(g => g.id === 'agenda').ok, 'alvo 3 com 3 compromissos');
-  // Fase pleno com alvo 6: os mesmos três não bastam — e o texto diz quanto falta.
-  const pleno = novoContexto(dados({ rampAlvo: 6, agenda: { eventos: tres } }), { ownerId: OWNER, role: 'rep' });
-  const g = pleno.gatesDoDia(pleno.DATA.reps[0]).gates.find(x => x.id === 'agenda');
-  falso(g.ok, 'alvo 6 com 3 compromissos');
-  verdade(/3 de 6/.test(g.detalhe), 'detalhe mostra 3 de 6, veio: ' + g.detalhe);
-  // Sem fase definida, o gate não inventa alvo — basta ter 1.
-  const semFase = novoContexto(dados({ agenda: { eventos: [ev(1)] } }), { ownerId: OWNER, role: 'rep' });
-  const g2 = semFase.gatesDoDia(semFase.DATA.reps[0]).gates.find(x => x.id === 'agenda');
-  verdade(g2.ok, 'sem fase: 1 compromisso basta');
-  verdade(/não definida/.test(g2.detalhe), 'detalhe avisa que não há alvo');
-});
-
-teste('fase com alvo 0 não é confundida com "fase não definida"', () => {
-  // Regressão: entrante em Semanas 2–3 (alvo 0) com 1 compromisso lia "fase de
-  // rampagem não definida" — a fase dele ESTÁ definida, ela só não cobra rua ainda.
-  const ev = { id: 'z1', ownerId: OWNER, dealId: 'zz', tipo: 'rota', inicio: diasAtras(0.1),
-    cliente: 'C', desfecho: null, registro: false, obs: '', decisor: null };
-  const c = novoContexto(dados({ rampAlvo: 0, agenda: { eventos: [ev] } }), { ownerId: OWNER, role: 'rep' });
-  const g = c.gatesDoDia(c.DATA.reps[0]).gates.find(x => x.id === 'agenda');
-  verdade(g.ok, 'alvo 0: um compromisso basta');
-  falso(/não definida/.test(g.detalhe), 'NÃO deve dizer "não definida", veio: ' + g.detalhe);
-  verdade(/não cobra volume/.test(g.detalhe), 'deve explicar que a fase não cobra volume, veio: ' + g.detalhe);
 });
 
 console.log('\n== Desfecho estruturado: escrever E ler (o ciclo fechado) ==');
@@ -873,12 +765,6 @@ teste('carga de 10h atrás não é confiável e o gate de carga avisa sem cobrar
   const f = c.frescorDosDados();
   verdade(f.velho, 'marcada como velha');
   falso(f.confiavel, 'não confiável');
-  const d = c.gatesDoDia(c.DATA.reps[0]);
-  const gCarga = d.gates.find(g => g.id === 'carga');
-  falso(gCarga.ok, 'gate de carga aberto');
-  igual(gCarga.cta, null, 'gate de carga não tem CTA de cobrança');
-  verdade(gCarga.informativo, 'gate de carga é informativo');
-  falso(c.checagensDaJanela(c.DATA.reps[0], d).cobravel, 'janela não é cobrável com carga velha');
 });
 
 teste('falha de sincronização própria aparece pro executivo', () => {
@@ -1735,62 +1621,6 @@ teste('Daily exclui eventos internos e deep-link do Playbook preserva o filtro p
     'o Planejamento nao publica um pipeline diferente do Field Sales oficial');
 });
 
-teste('as tres acoes de agora nao dao duas vagas ao mesmo cliente', () => {
-  /* Defeito visto EM PRODUCAO, na tela do Marco Filho em 28/08:
-       1. Registrar desfecho Bonamassa
-       2. Ligar para Don Aguilar
-       3. Ligar para Bonamassa
-     Dois tercos das vagas no mesmo cliente, com 12 negocios esperando na fila.
-
-     A causa era dupla: a fila era cortada em 3 ANTES de qualquer verificacao (entao
-     tirar um duplicado deixaria a vaga vazia) e nao havia deduplicacao por cliente.
-     Este teste reproduz o arranjo exato: o mesmo cliente com visita de hoje sem
-     desfecho E no topo da fila de follow-up. */
-  const hojeCedo = new Date(HOJE.getTime() - 3 * 3600000);   // ja passou, sem desfecho
-  const bonamassa = lead({ id: 'LB', name: 'Bonamassa', dias: 9, ultimaInteracao: diasAtras(9).toISOString() });
-  const aguilar   = lead({ id: 'LA', name: 'Don Aguilar', dias: 8, ultimaInteracao: diasAtras(8).toISOString() });
-  const terceiro  = lead({ id: 'LT', name: 'Casa do Sul', dias: 7, ultimaInteracao: diasAtras(7).toISOString() });
-  const quarto    = lead({ id: 'LQ', name: 'Bar do Meio', dias: 6, ultimaInteracao: diasAtras(6).toISOString() });
-
-  const c = novoContexto(dados({
-    funilLeads: { '1396005401': [bonamassa, aguilar, terceiro, quarto] },
-    agenda: { eventos: [{ id: 'ev1', ownerId: OWNER, dealId: 'LB', tipo: 'rota',
-      inicio: hojeCedo, cliente: 'Bonamassa', desfecho: null, registro: false, obs: '', decisor: null }] }
-  }), { ownerId: OWNER, role: 'rep' });
-
-  const rep = c.DATA.reps[0];
-  const acoes = c.acoesDeAgora(rep);
-
-  /* A REGRA, e não a contagem: uma vaga por cliente, e a vaga liberada preenchida pelo
-     próximo da fila. Antes este teste fixava 3 — quando o teto subiu para 6 ele caiu sem
-     que nada do que ele protege tivesse mudado. O arranjo tem 4 leads, então a lista tem
-     que trazer os 4, um por cliente. */
-  const nomes = acoes.map(a => a.cliente);
-  igual(acoes.length, 4, 'entrega uma ação para cada um dos 4 clientes do arranjo');
-  igual(new Set(nomes).size, nomes.length, 'nenhum cliente aparece duas vezes: ' + nomes.join(' / '));
-  verdade(nomes.includes('Bonamassa'), 'o cliente da visita de hoje continua na lista');
-  igual(nomes.filter(x => x === 'Bonamassa').length, 1, 'mas uma vez so');
-  // A vaga liberada tem que ser PREENCHIDA pelo proximo da fila, nao ficar vazia:
-  // era a outra metade do defeito (slice(0,3) antes de filtrar).
-  verdade(nomes.includes('Don Aguilar') && nomes.includes('Casa do Sul'),
-    'a vaga liberada foi preenchida pelo proximo da fila: ' + nomes.join(' / '));
-
-  // A acao do cliente com visita de hoje vem PRIMEIRO: registrar o desfecho e o que
-  // produz a informacao de qual proximo passo cabe.
-  igual(acoes[0].cliente, 'Bonamassa', 'a visita de hoje sem desfecho vem na frente');
-  verdade(/desfecho/i.test(acoes[0].verbo + ' ' + acoes[0].motivo), 'e a acao dela e registrar o desfecho');
-
-  // Nome com acento/caixa diferente entre as fontes tambem tem que casar.
-  const c2 = novoContexto(dados({
-    funilLeads: { '1396005401': [lead({ id: 'LX', name: 'CAFÉ  Do Centro', dias: 9, ultimaInteracao: diasAtras(9).toISOString() }), aguilar] },
-    agenda: { eventos: [{ id: 'ev2', ownerId: OWNER, dealId: 'LX', tipo: 'rota',
-      inicio: hojeCedo, cliente: 'cafe do centro', desfecho: null, registro: false, obs: '', decisor: null }] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const nomes2 = c2.acoesDeAgora(c2.DATA.reps[0]).map(a => a.cliente);
-  igual(nomes2.filter(x => /caf/i.test(x)).length, 1,
-    'acento e caixa diferentes contam como o MESMO cliente: ' + nomes2.join(' / '));
-});
-
 teste('telefone da acao: E.164 quando existe, null quando nao da pra ligar', () => {
   /* A tela do Marco em producao dizia "Ligar para Don Aguilar" e o unico botao era
      "Abrir e datar". O telefone existia em 19 dos 20 negocios dele. Esta funcao e o que
@@ -1821,61 +1651,6 @@ teste('telefone da acao: E.164 quando existe, null quando nao da pra ligar', () 
 });
 
 console.log('');
-teste('sem pendencia, as acoes nomeiam contas livres — e nunca disputam com a carteira', () => {
-  /* Pedido do Julyan: "conseguimos indicar contas se o funil está vazio?". Antes, sem
-     pendencia, o card mostrava um parabens e parava — beco sem saida justamente na hora
-     em que ele deveria abrir conta nova.
-
-     As contas chegam como PARAMETRO porque os filtros de escopo (prospeccaoAtiva,
-     prospeccaoFazSentido, rede grande) vivem fora do bloco @nucleo. Quem filtra e o
-     chamador, que e producao; aqui se testa a regra nova inteira, sem dublar nenhuma
-     regra de negocio. */
-  const contas = [
-    { id: 'k1', nome: 'Cantina Nova',   responsavel_owner_id: OWNER, data_abertura: diasAtras(12).toISOString(), nota: 4.7, avaliacoes: 88, bairro: 'Taquara', telefone: '21 98888-1111' },
-    { id: 'k2', nome: 'Pizzaria Recem', responsavel_owner_id: OWNER, data_abertura: diasAtras(40).toISOString(), bairro: 'Recreio' },
-    { id: 'k3', nome: 'Bar do Fim',     responsavel_owner_id: OWNER, cidade: 'Rio de Janeiro' },
-    { id: 'k4', nome: 'Quarta Conta',   responsavel_owner_id: OWNER, bairro: 'Barra' },
-    { id: 'k5', nome: 'De Outro Dono',  responsavel_owner_id: 'outro-owner', bairro: 'Centro' },
-    { id: 'k6', nome: 'Ja No Funil',    responsavel_owner_id: OWNER, hubspot_deal_id: '999', bairro: 'Centro' }
-  ];
-
-  // 1. carteira VAZIA: a tela nomeia contas em vez de parar num parabens.
-  const vazio = novoContexto(dados({ funilLeads: {} }), { ownerId: OWNER, role: 'rep' });
-  const semContas = vazio.acoesDeAgora(vazio.DATA.reps[0]);
-  igual(semContas.length, 0, 'sem lista de contas, nao inventa acao nenhuma');
-
-  const comContas = vazio.acoesDeAgora(vazio.DATA.reps[0], undefined, contas);
-  igual(comContas.length, 3, 'tres contas sugeridas, o mesmo teto das outras acoes');
-  igual(comContas.map(a => a.cliente), ['Cantina Nova', 'Pizzaria Recem', 'Bar do Fim'],
-    'na ORDEM que chegou (a fila do Planejamento ja vem ordenada), sem quarta vaga');
-  verdade(comContas.every(a => /Abrir negócio com/.test(a.verbo)), 'o verbo diz o que fazer');
-  verdade(/melhores contas livres/.test(comContas[0].motivo), 'o motivo explica por que ela esta ali');
-  verdade(/abriu há 12d/.test(comContas[0].motivo) && /4.7★ \(88\)/.test(comContas[0].motivo)
-    && /Taquara/.test(comContas[0].motivo), 'e carrega as pistas reais da base: ' + comContas[0].motivo);
-  verdade(!/undefined|null|NaN/.test(comContas.map(a => a.motivo + a.ultimaInteracao).join(' ')),
-    'nenhum campo ausente vaza como texto');
-
-  // 2. dono errado e conta que JA virou negocio ficam fora.
-  const nomes = comContas.map(a => a.cliente);
-  verdade(!nomes.includes('De Outro Dono'), 'conta de outro executivo nao entra');
-  verdade(!nomes.includes('Ja No Funil'), 'conta que ja tem negocio no HubSpot nao entra');
-
-  // 3. TELEFONE: quem tem numero na base ganha os canais; quem nao tem, nao promete.
-  igual(comContas[0].tel, '5521988881111', 'telefone da conta vira E.164 pros botoes');
-  igual(comContas[1].tel, null, 'sem telefone na base, nada de botao de ligar');
-
-  // 4. A REGRA QUE MAIS IMPORTA: havendo pendencia, a sugestao NAO rouba a vaga.
-  const comCarteira = novoContexto(dados({
-    funilLeads: { '1396005401': [
-      lead({ id: 'P1', name: 'Don Aguilar',  dias: 9, ultimaInteracao: diasAtras(9).toISOString() }),
-      lead({ id: 'P2', name: 'Casa do Sul',  dias: 8, ultimaInteracao: diasAtras(8).toISOString() })
-    ] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const mistas = comCarteira.acoesDeAgora(comCarteira.DATA.reps[0], undefined, contas);
-  verdade(mistas.length > 0, 'a carteira produz acao');
-  verdade(mistas.every(a => !/^contaalvo:/.test(a.id)),
-    'com negocio dele esperando, NENHUMA conta-alvo aparece: ' + mistas.map(a => a.cliente).join(' / '));
-});
 
 teste('distancia em km rejeita coordenada nula ANTES de converter', () => {
   /* A correcao de 11/08 que veio junto com a funcao pro nucleo: Number(null) e 0 e

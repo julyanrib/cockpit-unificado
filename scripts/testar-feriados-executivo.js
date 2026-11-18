@@ -39,7 +39,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext('const FERIADOS_BR_CACHE = {};', ctx);
-['feriadosDoAnoBR', 'ehFeriadoBR', 'isoLocalBR', 'cadEhUtil', 'cadSomarUteis', 'cadUteisEntre', 'isWeekend', 'pl6Dias', 'h10ProximoUtil', 'h10UtilAnterior']
+['feriadosDoAnoBR', 'ehFeriadoBR', 'isoLocalBR', 'cadEhUtil', 'cadSomarUteis', 'cadUteisEntre', 'isWeekend', 'pl6Dias']
   .forEach(function (f) { vm.runInContext(recortar(tpl, f), ctx); });
 
 /* o calendário do gestor, do bloco gv2, para comparar */
@@ -67,8 +67,6 @@ checar('a régua não conta o feriado como dia útil', !ctx.cadEhUtil('2026-11-0
 checar('1 dia útil depois da sexta 30/10 é a terça 03/11', ctx.cadSomarUteis('2026-10-30', 1) === '2026-11-03', ctx.cadSomarUteis('2026-10-30', 1));
 checar('de sexta 30/10 a terça 03/11 há 1 dia útil', ctx.cadUteisEntre('2026-10-30', '2026-11-03') === 1);
 checar('"fim de semana" inclui o feriado (próximo útil, sequência)', ctx.isWeekend('2026-11-02') && ctx.isWeekend('2026-11-01') && !ctx.isWeekend('2026-11-03'));
-checar('o próximo dia útil depois de sábado 31/10 é terça 03/11', ctx.h10ProximoUtil('2026-10-31') === '2026-11-03');
-checar('o dia útil antes de terça 03/11 é sexta 30/10', ctx.h10UtilAnterior('2026-11-03') === '2026-10-30');
 const sem = ctx.pl6Dias('2026-11-02');
 checar('a semana de 02/11 marca a segunda como feriado e tem 4 dias úteis', sem[0].feriado === true && sem.filter(function (d) { return !d.feriado; }).length === 4);
 checar('a semana de 09/11 não tem feriado', ctx.pl6Dias('2026-11-09').every(function (d) { return !d.feriado; }));
@@ -83,8 +81,6 @@ checar('nenhuma conta de "dia útil" do executivo ficou sem o feriado', !/if \(w
 /* sem expediente (domingo 01/11/26): nenhum quadro do executivo cobra o plano do dia */
 checar('Planejamento: o quadro Hoje diz "sem expediente" no fim de semana e no feriado', tpl.indexOf("if (!dv5.y && (isWeekend(iso))) return { plano: 'sem expediente'") > -1);
 checar('Desenvolvimento: o cartão Hoje diz "sem expediente", não "sem rota"', tpl.indexOf("GV2.temRua(p) ? GV2.visHoje(p) : GV2.util(b.agora.iso) ? 'sem rota' : 'sem expediente'") > -1);
-checar('Hoje do executivo: plano, meu dia e regras sabem do sem expediente', tpl.indexOf("GV2.util(b.agora.iso) ? 'sem rota' : 'sem expediente';") > -1 && tpl.indexOf("'Sem expediente hoje'") > -1 && tpl.indexOf("t: util ? 'Fechar o dia até 19h' : 'Montar o próximo dia útil'") > -1);
-checar('o resumo copiado para o gestor diz "sem expediente hoje"', tpl.indexOf("GV2.util(b.agora.iso) ? 'sem plano hoje' : 'sem expediente hoje'") > -1);
 checar('o mês do executivo conta o último dia útil (fim às 23:59:59)', tpl.indexOf('new Date(h.getFullYear(), h.getMonth() + 1, 0, 23, 59, 59)') > -1);
 checar('data inválida não é feriado e não lança erro', ctx.ehFeriadoBR('NaN-NaN-NaN') === false && ctx.feriadosDoAnoBR(NaN).length === 0);
 
