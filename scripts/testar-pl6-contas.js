@@ -900,7 +900,7 @@ console.log('');
          semana do RELÓGIO, que é o ponto. A TERCEIRA (06/11/26) é a do Hoje do executivo v4
          (HJ4.render), que lê a grade desta semana para o "Pôr em [dia]": também do relógio. */
       /* 07/11/26: a do Hoje v4 ganhou { soGrade: true } (só a linha da semana, sem os pinos); a semana segue do relógio */
-      && (cod.match(/pl6Carregar\([a-zA-Z]+, pl6SegundaDaSemana\(\)(, \{ soGrade: true \})?\)/g) || []).length === 3,
+      && (cod.match(/pl6Carregar\([a-zA-Z]+, pl6SegundaDaSemana\(\)(, \{ soGrade: true \})?\)/g) || []).length === 4, /* 17/11/26: a QUARTA é a do Hoje do executivo v5 (H5.render), a mesma leitura do v4, também do relógio */
     'sem o argumento, um passo de hoje entraria na linha da semana que vem, no dia errado');
 
   /* TROCAR DE SEMANA RECARREGA. pl6Plano é a linha de UMA semana; desenhar com a linha
