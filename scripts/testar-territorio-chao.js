@@ -28,7 +28,7 @@ const checar = (nome, cond, porque) => { if (cond) { ok++; return; } falhas.push
 const ini = tpl.indexOf('<script id="gv2-js">');
 const fim = tpl.indexOf('</script><!-- /gv2-js -->');
 const codigo = tpl.slice(ini + '<script id="gv2-js">'.length, fim).replace('GV2.instalar();', '');
-checar('o chão é a aba terr (por último, depois do estudo de campo)', codigo.lastIndexOf('GV2.render.terr = GV2.render.tc;') > codigo.indexOf('GV2.render.terr = GV2.render.tn;'));
+checar('o chão é a aba terr: a última atribuição, e a tela antiga (render.tn) não existe mais', codigo.lastIndexOf('GV2.render.terr = ') === codigo.lastIndexOf('GV2.render.terr = GV2.render.tc;') && codigo.indexOf('GV2.render.tn = ') < 0);
 const bloco = codigo.slice(codigo.indexOf('/* tc:js:ini */'), codigo.indexOf('/* tc:js:fim */'));
 checar('o bloco novo só chama as duas leituras do chão (nenhuma função que grava)', (bloco.match(/supa\.rpc\('([a-z_]+)'/g) || []).join() === "supa.rpc('territorio_chao',supa.rpc('territorio_chao_lista'" && !/\.insert\(|\.update\(|\.upsert\(|\.delete\(/.test(bloco), (bloco.match(/supa\.rpc\('([a-z_]+)'/g) || []).join());
 checar('o bloco novo não lê nenhuma tabela direto', !/supa\.from\(/.test(bloco));
