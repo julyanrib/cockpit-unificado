@@ -47472,7 +47472,7 @@ async function tp6AbrirRanking(periodo) {
   const mesNome = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][new Date().getMonth()];
   caixa.innerHTML = '<div class="tp6-folha-topo"><b class="tp6-titulo">Ranking</b>'
     + '<button type="button" class="tp6-fechar" aria-label="Fechar" onclick="document.getElementById(\'tp6Folha\').remove()">✕</button></div>'
-    + '<p class="tp6-muted">' + (p === 'semana' ? 'Semana · ' + tp6DDMM(r.de) + ' a ' + tp6DDMM(new Date(new Date(r.ate).getTime() - 86400000).toISOString()) + (bonus ? ' · visita e demo até sexta, venda até domingo · 1º leva R$ ' + (r.premio || 250) : ' · fecha segunda 9h') : 'Mês · ' + mesNome) + '</p>'
+    + '<p class="tp6-muted">' + (p === 'semana' ? 'Semana · ' + tp6DDMM(r.de) + ' a ' + tp6DDMM(new Date(new Date(r.ate).getTime() - 86400000).toISOString()) + (bonus ? ' · venda, demo e visita até domingo às 23:59 · 1º leva R$ ' + (r.premio || 250) : ' · fecha segunda 9h') : 'Mês · ' + mesNome) + '</p>'
     + (mc && mc.meta > 0 ? '<div class="tp6-bloco"><span class="tp6-rotulo">TIME · ' + mesNome.toUpperCase() + '</span><b>' + mc.feitos + ' de ' + mc.meta + ' contratos</b><span class="tp6-barra"><i style="width:' + Math.min(100, Math.round(mc.feitos / mc.meta * 100)) + '%"></i></span></div>' : '')
     + '<div class="tp6-podio">' + ordem.map(function (x) {
         return '<div class="tp6-podio-col' + (x.pos === 1 ? ' is-1' : '') + '"><span class="tp6-mini-av">' + tp6Avatar(x.nome, x.avatar_url, x.pos === 1 ? 64 : 52) + '<i>' + x.pos + '</i></span><b>' + esc(tp6Primeiro(x.nome)) + '</b><span>' + esc(bonus ? x.pts + ' pts' : tp6Pct(x.pct)) + '</span><small class="tp6-muted">' + esc(bonus ? '' : x.pts + ' pts') + '</small></div>';
@@ -47494,7 +47494,7 @@ async function tp6AbrirRanking(periodo) {
         return '<div class="tp6-conquista' + (k.feito ? ' is-feita' : '') + '"><b>' + esc(k.titulo) + '</b><small class="tp6-muted">' + (k.feito ? 'conquistada' : nm ? (k.id === 'quentes_4' ? 'sem quentes na carteira agora' : 'não medido ainda') : k.progresso + ' de ' + k.alvo + ' ' + esc(k.unidade)) + '</small></div>';
       }).join('') + '</div>'
     + '<p class="tp6-regras">' + (bonus
-      ? 'Placar da semana (o mesmo do app e do gestor): venda 100 (negócio em Fechado; Ag. Pagamento não conta) · demo 25 (negócio que entrou em Demo/Proposta no HubSpot; um por negócio na semana) · visita com prova 3 (check-in com GPS até 200 m; foto só quando o GPS não confirma; sem teto por dia; cada restaurante conta uma vez na semana). A demo do negócio que fechou na mesma semana não soma: conta só a venda. Desempate: vendas, demos, visitas. Visita e demo contam até sexta às 23:59; venda, até domingo às 23:59 (a do fim de semana entra na semana que terminou). O ganhador aparece na segunda às 08:00 e o pagamento é com o financeiro.'
+      ? 'Placar da semana (o mesmo do app e do gestor): venda 100 (negócio em Fechado; Ag. Pagamento não conta) · demo 25 (negócio que entrou em Demo/Proposta no HubSpot; um por negócio na semana) · visita com prova 3 (check-in com GPS até 200 m; foto só quando o GPS não confirma; sem teto por dia; cada restaurante conta uma vez na semana). A demo do negócio que fechou na mesma semana não soma: conta só a venda. Desempate: vendas, demos, visitas. Venda, demo e visita contam de segunda até domingo às 23:59 (o que acontece no fim de semana entra na semana que terminou). O ganhador aparece na segunda às 08:00 e o pagamento é com o financeiro.'
       : 'Pontos: visita provada 20 (GPS ou foto) · demo realizada 50 (o negócio entrou em Demo/Proposta) · contrato 200. Visita declarada não pontua. O ranking é pela % da sua meta; desempate por contratos e MRR. A semana fecha segunda às 9h.') + '</p>';
 }
 
@@ -67886,11 +67886,13 @@ GV2.v6PlacarLer = function (forcar) {
     if (GV2.estado.aba === 'pessoas' || GV2.estado.aba === 'time') GV2.pintar();
   }, function (e) { P.estado = 'erro'; P.erro = (e && e.message) || 'erro'; P.em = Date.now(); if (GV2.estado.aba === 'pessoas' || GV2.estado.aba === 'time') GV2.pintar(); });
 };
+
+GV2.v6Fim = function (d) { return (d && d.domingo) || (d && d.sexta ? GV2.somaDias(d.sexta, 2) : GV2.somaDias(d.segunda, 6)); };
 GV2.v6Conta = function (l) { return GV2.pl(l.vendas, 'venda', 'vendas') + ' · ' + GV2.pl(l.reunioes, 'demo', 'demos') + ' · ' + GV2.pl(l.visitas, 'visita', 'visitas'); };
 GV2.render.v6Placar = function () {
   GV2.v6PlacarLer(false);
   const P = GV2.v6Placar, d = P.dados;
-  const sub = d ? 'semana de ' + GV2.ddmm(d.segunda) + ' a ' + GV2.ddmm(d.sexta) + ' · visita e demo até sexta, venda até domingo · o mesmo placar do app · leitura ' + GV2.hm(new Date(d.lidoEm)) : 'o mesmo placar do app';
+  const sub = d ? 'semana de ' + GV2.ddmm(d.segunda) + ' a ' + GV2.ddmm(GV2.v6Fim(d)) + ' · venda, demo e visita até domingo às 23:59 · o mesmo placar do app · leitura ' + GV2.hm(new Date(d.lidoEm)) : 'o mesmo placar do app';
   const cab = '<div class="gv2-v6-plac-cab"><div><b>Como o time se vê · melhor da semana</b><span>' + GV2.e(sub) + '</span></div><div class="gv2-v6-plac-bts"><span class="gv2-v6-premio">1º leva R$ 250</span>'
     + '<button type="button" class="gv2-v5-btn" data-gv2="v6gav:pontos">Como a pontuação é feita</button><button type="button" class="gv2-v5-btn is-prim" data-gv2="v6gav:ranking">Ver o ranking completo</button></div></div>';
   let corpo;
@@ -67961,7 +67963,7 @@ GV2.render.v6GavPontos = function () {
   const P = GV2.v6Placar, d = P.dados;
   const sel = d ? d.linhas.find(function (l) { return l.ownerId === GV2.estado.pessoa; }) || d.linhas[0] : null;
   const it = function (n, t, s, pts) { return '<div class="gv2-v6-regra"><i>' + n + '</i><div><b>' + GV2.e(t) + '</b><span>' + GV2.e(s) + '</span></div><b class="num">' + pts + ' pts</b></div>'; };
-  const conta = sel ? '<div class="gv2-v6-conta"><small>' + GV2.e(GV2.prim(sel.nome) + ' · semana de ' + GV2.ddmm(d.segunda) + ' a ' + GV2.ddmm(d.sexta) + ' · até agora') + '</small>'
+  const conta = sel ? '<div class="gv2-v6-conta"><small>' + GV2.e(GV2.prim(sel.nome) + ' · semana de ' + GV2.ddmm(d.segunda) + ' a ' + GV2.ddmm(GV2.v6Fim(d)) + ' · até agora') + '</small>'
     + '<div><span>' + GV2.e(GV2.pl(sel.vendas, 'venda', 'vendas') + ' × 100') + '</span><b class="num">' + sel.vendas * 100 + '</b></div>'
     + '<div><span>' + GV2.e(GV2.pl(sel.reunioes, 'demo', 'demos') + ' × 25') + '</span><b class="num">' + sel.reunioes * 25 + '</b></div>'
     + '<div><span>' + GV2.e(GV2.pl(sel.visitas, 'visita', 'visitas') + ' × 3') + '</span><b class="num">' + sel.visitas * 3 + '</b></div>'
@@ -67970,7 +67972,7 @@ GV2.render.v6GavPontos = function () {
   return it(1, 'Venda feita', 'negócio que chegou em Fechado (Ganho ou Enviado Onboarding) na semana, no HubSpot · Ag. Pagamento não conta', 100)
     + it(2, 'Demo', 'negócio que entrou em Demo/Proposta no HubSpot · um por negócio na semana, mesmo que já tenha avançado', 25)
     + it(3, 'Visita na rua', 'com prova: check-in com GPS até 200 m (foto só quando o GPS não confirma) · cada restaurante uma vez na semana · sem teto por dia', 3)
-    + '<div class="gv2-v6-texto"><small>Prêmio</small><span>O 1º da semana recebe <b>R$ 250</b>. Visita e demo contam até sexta às 23:59; venda, até domingo às 23:59. O ganhador fica gravado na segunda às 08:00, aqui e no app. O pagamento é com o financeiro.</span>'
+    + '<div class="gv2-v6-texto"><small>Prêmio</small><span>O 1º da semana recebe <b>R$ 250</b>. Venda, demo e visita contam de segunda até domingo às 23:59. O ganhador fica gravado na segunda às 08:00, aqui e no app. O pagamento é com o financeiro.</span>'
     + '<small>Desempate</small><span>mais vendas → mais demos → mais visitas</span>'
     + '<small>Não conta</small><span>visita declarada sem prova · voltar no mesmo restaurante na semana · reunião marcada no app ou no HubSpot sem o negócio entrar em Demo/Proposta · negócio que sai de Fechado antes do fechamento</span></div>'
     + conta + '<span class="gv2-v6-fonte">Fonte: HubSpot (Fechado e entrada em Demo/Proposta) · visitas_com_prova · uma função só: pontos_da_semana</span>';
@@ -68125,7 +68127,7 @@ GV2.render.v6GavRanking = function () {
   const d = c.d;
   const status = d.gravado
     ? '<div class="gv2-v6-rk-ganhou"><b>' + GV2.e('Ganhador da semana: ' + d.gravado.nome + ' · ' + d.gravado.pontos + ' pts') + '</b><span>' + GV2.e('gravado em ' + GV2.ddmm(String(d.gravado.gravadoEm).slice(0, 10)) + ' · o pagamento de R$ ' + d.premio + ' é com o financeiro') + '</span></div>'
-    : '<div class="gv2-v6-rk-status">' + GV2.e(d.fechada ? GV2.v6RkSemGanhador(seg) : 'Semana em andamento · visita e demo até sexta, venda até domingo · o ganhador fica gravado na segunda às 08:00 · 1º leva R$ ' + d.premio) + '</div>';
+    : '<div class="gv2-v6-rk-status">' + GV2.e(d.fechada ? GV2.v6RkSemGanhador(seg) : 'Semana em andamento · venda, demo e visita até domingo às 23:59 · o ganhador fica gravado na segunda às 08:00 · 1º leva R$ ' + d.premio) + '</div>';
   const pontuou = d.linhas.some(function (l) { return l.pontos > 0; });
   const DIAS = ['seg', 'ter', 'qua', 'qui', 'sex'];
   const linhas = d.linhas.map(function (l) {
@@ -68241,7 +68243,7 @@ GV2.render.v7Passada = function () {
   const dias = GV2.v7Dias(seg);
   const sexta = GV2.somaDias(seg, 4);
   const feriados = [0, 1, 2, 3, 4].map(function (i) { return GV2.somaDias(seg, i); }).filter(function (iso) { return !GV2.util(iso); });
-  const cab = '<div class="gv2-v5-cab"><b>Semana de ' + GV2.e(GV2.ddmm(seg) + ' a ' + GV2.ddmm(sexta)) + '</b><span>' + GV2.e(GV2.pl(dias.length, 'dia útil', 'dias úteis') + (feriados.length ? ' (feriado ' + feriados.map(GV2.ddmm).join(', ') + ')' : '') + ' · meta por pessoa: 6 visitas por dia útil; demos e vendas pela meta do mês de cada um (8 ou 4) · venda conta até domingo') + '</span></div>';
+  const cab = '<div class="gv2-v5-cab"><b>Semana de ' + GV2.e(GV2.ddmm(seg) + ' a ' + GV2.ddmm(sexta)) + '</b><span>' + GV2.e(GV2.pl(dias.length, 'dia útil', 'dias úteis') + (feriados.length ? ' (feriado ' + feriados.map(GV2.ddmm).join(', ') + ')' : '') + ' · meta por pessoa: 6 visitas por dia útil; demos e vendas pela meta do mês de cada um (8 ou 4) · no placar, venda, demo e visita contam até domingo') + '</span></div>';
   if (!c) return '<section class="card gv2-v7">' + cab + '<div class="gv2-v6-lendo">lendo o placar da semana passada…</div></section>';
   if (c.erro) return '<section class="card gv2-v7">' + cab + '<div class="gv2-v6-lendo">' + GV2.e('— · o placar não respondeu agora; abra de novo em instantes') + '</div></section>';
   const d = c.d;
@@ -69112,7 +69114,7 @@ GV2.dv3Col4 = function (p, P) {
     + '<div class="dv3-decomp"><div><span>Vendas ' + ((L && L.vendas) || 0) + ' × 100</span><b>' + ((L && L.vendas) || 0) * 100 + '</b></div><div><span>Demos ' + ((L && L.reunioes) || 0) + ' × 25</span><b>' + ((L && L.reunioes) || 0) * 25 + '</b></div><div><span>Visitas ' + ((L && L.visitas) || 0) + ' × 3</span><b>' + ((L && L.visitas) || 0) * 3 + '</b></div></div>'
     + (passar ? '<p class="dv3-passar">' + GV2.e(passar) + '</p>' : '')
     + '<div class="dv3-mini">' + top.map(function (x) { return '<div class="' + (x === L ? 'is-eu' : '') + '"><span>' + (x.pos || '—') + 'º</span><span class="dv3-ell">' + GV2.e(nome(x)) + '</span><b>' + (x.pontos || 0) + '</b></div>'; }).join('') + '</div>'
-    + '<div class="dv3-sem-pe"><span class="t-amb">o 1º leva ' + GV2.e(GV2.v6Reais(P.premio)) + '</span><span>visita e demo até sexta, venda até domingo</span></div></section></div>';
+    + '<div class="dv3-sem-pe"><span class="t-amb">o 1º leva ' + GV2.e(GV2.v6Reais(P.premio)) + '</span><span>venda, demo e visita até domingo</span></div></section></div>';
 };
 GV2.dv3PeHTML = function (fila, i, p) {
   const b = GV2.base, ca = GV2.v8dCompromissoAnt(p), rasc = GV2.dv3Comp(p.id), ultimo = i >= fila.length - 1;
@@ -69657,7 +69659,7 @@ GV2.v8apPlacar = function () {
   const top = ls[0], max = Math.max(1, top ? top.pontos : 1);
   const nome = function (l) { const p = GV2.base.porId[String(l.ownerId)]; return p ? p.nome : (l.nome || '—'); };
   const det = function (l) { return GV2.pl(l.vendas || 0, 'venda', 'vendas') + ' · ' + GV2.pl(l.reunioes || 0, 'demo', 'demos') + ' · ' + GV2.pl(l.visitas || 0, 'visita', 'visitas'); };
-  const esq = top ? '<div class="gv2-ap-ganha"><span class="gv2-ap-sub">' + GV2.e('Melhor da semana · ' + GV2.ddmm(seg) + ' a ' + GV2.ddmm(GV2.somaDias(seg, 4))) + '</span><h2>' + GV2.e(nome(top)) + '</h2>'
+  const esq = top ? '<div class="gv2-ap-ganha"><span class="gv2-ap-sub">' + GV2.e('Melhor da semana · ' + GV2.ddmm(seg) + ' a ' + GV2.ddmm(GV2.somaDias(seg, 6))) + '</span><h2>' + GV2.e(nome(top)) + '</h2>'
     + '<b class="num t-ok">' + top.pontos + ' <small>pts · leva R$ ' + GV2.e(String(c.d.premio || 250)) + '</small></b>'
     + '<p>' + GV2.e('Por que merece: ' + GV2.v6Merece(top).replace(/ \(R\$ [^)]*\)/g, '') + '.') + '</p></div>' : '<div class="gv2-ap-ganha"><h2>Ninguém pontuou</h2></div>';
   const lista = '<div class="gv2-ap-placar">' + ls.map(function (l, i) {
@@ -72766,12 +72768,11 @@ EXH4.ini = function (nome) { const p = String(nome || '').trim().split(/\s+/); r
 
 EXH4.prazo = function (b) {
   const a = EXH.agora() || b.agora;
-  const sex = GV2.somaDias(GV2.segundaDe(a.iso), 4);
-  if (a.iso > sex) return { txt: 'visita e demo fecharam sexta · venda conta até domingo', vivo: false };
-  const dias = GV2.diasCorridos ? GV2.diasCorridos(a.iso, sex) : 0;
+  const dom = GV2.somaDias(GV2.segundaDe(a.iso), 6);
+  const dias = GV2.diasCorridos ? GV2.diasCorridos(a.iso, dom) : 0;
   const falta = dias * 1440 + (24 * 60 - 1 - a.min);
   const h = Math.floor(falta / 60), mi = falta % 60;
-  return { txt: (dias === 0 ? 'fecha hoje às 23:59' : 'fecha sexta ' + GV2.ddmm(sex) + ' às 23:59') + ' · faltam ' + (h ? h + 'h ' : '') + mi + 'min', vivo: true };
+  return { txt: (dias === 0 ? 'fecha hoje às 23:59' : 'fecha domingo ' + GV2.ddmm(dom) + ' às 23:59') + ' · faltam ' + (h ? h + 'h ' : '') + mi + 'min', vivo: true };
 };
 
 EXH4.oQueVale = function (p, b) {
@@ -72831,7 +72832,7 @@ EXH4.disputaHTML = function (p, b) {
     return '<span class="exh4-ev"><em>' + GV2.e(GV2.hhmm(GV2.minDe(x.em))) + '</em><b>' + GV2.e(EXH4.prim(x.nome)) + '</b>' + GV2.e(o) + ' <i>+' + x.pts + '</i></span>';
   }).join('');
   const rod = '<div class="exh4-gm-rod"><small>NO TIME HOJE</small><div class="exh4-evs">' + (ev || '<span class="exh4-gm-mute">ninguém pontuou ainda hoje</span>') + '</div>'
-    + '<details class="exh4-como"><summary>como pontua ›</summary><span>Venda (negócio em Fechado no HubSpot): 100 · demo (o negócio entrou em Demo/Proposta): 25, uma por negócio na semana, e conta junto com a venda · visita com prova (GPS ou foto): 3, sem teto por dia, cada restaurante uma vez na semana. Visita e demo até sexta 23:59; venda até domingo. Marcar o próximo passo não pontua.</span></details></div>';
+    + '<details class="exh4-como"><summary>como pontua ›</summary><span>Venda (negócio em Fechado no HubSpot): 100 · demo (o negócio entrou em Demo/Proposta): 25, uma por negócio na semana, e conta junto com a venda · visita com prova (GPS ou foto): 3, sem teto por dia, cada restaurante uma vez na semana. Venda, demo e visita contam até domingo 23:59. Marcar o próximo passo não pontua.</span></details></div>';
   return '<section class="exh4-gm" id="exh4Disputa"><div class="exh4-gm-g">' + col1 + col2 + col3 + '</div>' + rod + '</section>';
 };
 EXH4.pilulaHTML = function () {
@@ -76042,7 +76043,7 @@ HJ4.pintarPlacar = function () {
     return;
   }
   const P = st.P, R = P.regra || {}, L = P.linhas || [];
-  const per = e(HJ4.diaSem(P.segunda) + ' ' + HJ4.ddmm(P.segunda).slice(0, 2) + ' – ' + HJ4.diaSem(P.sexta) + ' ' + HJ4.ddmm(P.sexta));
+  const per = e(HJ4.diaSem(P.segunda) + ' ' + HJ4.ddmm(P.segunda).slice(0, 2) + ' – ' + HJ4.diaSem(GV2.v6Fim(P)) + ' ' + HJ4.ddmm(GV2.v6Fim(P)));
   const eu = L.filter(function (x) { return x.euMesmo; })[0] || null;
   const todosZero = !L.some(function (x) { return Number(x.pontos) > 0; });
   const premio = P.premio != null ? '<em class="hj4-premio">' + e('prêmio ' + GV2.rs(P.premio)) + '</em>' : '';
@@ -76088,7 +76089,7 @@ HJ4.pintarPlacar = function () {
   };
   const an = P.anterior;
   const rod = an && an.nome ? '<div class="hj4-rod"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>'
-    + e('Semana passada (' + HJ4.ddmm(an.semana).slice(0, 2) + '–' + HJ4.ddmm(GV2.somaDias(an.semana, 4)) + '): ' + an.nome + ' levou ' + (P.premio != null ? GV2.rs(P.premio) : 'o prêmio') + ' · ' + HJ4.pts(an.pontos)) + '</div>' : '';
+    + e('Semana passada (' + HJ4.ddmm(an.semana).slice(0, 2) + '–' + HJ4.ddmm(GV2.somaDias(an.semana, 6)) + '): ' + an.nome + ' levou ' + (P.premio != null ? GV2.rs(P.premio) : 'o prêmio') + ' · ' + HJ4.pts(an.pontos)) + '</div>' : '';
   const corpoR = todosZero
     ? '<div class="hj4-vazio"><b>' + e('Ninguém pontuou ainda nesta semana.') + '</b><span>' + e('A 1ª visita com prova já vale ' + HJ4.pts(R.visita) + '.') + '</span></div>'
     : '<div class="hj4-rh"><span>#</span><span>Pessoa</span><span>Pontos</span><span>Vendas</span><span>Reuniões</span><span>Visitas</span></div>'
