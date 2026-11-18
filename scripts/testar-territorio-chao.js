@@ -82,11 +82,12 @@ const R = { lido_em: '2026-11-17T14:51:00Z', hoje: '2026-11-17', semana_plano: '
   v5_fichas: [['rj', 'colibri', 206, 115, 78], ['sp', 'saipos', 89, 53, 26], ['vv', '', 2, 1, 1]] };
 
 const C = (k, nome, cid, pk, lat, lng, cli, queda, base, exc, ab) => [k, nome, cid, pk, lat, lng, cli, queda, base, exc].concat(ab || [0, 0, 0, 0, 0, 0]);
-const CHAO = { lido_em: '2026-11-17T14:52:00Z', hoje: '2026-11-17', fora: { rj: { sem: 57, total: 1627 }, sp: { sem: 48, total: 1825 }, vv: { sem: 29, total: 1169 } }, bairros: [
+const CHAO = { lido_em: '2026-11-17T14:52:00Z', hoje: '2026-11-17', fora: { rj: { sem: 57, total: 1627 }, sp: { sem: 48, total: 1825 }, vv: { sem: 29, total: 1169, cli: 4, queda: 1, base: 8, ex: 17 } }, bairros: [
   C('vv|vitoria|jardim camburi', 'JARDIM CAMBURI', 'Vitória', 'vv', -20.2576, -40.2694, 22, 3, 35, 26),
   C('vv|vitoria|jardim da penha', 'Jardim da Penha', 'Vitória', 'vv', -20.2818, -40.2992, 15, 2, 53, 12, [1, 13, 4, 0, 1, 0]),
   C('vv|vila velha|centro', 'Centro', 'Vila Velha', 'vv', -20.3300, -40.2900, 4, 0, 24, 3),
   C('vv|vitoria|centro', 'Centro', 'Vitória', 'vv', -20.3200, -40.3400, 2, 0, 10, 1),
+  C('vv|vila velha|jardim camburi', 'Jardim Camburi', 'Vila Velha', 'vv', null, null, 0, 0, 1, 0),
   C('rj|rio de janeiro|recreio dos bandeirantes', 'Recreio dos Bandeirantes', 'Rio de Janeiro', 'rj', -23.0144, -43.4587, 15, 1, 37, 10, [0, 2, 0, 0, 0, 0]),
   C('rj|rio de janeiro|barra da tijuca', 'Barra da Tijuca', 'Rio de Janeiro', 'rj', -23.0012, -43.3662, 24, 0, 138, 17),
   C('rj|rio de janeiro|campo grande', 'Campo Grande', 'Rio de Janeiro', 'rj', null, null, 12, 2, 53, 9),
@@ -134,20 +135,21 @@ const clicar = (GV2, a) => { const p = a.split(':'); return GV2.tcComando(p[0], 
   checar('a tela montou: frase, lista, mapa, chave de leitura do mapa e legenda', /class="tn-fr/.test(h) && /class="tc-lista"/.test(h) && /data-gv2-tnmapa="vv"/.test(h) && /class="tc-ov tc-m-topo"/.test(h) && /class="tc-ov tc-m-leg"/.test(h), h.slice(0, 200));
   const T = G.tc.M, M = G.tn.M;
   checar('abre na pior praça (o ES, "maior buraco") e o recorte traz o estado de cada uma', G.estado.tn.pr === 'vv' && /RJ<\/span><em> · bate/.test(h) && /SP<\/span><em> · sem dono/.test(h) && /ES<\/span><em> · maior buraco/.test(h), G.estado.tn.pr);
-  checar('ex-cliente nunca conta como ativo: 43 clientes no ES, 42 ex-clientes à parte', T.tot.vv.cli === 43 && T.tot.vv.ex === 42 && T.tot.vv.queda === 5 && T.tot.vv.base === 122, JSON.stringify(T.tot.vv));
-  checar('a frase lê o chão: clientes, bairros visitados de quantos', /No ES temos 43 clientes e o time visitou 3 de 6 bairros em 4 semanas\./.test(h), (h.match(/class="tn-fr[^>]*>([^<]*)/) || [])[1]);
-  checar('o contexto traz clientes, leads na base, visitas e os bairros com 5 clientes ou mais e nenhuma visita', /43 clientes ativos · 122 leads na base · 38 visitas com prova · 1 bairro com 5 clientes ou mais e nenhuma visita/.test(h), (h.match(/<p>([^<]*clientes ativos[^<]*)/) || [])[1]);
+  checar('ex-cliente nunca conta como ativo: 47 clientes no ES (43 com bairro + 4 sem), 59 ex-clientes à parte', T.tot.vv.cli === 47 && T.tot.vv.cliSem === 4 && T.tot.vv.ex === 59 && T.tot.vv.queda === 6 && T.tot.vv.base === 131, JSON.stringify(T.tot.vv));
+  checar('a frase lê o chão: clientes, bairros visitados de quantos', /No ES temos 47 clientes e o time visitou 3 de 7 bairros em 4 semanas\./.test(h), (h.match(/class="tn-fr[^>]*>([^<]*)/) || [])[1]);
+  checar('o contexto traz clientes, leads na base, visitas e os bairros com 5 clientes ou mais e nenhuma visita', /47 clientes ativos · 131 leads na base · 38 visitas com prova · 1 bairro com 5 clientes ou mais e nenhuma visita/.test(h), (h.match(/<p>([^<]*clientes ativos[^<]*)/) || [])[1]);
   checar('a frase abre a ficha da praça e a faixa âmbar abre Abastecer a semana', /class="tn-fr[^"]*" data-gv2="tn:praca:vv"/.test(h) && /class="tn-faixa" data-gv2="tn:abastecer"/.test(h));
   checar('o cabeçalho traz Abastecer a semana, Pessoas e Rua', /data-gv2="tn:abastecer">/.test(h) && /data-gv2="aba:pessoas">Pessoas →/.test(h) && /data-gv2="aba:rua">Rua →/.test(h));
   /* a lista: a ordem aprovada */
   const ordem = (x) => (x.match(/class="tc-l" data-tc-b="([^"]+)"/g) || []).map(s => /data-tc-b="([^"]+)"/.exec(s)[1]);
-  const esperada = ['vv|vitoria|jardim camburi', 'vv|vila velha|centro', 'vv|vitoria|jardim da penha', 'vv|vitoria|centro', 'vv|serra|lagoa de carapebus'];
+  const esperada = ['vv|vitoria|jardim camburi', 'vv|vila velha|centro', 'vv|vitoria|jardim da penha', 'vv|vitoria|centro', 'vv|serra|lagoa de carapebus', 'vv|vila velha|jardim camburi'];
   checar('Onde atacar: (clientes + leads + novos) × 2 sem visita, × 0,5 acima de 20 visitas; quem não soma nada fica fora', ordem(h).join() === esperada.join(), ordem(h).join(' > '));
   checar('os pontos são os da regra: Jardim Camburi 114, Jardim da Penha 38,5', T.por['vv|vitoria|jardim camburi'].pts === 114 && T.por['vv|vitoria|jardim da penha'].pts === 38.5, T.por['vv|vitoria|jardim camburi'].pts + ' / ' + T.por['vv|vitoria|jardim da penha'].pts);
-  checar('o motivo da linha são as parcelas da conta', /<small>22 clientes · 35 leads · nenhuma visita<\/small>/.test(h) && /<small>15 clientes · 53 leads · 9 novos esperando · 25 visitas<\/small>/.test(h), (h.match(/<small>22 clientes[^<]*/) || [])[0]);
-  checar('bairros de mesmo nome na praça ganham o município', /<b>Centro · Vila Velha<\/b>/.test(h) && /<b>Centro · Vitória<\/b>/.test(h));
+  checar('o motivo da linha são as parcelas da conta', /<small>22 clientes · 35 leads · nenhuma visita<\/small>/.test(h) && /<small>15 clientes · 53 leads · 25 visitas · 9 novos<\/small>/.test(h), (h.match(/<small>22 clientes[^<]*/) || [])[0]);
+  checar('bairros de mesmo nome e de peso ganham o município (os dois Centros)', /<b>Centro · Vila Velha<\/b>/.test(h) && /<b>Centro · Vitória<\/b>/.test(h));
+  checar('o homônimo de cadastro errado leva o município sozinho; o bairro de verdade fica com o nome limpo', /<b>Jardim Camburi<\/b>/.test(h) && /<b>Jardim Camburi · Vila Velha<\/b>/.test(h) && !/<b>Jardim Camburi · Vitória<\/b>/.test(h));
   checar('o nome do bairro em caixa alta é arrumado', /<b>Jardim Camburi<\/b>/.test(h));
-  checar('sem visita, a barra de baixo é o contorno tracejado', conta(h, /class="tc-g-v is-nada"/g) === 3 && conta(h, /class="tc-g-v"><i/g) === 2, conta(h, /class="tc-g-v is-nada"/g));
+  checar('sem visita, a barra de baixo é o contorno tracejado', conta(h, /class="tc-g-v is-nada"/g) === 4 && conta(h, /class="tc-g-v"><i/g) === 2, conta(h, /class="tc-g-v is-nada"/g));
   checar('o dono vem do território e a distância, das réguas do v5', /Rodrigo · (anda )?a [0-9,]+ km<\/em>/.test(h) && />sem dono<\/em>/.test(h), (h.match(/Rodrigo · [^<]*/) || [])[0]);
   checar('um só vermelho na primeira tela: a primeira ação da lista (Cobrar Rodrigo, em Jardim Camburi)', conta(h, /is-verm/g) === 1 && /class="tn-bt is-verm" data-gv2="tccobrar:tc:b:vv\|vitoria\|jardim camburi:2026-11-17">Cobrar Rodrigo</.test(h), (h.match(/class="tn-bt is-verm"[^>]*>[^<]*/g) || []).join(' | '));
   checar('a linha inteira abre a ficha do bairro e o pé traz a legenda e "Como a ordem é feita"', /class="tc-l-f" data-gv2="tn:b:vv\|vitoria\|jardim camburi"/.test(h) && /data-gv2="tn:conta:ordem">Como a ordem é feita</.test(h) && /class="tc-leg"/.test(h));
@@ -160,7 +162,7 @@ const clicar = (GV2, a) => { const p = a.split(':'); return GV2.tcComando(p[0], 
   /* ── Todas ── */
   h = G.render.terr();
   checar('em Todas a lista mistura as praças, com a etiqueta de cada uma', /class="tc-l-pr">RJ</.test(h) && /class="tc-l-pr">SP</.test(h) && /class="tc-l-pr">ES</.test(h) && ordem(h).length === 8, ordem(h).length);
-  checar('em Todas a frase soma as três praças e abre a conta', /Temos 106 clientes e o time visitou/.test(h) && /data-gv2="tn:conta:chao"/.test(h), (h.match(/class="tn-fr[^>]*>([^<]*)/) || [])[1]);
+  checar('em Todas a frase soma as três praças e abre a conta', /Temos 110 clientes e o time visitou/.test(h) && /data-gv2="tn:conta:chao"/.test(h), (h.match(/class="tn-fr[^>]*>([^<]*)/) || [])[1]);
   let Mp = G.tn.mapa;
   checar('em Todas o mapa é um ponto por praça, com nome, e o clique entra na praça', Mp.k === 'todas' && Mp.pts.length === 3 && Mp.pts.every(p => /^tn:pr:(rj|sp|vv)$/.test(p.cmd) && /clientes?$/.test(p.rot)), Mp.pts.map(p => p.cmd + ' ' + p.rot).join(' | '));
 
@@ -230,7 +232,7 @@ const clicar = (GV2, a) => { const p = a.split(':'); return GV2.tcComando(p[0], 
   checar('Cobrar no bairro sem lead novo: o aviso vai ao dono com o que temos lá e que ninguém foi', cobrado && cobrado.id === '31' && /em Jardim Camburi temos 22 clientes nossos e 35 leads na base\. Ninguém fez visita com prova lá em 4 semanas/.test(cobrado.texto) && /Põe um dia em Jardim Camburi no plano\?$/.test(cobrado.texto) && cobrado.chave === 'tc:b:vv|vitoria|jardim camburi:2026-11-17', cobrado && cobrado.texto);
   checar('depois de cobrado o botão vira "Cobrado" (não cobra duas vezes)', /Cobrado/.test(G.render.terr()) && (function () { const antes = cobrado; cobrado = null; G.tcComando('tccobrar', 'tccobrar:tc:b:vv|vitoria|jardim camburi:2026-11-17'.split(':')); return cobrado === null && !!antes; })());
   clicar(G, 'tn:praca:vv'); g = gav();
-  checar('ficha da praça: o chão em cima e os blocos de sempre embaixo', g.rot === 'Ficha da praça' && g.corpo.indexOf('O chão · o que temos e o que fizemos') < g.corpo.indexOf('Leads novos') && />Clientes ativos<\/span><b class="num">43</.test(g.corpo) && />Bairros visitados<\/span><b class="num">3 de 6</.test(g.corpo) && /Caem onde o time anda/.test(g.corpo) && conta(g.corpo, /class="tn-passo"/g) === 5, g.corpo.slice(0, 160).replace(/<[^>]+>/g, ' '));
+  checar('ficha da praça: o chão em cima e os blocos de sempre embaixo', g.rot === 'Ficha da praça' && g.corpo.indexOf('O chão · o que temos e o que fizemos') < g.corpo.indexOf('Leads novos') && />Clientes ativos<\/span><b class="num">47</.test(g.corpo) && /6 em queda de uso · 4 sem bairro no cadastro/.test(g.corpo) && />Bairros visitados<\/span><b class="num">3 de 7</.test(g.corpo) && /Caem onde o time anda/.test(g.corpo) && conta(g.corpo, /class="tn-passo"/g) === 5, g.corpo.slice(0, 160).replace(/<[^>]+>/g, ' '));
   clicar(G, 'tn:lista:chaob:vv'); g = gav();
   checar('"5 clientes ou mais e nenhuma visita" abre os bairros, e o bairro abre a ficha', /data-gv2="tn:b:vv\|vitoria\|jardim camburi"/.test(g.corpo) && conta(g.corpo, /class="tn-ll is-3" data-gv2/g) === 1);
   clicar(G, 'tn:conta:ordem'); g = gav();
@@ -269,6 +271,8 @@ const clicar = (GV2, a) => { const p = a.split(':'); return GV2.tcComando(p[0], 
 
   /* ── o estilo ── */
   const css = tpl.slice(tpl.indexOf('/* tc:css:ini */'), tpl.indexOf('/* tc:css:fim */'));
+  checar('a lista nunca corta uma linha: se não couber, rola por dentro', /\.tc-l-corpo\{[^}]*overflow-y:auto/.test(css));
+  checar('a chave de leitura tem alvo de 36 px', /\.tc-chave button\{height:36px/.test(css));
   checar('a lista tem 680 px e o mapa fica com o resto', /\.tc-grade\{[^}]*grid-template-columns:680px minmax\(0,1fr\)/.test(css));
   checar('nenhum texto menor que 11 px no estilo novo', !(css.match(/font(?:-size)?:[^;]*?\b(\d+(?:\.\d+)?)px/g) || []).some(s => Number(/(\d+(?:\.\d+)?)px/.exec(s)[1]) < 11), (css.match(/font(?:-size)?:[^;]*?\b([0-9]|10)(\.\d+)?px[^;]*/g) || []).join(' | '));
   checar('no celular: a lista primeiro, o mapa no botão flutuante de 48 px e os alvos com 44 px', /@media \(max-width:760px\)\{[\s\S]*\.tc-mapa-w\{display:none;\}[\s\S]*\.tc-flut\{[^}]*height:48px/.test(css) && /\.tc-chave button\{height:44px/.test(css));
@@ -282,7 +286,7 @@ const clicar = (GV2, a) => { const p = a.split(':'); return GV2.tcComando(p[0], 
   const sab2 = codigo.replace('b.cli = Number(a[6]) || 0;', 'b.cli = (Number(a[6]) || 0) + (Number(a[9]) || 0);');
   checar('a sabotagem 2 foi aplicada', sab2 !== codigo);
   const S2 = await abrir(sab2);
-  checar('sabotada (ex-cliente somado como ativo), a conta de clientes acusa', S2.GV2.tc.M.tot.vv.cli === 85 && !/No ES temos 43 clientes/.test(S2.h));
+  checar('sabotada (ex-cliente somado como ativo), a conta de clientes acusa', S2.GV2.tc.M.tot.vv.cli === 89 && !/No ES temos 47 clientes/.test(S2.h));
   const sab3 = codigo.replace("class=\"tn-bt\" data-gv2=\"aba:pessoas\">Pessoas →</button>'\n", "class=\"tn-bt is-verm\" data-gv2=\"aba:pessoas\">Pessoas →</button>'\n");
   checar('a sabotagem 3 foi aplicada', sab3 !== codigo);
   const S3 = await abrir(sab3);
