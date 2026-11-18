@@ -80243,6 +80243,9 @@ GV2.tcModelo = function (M, R) {
       if (b.lat == null && t.lat != null) { b.lat = Number(t.lat); b.lng = Number(t.lng); }
       b.donoId = t.donoId || null; b.dono = t.dono || null; b.cor = t.cor || null; b.dd = t.dd; b.ddOnde = t.ddOnde; b.best = t.best || null;
     });
+    const vezes = {};
+    lista.forEach(function (b) { const n = GV2.pv2Chave(b.nome); vezes[n] = (vezes[n] || 0) + 1; });
+    lista.forEach(function (b) { if (vezes[GV2.pv2Chave(b.nome)] > 1) { const mun = String(b.k).split('|')[1]; if (mun) b.nome = b.nome + ' · ' + GV2.t4Bairro(mun); } });
     const tot = { cli: 0, queda: 0, base: 0, ex: 0, nb: 0, nv: 0, sem5: 0, semPonto: 0 };
     lista.forEach(function (b) {
       if (!b.tn) {
@@ -80288,8 +80291,10 @@ GV2.tcBairros = function (T, pr) {
 GV2.tcEstado = function (b) {
   if (!b.donoId) return { t: 'sem dono', k: 'acao', longo: 'sem dono' };
   const foi = (b.quem || []).some(function (q) { return String(q.id) === String(b.donoId); });
-  if (foi || b.dd <= GV2.T5.ANDA) return { t: 'anda lá', k: 'ok', longo: 'anda lá' };
+  if (foi) return { t: 'anda lá', k: 'ok', longo: 'anda lá' };
   if (!isFinite(b.dd)) return { t: 'não foi lá', k: 'acao', longo: 'não foi lá em 4 semanas' };
+
+  if (b.dd <= GV2.T5.ANDA) return { t: b.dd < .05 ? 'anda lá' : 'anda a ' + GV2.t5Km(b.dd), k: 'ok', longo: b.dd < .05 ? 'anda lá' : 'anda a ' + GV2.t5Km(b.dd) + ' daqui' };
   if (b.dd <= GV2.T5.PERTO) return { t: 'a ' + GV2.t5Km(b.dd), k: 'av', longo: 'anda a ' + GV2.t5Km(b.dd) };
   return { t: 'a ' + GV2.t5Km(b.dd), k: 'acao', longo: 'longe: está a ' + GV2.t5Km(b.dd) };
 };
@@ -80310,7 +80315,7 @@ GV2.tcAtacar = function (T, pr) {
 GV2.tcAcao = function (M, b, verm) {
   if (b.tn) { const a = GV2.tnAcaoBairro(M, b.tn, verm); if (a) return a; }
   if (!b.donoId || !(b.soma > 0)) return '';
-  if (GV2.tcEstado(b).k === 'ok') return '';
+  if (b.vis > 0 && GV2.tcEstado(b).k === 'ok') return '';
   return GV2.tnBtCobrar('tc:b:' + b.k + ':' + M.hoje, 'Cobrar ' + GV2.t4Nome(b.dono), verm, 'tccobrar');
 };
 GV2.tcCobrar = async function (chave) {
@@ -80476,7 +80481,7 @@ GV2.tcPessoas = function (M, T, pr) {
 GV2.render.tcDono = function (M, T) {
   const s = GV2.tcS(), ps = GV2.tcPessoas(M, T, s.pr), C = { lim: GV2.TC.LIMITE, amb: GV2.TC.AMBAR };
   if (!ps.length) return '<div class="tc-l-corpo"><p class="tc-vazio">Ninguém do time neste recorte.</p></div>';
-  const mxB = Math.max.apply(null, ps.map(function (x) { return Math.max(x.visitou, x.dono); }).concat([1])), mxS = Math.max.apply(null, ps.map(function (x) { return x.sem; }).concat([C.lim * 2]));
+  const mxB = Math.max.apply(null, ps.map(function (x) { return x.visitou; }).concat([1])), mxS = Math.max.apply(null, ps.map(function (x) { return x.sem; }).concat([C.lim * 2]));
   const cab = '<div class="tc-d is-cab" aria-hidden="true"><span>Pessoa</span><span>Bairros que visitou</span><span>A fila dura</span><span>Visitas</span></div>';
   const linhas = ps.map(function (x) {
     const tom = x.sem > C.lim ? 'acao' : x.sem >= C.amb ? 'av' : 'ok', on = s.pes === x.id;
