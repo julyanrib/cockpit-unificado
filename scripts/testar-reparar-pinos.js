@@ -1,6 +1,6 @@
 // scripts/testar-reparar-pinos.js — as regras do reparador de pinos (scripts/reparar-pinos.js).
 // Uso: node scripts/testar-reparar-pinos.js
-const { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo } = require('./reparar-pinos.js');
+const { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo, separarNumero } = require('./reparar-pinos.js');
 
 let ok = 0; const falhas = [];
 function conferir(nome, cond, porque) { if (cond) ok++; else falhas.push(nome + ' — ' + porque); }
@@ -33,6 +33,17 @@ conferir('porta com número do vizinho vira rua', nivelConferido('porta', '1480'
 conferir('estabelecimento sem número vira rua', nivelConferido('porta', undefined, '1500') === 'rua', 'POI sem número pode ser outro lugar da rua');
 conferir('sem número pedido nunca é porta', nivelConferido('porta', '10', null) === 'rua', 'S/N não tem porta para conferir');
 conferir('zeros à esquerda conferem', nivelConferido('porta', '00264', '264') === 'porta', '00264 = 264');
+
+const s1 = separarNumero('AVENIDA DAS AMERICAS, 00500', null);
+conferir('número dentro do endereço é separado', s1.rua === 'AVENIDA DAS AMERICAS' && s1.num === '500', JSON.stringify(s1));
+const s2 = separarNumero('Rua Madre de Deus, 567', '');
+conferir('número com campo vazio vem do endereço', s2.rua === 'Rua Madre de Deus' && s2.num === '567', JSON.stringify(s2));
+const s3 = separarNumero('Rua X, 120', '45');
+conferir('o campo número vence o endereço', s3.num === '45', JSON.stringify(s3));
+const s4 = separarNumero('Rua Dezenove de Fevereiro', null);
+conferir('número no nome da rua não é número', s4.num === null, JSON.stringify(s4));
+const s5 = separarNumero('Rua Dois, 80A', null);
+conferir('80A vira 80', s5.num === '80' && s5.rua === 'Rua Dois', JSON.stringify(s5));
 
 if (falhas.length) { console.log('reparar pinos: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length)); falhas.forEach((f) => console.log('  ✗ ' + f)); process.exit(1); }
 console.log('reparar pinos: ' + ok + ' verificações ok');
