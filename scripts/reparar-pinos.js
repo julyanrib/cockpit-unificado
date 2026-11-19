@@ -26,6 +26,7 @@
 //   node scripts/reparar-pinos.js --seco            (padrão) mostra o que faria, não grava
 //   node scripts/reparar-pinos.js --aplicar         grava (o agendamento roda este)
 //   node scripts/reparar-pinos.js --limite 300      quantos pinos tentar nesta rodada (padrão 300)
+//   node scripts/reparar-pinos.js --repetir-rua     tenta de novo os que só acharam a rua (ignora os 14 dias)
 //
 // Variáveis: SUPABASE_URL, SUPABASE_SERVICE_KEY (os mesmos segredos do robô diário).
 
@@ -33,11 +34,12 @@ const SUPA = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const KEY = process.env.SUPABASE_SERVICE_KEY;
 
 function lerArgs(argv) {
-  const a = { aplicar: false, limite: 300 };
+  const a = { aplicar: false, limite: 300, repetirRua: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--aplicar') a.aplicar = true;
     else if (argv[i] === '--seco') a.aplicar = false;
     else if (argv[i] === '--limite') a.limite = Math.max(1, Number(argv[++i]) || 300);
+    else if (argv[i] === '--repetir-rua') a.repetirRua = true;
   }
   return a;
 }
@@ -55,6 +57,18 @@ function numeroLimpo(n) {
   const d = t.match(/\d+/);
   return d ? String(Number(d[0])) : null;
 }
+/* O NÚMERO MUITAS VEZES ESTÁ DENTRO DO ENDEREÇO ('AVENIDA DAS AMERICAS, 00500') com o campo número
+   vazio — 819 dos 1.757 aproximados em 19/11. Sem separar, o provedor devolvia o meio da avenida e
+   19 clientes de números entre 500 e 8.585 caíram no mesmo ponto. */
+function separarNumero(endereco, numero) {
+  const rua = limpo(endereco);
+  const n = numeroLimpo(numero);
+  if (n || !rua) return { rua, num: n };
+  const m = rua.match(/^(.*?),\s*(\d+)\s*[A-Za-z]?\s*$/);
+  if (!m) return { rua, num: null };
+  return { rua: m[1].trim(), num: numeroLimpo(m[2]) };
+}
+
 function km(a, b, c, d) {
   const R = 6371, r = Math.PI / 180, x = (c - a) * r, y = (d - b) * r;
   const h = Math.sin(x / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(y / 2) ** 2;
@@ -152,13 +166,18 @@ async function main() {
   const pilha = new Map();
   for (const c of todos) { const k = c.latitude + ',' + c.longitude; pilha.set(k, (pilha.get(k) || 0) + 1); }
 
-  const tentativas = await lerTudo('geocode_repair_attempts?select=client_id,last_attempt_at&last_reason=like.gh:*');
+  const tentativas = await lerTudo('geocode_repair_attempts?select=client_id,last_attempt_at,last_reason&last_reason=like.gh:*');
   const corte = Date.now() - DIAS_ENTRE_TENTATIVAS * 864e5;
-  const recente = new Set(tentativas.filter((t) => new Date(t.last_attempt_at).getTime() > corte).map((t) => t.client_id));
+  const recente = new Set(tentativas
+    .filter((t) => new Date(t.last_attempt_at).getTime() > corte)
+    .filter((t) => !(a.repetirRua && String(t.last_reason).startsWith('gh:rua')))
+    .map((t) => t.client_id));
 
   const fila = todos
     .filter((c) => c.geo_approximate === true && limpo(c.endereco) && limpo(c.cidade) && limpo(c.estado) && !recente.has(c.id))
     .map((c) => ({ c, praca: PRACAS.has(semAcento(c.cidade)), n: pilha.get(c.latitude + ',' + c.longitude) || 1 }))
+    // quem já está na rua e ainda não tem número para conferir não ganha nada tentando de novo
+    .filter((x) => !(a.repetirRua && tentativas.some((t) => t.client_id === x.c.id && String(t.last_reason).startsWith('gh:rua')) && !separarNumero(x.c.endereco, x.c.numero).num))
     .sort((x, y) => (y.praca - x.praca) || (y.n - x.n));
   const rodada = fila.slice(0, a.limite);
 
@@ -169,7 +188,8 @@ async function main() {
   let falhasSeguidas = 0;
   for (let i = 0; i < rodada.length; i++) {
     const { c, n } = rodada[i];
-    const rua = limpo(c.endereco), num = numeroLimpo(c.numero), cid = limpo(c.cidade), uf = limpo(c.estado);
+    const { rua, num } = separarNumero(c.endereco, c.numero);
+    const cid = limpo(c.cidade), uf = limpo(c.estado);
     const lat0 = Number(c.latitude), lon0 = Number(c.longitude);
 
     let res = await photon(rua, num, cid, uf);
@@ -214,4 +234,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message || e); process.exit(1); });
-module.exports = { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo, semAcento };
+module.exports = { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo, separarNumero, semAcento };
