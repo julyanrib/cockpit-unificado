@@ -13,7 +13,8 @@
 // AS REGRAS (as mesmas da função do Supabase — mudar uma é mudar a outra):
 //   - Só mexe em pino que se declara APROXIMADO (geo_approximate = true). Pino exato não é tocado.
 //   - Só aceita resultado na MESMA cidade do cadastro e a menos de 60 km do ponto atual.
-//   - Acertou a PORTA (número da casa ou o estabelecimento): move e marca preciso (geo_approximate=false).
+//   - Acertou a PORTA — o provedor devolveu o MESMO número pedido: move e marca preciso
+//     (geo_approximate=false). Número diferente (o vizinho) ou estabelecimento sem número vale RUA.
 //   - Acertou só a RUA: move, mas continua aproximado, e só quando o ponto atual é uma pilha de 3+
 //     clientes (o centro da cidade) — rua certa é melhor que a praça da cidade; pino já espalhado fica.
 //   - O flag decide o raio da prova de visita (200 m preciso × 500 m aproximado): nunca afirmar
@@ -98,6 +99,13 @@ function nivelNominatim(h) {
   return 'rua';
 }
 
+/* Porta só com o número conferido: o provedor às vezes devolve o vizinho com toda a confiança. */
+function nivelConferido(nivel, numeroDevolvido, numeroPedido) {
+  if (nivel !== 'porta') return nivel;
+  if (!numeroPedido) return 'rua';
+  return numeroLimpo(numeroDevolvido) === numeroPedido ? 'porta' : 'rua';
+}
+
 async function pegar(url) {
   try {
     const r = await fetch(url, { headers: UA });
@@ -110,10 +118,11 @@ async function photon(rua, num, cid, uf) {
   const r = await pegar('https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=5&lang=default&bbox=-74,-34,-34,6');
   if (r.falha) return { falha: r.falha };
   const feats = (r.data?.features ?? []).filter((f) => semAcento(f?.properties?.city ?? f?.properties?.county) === semAcento(cid));
-  const f = feats.find((x) => nivelPhoton(x.properties) === 'porta') ?? feats.find((x) => nivelPhoton(x.properties) === 'rua') ?? feats[0];
+  const nv = (x) => nivelConferido(nivelPhoton(x.properties), x.properties?.housenumber, num);
+  const f = feats.find((x) => nv(x) === 'porta') ?? feats.find((x) => nv(x) === 'rua') ?? feats[0];
   if (!f) return null;
   const [lon, lat] = f.geometry.coordinates;
-  return { lat, lon, nivel: nivelPhoton(f.properties), fonte: 'photon', q };
+  return { lat, lon, nivel: nv(f), fonte: 'photon', q };
 }
 async function nominatim(rua, num, cid, uf) {
   const p = new URLSearchParams({ street: [num, rua].filter(Boolean).join(' '), city: cid, state: uf, country: 'Brasil',
@@ -121,9 +130,10 @@ async function nominatim(rua, num, cid, uf) {
   const r = await pegar('https://nominatim.openstreetmap.org/search?' + p);
   if (r.falha) return { falha: r.falha };
   const hits = (r.data ?? []).filter((h) => semAcento(h?.address?.city ?? h?.address?.town ?? h?.address?.municipality) === semAcento(cid));
-  const h = hits.find((x) => nivelNominatim(x) === 'porta') ?? hits.find((x) => nivelNominatim(x) === 'rua');
+  const nv = (x) => nivelConferido(nivelNominatim(x), x?.address?.house_number, num);
+  const h = hits.find((x) => nv(x) === 'porta') ?? hits.find((x) => nv(x) === 'rua');
   if (!h) return null;
-  return { lat: Number(h.lat), lon: Number(h.lon), nivel: nivelNominatim(h), fonte: 'nominatim', q: p.get('street') + ', ' + cid };
+  return { lat: Number(h.lat), lon: Number(h.lon), nivel: nv(h), fonte: 'nominatim', q: p.get('street') + ', ' + cid };
 }
 
 /* Decide o que fazer com UM pino. Pura: recebe o que os provedores responderam. */
@@ -204,4 +214,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message || e); process.exit(1); });
-module.exports = { decidir, nivelPhoton, nivelNominatim, numeroLimpo, semAcento };
+module.exports = { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo, semAcento };
