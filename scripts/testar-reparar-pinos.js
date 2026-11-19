@@ -1,6 +1,6 @@
 // scripts/testar-reparar-pinos.js — as regras do reparador de pinos (scripts/reparar-pinos.js).
 // Uso: node scripts/testar-reparar-pinos.js
-const { decidir, nivelPhoton, nivelNominatim, numeroLimpo } = require('./reparar-pinos.js');
+const { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo } = require('./reparar-pinos.js');
 
 let ok = 0; const falhas = [];
 function conferir(nome, cond, porque) { if (cond) ok++; else falhas.push(nome + ' — ' + porque); }
@@ -27,6 +27,12 @@ conferir('Nominatim bairro é impreciso', nivelNominatim({ addresstype: 'suburb'
 conferir('S/N vira sem número', numeroLimpo('S/N') === null && numeroLimpo('s/nº') === null, 's/n');
 conferir('zeros à esquerda saem', numeroLimpo('00264') === '264', '00264');
 conferir('só zeros vira sem número', numeroLimpo('00') === null, '00');
+
+conferir('porta com o mesmo número continua porta', nivelConferido('porta', '1500', '1500') === 'porta', 'número conferido');
+conferir('porta com número do vizinho vira rua', nivelConferido('porta', '1480', '1500') === 'rua', 'o vizinho não é a porta — afirmaria precisão falsa');
+conferir('estabelecimento sem número vira rua', nivelConferido('porta', undefined, '1500') === 'rua', 'POI sem número pode ser outro lugar da rua');
+conferir('sem número pedido nunca é porta', nivelConferido('porta', '10', null) === 'rua', 'S/N não tem porta para conferir');
+conferir('zeros à esquerda conferem', nivelConferido('porta', '00264', '264') === 'porta', '00264 = 264');
 
 if (falhas.length) { console.log('reparar pinos: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length)); falhas.forEach((f) => console.log('  ✗ ' + f)); process.exit(1); }
 console.log('reparar pinos: ' + ok + ' verificações ok');
