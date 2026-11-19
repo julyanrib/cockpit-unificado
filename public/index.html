@@ -17584,7 +17584,8 @@ function kb7Janela(lead, de, para) {
 const KB7_ONB_CAMPOS = [
   { p: 'estrutura_do_cliente', r: 'Estrutura do cliente', t: 'chips', ob: true, op: [['Loja Única', 'Loja única'], ['Rede Própria (múltiplas lojas)', 'Rede própria'], ['Franquia', 'Franquia']] },
   { p: 'quando_vai_comecar_a_usar', r: 'Quando vai começar a usar', t: 'data', ob: true },
-  { p: 'perfil_do_cliente', r: 'Perfil do cliente', t: 'chips', ob: true, op: [['lead_low', 'P'], ['lead_mid', 'M'], ['lead_high', 'G'], ['GG', 'GG'], ['Isento', 'Isento'], ['Revendedor', 'Revendedor']] },
+
+  { p: 'perfil_do_cliente', r: 'Tamanho do cliente', t: 'chips', ob: true, semPre: true, op: [['lead_low', 'P'], ['lead_mid', 'M'], ['lead_high', 'G'], ['GG', 'GG'], ['Isento', 'Isento'], ['Revendedor', 'Revendedor']] },
   { p: 'instagram', r: 'Instagram', t: 'texto', ob: true, ph: '@daloja' },
   { p: 'criar_grupo_automaticamente_', r: 'Criar grupo de WhatsApp automaticamente?', t: 'chips', ob: true, op: [['true', 'Sim'], ['false', 'Não']] },
   { p: 'multilojas_', r: 'Multilojas?', t: 'chips', ob: true, op: [['true', 'Sim'], ['false', 'Não']] },
@@ -17606,6 +17607,18 @@ function kb7LerArquivo(arq) {
     fr.readAsDataURL(arq);
   });
 }
+
+const KB7_TAMANHO_ROT = { lead_low: 'P', lead_mid: 'M', lead_high: 'G', GG: 'GG', Isento: 'Isento', Revendedor: 'Revendedor' };
+function kb7TamanhoDica(lead) {
+  const partes = [];
+  const robo = KB7_TAMANHO_ROT[String(lead.perfil_do_cliente || '')];
+  if (robo) partes.push('O robô do HubSpot marcou ' + robo + ' pelo MRR.');
+  const mrr = typeof fn2Valor === 'function' ? fn2Valor(lead) : 0;
+  const bf = typeof pc9PromoValida === 'function' && pc9PromoValida() && String(lead.periodo_contratado || '') === 'Semestral';
+  if (bf && mrr) partes.push('Se fechou na Black Friday (semestral −50%), ' + kb7Rs(mrr) + '/mês é metade: sem o desconto seriam ' + kb7Rs(mrr * 2) + '/mês.');
+  partes.push('Escolha pelo tamanho real do cliente, não pelo valor com desconto.');
+  return partes.join(' ');
+}
 function kb7JanelaOnboarding(lead) {
   const valor = typeof fn2Valor === 'function' ? fn2Valor(lead) : 0;
   const leitura = function (rot, v, vazio) {
@@ -17614,11 +17627,11 @@ function kb7JanelaOnboarding(lead) {
   };
   const campoHTML = function (c) {
     const rot = '<b class="kb7-falta' + (c.ob ? '' : ' is-livre') + '" data-kb7-ob="' + c.p + '">' + esc(c.r) + (c.ob ? ' · obrigatório' : ' (opcional)') + '</b>';
-    const atual = lead[c.p];
+    const atual = c.semPre ? '' : lead[c.p];
     if (c.t === 'chips') {
       return '<div class="kb7-campo">' + rot + '<div class="kb7-chips" data-kb7-grupo="' + c.p + '">'
         + c.op.map(function (o) { return '<button type="button" class="kb7-chip" data-kb7-chip="' + esc(o[0]) + '" aria-pressed="' + (String(atual) === o[0]) + '">' + esc(o[1]) + '</button>'; }).join('')
-        + '</div></div>';
+        + '</div>' + (c.semPre ? '<span class="kb7-dica-campo" data-kb7-tamanho-dica>' + esc(kb7TamanhoDica(lead)) + '</span>' : '') + '</div>';
     }
     if (c.t === 'area') return '<div class="kb7-campo">' + rot + '<textarea class="kb7-input is-area" rows="2" data-kb7-onb-campo="' + c.p + '" placeholder="' + esc(c.ph || '') + '">' + esc(atual || '') + '</textarea></div>';
     return '<div class="kb7-campo">' + rot + '<input type="' + (c.t === 'data' ? 'date' : 'text') + '" class="kb7-input" data-kb7-onb-campo="' + c.p + '"'
@@ -17648,7 +17661,7 @@ function kb7JanelaOnboarding(lead) {
     + '<button type="button" class="kb7-btn is-acao" data-kb7-j="ok" disabled>Enviar para onboarding</button></div></div>';
   document.body.appendChild(veu);
   const escolha = {};
-  KB7_ONB_CAMPOS.forEach(function (c) { if (c.t === 'chips' && c.op.some(function (o) { return o[0] === String(lead[c.p]); })) escolha[c.p] = String(lead[c.p]); });
+  KB7_ONB_CAMPOS.forEach(function (c) { if (c.t === 'chips' && !c.semPre && c.op.some(function (o) { return o[0] === String(lead[c.p]); })) escolha[c.p] = String(lead[c.p]); });
   let anexos = [];
   const campo = k => String((veu.querySelector('[data-kb7-onb-campo="' + k + '"]') || {}).value || '').trim();
   const valorDe = function (c) { return c.t === 'chips' ? (escolha[c.p] || '') : campo(c.p); };
