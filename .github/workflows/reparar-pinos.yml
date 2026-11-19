@@ -1,0 +1,43 @@
+name: Reparar pinos aproximados
+
+# O Nominatim e o Photon bloqueiam os servidores do Supabase (403 desde ~27/10/26), e o reparador de
+# lá deixou de reparar. Do GitHub os dois respondem: aqui se acha a coordenada e se grava no banco do
+# APP. Só provedores grátis ("repare os pinos mas sem gasto", Julyan 29/10). Regras em
+# scripts/reparar-pinos.js. À mão, "seco" mostra o que faria sem gravar.
+
+on:
+  schedule:
+    # todo dia às 04:40 de Brasília (07:40 UTC), antes de o time abrir o mapa
+    - cron: '40 7 * * *'
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "seco = só mostrar o que faria; aplicar = gravar"
+        required: false
+        default: "seco"
+      limite:
+        description: "Quantos pinos tentar nesta rodada"
+        required: false
+        default: "300"
+
+permissions:
+  contents: read
+
+jobs:
+  reparar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Reparar pinos
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/reparar-pinos.js ${{ (github.event_name == 'schedule' || github.event.inputs.modo == 'aplicar') && '--aplicar' || '--seco' }} --limite ${{ github.event.inputs.limite || '300' }}
