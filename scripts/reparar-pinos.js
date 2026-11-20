@@ -94,6 +94,14 @@ async function lerTudo(caminho) {
   return out;
 }
 
+/* Tentativa que não move o pino (guarda a posição, para a fila respeitar os 14 dias). */
+async function registrarSemMover(c, motivo) {
+  await rest('geocode_repair_attempts?on_conflict=client_id', { method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({
+      client_id: c.id, attempts: 1, last_attempt_at: new Date().toISOString(), last_status: 'skipped',
+      last_reason: motivo, last_query: 'de:' + c.latitude + ',' + c.longitude, last_error: null, last_repaired_at: null }) });
+}
+
 /* ── níveis do acerto ─────────────────────────────────────────────────────────────────────────── */
 function nivelPhoton(p) {
   const tipo = String(p?.type ?? '').toLowerCase(), chave = String(p?.osm_key ?? '').toLowerCase();
@@ -127,6 +135,18 @@ async function pegar(url) {
     return { data: await r.json() };
   } catch (e) { return { falha: String(e.message || e) }; }
 }
+/* CEP que identifica rua: 8 dígitos e não terminado em 000 (o 000 é o CEP geral da cidade). */
+function cepUtil(cep) {
+  const d = String(cep ?? '').replace(/\D/g, '');
+  return d.length === 8 && !d.endsWith('000') ? d : null;
+}
+async function ruaDoCep(cep) {
+  const d = cepUtil(cep);
+  if (!d) return null;
+  const r = await pegar('https://viacep.com.br/ws/' + d + '/json/');
+  return r.data && !r.data.erro ? limpo(r.data.logradouro) : null;
+}
+
 async function photon(rua, num, cid, uf) {
   const q = [[rua, num].filter(Boolean).join(' '), cid, uf].join(', ');
   const r = await pegar('https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=5&lang=default&bbox=-74,-34,-34,6');
@@ -162,7 +182,7 @@ async function main() {
   const a = lerArgs(process.argv.slice(2));
   if (!SUPA || !KEY) { console.error('Faltam SUPABASE_URL e SUPABASE_SERVICE_KEY.'); process.exit(1); }
 
-  const todos = await lerTudo('clients?select=id,endereco,numero,cidade,estado,latitude,longitude,geo_approximate&latitude=not.is.null&order=id');
+  const todos = await lerTudo('clients?select=id,endereco,numero,cidade,estado,cep,latitude,longitude,geo_approximate&latitude=not.is.null&order=id');
   const pilha = new Map();
   for (const c of todos) { const k = c.latitude + ',' + c.longitude; pilha.set(k, (pilha.get(k) || 0) + 1); }
 
@@ -174,7 +194,7 @@ async function main() {
     .map((t) => t.client_id));
 
   const fila = todos
-    .filter((c) => c.geo_approximate === true && limpo(c.endereco) && limpo(c.cidade) && limpo(c.estado) && !recente.has(c.id))
+    .filter((c) => c.geo_approximate === true && (limpo(c.endereco) || cepUtil(c.cep)) && limpo(c.cidade) && limpo(c.estado) && !recente.has(c.id))
     .map((c) => ({ c, praca: PRACAS.has(semAcento(c.cidade)), n: pilha.get(c.latitude + ',' + c.longitude) || 1 }))
     // quem já está na rua e ainda não tem número para conferir não ganha nada tentando de novo
     .filter((x) => !(a.repetirRua && tentativas.some((t) => t.client_id === x.c.id && String(t.last_reason).startsWith('gh:rua')) && !separarNumero(x.c.endereco, x.c.numero).num))
@@ -188,7 +208,12 @@ async function main() {
   let falhasSeguidas = 0;
   for (let i = 0; i < rodada.length; i++) {
     const { c, n } = rodada[i];
-    const { rua, num } = separarNumero(c.endereco, c.numero);
+    let { rua, num } = separarNumero(c.endereco, c.numero);
+    if (!rua) {
+      // sem o nome da rua no cadastro, o CEP diz qual é (ViaCEP, grátis); o endereço gravado não muda
+      rua = await ruaDoCep(c.cep);
+      if (!rua) { conta.nada++; if (a.aplicar) await registrarSemMover(c, 'gh:nada:sem_rua'); await sleep(400); continue; }
+    }
     const cid = limpo(c.cidade), uf = limpo(c.estado);
     const lat0 = Number(c.latitude), lon0 = Number(c.longitude);
 
@@ -234,4 +259,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e.message || e); process.exit(1); });
-module.exports = { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo, separarNumero, semAcento };
+module.exports = { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo, separarNumero, cepUtil, semAcento };
