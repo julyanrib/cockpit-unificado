@@ -16359,7 +16359,33 @@ async function iniciarAuth() {
     return;
   }
 
-  supa = window.supabase.createClient(DATA.supabase.url, DATA.supabase.anonKey);
+  /* O COMPUTADOR ACORDOU E O QUADRO FICOU VAZIO (auditoria de 19/11/26). Com o notebook dormindo,
+     o login vence; ao acordar, o Cockpit pede os dados ANTES de o supabase-js terminar de renovar
+     o login, e o pedido sai sem login (com a chave pública). O servidor responde 401 e o quadro
+     (Desenvolvimento, Território, farol de etapas) fica vazio até recarregar a página — embora a
+     sessão volte sozinha segundos depois. Medido em 19/11: Jean 8h40, Júlio 11h03, Bruno e André
+     13h38, sempre 3 a 25 s antes da renovação. Aqui: um 401 de pedido que saiu SEM login espera a
+     renovação e tenta de novo, uma vez. Pedido que saiu COM login e levou 401 é recusa de verdade e
+     passa direto; sem sessão nenhuma, o aviso de "sessão terminou" continua com o onAuthStateChange. */
+  async function fetchQueEsperaOLogin(entrada, opcoes) {
+    const resp = await fetch(entrada, opcoes);
+    if (resp.status !== 401) return resp;
+    const url = typeof entrada === 'string' ? entrada : (entrada && entrada.url) || '';
+    if (!/\/(rest|functions)\/v1\//.test(url)) return resp;
+    const cab = new Headers((opcoes && opcoes.headers) || {});
+    if (cab.get('Authorization') !== 'Bearer ' + DATA.supabase.anonKey) return resp;
+    for (const espera of [1000, 3000]) {
+      await new Promise((r) => setTimeout(r, espera));
+      const { data } = await supa.auth.getSession();
+      const token = data && data.session && data.session.access_token;
+      if (token) {
+        cab.set('Authorization', 'Bearer ' + token);
+        return fetch(entrada, Object.assign({}, opcoes, { headers: cab }));
+      }
+    }
+    return resp;
+  }
+  supa = window.supabase.createClient(DATA.supabase.url, DATA.supabase.anonKey, { global: { fetch: fetchQueEsperaOLogin } });
 
   // Detecta ANTES de qualquer coisa se essa carga de página veio de um link de
   // "esqueci minha senha" — o Supabase já injeta o token na URL (hash ou query,
