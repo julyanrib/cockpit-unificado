@@ -1,6 +1,6 @@
 // scripts/testar-reparar-pinos.js — as regras do reparador de pinos (scripts/reparar-pinos.js).
 // Uso: node scripts/testar-reparar-pinos.js
-const { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo, separarNumero } = require('./reparar-pinos.js');
+const { decidir, nivelPhoton, nivelNominatim, nivelConferido, numeroLimpo, separarNumero, cepUtil } = require('./reparar-pinos.js');
 
 let ok = 0; const falhas = [];
 function conferir(nome, cond, porque) { if (cond) ok++; else falhas.push(nome + ' — ' + porque); }
@@ -44,6 +44,10 @@ const s4 = separarNumero('Rua Dezenove de Fevereiro', null);
 conferir('número no nome da rua não é número', s4.num === null, JSON.stringify(s4));
 const s5 = separarNumero('Rua Dois, 80A', null);
 conferir('80A vira 80', s5.num === '80' && s5.rua === 'Rua Dois', JSON.stringify(s5));
+
+conferir('CEP de rua serve', cepUtil('22.640-102') === '22640102', 'formato com ponto e traço');
+conferir('CEP geral da cidade (000) não serve', cepUtil('20000-000') === null, 'o 000 é a cidade inteira');
+conferir('CEP curto não serve', cepUtil('2264010') === null, '7 dígitos');
 
 if (falhas.length) { console.log('reparar pinos: ' + falhas.length + ' falha(s) de ' + (ok + falhas.length)); falhas.forEach((f) => console.log('  ✗ ' + f)); process.exit(1); }
 console.log('reparar pinos: ' + ok + ' verificações ok');
