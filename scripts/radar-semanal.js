@@ -1,110 +1,16 @@
 #!/usr/bin/env node
-/* ══════════════════════════════════════════════════════════════════════════════════════
-   O RADAR SEMANAL DAS PRAÇAS + AS NOTÍCIAS DO SETOR (09/09/26)
-   ══════════════════════════════════════════════════════════════════════════════════════
-   Julyan: "pode colocar fontes reais da abrasel brasil inteiro, infomoney, fontes
-   relevantes, coloque semanalmente para eu saber de tudo".
+/* ═══════════════════════════════════════════════════════════════════════════════════════
+   O RADAR SEMANAL DAS PRAÇAS (09/09/26; só as praças desde 20/11/26)
+   ═══════════════════════════════════════════════════════════════════════════════════════
+   Roda segunda 06h BRT (09:00 UTC) e escreve em `radar_pracas`: o TAM de cada praça (CNPJs
+   food ativos na Receita, pela Casa dos Dados) e quanto dele o funil já tocou. Nada aqui
+   inventa número nem frase.
 
-   Roda segunda 06h BRT (09:00 UTC) e escreve em duas tabelas: `radar_pracas` e
-   `noticias_setor`. Nada aqui inventa número nem frase.
-
-   ══ AS TRÊS MEDIÇÕES QUE DESENHARAM ESTE ARQUIVO (08/09/26) ═════════════════════════
-
-   1. A ABRASEL PROÍBE ROBÔ NOSSO, POR ESCRITO. O robots.txt deles:
-          User-agent: ClaudeBot
-          Disallow: /
-      com `Content-Signal: search=yes, ai-train=no, use=reference`. Então este arquivo
-      NUNCA busca abrasel.com.br. A notícia deles chega pelo ÍNDICE DE BUSCA — que eles
-      autorizam — e o que guardamos é manchete, data, veículo e o link para a matéria no
-      site deles. Zero texto copiado. É a diferença entre citar e coletar.
-
-   2. FEED DE VEÍCULO NÃO FAZ RADAR SETORIAL. Medido: InfoMoney, 0 de 10 itens relevantes
-      (o feed é uma janela de 10 e naquele dia era resultado da Quina e acordo comercial
-      dos EUA). Agência Brasil, 1 e 4 de 10 — e esses eram FALSO POSITIVO: "desfile de 7
-      de Setembro" casa com a palavra "bar" porque ela está dentro de "Brasília". Por isso
-      o filtro por palavra aqui exige limite de palavra e a consulta por TEMA é a fonte
-      principal, não o feed genérico.
-
-   3. SEIS DE DEZ FONTES ESPECIALIZADAS NÃO SERVEM. Portal No Varejo responde sem itens;
-      Food Magazine, Bar e Restaurante, Panorama Gastronômico e FoodServiceNews não
-      respondem; Mercado&Consumo e Cozinha Profissional devolvem 200 com item mais novo de
-      28 e 46 dias. Feed morto respondendo 200 é o pior caso, porque parece funcionar —
-      então este arquivo DESCARTA item mais velho que JANELA_DIAS e conta quantos cada
-      fonte trouxe, para uma fonte que morrer aparecer como fonte sem item.
-   ══════════════════════════════════════════════════════════════════════════════════════ */
-
-const https = require('https');
-const http = require('http');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const CASADOSDADOS_TOKEN = process.env.CASADOSDADOS_TOKEN;
-
-/* só entra notícia da semana. 8 dias e não 7 para não perder a matéria de segunda cedo
-   publicada antes da rodada. */
-const JANELA_DIAS = 8;
-const MAX_POR_TEMA = 8;
-const MAX_POR_FEED = 12;
-
-/* ── AS FONTES ────────────────────────────────────────────────────────────────────────
-   `feed` = RSS do próprio veículo, lido direto. Só as que passaram nas três perguntas:
-   responde, está viva, e o robots permite.
-   `filtro: true` = veículo generalista, cujo item só entra se casar uma palavra do setor. */
-const FEEDS = [
-  { fonte: 'Food Connection', url: 'https://foodconnection.com.br/feed/', filtro: false },
-  { fonte: 'Agência Sebrae', url: 'https://agenciasebrae.com.br/feed/', filtro: true },
-  { fonte: 'Hotelier News', url: 'https://hoteliernews.com.br/feed/', filtro: true },
-  { fonte: 'InfoMoney', url: 'https://www.infomoney.com.br/feed/', filtro: true },
-  { fonte: 'Agência Brasil', url: 'https://agenciabrasil.ebc.com.br/rss/economia/feed.xml', filtro: true }
-];
-
-/* ── OS TEMAS ─────────────────────────────────────────────────────────────────────────
-   Consulta por assunto no índice de notícias, que é o que traz a Abrasel, o Sebrae, o G1
-   e a imprensa regional falando do setor na semana. Cada tema é uma linha do radar. */
-const TEMAS = [
-  { tema: 'bares e restaurantes', q: '"bares e restaurantes" OR "food service"' },
-  { tema: 'delivery e apps', q: '(delivery OR iFood OR Rappi) (restaurante OR bar OR gastronomia)' },
-  { tema: 'custos e tributos', q: '("reforma tributária" OR "Simples Nacional" OR "vale-refeição") (restaurante OR bar OR "food service")' },
-  { tema: 'consumo fora do lar', q: '"alimentação fora do lar" OR "consumo fora do lar"' }
-];
-
-/* as palavras que fazem um item de veículo generalista interessar a quem vende PDV para
-   bar e restaurante. Casadas com limite de palavra — ver a medição 2 no cabeçalho. */
-const PALAVRAS = ['restaurante', 'restaurantes', 'bar', 'bares', 'lanchonete', 'padaria',
-  'pizzaria', 'churrascaria', 'gastronomia', 'delivery', 'ifood', 'rappi', 'abrasel',
-  'cardápio', 'garçom', 'foodservice', 'food service', 'alimentação fora do lar',
-  'consumo fora do lar', 'vale-refeição', 'vale refeição', 'simples nacional',
-  'reforma tributária', 'maquininha', 'bebidas'];
-
-/* ══ BAIXAR, COM REDIRECIONAMENTO E SEM TRAVAR A RODADA ═══════════════════════════════
-   Fonte fora do ar não pode derrubar o job: devolve corpo vazio e o resumo conta como
-   fonte sem item. O robô existe para trazer o que der. */
-function baixar(url, saltos) {
-  saltos = saltos || 0;
-  return new Promise(resolve => {
-    if (saltos > 3) return resolve({ status: 0, corpo: '' });
-    const lib = url.startsWith('http://') ? http : https;
-    let req;
-    try {
-      req = lib.get(url, {
-        headers: { 'User-Agent': 'CockpitTakeat/1.0 (+radar semanal do setor de food service)' },
-        timeout: 15000
-      }, res => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          res.resume();
-          const prox = res.headers.location.startsWith('http')
-            ? res.headers.location : new URL(res.headers.location, url).href;
-          return resolve(baixar(prox, saltos + 1));
-        }
-        let d = '';
-        res.on('data', c => { d += c; });
-        res.on('end', () => resolve({ status: res.statusCode, corpo: d }));
-      });
-    } catch (e) { return resolve({ status: 0, corpo: '' }); }
-    req.on('error', () => resolve({ status: 0, corpo: '' }));
-    req.on('timeout', () => { req.destroy(); resolve({ status: 0, corpo: '' }); });
-  });
-}
+   AS NOTÍCIAS DO SETOR SAÍRAM EM 20/11/26. Esta rodada também coletava manchetes (Abrasel
+   pelo índice de busca, feeds de veículo) e gravava em `noticias_setor` — e nenhuma tela lia
+   essa tabela desde a prancha FINAL de Rotas (11/09). A faxina final tirou a coleta e a
+   tabela junto; o histórico do porquê das fontes está no git (antes de 20/11/26).
+   ═══════════════════════════════════════════════════════════════════════════════════════ */
 
 /* Sem acento, sem caixa e sem pontuação. As DUAS metades do radar dependem disto — o
    filtro de época e o dedupe por história, aqui; e o casamento de cidade, mais abaixo. A
@@ -114,282 +20,11 @@ const semAcento = t => String(t || '').toLowerCase().normalize('NFD')
   .replace(new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g'), '')
   .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
-const limpar = s => String(s || '')
-  .replace(/<!\[CDATA\[|\]\]>/g, '')
-  .replace(/<[^>]+>/g, ' ')
-  .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
-  .replace(/\s+/g, ' ').trim();
-
-function itensDoXml(xml) {
-  return [...String(xml || '').matchAll(/<item[\s>][\s\S]*?<\/item>/g)].map(m => {
-    const b = m[0];
-    const pega = re => (b.match(re) || [])[1] || '';
-    return {
-      titulo: limpar(pega(/<title>([\s\S]*?)<\/title>/)),
-      url: limpar(pega(/<link>([\s\S]*?)<\/link>/)) || limpar(pega(/<guid[^>]*>([\s\S]*?)<\/guid>/)),
-      publicado: pega(/<pubDate>([^<]+)<\/pubDate>/),
-      descricao: limpar(pega(/<description>([\s\S]*?)<\/description>/)),
-      veiculo: limpar(pega(/<source[^>]*>([^<]+)<\/source>/))
-    };
-  });
-}
-
-/* LIMITE DE PALAVRA, e é o que separa notícia de coincidência: sem ele, "Brasília" casa
-   com "bar" e o desfile de 7 de Setembro entra como notícia de bar — aconteceu na
-   medição. */
-function ehDoSetor(txt) {
-  const t = ' ' + String(txt || '').toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') + ' ';
-  return PALAVRAS.some(p => {
-    const alvo = p.normalize('NFD').replace(/[̀-ͯ]/g, '');
-    return new RegExp('(^|[^a-z0-9])' + alvo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)').test(t);
-  });
-}
-
-/* ══ UM VEÍCULO, UM NOME (09/09/26) ════════════════════════════════════════════════════
-   O índice devolve o veículo às vezes pelo nome ("Food Connection") e às vezes pelo
-   domínio ("foodconnection.com.br"). Na primeira rodada os dois apareceram como fontes
-   SEPARADAS, e a tela creditaria o mesmo site duas vezes com nomes diferentes.
-
-   A lista de fora é derivada de FEEDS, para o nome que a tela mostra ser o mesmo que a
-   fonte já tem — sem uma segunda tabela de nomes para divergir. O que não estiver nela e
-   vier como domínio recebe o domínio limpo, sem www e sem .com.br: melhor "gazetasp" do
-   que "gazetasp.com.br", e nunca um nome inventado por mim para um site que eu não sei
-   como se chama. */
-const DOMINIO_DO_FEED = FEEDS.reduce((m, f) => {
-  try { m[new URL(f.url).host.replace(/^www\./, '')] = f.fonte; } catch (e) { /* ignora */ }
-  return m;
-}, {});
-
-function nomeDoVeiculo(bruto) {
-  const t = String(bruto || '').trim();
-  if (!t) return '';
-  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(t)) return t;   // já é nome de gente
-  const host = t.toLowerCase().replace(/^www\./, '');
-  if (DOMINIO_DO_FEED[host]) return DOMINIO_DO_FEED[host];
-  const curto = host.replace(/\.(com|net|org|gov|edu|inf|jor)?\.?br$/, '').replace(/\.(com|net|org)$/, '');
-  /* maiúscula na primeira letra: "abrasel" na tela ao lado de "Estadão" parece erro
-     nosso, e é só o índice tendo mandado o domínio em vez do nome. O que não se faz é
-     tentar adivinhar o resto — "bemparana" não vira "Bem Paraná" por chute. */
-  return curto.charAt(0).toUpperCase() + curto.slice(1);
-}
-
-/* ══ A MANCHETE DE OUTRA ÉPOCA ═════════════════════════════════════════════════════════
-   Medido na primeira rodada: o gazetasp veio com pubDate DESTA semana e conteúdo de 9 de
-   julho ("esperam faturar no feriado de 9 de Julho"). O índice reindexou uma matéria
-   velha, e o filtro de data — que só olha a data do índice — deixou passar.
-
-   A REGRA OLHA A DIREÇÃO DO TEMPO, e isto foi um conserto: a primeira versão media
-   distância CIRCULAR e reprovou "Os Restaurantes Estão Preparados Para a Corrida até
-   Dezembro?", do Food Connection, publicado em setembro. Aquilo é matéria olhando para
-   FRENTE, e a regra jogou fora notícia boa — exatamente o erro que eu tinha escrito no
-   comentário que queria evitar. Descobri porque apliquei a regra nas linhas da rodada
-   anterior e olhei o que ela reprovava.
-
-   ENTÃO: mês no PASSADO, entre 2 e 6 meses atrás, reprova — "feriado de 9 de Julho" numa
-   notícia de setembro é matéria reindexada. Mês à frente passa, mês vizinho passa, e
-   passado além de 6 meses passa também, porque aí "março" numa notícia de setembro se lê
-   mais naturalmente como o março que vem. A regra para de adivinhar onde a leitura fica
-   ambígua, em vez de chutar. */
-const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho',
-  'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-
-function ehDeOutraEpoca(titulo, quando) {
-  const t = ' ' + semAcento(titulo) + ' ';
-  const mesPub = quando.getUTCMonth();
-  for (let i = 0; i < MESES.length; i++) {
-    if (new RegExp('(^|[^a-z])' + MESES[i] + '([^a-z]|$)').test(t)) {
-      /* quantos meses ATRÁS da publicação o mês citado está; dezembro visto de janeiro
-         dá 1, e não 11, porque a volta do ano é vizinhança e não distância */
-      const atras = (mesPub - i + 12) % 12;
-      if (atras >= 2 && atras <= 6) return true;
-    }
-  }
-  return false;
-}
-
-/* ══ RANQUEAR, NÃO FILTRAR MAIS (09/09/26) ═════════════════════════════════════════════
-   Depois de consertar os cinco defeitos da primeira rodada, sobraram 33 manchetes de 32
-   veículos — e eu li as 33. As boas são MUITO boas: "lucro chega a só 32% dos bares do
-   RN", "alimentação fora do lar movimenta R$ 287,9 bilhões", "metade dos bares gaúchos
-   com faturamento em alta" (a praça da Kelly), o Magalu entrando em delivery contra o
-   iFood, a briga do vale-refeição em cinco veículos.
-
-   Só que ao lado delas ficaram: "morango cravejado", "Dia do Açaí", "Prefeitura de
-   Valença busca investimentos", o Salão Abrasel em três matérias diferentes, e um texto
-   do Estúdio Folha — que é conteúdo patrocinado. Nenhum é falso positivo de palavra:
-   todos citam gastronomia ou restaurante de verdade. Filtro de palavra não separa
-   "notícia que muda meu mês" de "evento regional" e "release".
-
-   ENTÃO NADA MAIS É JOGADO FORA POR JULGAMENTO DE ASSUNTO — É RANQUEADO, e o motivo do
-   lugar vai gravado ao lado da nota. A tela mostra as primeiras e guarda o resto atrás de
-   "ver todas": quem quiser conferir o que eu rebaixei, confere. Filtro escondido decide
-   pelo gestor; nota com motivo deixa ele discordar de mim.
-
-   OS TRÊS SINAIS, e por que cada um:
-   · NÚMERO NO TÍTULO vale mais que tudo. Manchete com R$, % ou "32%" carrega fato
-     verificável; sem número é quase sempre opinião, evento ou anúncio.
-   · VEÍCULO QUE PESA no setor: entidade (Abrasel, Sebrae), imprensa econômica e os
-     grandes. Não é esnobismo com a imprensa regional — o Agora RN tem a melhor manchete
-     desta semana e sobe pelo número. É que release republicado sai em dez sites pequenos.
-   · MARCA DE RELEASE derruba: "Salão", "Feira", "Encontro", "Prefeitura", "oferece
-     desconto", "Estúdio". São textos escritos para divulgar, não para informar. */
-const VEICULOS_QUE_PESAM = ['abrasel', 'sebrae', 'exame', 'infomoney', 'valor', 'estadao',
-  'folha', 'globo', 'g1', 'cnn', 'terra', 'monitor mercantil', 'food connection',
-  'hotelier news', 'seu dinheiro', 'veja', 'agencia brasil', 'canaltech', 'tecnoblog'];
-
-const MARCAS_DE_RELEASE = ['salao', 'feira', 'encontro', 'congresso', 'prefeitura',
-  'estudio', 'patrocinado', 'oferece desconto', 'promove', 'reune negocios', 'workshop',
-  'oficina', 'lanca campanha', 'comemorar'];
-
-function relevancia(titulo, fonte) {
-  const t = semAcento(titulo);
-  const f = semAcento(fonte);
-  let nota = 0;
-  const motivos = [];
-
-  /* R$ e % precisam do título CRU: semAcento come a pontuação */
-  if (/R\$|\d+%|\d+,\d+\s*%/.test(String(titulo))) { nota += 3; motivos.push('número no título'); }
-  else if (/\b\d{2,}\b/.test(t)) { nota += 1; motivos.push('quantidade no título'); }
-
-  if (VEICULOS_QUE_PESAM.some(v => f.indexOf(v) > -1)) { nota += 2; motivos.push('veículo de peso no setor'); }
-
-  const release = MARCAS_DE_RELEASE.filter(m => t.indexOf(m) > -1);
-  if (release.length) { nota -= 3; motivos.push('cara de divulgação ("' + release[0] + '")'); }
-
-  /* ══ E A MARCA PODE ESTAR NO NOME DA FONTE ═══════════════════════════════════════════
-     "Estúdio Folha" é o braço de conteúdo PATROCINADO da Folha, e o item dele ("99Food
-     ajuda restaurantes a vender mais") subiu para 3 na primeira medição do ranking, acima
-     de matéria editorial de verdade. "Sala da Notícia" é plataforma de distribuição de
-     release. O texto pode até ter número; o que ele não tem é jornalista.
-     A LISTA É CURTA E VAI PRECISAR CRESCER — e isso está ok justamente porque a nota e o
-     motivo aparecem na tela: quando um release passar na frente, o Julyan vê o motivo e
-     me diz o nome, em vez de perder a confiança no bloco todo. */
-  const FONTES_DE_RELEASE = ['sala da noticia', 'estudio', 'assessoria', 'press'];
-  const fr = FONTES_DE_RELEASE.filter(m => f.indexOf(m) > -1);
-  if (fr.length) { nota -= 4; motivos.push('conteúdo patrocinado ou release ("' + fr[0] + '")'); }
-
-  /* o que o gestor vende: quem fala de margem, custo, imposto e app está falando do
-     problema que o PDV resolve */
-  if (/\b(lucro|margem|faturamento|custo|custos|imposto|tributaria|inadimplencia|endividamento|ticket medio|delivery|ifood|rappi|maquininha|vale refeicao)\b/.test(t)) {
-    nota += 2; motivos.push('fala de dinheiro do dono');
-  }
-
-  return { nota, motivo: motivos.length ? motivos.join(' · ') : 'sem sinal forte' };
-}
-
 function segundaDaSemana(d) {
   const base = d ? new Date(d) : new Date();
   const dow = (base.getUTCDay() + 6) % 7;
   const seg = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() - dow));
   return seg.toISOString().slice(0, 10);
-}
-
-async function coletarNoticias(semana) {
-  const achados = [];
-  const porFonte = {};
-  const limite = Date.now() - JANELA_DIAS * 86400000;
-
-  /* ── os feeds dos veículos ─────────────────────────────────────────────────────── */
-  for (const f of FEEDS) {
-    const r = await baixar(f.url);
-    const itens = itensDoXml(r.corpo);
-    let entraram = 0;
-    itens.slice(0, MAX_POR_FEED).forEach(it => {
-      if (!it.titulo || !it.url) return;
-      const quando = it.publicado ? new Date(it.publicado) : null;
-      if (!quando || isNaN(quando.getTime()) || quando.getTime() < limite) return;
-      if (f.filtro && !ehDoSetor(it.titulo + ' ' + it.descricao)) return;
-      const rel = relevancia(it.titulo, f.fonte);
-      achados.push({
-        titulo: it.titulo, fonte: f.fonte, origem: 'feed_setorial', url: it.url,
-        publicado_em: quando.toISOString(), tema: f.filtro ? 'setor na imprensa' : 'food service',
-        praca: null, data_semana: semana,
-        relevancia: rel.nota, relevancia_motivo: rel.motivo
-      });
-      entraram++;
-    });
-    porFonte[f.fonte] = { itens: itens.length, entraram, http: r.status };
-  }
-
-  /* ── as consultas por tema ─────────────────────────────────────────────────────── */
-  for (const t of TEMAS) {
-    const url = 'https://news.google.com/rss/search?q=' + encodeURIComponent(t.q + ' when:' + JANELA_DIAS + 'd')
-      + '&hl=pt-BR&gl=BR&ceid=BR:pt-419';
-    const r = await baixar(url);
-    const itens = itensDoXml(r.corpo);
-    let entraram = 0;
-    let candidatos = 0;
-    itens.forEach(it => {
-      if (entraram >= MAX_POR_TEMA) return;
-      if (!it.titulo || !it.url) return;
-      const quando = it.publicado ? new Date(it.publicado) : null;
-      if (!quando || isNaN(quando.getTime()) || quando.getTime() < limite) return;
-      const titulo = it.titulo.replace(/ - [^-]{3,40}$/, '');
-      candidatos += 1;
-      /* ══ O TEMA TAMBÉM PASSA PELO FILTRO DO SETOR (09/09/26) ═══════════════════════
-         Eu aplicava `ehDoSetor` só nos feeds, supondo que uma consulta por assunto já
-         devolvia assunto. MEDIDO nas 36 da primeira rodada: doze eram ruído — "morango
-         cravejado", "TikTok ClubHouse desembarca no Brasil", "Dia do Açaí", "Connecta
-         Minas", "Prefeitura de Valença busca investimentos". A consulta é OR de termos
-         largos; quem garante o assunto é o filtro, não a pergunta. */
-      if (!ehDoSetor(titulo + ' ' + it.descricao)) return;
-      /* ══ E A MANCHETE NÃO PODE SER DE OUTRA ÉPOCA ═════════════════════════════════
-         O gazetasp entrou com pubDate desta semana e conteúdo de 9 de JULHO: "hotéis,
-         bares e restaurantes esperam faturar no feriado de 9 de Julho". O filtro de data
-         olhava a data do índice; o texto dizia outra coisa. */
-      if (ehDeOutraEpoca(titulo, quando)) return;
-      /* o veículo vem no <source> do item; sem ele, o tema responde pela procedência */
-      const veiculo = nomeDoVeiculo(it.veiculo) || 'imprensa';
-      const rel = relevancia(titulo, veiculo);
-      achados.push({
-        titulo: titulo, fonte: veiculo,
-        origem: 'consulta_tema', url: it.url,
-        publicado_em: quando.toISOString(), tema: t.tema, praca: null, data_semana: semana,
-        relevancia: rel.nota, relevancia_motivo: rel.motivo
-      });
-      entraram++;
-    });
-    porFonte['tema: ' + t.tema] = { itens: itens.length, candidatos, entraram, http: r.status };
-  }
-
-  /* ══ DEDUPE EM DUAS CAMADAS ═════════════════════════════════════════════════════════
-     POR URL, antes de gravar: duas consultas de tema trazem a mesma matéria com
-     frequência, e o unique da tabela recusaria o LOTE inteiro em vez de a linha.
-
-     E POR HISTÓRIA, que a de URL não pega: "Cármen Lúcia mantém teto para taxas do
-     vale-refeição em ação no STF" entrou pela Folha PE e pelo O GLOBO na primeira
-     rodada — dois links, duas fontes, uma notícia. Na tela do gestor isso é a mesma
-     linha duas vezes. A chave é o título sem acento, sem pontuação e sem as palavras
-     de ligação.
-
-     QUEM FICA É A DE MAIOR NOTA, não a primeira que apareceu. A ordem de coleta é
-     acidental — depende de qual tema respondeu antes —, e deixar o acidente escolher
-     entre o O GLOBO e um agregador é deixar o sorteio decidir o que o gestor lê. */
-  const LIGACAO = ['a', 'o', 'as', 'os', 'de', 'da', 'do', 'das', 'dos', 'e', 'em', 'no',
-    'na', 'nos', 'nas', 'para', 'por', 'com', 'que', 'ao', 'aos', 'um', 'uma', 'se'];
-  const chaveDaHistoria = t => semAcento(t).split(' ')
-    .filter(p => p.length > 2 && LIGACAO.indexOf(p) < 0).slice(0, 8).join(' ');
-
-  const porNota = achados.slice().sort((a, b) => {
-    if (b.relevancia !== a.relevancia) return b.relevancia - a.relevancia;
-    /* empate: o feed do veículo especializado ganha do índice, e depois a mais nova */
-    if (a.origem !== b.origem) return a.origem === 'feed_setorial' ? -1 : 1;
-    return String(b.publicado_em).localeCompare(String(a.publicado_em));
-  });
-
-  const urlsVistas = new Set();
-  const historiasVistas = new Set();
-  const unicos = porNota.filter(a => {
-    if (urlsVistas.has(a.url)) return false;
-    const h = chaveDaHistoria(a.titulo);
-    if (h && historiasVistas.has(h)) return false;
-    urlsVistas.add(a.url);
-    if (h) historiasVistas.add(h);
-    return true;
-  });
-  return { noticias: unicos, porFonte };
 }
 
 /* ══ AS PRAÇAS VÊM DE UM LUGAR SÓ ══════════════════════════════════════════════════════
@@ -630,52 +265,17 @@ async function gravar(tabela, linhas, conflito) {
 
 /* ══ A RODADA ══════════════════════════════════════════════════════════════════════════
    Julyan: "coloque semanalmente para eu saber de tudo". Segunda de manhã, antes de ele
-   abrir a aba.
-
-   NÃO ABORTA NA PRIMEIRA FALHA. Notícia e TAM são independentes: feed fora do ar não
-   pode impedir o radar das praças de gravar, e a Casa dos Dados fora do ar não pode
-   apagar as manchetes da semana. O que cada metade não conseguiu vira linha no resumo do
-   workflow, e o processo só sai com erro se NENHUMA das duas gravou. */
+   abrir a aba. Praça sem TAM não derruba as outras: vira linha no resumo do workflow, e o
+   processo só sai com erro se nada gravou. */
 async function rodar() {
-  /* segundaDaSemana devolve 'AAAA-MM-DD', que é o que a coluna date espera e o que
-     coletarNoticias já grava em cada linha. A primeira versão daqui chamava
-     .toISOString() no retorno e derrubava a rodada na segunda linha — defeito que build
-     e suite de regex não veem, e que só apareceu quando eu rodei. */
+  /* segundaDaSemana devolve 'AAAA-MM-DD', que é o que a coluna date espera. A primeira
+     versão daqui chamava
+     .toISOString() no retorno e derrubava a rodada na segunda linha. */
   const dataSemana = segundaDaSemana(new Date());
   console.log('[radar-semanal] semana de ' + dataSemana);
 
   const problemas = [];
   let gravouAlgo = false;
-
-  /* ── as notícias ─────────────────────────────────────────────────────────────────── */
-  let nNoticias = 0;
-  try {
-    const { noticias, porFonte } = await coletarNoticias(dataSemana);
-    /* CADA FONTE APARECE COM TRÊS NÚMEROS: http, itens que ela trouxe e itens que
-       entraram. É assim que se vê no log de segunda a diferença entre "feed morto" e
-       "feed vivo sem notícia do setor nesta semana" — os dois dariam 0 entraram. */
-    Object.keys(porFonte).forEach(f => {
-      const p = porFonte[f] || {};
-      console.log('  ' + f + ': http ' + p.http + ' · ' + p.itens + ' itens · '
-        + p.entraram + ' entraram');
-    });
-    if (!noticias.length) {
-      problemas.push('nenhuma notícia do setor nesta janela de ' + JANELA_DIAS + ' dias');
-    } else {
-      const r = await gravar('noticias_setor', noticias.map(n => Object.assign({}, n, {
-        data_semana: dataSemana
-      })), 'url');
-      if (r.ok) {
-        nNoticias = r.gravadas;
-        gravouAlgo = true;
-        console.log('  gravadas: ' + r.gravadas + ' de ' + noticias.length + ' coletadas');
-      } else {
-        problemas.push('gravar notícias: ' + r.erro);
-      }
-    }
-  } catch (e) {
-    problemas.push('coletar notícias: ' + (e.message || e));
-  }
 
   /* ── o radar das praças ──────────────────────────────────────────────────────────── */
   let nPracas = 0;
@@ -722,7 +322,6 @@ async function rodar() {
 
   /* ── o que ficou de fora, escrito onde alguém lê ─────────────────────────────────── */
   const resumo = ['### Radar semanal — semana de ' + dataSemana, '',
-    '- notícias novas gravadas: **' + nNoticias + '**',
     '- praças no radar: **' + nPracas + '** de ' + CIDADES.length];
   if (problemas.length) {
     resumo.push('', '**O que não deu:**');
@@ -735,9 +334,9 @@ async function rodar() {
     catch (e) { /* o resumo é bônus; a rodada não depende dele */ }
   }
 
-  /* SÓ FALHA SE NADA GRAVOU. Uma metade viva é rodada útil; o que faltou está no resumo. */
+  /* SÓ FALHA SE NADA GRAVOU; o que faltou está no resumo. */
   if (!gravouAlgo) throw new Error('nada foi gravado nesta rodada');
-  return { nNoticias, nPracas, problemas };
+  return { nPracas, problemas };
 }
 
 if (require.main === module) {
@@ -747,7 +346,5 @@ if (require.main === module) {
   });
 }
 
-module.exports = { coletarNoticias, segundaDaSemana, ehDoSetor, itensDoXml, tamDaPraca,
-  acharTotal, contarTocado, tocadoDaPraca, semUfNoFim, leituraDaPraca, gravar, rodar,
-  nomeDoVeiculo, ehDeOutraEpoca, NOME_DO_TAM, relevancia,
-  FEEDS, TEMAS, JANELA_DIAS, CNAE_FOODSERVICE, CAMPOS_DE_TOTAL };
+module.exports = { segundaDaSemana, tamDaPraca, acharTotal, contarTocado, tocadoDaPraca, semUfNoFim,
+  leituraDaPraca, gravar, rodar, NOME_DO_TAM, CNAE_FOODSERVICE, CAMPOS_DE_TOTAL };

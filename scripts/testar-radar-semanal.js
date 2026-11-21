@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════════════════
-   O RADAR SEMANAL — as praças e as notícias do setor (09/09/26)
+   O RADAR SEMANAL DAS PRAÇAS (09/09/26; as notícias do setor saíram em 20/11/26)
    ══════════════════════════════════════════════════════════════════════════════════════
    Julyan: "pode colocar fontes reais da abrasel brasil inteiro, infomoney, fontes
    relevantes, coloque semanalmente para eu saber de tudo".
@@ -30,7 +30,6 @@
    3. A PRAÇA NÃO ROUBA A CIDADE VIZINHA. "Vitória" não pode engolir "Vitória da
       Conquista", que é outro estado.
    4. O PISO É DITO COMO PISO. Os negócios sem cidade aparecem na leitura, com número.
-   5. A ABRASEL NÃO É RASPADA. O robots.txt deles proíbe o nosso robô por escrito.
    ══════════════════════════════════════════════════════════════════════════════════════ */
 const fs = require('fs');
 const path = require('path');
@@ -175,102 +174,24 @@ conferir('piso é dito como piso — "pelo menos", sem percentual',
   /pelo menos 900/.test(lidoPiso) && !/%/.test(lidoPiso),
   'saiu: ' + lidoPiso);
 
-/* ══ AS FONTES DE NOTÍCIA ══════════════════════════════════════════════════════════════ */
-/* o domínio deles APARECE nos comentários deste arquivo, dizendo por que não o buscamos —
-   por isso a checagem é no código que roda, não na prosa */
-conferir('a Abrasel não é raspada por nós — o robots.txt deles proíbe, por escrito',
-  !/abrasel\.com\.br/.test(semNota),
-  'o site deles tem "User-agent: ClaudeBot / Disallow: /"; a manchete chega pelo índice de busca, que eles autorizam');
+/* 20/11/26: saíram as checagens das notícias do setor (fontes, filtro, época, veículo, dedupe, nota): a coleta saiu do radar-semanal junto com a tabela noticias_setor, que nenhuma tela lia. */
 
-conferir('nenhuma fonte entra sem nome de veículo para creditar',
-  radar.FEEDS.every(f => f.fonte && f.url) && radar.TEMAS.every(t => t && t.tema && t.q),
-  'fonte sem nome vira manchete órfã na tela, e ninguém sabe se pode confiar');
 
-conferir('o InfoMoney está na lista, como o Julyan pediu, e passa pelo filtro do setor',
-  radar.FEEDS.some(f => /infomoney/i.test(f.fonte) && f.filtro === true),
-  'medido em 08/09: 0 de 10 itens dele eram do setor — sem filtro, o bloco abre com resultado da Quina');
 
-conferir('o filtro do setor usa borda de palavra',
-  radar.ehDoSetor('bares e restaurantes lotados no feriado') === true &&
-  radar.ehDoSetor('desfile de 7 de Setembro em Brasília') === false,
-  '"Brasília" contém "bar": foi o falso positivo que a primeira versão deixou entrar');
 
-conferir('e não deixa passar item de outro assunto só por conter a palavra solta',
-  radar.ehDoSetor('Barack Obama publica memórias') === false &&
-  radar.ehDoSetor('Barreirinhas recebe turistas') === false,
-  'sem borda de palavra o radar do gestor enche de notícia que não é dele');
 
-/* ══ OS CINCO DEFEITOS DA PRIMEIRA RODADA EM PRODUÇÃO (09/09/26) ═══════════════════════
-   36 manchetes gravadas, e eu li as 36. Doze eram ruído, uma era de julho, duas eram a
-   mesma notícia, um veículo apareceu com dois nomes, e o meu rótulo do denominador
-   exagerava. Cada um dos cinco tem checagem aqui, com o caso real que o achou. */
+/* ══ O DEFEITO DO DENOMINADOR (09/09/26): o rótulo exagerava — CNPJ ativo não é restaurante operando. */
 
-conferir('a consulta por TEMA também passa pelo filtro do setor',
-  /if \(!ehDoSetor\(titulo \+ ' ' \+ it\.descricao\)\) return;/.test(semNota) &&
-  (semNota.match(/ehDoSetor\(/g) || []).length >= 3,
-  'sem isso entraram "morango cravejado", "TikTok ClubHouse desembarca no Brasil" e "Dia do Açaí" — a consulta é OR de termos largos');
 
-conferir('manchete de outra época não entra, mesmo com data do índice desta semana',
-  radar.ehDeOutraEpoca('Hotéis, bares e restaurantes esperam faturar no feriado de 9 de Julho',
-    new Date('2026-09-08T00:00:00Z')) === true,
-  'foi o item do gazetasp: pubDate de setembro, conteúdo de 9 de julho');
 
-conferir('e a regra é estreita — mês vizinho e mês da própria publicação passam',
-  radar.ehDeOutraEpoca('Feriado de 7 de setembro deve elevar movimento de bares',
-    new Date('2026-09-08T00:00:00Z')) === false &&
-  radar.ehDeOutraEpoca('Vendas de agosto surpreendem o setor',
-    new Date('2026-09-08T00:00:00Z')) === false &&
-  radar.ehDeOutraEpoca('Balanço de dezembro fecha o ano',
-    new Date('2026-01-05T00:00:00Z')) === false,
-  'regra larga joga fora notícia boa, que é o erro pior: dezembro e janeiro são vizinhos');
 
-/* A REGRA OLHA A DIREÇÃO DO TEMPO, e este teste existe porque a primeira versão media
-   distância circular e reprovou "Os Restaurantes Estão Preparados Para a Corrida até
-   Dezembro?" — matéria do Food Connection publicada em setembro, olhando para a frente.
-   Eu só vi porque apliquei a regra nas linhas da rodada anterior e li o que ela cortava. */
-conferir('mês À FRENTE passa: matéria que planeja não é matéria velha',
-  radar.ehDeOutraEpoca('Os Restaurantes Estão Preparados Para a Corrida até Dezembro?',
-    new Date('2026-09-04T00:00:00Z')) === false &&
-  radar.ehDeOutraEpoca('O que esperar do Natal e de dezembro no food service',
-    new Date('2026-10-01T00:00:00Z')) === false,
-  'a regra existe contra matéria reindexada, não contra planejamento — cortar isso é jogar fora notícia boa');
 
-conferir('e mês no passado recente reprova, que é o caso real',
-  radar.ehDeOutraEpoca('esperam faturar no feriado de 9 de Julho', new Date('2026-09-08T00:00:00Z')) === true &&
-  radar.ehDeOutraEpoca('O balanço de maio dos bares', new Date('2026-09-08T00:00:00Z')) === true,
-  'dois a seis meses atrás é a janela onde matéria reindexada aparece');
 
-conferir('passado longe demais para ter direção clara não é chutado',
-  radar.ehDeOutraEpoca('As metas de março do setor', new Date('2026-10-01T00:00:00Z')) === false,
-  'março visto de outubro se lê mais como o março que vem; onde a leitura é ambígua a regra para de adivinhar');
 
-conferir('e ela não reprova manchete que não nomeia mês',
-  radar.ehDeOutraEpoca('Ticket médio sustenta alta de 3,24% na panificação',
-    new Date('2026-09-08T00:00:00Z')) === false,
-  'a maioria das manchetes não cita mês; elas não podem depender desta regra');
 
-conferir('um veículo tem UM nome: o domínio vira o nome que a fonte já tem',
-  radar.nomeDoVeiculo('foodconnection.com.br') === 'Food Connection' &&
-  radar.nomeDoVeiculo('Food Connection') === 'Food Connection' &&
-  radar.nomeDoVeiculo('agenciasebrae.com.br') === 'Agência Sebrae',
-  'na primeira rodada "Food Connection" e "foodconnection.com.br" eram duas fontes na tela');
 
-/* domínio desconhecido perde o sufixo e ganha maiúscula — "abrasel" ao lado de "Estadão"
-   parece erro nosso. O que NÃO se faz é adivinhar o resto: "bemparana" não vira
-   "Bem Paraná" por chute, porque isso seria inventar procedência. */
-conferir('domínio desconhecido perde o .com.br e ganha só a maiúscula',
-  radar.nomeDoVeiculo('www.gazetasp.com.br') === 'Gazetasp' &&
-  radar.nomeDoVeiculo('abrasel.com.br') === 'Abrasel' &&
-  radar.nomeDoVeiculo('O GLOBO') === 'O GLOBO',
-  'nome de veículo em caixa baixa no meio da lista parece defeito da tela');
 
-conferir('a mesma notícia por dois veículos entra uma vez',
-  /historiasVistas/.test(semNota) && /chaveDaHistoria/.test(semNota),
-  '"Cármen Lúcia mantém teto para taxas do vale-refeição" entrou pela Folha PE e pelo O GLOBO: dois links, uma notícia');
 
-conferir('e o dedupe por URL continua, porque o unique da tabela recusaria o lote',
-  /urlsVistas\.has\(a\.url\)/.test(semNota),
-  'sem ele um link repetido no mesmo lote derruba as 36 linhas de uma vez');
 
 conferir('o denominador é chamado pelo que é: base de CNPJ, não restaurante operando',
   radar.NOME_DO_TAM === 'CNPJs food ativos na Receita' &&
@@ -278,51 +199,14 @@ conferir('o denominador é chamado pelo que é: base de CNPJ, não restaurante o
     radar.leituraDaPraca({ tam: 142319, tam_fonte: 'contagem_api', tocado: 18, pct_tocado: 0.01, perdidos: 0 }, 0)),
   'são 142.319 em SP contra as 40-50 mil que o setor estima operando: "estabelecimentos" faz o 0,01% parecer que o time não começou');
 
-/* ══ O SEXTO DEFEITO: A LISTA NÃO ESTAVA PRONTA PARA A TELA ═════════════════════════════
-   Consertados os cinco, sobraram 33 manchetes de 32 veículos, com "morango cravejado" e
-   o Salão Abrasel em três matérias ao lado de "lucro chega a só 32% dos bares do RN".
-   Nenhum desses é falso positivo de palavra — todos citam o setor de verdade. A resposta
-   é RANQUEAR com o motivo visível, não filtrar mais e esconder a decisão. */
-conferir('a notícia com número e assunto de dono ganha da matéria de comportamento',
-  radar.relevancia('Vendas crescem, mas lucro chega a só 32% dos bares e restaurantes do RN', 'Agora RN').nota >
-  radar.relevancia('Quanto custa o morango cravejado? Saiba mais sobre a nova onda viral', 'Estadão').nota,
-  'as duas citam o setor; uma muda o mês do gestor e a outra é matéria de comportamento');
 
-conferir('release de evento cai para o fim, mesmo vindo de veículo conhecido',
-  radar.relevancia('Salão Abrasel estreia com foco em negócios e inovação', 'Giro News').nota < 0 &&
-  radar.relevancia('Abrasel Minas promove 17º Encontro de Bares e Restaurantes', 'Gazeta da Semana').nota < 0,
-  'o Salão Abrasel entrou em TRÊS matérias diferentes na primeira rodada, e nenhuma é notícia do mês de ninguém');
 
-conferir('conteúdo patrocinado não sobe por ser de veículo grande',
-  radar.relevancia('99Food ajuda restaurantes a vender mais e aumentar a rentabilidade', 'Estúdio Folha').nota < 0,
-  '"Estúdio Folha" é o braço de conteúdo pago da Folha, e o item dele ficou acima de matéria editorial de verdade');
 
-conferir('a nota NUNCA esconde: ela ordena, e toda notícia continua gravada',
-  !/relevancia [<>]=? *[0-9-]+\) return/.test(semNota) &&
-  /sort\(\(a, b\) => \{/.test(semNota),
-  'filtro escondido decide pelo gestor; nota com motivo deixa ele discordar de mim');
 
-conferir('e toda nota vem com o motivo escrito, sem exceção',
-  radar.relevancia('Manchete qualquer sem nada', 'Veículo Desconhecido').motivo === 'sem sinal forte' &&
-  radar.relevancia('Lucro cai 32%', 'Exame').motivo.length > 0,
-  'nota sem procedência num cockpit onde todo número diz de onde vem é o número que ninguém acredita');
 
-conferir('quem fica de um par duplicado é a de MAIOR nota, não a que chegou antes',
-  /porNota\.filter/.test(semNota) && /b\.relevancia - a\.relevancia/.test(semNota),
-  'a ordem de coleta depende de qual tema respondeu primeiro: deixar o acidente escolher entre o O GLOBO e um agregador é sorteio');
 
-conferir('a janela é de uma semana com folga, não do mês',
-  radar.JANELA_DIAS >= 7 && radar.JANELA_DIAS <= 10,
-  'JANELA_DIAS = ' + radar.JANELA_DIAS + '; mais que isso repete manchete velha toda segunda');
 
-/* ══ A RODADA ══════════════════════════════════════════════════════════════════════════ */
-conferir('as praças vêm da lista que o backfill já usa — não de uma cópia',
-  /require\('\.\/backfill-casa-dos-dados'\)/.test(semNota) && !/const CIDADES = \[/.test(semNota),
-  'a mesma regra em dois lugares é a causa que passei a semana consertando');
 
-conferir('notícia e praça são independentes: uma metade caída não derruba a outra',
-  (semNota.match(/catch \(e\) \{\s*\n?\s*problemas\.push/g) || []).length >= 2,
-  'feed fora do ar não pode impedir o radar de gravar, nem a Casa dos Dados apagar as manchetes');
 
 conferir('a rodada só passa se ALGO foi gravado',
   /if \(!gravouAlgo\) throw new Error/.test(fonte),

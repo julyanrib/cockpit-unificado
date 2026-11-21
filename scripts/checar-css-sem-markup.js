@@ -49,15 +49,8 @@ const PREFIXOS = ['pl6-', 'fn2-', 'fn3-', 'd7-', 'hist-', 'hoje-', 'h8-'];
    saiu da lista sem sair do arquivo também reprova. Whitelist que só cresce é guarda morta
    (é a mesma regra da guarda 7, e por isso o mesmo formato). */
 const DIVIDA = {
-  /* ACHADAS PELA PRIMEIRA EXECUCAO desta guarda, em 04/09/26 — e nenhuma delas eu conhecia.
-     As duas sao do Meu funil, que e a proxima aba na fila do Julyan; entram aqui nomeando
-     quem as resolve em vez de eu meio-consertar uma tela que vai ser refeita em seguida.
-
-     `.fn3-cta` e o caso mais caro dos dois, e pelo mesmo motivo que produziu esta guarda:
-     ela aparece na lista de `min-height:44px` do bloco de celular. Ou seja, o piso de dedo
-     do Meu funil pode estar na mesma situacao em que o do Planejamento estava — lista cheia
-     de botao que nao existe. Isso se mede quando a aba for revista, nao por palpite. */
-  'fn3-cta': 'Meu funil — CTA do card antigo; ainda citada no piso de 44px do celular',
+  /* `fn3-cta` SAIU DA LISTA EM 20/11/26 porque saiu do arquivo: era do cartão do Meu funil v3, que a
+     faxina final tirou. A dívida desta guarda está zerada. */
 
   /* ══ AS 15 DA ABA HOJE, achadas em 04/09/26 ao ADICIONAR o prefixo `hoje-` a esta guarda.
      Elas não vieram da prancha 8b: são de redesenhos anteriores da aba (a faixa `hoje-hero`
@@ -78,7 +71,7 @@ const DIVIDA = {
      fazer quando uma divida e paga, e a razao de a lista ter de encolher. */
   /* `hoje-hero-stats` SAIU DA LISTA EM 14/09/26 porque saiu do arquivo: era a última
      das 15, uma @media de uma linha sobrada do hero de três redesenhos atrás. A família
-     `hoje-` está zerada — o que resta aqui é só a `fn3-cta`, que ainda tem uso vivo. */
+     `hoje-` está zerada. */
 };
 
 /* As classes que o arquivo REALMENTE gera. Mesmo levantamento da guarda 7 — as quatro
