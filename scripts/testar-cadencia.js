@@ -7,7 +7,7 @@
 // que precisam concordar, e nenhum deles reclama quando discordam:
 //
 //   1. a grade de cron em .github/workflows/daily-refresh.yml (em UTC);
-//   2. o portão da IA no mesmo arquivo, que compara a STRING do cron da manhã — ao trocar
+//   2. o portão da IA no mesmo arquivo (saiu em 20/11/26; ver a seção 3), que comparava a STRING do cron da manhã — ao trocar
 //      a grade eu deixei essa comparação apontando para "56 11 * * *", um cron que havia
 //      deixado de existir. Efeito: nenhuma rodada agendada geraria mais o gargalo do dia
 //      nem o compromisso da semana, EM SILÊNCIO. Pego a tempo, e é o motivo nº 1 deste
@@ -83,20 +83,17 @@ for (let i = 1; i < uteis.length; i++) {
     'entre ' + uteis[i - 1].hhmm + ' e ' + uteis[i].hhmm + ' há ' + buraco + ' min');
 }
 
-/* ── 3. O ACOPLAMENTO DO PORTÃO DA IA ────────────────────────────────────────────────
-   Este é o teste que justifica o arquivo. O portão compara a string do cron da manhã; se
-   ela não estiver na grade, nenhuma rodada agendada gera texto de IA e ninguém vê erro. */
-const mPortao = yml.match(/github\.event\.schedule\s*\}\}"\s*!=\s*"([^"]+)"/);
-conferir('o portão da IA declara um cron', !!mPortao);
-if (mPortao) {
-  const cronDaIA = mPortao[1];
-  conferir('o cron do portão da IA EXISTE na grade', crons.indexOf(cronDaIA) >= 0,
-    'o portão espera "' + cronDaIA + '" e a grade tem [' + crons.join(' | ') + ']');
-  const [minIA, horaIA] = cronDaIA.split(/\s+/);
-  const brtIA = paraBRT(horaIA) * 60 + Number(minIA);
-  conferir('o texto de IA é gerado na rodada da MANHÃ', brtIA === ABRE,
-    'o portão aponta para ' + String(Math.floor(brtIA / 60)).padStart(2, '0') + ':' + String(brtIA % 60).padStart(2, '0') + ' BRT');
-}
+/* ── 3. O PORTÃO DA IA SAIU (20/11/26) ──────────────────────────────────────────────
+   O portão comparava a string do cron da manhã e decidia se a rodada gerava texto de IA.
+   Desde 05/09/26 nenhum passo deste workflow chama a IA (o coaching foi para o semanal de
+   domingo), e a saída gerar=sim/nao não era lida por ninguém. O risco que este bloco media
+   — IA paga em toda rodada sem ninguém ver — continua medido pelo avesso: nenhum passo do
+   robô diário roda gerador de texto, e nenhum lê um portão que não existe mais. */
+const passosNode = (yml.match(/run: node scripts\/[a-z0-9-]+\.js/g) || []);
+conferir('o robô diário roda os seus scripts', passosNode.length >= 3, passosNode.join(' | '));
+conferir('nenhum passo do robô diário gera texto de IA',
+  passosNode.every(function (p) { return !/generate-|narrativ|analise/.test(p); }), passosNode.join(' | '));
+conferir('e nenhum passo lê o portão que saiu', yml.indexOf('steps.portao_ia.outputs') < 0 && yml.indexOf('id: portao_ia') < 0);
 
 /* ── 4. a janela do webhook TEM QUE CONTER a grade ───────────────────────────────────
    A invariante era IGUALDADE, e fazia sentido quando o webhook existia so para acelerar

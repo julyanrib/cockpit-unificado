@@ -84,77 +84,9 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: node scripts/fetch-hubspot.js
 
-      # ==================================================================
-      # CADÊNCIA DA IA (28/08/26) — o texto de IA sai UMA vez por dia útil.
-      #
-      # Antes os dois geradores rodavam nas TRÊS rodadas diárias, todos os dias.
-      # A conta, com 7 executivos e uma chamada por executivo em cada gerador:
-      #
-      #   17 rodadas/semana x 14 chamadas = 238
-      #   + 15 do weekly-summary de sexta
-      #   = 253 chamadas de IA por semana
-      #
-      # Foi isso que esgotou o crédito da Anthropic em 27/08 (7 falhas seguidas
-      # gravadas em _falhasIA), e o esgotamento derrubou a leitura semanal do time.
-      #
-      # O que se perdia pagando 3x por dia: NADA que o produto use. O gargalo do dia
-      # alimenta a Daily das 9h — quem importa é a rodada de 08:56. E a análise
-      # individual é um COMPROMISSO DE SEMANA: o próprio prompt dela manda "dentro da
-      # mesma semana, mantenha os compromissos estáveis... compromisso que muda todo
-      # dia vira ruído e o executivo para de levar a sério".
-      #
-      # Agora: 5 dias uteis x 14 + 15 = 85 chamadas/semana. Corte de 66%, sem perder
-      # nenhuma leitura que alguém abre. As outras duas rodadas do dia continuam
-      # atualizando NÚMERO (fetch-hubspot, ganhos, ranking) — só o texto de IA que
-      # deixa de ser regerado.
-      # ==================================================================
-      - name: Esta rodada gera texto de IA?
-        id: portao_ia
-        run: |
-          # Só a rodada da manhã e o disparo manual geram texto.
-          #
-          # ATENÇÃO — ESTE PORTÃO ESTÁ ACOPLADO À GRADE DE CRON LÁ EM CIMA, pela STRING do
-          # agendamento. Ao trocar a grade em 02/09/26 (de 08:56/13:00/19:00 para 2 em 2
-          # horas) esta comparação apontava para "56 11 * * *", um cron que deixou de
-          # existir — e o efeito seria SILENCIOSO: nenhuma rodada agendada geraria mais o
-          # gargalo do dia nem o compromisso da semana, e ninguém veria erro nenhum. Se a
-          # grade mudar de novo, esta linha muda junto.
-          # 09/10/26: o webhook (origem "webhook") e o botão do gestor (origem "cockpit") também
-          # chegam por workflow_dispatch. O input `origem` existia, mas este portão não o lia:
-          # todo disparo do webhook gerava texto de IA. Só o disparo humano, sem origem, gera.
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ -n "${{ github.event.inputs.origem }}" ]; then
-              echo "gerar=nao" >> "$GITHUB_OUTPUT"
-              echo "Disparo de ${{ github.event.inputs.origem }} — atualiza número, não gera texto de IA."
-              exit 0
-            fi
-            echo "gerar=sim" >> "$GITHUB_OUTPUT"
-            echo "Disparo manual — vai gerar texto de IA."
-            exit 0
-          fi
-          if [ "${{ github.event.schedule }}" != "30 11 * * 1-5" ]; then
-            echo "gerar=nao" >> "$GITHUB_OUTPUT"
-            echo "Rodada de ${{ github.event.schedule }} — atualiza número, não regera texto de IA."
-            exit 0
-          fi
-          # O COMPROMISSO É DA SEMANA, então nasce na SEGUNDA (28/08/26).
-          #
-          # O prompt da análise individual manda, com todas as letras: "dentro da
-          # mesma semana, mantenha os compromissos atuais estáveis (repita-os)...
-          # compromisso que muda todo dia vira ruído e o executivo para de levar a
-          # sério". Gerar de novo terça, quarta e quinta é pagar cinco vezes por um
-          # artefato que deve ser um só — e ainda dá cinco chances de ele mudar.
-          #
-          # Segunda de manhã ele nasce com a semana inteira pela frente. Sexta o
-          # workflow weekly-summary fecha a semana e cuida do mensal, à parte.
-          DIA=$(TZ=America/Sao_Paulo date +%u)   # 1=segunda ... 7=domingo
-          if [ "$DIA" = "1" ]; then
-            echo "gerar=sim" >> "$GITHUB_OUTPUT"
-            echo "Segunda de manhã — compromisso da semana vai ser gerado."
-          else
-            echo "gerar=nao" >> "$GITHUB_OUTPUT"
-            echo "Dia $DIA — compromisso da semana já existe, não regera."
-          fi
+      # A CADÊNCIA DA IA (28/08/26) e o passo "Esta rodada gera texto de IA?" (id portao_ia)
+      # saíram em 20/11/26: desde 05/09/26 nenhum passo daqui chama a IA e ninguém lia a
+      # saída gerar=sim/nao do portão. A história está no git.
 
       # ------------------------------------------------------------------
       # O ROBÔ DO GARGALO EM PROSA FOI APAGADO (05/09/26), a pedido do Julyan, na revisão
@@ -175,9 +107,8 @@ jobs:
       # generate-weekly-summary de sexta (1 de time + 7 individuais, escrevia a leitura
       # da semana). Agora é uma rodada só, domingo 22h, e cada chamada individual devolve
       # os dois conjuntos de campos: 15 chamadas por semana viraram 8.
-      # Consequência aqui: NENHUM passo deste workflow diário chama a IA. O portão
-      # steps.portao_ia continua existindo porque é ele que decide se vale commitar
-      # narrativas, mas nenhuma chamada de API depende mais dele.
+      # Consequência aqui: NENHUM passo deste workflow diário chama a IA (o portão
+      # steps.portao_ia, que já não era lido por passo nenhum, saiu em 20/11/26).
       # ------------------------------------------------------------------
 
       - name: Atualizar números de ganhos/ranking/reuniões (sem gerar texto de IA)

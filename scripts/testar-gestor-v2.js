@@ -812,7 +812,8 @@ tabelas.gv2_falta_etapa = [
       /* 14/10/26: a regra de gestor é eh_gestor_cockpit (gestor do app OU manager do cockpit); is_field_admin sozinho barrava o gestor que só existe no cockpit */
       checar('Atualizar HubSpot: botão na Hoje, rota só para gestor (eh_gestor_cockpit), origem cockpit, e o robô não gera IA em disparo com origem (09/10/26)',
         GV2.render.time().indexOf('data-gv2="hsatu"') > 0 && api.indexOf('/rest/v1/rpc/eh_gestor_cockpit') > 0 && api.indexOf('/rest/v1/rpc/is_field_admin') < 0 && api.indexOf("inputs: { origem: 'cockpit' }") > 0
-          && api.indexOf('PLACEHOLDER') < 0 && wf.indexOf('if [ -n "${{ github.event.inputs.origem }}" ]; then') > 0
+          /* 20/11/26: o portão que lia `origem` saiu — o robô diário não chama IA em disparo nenhum */
+          && api.indexOf('PLACEHOLDER') < 0 && wf.indexOf('id: portao_ia') < 0 && !/run: node scripts\/generate-/.test(wf)
           && fsx.readFileSync(px.join(__dirname, '..', 'api', 'hubspot-webhook.js'), 'utf8').indexOf("req.query.acao === 'atualizar'") > 0 && fsx.readdirSync(px.join(__dirname, '..', 'api')).filter(function (f) { return /\.js$/.test(f); }).length <= 12);
     }
     checar('executivo · Meu funil: o R$ dos sem próximo passo usa a lista do movimento (não x.semPasso) e Ag. Pagamento vazio não manda puxar munição (09/10/26)',
