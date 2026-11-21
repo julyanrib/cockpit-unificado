@@ -370,16 +370,13 @@ checar('o vermelho da leitura por pessoa depende de amostra suficiente',
     return bloco.indexOf('taxa != null && taxa >= 50') > 0;
   }()),
   'cor sobre amostra curta e acusacao sobre ruido');
-checar('as colunas vem do agregado do robo, nao de uma lista de etapas escrita a mao',
-  templateCodigo.indexOf('const ordem = Array.isArray(h.agregado) ? h.agregado : []') > 0);
+/* 20/11/26: saíram as cinco do funil interativo (gxFunilRaioX), que ninguém desenhava — a faxina final o tirou. */
 /* A TELA DECLARA QUE NAO E RANKING, e diz de onde vem o numero. Sem isso a leitura por
    pessoa vira placar, e placar sobre etapa do funil compara quem tem praca diferente. */
 checar('a leitura por pessoa declara que nao e ranking e diz a fonte',
   templateCodigo.indexOf('Não é ranking — a leitura é onde treinar') > 0 &&
   templateCodigo.indexOf('notaDeFonte') > 0,
   'sem a declaracao, a leitura vira placar entre pracas diferentes');
-checar('a comparacao respeita quem ainda esta no campo',
-  templateCodigo.indexOf('!ownerAtivoNoField(rep.ownerId)) return null') > 0);
 /* O DEGRAU DIZ QUAL E O PIOR, com nome. A escada antiga mostrava 'N saíram'; o acordeao
    mostra a taxa por etapa E aponta o degrau mais fraco na nota — que e a acao que a
    leitura existe para provocar. */
@@ -408,22 +405,6 @@ checar('estoque e conversao ficam em leituras separadas',
     return temEscada && temTempos;
   }()),
   'estoque e conversao no mesmo bloco e onde um vira o outro sem ninguem notar');
-checar('a conversao do cartao vem do historico de etapa, nao da contagem de abertos',
-  templateCodigo.indexOf('const taxa = et.chegaram > 0 ? (et.avancaram / et.chegaram) : null') > 0 &&
-  templateCodigo.indexOf('const ordem = Array.isArray(h.agregado) ? h.agregado : []') > 0);
-checar('o estoque do cartao vem dos abertos, e so de quem esta no campo',
-  templateCodigo.indexOf('(DATA.funilLeads || {})[id] || []') > 0 &&
-  templateCodigo.indexOf('ownerAtivoNoField(l.ownerId)') > 0);
-/* ESTA CHECAGEM MORREU COM O DESENHO QUE ELA MEDIA (06/09/26), e o motivo fica escrito
-   em vez de a linha desaparecer: ela exigia o mecanismo de 'acende onde o vao pesa' do
-   topo do raio-X, que era um cartao interativo especifico. O raio-X saiu na varredura e
-   nao tem sucessor com topo que acende. O que ela protegia de verdade — vermelho so onde
-   o numero aguenta — passou para a checagem de amostra suficiente, acima.
-   Nao inventei uma checagem nova com o mesmo nome: guarda que mede desenho inexistente e
-   guarda que da verde sobre nada. */
-checar('amostra curta nao acusa ninguem no funil interativo',
-  templateCodigo.indexOf('curta: dele.chegaram < GX_FX_MIN_CELULA') > 0 &&
-  templateCodigo.indexOf('dele.chegaram >= GX_FX_MIN_CELULA') > 0);
 /* ══ AS QUATRO CHECAGENS DA LISTA DE CASOS SAIRAM EM 13/09/26 ══════════════════════
    Elas mediam `gxFxCasosHTML` — a lista de negocios estourados dentro da quebra do
    funil. Essa lista nao existe: o painel por executivo do raio-X ja tinha sido removido

@@ -74,8 +74,10 @@ checar('nenhuma leitura direta de proximaAtividade decide "sem próximo passo"',
 /* a carga existe, roda depois do login e de cada gravação do plano */
 checar('carregarPlanoDosNegocios roda depois do login (reidratarPosLogin)',
   /if \(typeof carregarAgendaDoApp === 'function'\) await carregarAgendaDoApp\(\);\s*if \(typeof carregarPlanoDosNegocios === 'function'\) await carregarPlanoDosNegocios\(\);/.test(tpl));
-checar('o plano gravado (semana e dia) recarrega o registro',
-  (tpl.match(/if \(typeof carregarPlanoDosNegocios === 'function'\) carregarPlanoDosNegocios\(\);/g) || []).length === 2);
+/* era "(semana e dia)", === 2: o gravador do plano do DIA (salvarPlanoDoDia) saiu em 20/11/26 —
+   ninguém o chamava desde que o dia virou parte da grade da semana. */
+checar('o plano gravado recarrega o registro',
+  (tpl.match(/if \(typeof carregarPlanoDosNegocios === 'function'\) carregarPlanoDosNegocios\(\);/g) || []).length === 1);
 checar('a carga lê esta semana e a próxima',
   tpl.indexOf("supa.rpc('rotas_da_semana', { p_segunda: seg, p_donos: p_donos })") > 0 && tpl.indexOf("supa.rpc('rotas_da_semana', { p_segunda: prox, p_donos: p_donos })") > 0);
 

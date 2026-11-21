@@ -58,22 +58,9 @@ checar('a hora viaja no corpo do pedido, e só quando ele escolheu uma',
    isso o primeiro conserto foi só nela — medido depois na produção, com a sessão dele:
    clicar em "próximo passo" num cartão do Meu funil abria `.fn3-passo-in` (type=date) e
    mais nada. Dois lugares para a mesma ação é como um conserto cobre metade do pedido. */
-checar('o cartão do Meu funil também tem hora ao lado do dia',
-  /<input type="text" list="fpHorasLista" inputmode="numeric" autocomplete="off" placeholder="hora" class="fn3-passo-in fn3-passo-hora" data-fn3-passo-hora=/.test(tpl)
-    && /const campoH = el\.querySelector\('\[data-fn3-passo-hora="' \+ id \+ '"\]'\);/.test(tpl),
-  'era o formulário de que ele reclamou; o da ficha era o outro');
-
-checar('e o gravador do funil valida a hora e a manda ao servidor',
-  /const gravarPasso = async function \(id, dataISO, botao, horaCrua\) \{/.test(tpl)
-    && /\.\.\.\(hora \? \{ hora: hora \} : \{\}\),/.test(tpl)
-    && /A hora precisa estar no formato HH:MM — não datei nada\./.test(tpl),
-  'hora malformada num compromisso com cliente é pior do que hora nenhuma');
-
-checar('e o espelho do funil usa a hora escolhida, não 12:00Z fixo',
-  /const quando = hora/.test(tpl)
-    && /\(dataISO \+ 'T' \+ String\(Number\(hora\.slice\(0, 2\)\) \+ 3\)\.padStart\(2, '0'\)/.test(tpl)
-    && /: \(dataISO \+ 'T12:00:00\.000Z'\);/.test(tpl),
-  'espelho em 9h para um compromisso das 15h é o mesmo erro, só do lado de cá');
+/* Saíram em 20/11/26 as três do cartão do Meu funil v3 (campo de hora, gravarPasso e o espelho dele):
+   o cartão v3 deixou de existir com o kanban v6, e a faxina final tirou o formulário e o gravador mortos.
+   A hora do próximo passo que vive é a da ficha, medida acima. */
 
 /* ── 3 · O ESPELHO: o quinto argumento finalmente é passado ─────────────────────────── */
 checar('o espelho das telas recebe a hora',

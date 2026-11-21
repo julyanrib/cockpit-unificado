@@ -81,7 +81,7 @@ checar('o id da oferta NÃO está na enumeração do servidor',
 
 /* E A ABA DE PROPOSTAS CONTINUA ESCREVENDO SÓ AS DUAS PROPRIEDADES QUE ELA SABE. */
 const iPrc = tpl.indexOf('const PRC_ETAPA_DEMO');
-const iFim = tpl.indexOf('function prcBlocoAdicionaisHTML');
+const iFim = tpl.indexOf('function prcLigarPeriodos', iPrc);
 const blocoPrc = (iPrc > -1 && iFim > iPrc) ? tpl.slice(iPrc, iFim) : '';
 checar('o bloco da aba Propostas foi encontrado', blocoPrc.length > 1000,
   'sem o recorte a checagem abaixo passa medindo nada');
@@ -90,29 +90,9 @@ checar('a proposta não escreve periodo_contratado',
   'ela escreve plano_apresentado e valor_de_mrr; o período o executivo declara na entrada '
     + 'de Ag. Pagamento, escolhendo um dos quatro valores que o HubSpot aceita');
 
-/* ══ 5. A TELA ══════════════════════════════════════════════════════════════════════ */
-/* A GRADE DOS PERÍODOS, e não qualquer grade: `auto-fit,minmax(150px,1fr)` aparece três
-   vezes no arquivo, então procurar o padrão solto deixava a sabotagem passar — medido.
-   O recorte vai da grade até o `.map` das periodicidades, que é o que a torna esta. */
-const iGradePer = tpl.indexOf('${prcRotPasso(4, \'Período\'');
-const iMapPer = tpl.indexOf('precificacaoCache.periodicidades.map', iGradePer);
-const gradePeriodo = (iGradePer > -1 && iMapPer > iGradePer) ? tpl.slice(iGradePer, iMapPer) : '';
-checar('a grade dos períodos foi encontrada', gradePeriodo.length > 40,
-  'sem o recorte a checagem abaixo mede o vazio');
-checar('a grade de períodos acompanha quantos períodos existem',
-  /repeat\(auto-fit,minmax\(150px,1fr\)\)/.test(gradePeriodo)
-    && !/repeat\(4,/.test(gradePeriodo),
-  'estava cravada em repeat(4,...) e o quinto cartão cairia sozinho numa segunda fileira');
-
-checar('o cartão da oferta se identifica como oferta',
-  /per\.promocao \? '#E51A31' : '#1E9E7B'/.test(tpl) && /per\.promocao \? 'OFERTA ' : ''/.test(tpl),
-  'um "−30%" verde no meio dos outros quatro lê como mais uma faixa da tabela; o dono '
-    + 'precisa ouvir que é temporário para decidir agora');
-
-checar('a nota do período quebra em vez de ser cortada',
-  !/color:#1E9E7B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">\$\{esc\(nota\)\}/.test(tpl),
-  'com o quinto cartão a coluna caiu de 196px para 155px e a nota do anual perdia o '
-    + '"economiza R$ 1.320" — que é o número que vende o período');
+/* ══ 5. A TELA — saiu em 20/11/26. A grade de períodos da Propostas antiga (prcBlocoPeriodoHTML e o
+   cartão da oferta dentro dela) não era chamada por ninguém desde a Calculadora (pc9); a faxina final
+   tirou o markup morto, e com ele estas quatro checagens de desenho. As regras de dado acima ficam. */
 
 console.log('');
 console.log('oferta trimestral: ' + ok + ' verificações');

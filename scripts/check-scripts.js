@@ -1385,11 +1385,11 @@ function checarGestorSemZeroInventado() {
 
   /* (c) OS CAMINHOS DE "NAO MEDIDO", por frase. As duas primeiras sao do placar de ontem
      (prancha daily-gestor-final): promessa que ninguem registrou e feito que nao deu para
-     medir. A terceira e a faixa inteira quando a consulta de planos falha. */
+     medir. (A terceira, "planos nao lidos", saiu em 20/11/26 com a faixa que a usava:
+     ninguem a chamava mais, e a guarda casava so o comentario dela.) */
   [
     ['promessa nao registrada', 'sem promessa registrada'],
-    ['feito nao medido', 'feito não medido'],
-    ['planos nao lidos', 'a leitura de planos_diarios falhou']
+    ['feito nao medido', 'feito não medido']
   ].forEach(function (par) {
     if (cru.indexOf(par[1]) < 0) {
       falhas.push('sumiu o caminho de "' + par[0] + '" - sem ele o vazio volta a ser'

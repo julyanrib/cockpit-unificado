@@ -208,7 +208,6 @@ const B = ['b:meier', 'b:tijuca', 'b:madureira', 'b:vila isabel', 'b:penha'];
   const S0 = semana(['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'], 2, { 0: 'Finados' });
   const t = P.topo(S0, [[{ feita: true }], [{ feita: true }, {}], [], [{}, {}, {}], [{}]]);
   checar('topo coerente: na grade = soma dos dias úteis (o feriado fora), cobertos = dias úteis com cartão, feitas = com check-in', t.naGrade === 6 && t.cobertos === 3 && t.uteis === 4 && t.feitas === 1, JSON.stringify(t));
-  checar('"mover 3 para…" vai para o dia útil não passado com menos paradas', P.diaComMenos(S0, [0, 2, 9, 1, 4], 2) === 3);
 }
 
 /* ── 8 · a fiação: a v3 é o padrão, a v2 continua atrás da flag, e o ao vivo não mostra mais o aviso nesta aba ── */

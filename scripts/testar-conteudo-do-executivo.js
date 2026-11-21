@@ -86,14 +86,8 @@ conferir('e NÃO soma total de contrato como se fosse mensalidade',
   !/lead\.valor\b/.test(valor) && !/lead\.amount\b/.test(valor),
   'as duas linhas que exibem este número escrevem "/mês"; contrato somado ali mistura unidades');
 
-conferir('o total de contrato não se perdeu: tem leitor próprio',
-  /function fn2ValorContrato\(lead\)/.test(tpl) &&
-  /lead\.valor \|\| lead\.amount/.test(corpoDe('fn2ValorContrato')),
-  'os 5 negócios com contrato e sem mensalidade não podem sumir da tela — só sair do "em jogo"');
+/* 20/11/26: as duas do total de contrato (fn2ValorContrato) saíram com o cartão do Meu funil v3, o único que o desenhava; o kanban v6 não tem essa linha desde 01/10. */
 
-conferir('e ele aparece dito como contrato, não como /mês',
-  (tpl.match(/' contrato'/g) || []).length >= 2,
-  'a palavra é o que separa R$ 8.000 de contrato de R$ 8.000 por mês');
 
 /* ── 5 · O DECK ÓRFÃO DA FILA SAIU, E OS CTAs LEVAM PARA A FILA QUE EXISTE ─────────
    `filaDeFollowUpHTML` e `wireFilaDeFollowUp` desenhavam chips de balde e só se chamavam

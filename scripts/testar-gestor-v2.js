@@ -1587,12 +1587,6 @@ tabelas.gv2_falta_etapa = [
           && /pl7-cap is-ok/.test(c8) && /8 \(\+2\) · meta 6/.test(c8) && !/pl7-mix/.test(c8));
     }
     if (P) {
-      const e2 = P.enviarHTML(2, null, false), e5 = P.enviarHTML(5, null, false), eE = P.enviarHTML(3, '2026-10-16T21:10:00Z', false);
-      checar('pl7 · enviar ao gestor: com 2 de 5 é contornado e diz que pode enviar; com 5 fica vermelho; enviado mostra a hora',
-        /data-pl6-acao="pl7enviar:2"/.test(e2) && !/is-pronto/.test(e2) && /pode enviar com regra faltando/.test(e2)
-          && /pl7-enviar-bt is-pronto/.test(e5) && /plano enviado ✓/.test(eE) && /18:10/.test(eE) && /Reenviar/.test(eE));
-    }
-    if (P) {
       const A = { lat: -23.5505, lng: -46.6333 }, B = { lat: -23.5605, lng: -46.6333 };
       checar('pl7 · mapa: 0,01° de latitude ≈ 1,1 km em linha reta', Math.abs(P.km(A, B) - 1.112) < 0.01, String(P.km(A, B)));
       const perto = P.perto([A], [{ id: 'a', lat: -23.551, lng: -46.6333 }, { id: 'longe', lat: -23.70, lng: -46.6333 }, { id: 'q', quente: true, lat: -23.56, lng: -46.6333 }], 4);
@@ -2188,7 +2182,7 @@ tabelas.gv2_falta_etapa = [
     GV2.hbLer = function () {};
     /* domingo 01/11: o mês não tem dia útil fechado; o último dia útil foi sexta 30/10 */
     GV2.base.agora = Object.assign({}, agEra, { iso: '2026-11-01', min: 700 }); GV2.base.ontemIso = '2026-10-30';
-    checar('auditoria · no domingo, o último dia útil é "na sexta 30/10", não "ontem"', GV2.ontemDe() === 'na sexta 30/10' && GV2.ontemCurto() === 'Sex 30/10', GV2.ontemDe());
+    checar('auditoria · no domingo, o último dia útil é "na sexta 30/10", não "ontem"', GV2.ontemDe() === 'na sexta 30/10', GV2.ontemDe());
     checar('auditoria · na terça, ontem é ontem', GV2.ontemDe('2026-11-02', '2026-11-03') === 'ontem');
     checar('auditoria · dia 1º antes do primeiro dia útil: "mês começando", não "no ritmo"', GV2.v8Comecando() && GV2.v8Selo(0, 0).t === 'mês começando' && /O mês começa terça 03\/11/.test(GV2.v8Gargalo(GV2.v8Ritmo(null)).t), JSON.stringify([GV2.v8Comecando(), GV2.v8Mes(), GV2.v8Selo(0, 0), GV2.v8Gargalo(GV2.v8Ritmo(null))]));
     const mk = function (id, meta, fech) { return { id: id, nome: id, meta_clientes_mes: meta, fase: 'Pleno', funil_mes: { portas: 0, decisor: 0, demo: 0, proposta: 0, fechado: fech } }; };

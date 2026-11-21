@@ -31,7 +31,11 @@ let ok = 0;
 const APOSENTADAS = [
   'a fiação trata os três tipos', 'os destinos reusam os caminhos que já existem', 'as três prioridades saem do funil ao vivo',
   'o CTA só é desenhado quando existe destino', 'a fala pronta não aparece sem gargalo', 'toda pergunta do rodapé nasce com resposta',
-  'a resposta não vai buscar dado no clique'
+  'a resposta não vai buscar dado no clique',
+  /* 20/11/26: a faxina final tirou o que estas protegiam — o Desenvolvimento antigo do executivo
+     (contrastesDoExecutivo, o acordo do 1:1 dentro dele, os indicadores e o destravar do núcleo),
+     que ninguém chamava desde a prancha DESE. */
+  'contraste com gap zero não entra', 'acordo marcado fica aguardando o gestor'
 ];
 function checar(nome, condicao, porque) {
   if (APOSENTADAS.some(function (n) { return String(nome).indexOf(n) === 0; })) return;
@@ -178,10 +182,6 @@ checar('acordo marcado fica aguardando o gestor',
 checar('o fundo da página só muda nesta aba',
   template.indexOf('body.exec-v3:has(#viewPDIs.active){background:var(--bg);}') > -1,
   'sem o :has, o cockpit inteiro trocaria de fundo');
-
-/* ── 9. O QUE JÁ EXISTIA E NÃO PODE SUMIR ────────────────────────────────────────── */
-['focoDeHabilidadeHTML', 'buildIndicadoresExecutivoHTML', 'compromissosComPrazo', 'destravarFunil']
-  .forEach(fn => checar('continua existindo: ' + fn, template.indexOf('function ' + fn) > -1));
 
 /* ── 10. O TREINO DA SEMANA ──────────────────────────────────────────────────────
    Coluna aditiva em pdi_compromissos (treino_feito_em, treino_foco), autorizada pelo

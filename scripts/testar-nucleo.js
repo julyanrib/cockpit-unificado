@@ -357,31 +357,8 @@ teste('evento do Expogo e do PWA produzem o MESMO formato de touchpoint', () => 
   igual(tps.map(t => t.sync_status), ['sincronizado', 'sincronizado'], 'ambos sincronizados');
 });
 
-teste('visita passada sem fechamento = registro incompleto, não realizada', () => {
-  const l = lead({ id: 'L2', name: 'Pizzaria X' });
-  const c = novoContexto(dados({
-    agenda: { eventos: [{ id: 'e9', ownerId: OWNER, dealId: 'L2', tipo: 'rota', inicio: diasAtras(1), cliente: 'Pizzaria X', desfecho: null, registro: false, obs: '', decisor: null }] },
-    funilLeads: { '1396005401': [l] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const tp = c.touchpointsDoLead(l)[0];
-  igual(tp.sync_status, 'sincronizado', 'o evento veio do HubSpot: sincronizado');
-  falso(tp._realizado, 'não é realizado');
-  verdade(tp._semDesfecho, 'está sem desfecho');
-  igual(c.rotuloDeRegistroDaVisita(tp).id, 'incompleto', 'visita passada não fechada é registro incompleto, não falha de rede');
-});
+/* 20/11/26: saíram os testes das funções do núcleo que ninguém chamava (indicadoresDoExecutivo, destravarFunil, tipo/somaDaPromessa, eixos e ciclo da semana, rotuloDeRegistroDaVisita) — a faxina final tirou as funções. */
 
-teste('agendado no futuro não conta como realizado', () => {
-  const l = lead({ id: 'L3', name: 'Café Central' });
-  const c = novoContexto(dados({
-    agenda: { eventos: [{ id: 'e10', ownerId: OWNER, dealId: 'L3', tipo: 'rota', inicio: diasAFrente(1), cliente: 'Café Central', desfecho: null, registro: false, obs: '', decisor: null }] },
-    funilLeads: { '1396005401': [l] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const tp = c.touchpointsDoLead(l)[0];
-  verdade(tp._agendadoFuturo, 'é futuro');
-  falso(tp._realizado, 'não é realizado');
-  igual(c.toquesDoLead(l).total, 0, 'nenhum toque realizado');
-  igual(c.rotuloDeRegistroDaVisita(tp).id, 'agendado');
-});
 
 teste('contagem de toques é declaradamente parcial', () => {
   const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
@@ -547,18 +524,6 @@ console.log('\n== Gates do dia e CTA (Escopo 1) ==');
    guarda a digitação, não o comportamento — o que precisa ser guardado é que existe um
    teto e que ele é respeitado, e isso se faz lendo o teto de onde ele mora. */
 
-teste('visita sem associação de negócio no HubSpot é "não confirmada"', () => {
-  const l = lead({ id: 'NC', name: 'Bar Sem Vínculo' });
-  const c = novoContexto(dados({
-    // sem dealId de propósito: é o caso dos 24 itens da carga real que chegam sem
-    // lead_deal_id — o nome bate, a associação não existe.
-    agenda: { eventos: [{ id: 'enc', ownerId: OWNER, tipo: 'rota', inicio: diasAtras(1), cliente: 'Bar Sem Vínculo', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }] },
-    funilLeads: { '1396005401': [l] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const tp = c.touchpointsDoLead(l)[0];
-  verdade(tp._clienteNaoConfirmado, 'marcado como não confirmado');
-  igual(c.rotuloDeRegistroDaVisita(tp).id, 'nao_confirmada', 'não confirmada ganha de qualquer outro estado');
-});
 
 console.log('\n== Desfecho estruturado: escrever E ler (o ciclo fechado) ==');
 
@@ -776,13 +741,6 @@ teste('falha de sincronização própria aparece pro executivo', () => {
 
 console.log('\n== Indicadores do executivo (Escopo 12) ==');
 
-teste('indicadores declaram amostra quando não há base de cálculo', () => {
-  const c = novoContexto(dados({ funilLeads: { '1396005401': [lead({ id: 'i1', ultimaInteracao: diasAtras(2).toISOString() })] } }), { ownerId: OWNER, role: 'rep' });
-  const ind = c.indicadoresDoExecutivo(c.DATA.reps[0]);
-  const t2 = ind.find(x => x.id === 'segundo_toque');
-  igual(t2.valor, null, 'sem amostra, valor é null e não 0');
-  verdade(/sem amostra/.test(t2.nota), 'a nota explica por quê');
-});
 
 console.log('\n== Papéis (Escopo: não alterar a experiência do gestor) ==');
 
@@ -935,35 +893,8 @@ teste('data inválida não quebra a ordenação', () => {
 
 console.log('\n== Promessa derivada (prometido × realizado sem digitação) ==');
 
-teste('o tipo da promessa sai da etapa do negócio', () => {
-  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
-  igual(c.tipoDaPromessa({ stageId: '1395880469' }), 'visitas', 'Prospecção = visita');
-  igual(c.tipoDaPromessa({ stageId: '1396005401' }), 'visitas', 'Visita = visita');
-  igual(c.tipoDaPromessa({ stageId: '1395880470' }), 'avancos', 'Decisor = avanço');
-  igual(c.tipoDaPromessa({ stageId: '1395880471' }), 'propostas', 'Demo/Proposta = proposta');
-  igual(c.tipoDaPromessa({ stageId: '1395880472' }), 'fechamentos', 'Negociação = fechamento');
-  igual(c.tipoDaPromessa({ stageId: '1395880473' }), 'fechamentos', 'Ag. Pagamento = fechamento');
-});
 
-teste('sem etapa conhecida não inventa uma visita', () => {
-  // A promessa é auditável: negócio fora do mapa precisa ser classificado antes de
-  // entrar no compromisso, em vez de inflar visitas por aproximação.
-  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
-  igual(c.tipoDaPromessa({ stageId: '1396006164' }), null, 'etapa fora do mapa');
-  igual(c.tipoDaPromessa({}), null, 'sem stageId');
-  igual(c.tipoDaPromessa(null), null, 'lead nulo');
-});
 
-teste('a soma ignora tipo inválido em vez de transformá-lo em visita', () => {
-  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
-  const itens = [
-    { tipo: 'visitas' }, { tipo: 'visitas' }, { tipo: 'avancos' },
-    { tipo: 'propostas' }, { tipo: 'fechamentos' }, { tipo: 'coisa_invalida' }
-  ];
-  const som = c.somaDaPromessa(itens);
-  igual(som, { visitas: 2, avancos: 1, propostas: 1, fechamentos: 1 }, 'tipo inválido não entra na promessa');
-  igual(som.visitas + som.avancos + som.propostas + som.fechamentos, itens.length - 1, 'só itens classificados entram');
-});
 
 /* A HORA MUDOU DE 9H30 PARA 13H EM 03/09/26 (decisão do Julyan). O ritual continua às
    8h30 — a trava não é o horário da daily, é o prazo. 9h30 dava uma hora a quem entra na
@@ -1021,113 +952,13 @@ function funilDoBruno() {
   };
 }
 
-teste('acha o degrau travado: Visita cheia com Decisor vazio', () => {
-  const c = novoContexto(dados(funilDoBruno()), { ownerId: OWNER, role: 'rep' });
-  const d = c.destravarFunil(OWNER);
-  igual(d.etapaTravada, '1396005401', 'a etapa travada é Visita');
-  igual(d.motivo, 'saida_travada', 'e o motivo é saída travada, não estoque');
-  igual(d.proximaLabel, 'Conversa com Decisor', 'nomeia o degrau seguinte');
-  igual(d.candidatos.length, 14, 'os 14 são candidatos a subir');
-});
 
-teste('o movimento sai do que FALTA, e qualificação vem antes de tudo', () => {
-  const semNada = lead({ id: 'D1', name: 'Cego', stageId: '1396005401', dias: 5 });
-  const qualificado = lead({ id: 'D2', name: 'Qualificado', stageId: '1396005401', dias: 5,
-    nome_do_sistema: 'Consumer', gargalo_operacional: 'Fila' });
-  const pronto = lead({ id: 'D3', name: 'Pronto', stageId: '1396005401', dias: 5,
-    nome_do_sistema: 'Saipos', gargalo_operacional: 'Estoque',
-    tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
-  const c = novoContexto(dados({
-    funilLeads: { '1396005401': [semNada, qualificado, pronto] },
-    reps: [{ ownerId: OWNER, name: 'T', open: 3, travados: [], criticos: [], quentes: [], stages: { '1396005401': 3, '1395880470': 0 } }]
-  }), { ownerId: OWNER, role: 'rep' });
-  const d = c.destravarFunil(OWNER);
-  igual(d.candidatos.map(x => x.nome), ['Cego', 'Qualificado', 'Pronto'], 'ordem: falta qualificação, falta passo, pronto');
-  verdade(/sistema e dor/.test(d.candidatos[0].movimento), 'o cego é mandado qualificar primeiro');
-  verdade(/decisor/i.test(d.candidatos[1].movimento), 'o qualificado é mandado pedir o decisor');
-  verdade(/executar/i.test(d.candidatos[2].movimento), 'o pronto é mandado executar e mover');
-  igual([d.faltandoQualificacao, d.faltandoPasso, d.prontosParaSubir], [1, 1, 1], 'agregados coerentes');
-});
 
-teste('o gesto é o da etapa travada, não um texto genérico', () => {
-  // Sandro real: 10 de 10 em Prospecção. O gesto ali é primeiro contato, não decisor.
-  const presp = [];
-  for (let i = 0; i < 5; i++) presp.push(lead({ id: 'P' + i, name: 'Prosp ' + i, stageId: '1395880469', dias: 7,
-    nome_do_sistema: 'x', gargalo_operacional: 'Fila' }));
-  const c = novoContexto(dados({
-    funilLeads: { '1395880469': presp },
-    reps: [{ ownerId: OWNER, name: 'T', open: 5, travados: [], criticos: [], quentes: [], stages: { '1395880469': 5, '1396005401': 0 } }]
-  }), { ownerId: OWNER, role: 'rep' });
-  const d = c.destravarFunil(OWNER);
-  igual(d.etapaTravadaLabel, 'Prospecção', 'travou na Prospecção');
-  verdade(/primeiro contato/i.test(d.candidatos[0].movimento), 'gesto de Prospecção, não de Visita');
-});
 
-teste('o retrato por etapa traz razão mediana/SLA comparável', () => {
-  // Kelly real no Decisor: mediana 19d contra SLA 4 = 4,8x.
-  const dec = [1, 19, 25].map((dd, i) => lead({ id: 'K' + i, name: 'Dec ' + i, stageId: '1395880470', dias: dd, slaBreach: dd > 4 }));
-  const c = novoContexto(dados({
-    funilLeads: { '1395880470': dec },
-    reps: [{ ownerId: OWNER, name: 'T', open: 3, travados: [], criticos: [], quentes: [], stages: { '1395880470': 3 } }]
-  }), { ownerId: OWNER, role: 'rep' });
-  const d = c.destravarFunil(OWNER);
-  const e = d.porEtapa.find(x => x.sid === '1395880470');
-  igual(e.mediana, 19, 'mediana de dias na etapa');
-  igual(e.sla, 4, 'SLA da etapa');
-  igual(e.razao, 4.8, 'razão 19/4 = 4,8x');
-  igual(e.acimaDoSla, 2, 'dois acima do SLA');
-});
 
-teste('funil SAUDÁVEL não recebe gargalo falso', () => {
-  // Caso real do Marco em 28/08: Prospecção com 6 negócios, mediana 2d contra SLA 5,
-  // ZERO acima do SLA. gargaloDoRep pontuava por volume e ela ganhava sempre, então a
-  // tela dizia "o degrau que não está sendo subido: Prospecção" — falso. E ⚠ falso
-  // treina a pessoa a ignorar o ⚠ verdadeiro.
-  const presp = [];
-  for (let i = 0; i < 6; i++) presp.push(lead({ id: 'S' + i, stageId: '1395880469', dias: 2, slaBreach: false }));
-  const visita = [lead({ id: 'SV', stageId: '1396005401', dias: 2, slaBreach: false })];
-  const c = novoContexto(dados({
-    funilLeads: { '1395880469': presp, '1396005401': visita },
-    reps: [{ ownerId: OWNER, name: 'Marco Teste', open: 7, travados: [], criticos: [], quentes: [],
-      stages: { '1395880469': 6, '1396005401': 1 } }]
-  }), { ownerId: OWNER, role: 'rep' });
-  const d = c.destravarFunil(OWNER);
-  verdade(d.saudavel, 'reconhece o funil como saudável');
-  igual(d.porEtapa.filter(e => e.ehGargalo).length, 0, 'nenhuma etapa marcada com gargalo');
-});
 
-teste('uma condição que falha já derruba o "saudável"', () => {
-  // Mesmo funil, mas UM negócio acima do SLA na etapa apontada. Volta a ser gargalo.
-  const presp = [];
-  for (let i = 0; i < 6; i++) presp.push(lead({ id: 'T' + i, stageId: '1395880469', dias: 2, slaBreach: i === 0 }));
-  const c = novoContexto(dados({
-    funilLeads: { '1395880469': presp, '1396005401': [lead({ id: 'TV', stageId: '1396005401', dias: 2 })] },
-    reps: [{ ownerId: OWNER, name: 'T', open: 7, travados: [presp[0]], criticos: [], quentes: [],
-      stages: { '1395880469': 6, '1396005401': 1 } }]
-  }), { ownerId: OWNER, role: 'rep' });
-  const d = c.destravarFunil(OWNER);
-  falso(d.saudavel, 'com negócio acima do SLA não é saudável');
-  verdade(d.porEtapa.some(e => e.ehGargalo), 'volta a marcar o gargalo');
-});
 
-teste('saída travada manda mais que qualquer sinal de saúde', () => {
-  // Bruno: 14 em Visita, ZERO no Decisor, e só 1 acima do SLA (mediana 3d / SLA 5 = 0,6x).
-  // Pelas outras duas condições ele "passaria" como saudável. Não pode.
-  const c = novoContexto(dados(funilDoBruno()), { ownerId: OWNER, role: 'rep' });
-  const d = c.destravarFunil(OWNER);
-  igual(d.motivo, 'saida_travada', 'motivo é saída travada');
-  falso(d.saudavel, 'e saída travada nunca é saudável');
-});
 
-teste('funil vazio não inventa gargalo', () => {
-  const c = novoContexto(dados({
-    reps: [{ ownerId: OWNER, name: 'T', open: 0, travados: [], criticos: [], quentes: [], stages: {} }]
-  }), { ownerId: OWNER, role: 'rep' });
-  const d = c.destravarFunil(OWNER);
-  igual(d.etapaTravada, null, 'sem etapa travada');
-  igual(d.candidatos, [], 'sem candidatos');
-  igual(d.porEtapa, [], 'sem retrato');
-});
 
 console.log('\n== Ciclo fechado da semana (constância por qualidade, não só volume) ==');
 
@@ -1144,96 +975,11 @@ function eventoVisita(dealId, cliente, dataISO) {
   };
 }
 
-teste('visita qualificada e com próximo passo = ciclo fechado', () => {
-  const l = lead({ id: 'C1', name: 'Pizzaria Fechada', nome_do_sistema: 'Consumer',
-    gargalo_operacional: 'Fila', tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
-  const c = novoContexto(dados({
-    funilLeads: { '1396005401': [l] },
-    agenda: { eventos: [eventoVisita('C1', 'Pizzaria Fechada', iso(HOJE))] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
-  igual(r.avaliados, 1, 'uma visita avaliada');
-  igual(r.fechados, ['Pizzaria Fechada'], 'ciclo fechado');
-  igual(r.pct, 100, '100%');
-});
 
-teste('o vazamento é nomeado: sem qualificação, sem passo, ou os dois', () => {
-  // É esta a parte que ensina o ofício — dizer QUAL gesto faltou, não só o total.
-  const soQual = lead({ id: 'C2', name: 'Só qualificada', nome_do_sistema: 'Saipos', gargalo_operacional: 'Estoque' });
-  const soPasso = lead({ id: 'C3', name: 'Só com passo',
-    tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
-  const nenhum = lead({ id: 'C4', name: 'Nem um nem outro' });
-  const c = novoContexto(dados({
-    funilLeads: { '1396005401': [soQual, soPasso, nenhum] },
-    agenda: { eventos: [
-      eventoVisita('C2', 'Só qualificada', iso(HOJE)),
-      eventoVisita('C3', 'Só com passo', iso(HOJE)),
-      eventoVisita('C4', 'Nem um nem outro', iso(HOJE))
-    ] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
-  igual(r.avaliados, 3, 'três avaliadas');
-  igual(r.fechados, [], 'nenhum ciclo fechado');
-  igual(r.faltaPasso, ['Só qualificada'], 'qualificada mas sem passo');
-  igual(r.faltaQualificacao, ['Só com passo'], 'com passo mas sem qualificação');
-  igual(r.faltaAmbos, ['Nem um nem outro'], 'faltando os dois');
-  igual(r.pct, 0, '0%');
-});
 
-teste('mesmo cliente visitado duas vezes na semana é UM ciclo', () => {
-  const l = lead({ id: 'C5', name: 'Duas visitas', nome_do_sistema: 'Linx', gargalo_operacional: 'Fila',
-    tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
-  const ontem = iso(new Date(HOJE.getTime() - DIA));
-  const c = novoContexto(dados({
-    funilLeads: { '1396005401': [l] },
-    agenda: { eventos: [eventoVisita('C5', 'Duas visitas', iso(HOJE)), eventoVisita('C5', 'Duas visitas', ontem)] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
-  igual(r.avaliados, 1, 'contado uma vez');
-});
 
-teste('visita sem negócio associado não entra no numerador nem no denominador', () => {
-  // Não dá pra avaliar o ciclo de uma visita que não aponta pra negócio nenhum —
-  // e inventar um veredito aqui seria pior que declarar a lacuna.
-  const c = novoContexto(dados({
-    funilLeads: {},
-    agenda: { eventos: [Object.assign(eventoVisita('X', 'Sem negócio', iso(HOJE)), { dealId: null })] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
-  igual(r.avaliados, 0, 'fora da conta');
-  igual(r.semDeal, 1, 'mas declarado em semDeal');
-  igual(r.pct, null, 'sem base de cálculo, pct é null e não 0');
-});
 
-teste('conta cada gesto separado, não só o combo (régua da excelência)', () => {
-  // A régua precisa dizer QUAL hábito falta: anotar o sistema e datar o retorno são
-  // treinos diferentes, e um número agregado esconde qual dos dois é o problema.
-  const soSistema = lead({ id: 'G1', name: 'Só sistema', nome_do_sistema: 'Consumer' });
-  const soDor = lead({ id: 'G2', name: 'Só dor', gargalo_operacional: 'Fila' });
-  const soPasso = lead({ id: 'G3', name: 'Só passo',
-    tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
-  const c = novoContexto(dados({
-    funilLeads: { '1396005401': [soSistema, soDor, soPasso] },
-    agenda: { eventos: [
-      eventoVisita('G1', 'Só sistema', iso(HOJE)),
-      eventoVisita('G2', 'Só dor', iso(HOJE)),
-      eventoVisita('G3', 'Só passo', iso(HOJE))
-    ] }
-  }), { ownerId: OWNER, role: 'rep' });
-  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
-  igual(r.avaliados, 3, 'três visitas avaliadas');
-  igual(r.comSistema, 1, 'uma com sistema anotado');
-  igual(r.comDor, 1, 'uma com dor registrada');
-  igual(r.comPasso, 1, 'uma com próximo passo datado');
-  igual(r.fechados, [], 'e nenhuma fechou o ciclo — os três gestos são independentes');
-});
 
-teste('sem visita na semana, o número não finge zero', () => {
-  const c = novoContexto(dados({ funilLeads: { '1396005401': [lead({ id: 'C6' })] } }), { ownerId: OWNER, role: 'rep' });
-  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
-  igual(r.avaliados, 0, 'nada avaliado');
-  igual(r.pct, null, 'pct null — 0% diria que ele falhou, e ele não tentou');
-});
 
 console.log('\n== Próximo passo de HOJE conta o dia inteiro (bug de produção, 28/08) ==');
 
@@ -1596,15 +1342,8 @@ teste('Agenda separa historico vazio de buraco ainda acionavel', () => {
 });
 
 teste('Daily exclui eventos internos e deep-link do Playbook preserva o filtro prometido', () => {
-  const iniDaily = html.indexOf('function d4EventosDeHoje(ownerId)');
-  /* O FIM E O DA PROPRIA FUNCAO. Antes esta linha apontava para a vizinha
-     (buildBriefingExecutivoHTML), que saiu quando as tres telas antigas da Daily foram
-     apagadas: indexOf deu -1, a fatia ficou vazia e o teste caiu sem que a regra que ele
-     protege tivesse mudado. Ancora em vizinha e ancora que a proxima limpeza arranca. */
-  const fimDaily = html.indexOf(String.fromCharCode(10) + 'function ', iniDaily + 10);
-  const daily = html.slice(iniDaily, fimDaily);
-  verdade(daily.includes('agendaContaComoCompromisso(e)'),
-    'a linha comercial da Daily aplica a mesma regra que exclui DAILY OUTBOUND e 1:1 da rua');
+  /* A metade da Daily (d4EventosDeHoje) saiu em 20/11/26 com a função, que ninguém chamava.
+     A regra de rua continua em agendaContaComoCompromisso, medida pela suíte da Agenda. */
 
   const iniLink = html.indexOf('function irParaMeuFunilVisao(visao)');
   const fimLink = html.indexOf('let filaFocoInicial', iniLink);
@@ -1666,50 +1405,6 @@ teste('distancia em km rejeita coordenada nula ANTES de converter', () => {
   igual(c.distanciaKm('abc', -40.29, -20.28, -40.29), Infinity, 'lat nao numerica -> Infinity');
 });
 
-teste('eixo da semana: so dia futuro, so com coordenada, e ordenado por quem cabe no caminho', () => {
-  /* A ideia veio do desenho do Claude Design ("terca voce ja esta em Jardim Camburi").
-     Foi implementada por COORDENADA e nao por bairro porque o dado manda: bairro existe
-     em 7 dos 121 negocios (6%), coordenada em 89 (74%), e as 970 contas-alvo tem
-     coordenada em 100%. */
-  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
-  const HOJE_I = iso(HOJE);
-  const AMANHA = iso(diasAFrente(1));
-  const ONTEM = iso(diasAtras(1));
-
-  const base = { lat: -20.2884, lng: -40.2978 };
-  const ancoras = [
-    { dataISO: AMANHA, cliente: 'Cervejaria Fratelli', lat: base.lat, lng: base.lng },
-    { dataISO: ONTEM, cliente: 'Visita que ja passou', lat: base.lat, lng: base.lng },
-    { dataISO: AMANHA, cliente: 'Sem coordenada', lat: null, lng: null }
-  ];
-  const contas = [
-    { id: 'p1', nome: 'Vizinha 300m', lat: base.lat + 0.0027, lng: base.lng },
-    { id: 'p2', nome: 'Vizinha 1,5km', lat: base.lat + 0.0135, lng: base.lng },
-    { id: 'p3', nome: 'Longe 6km', lat: base.lat + 0.054, lng: base.lng },
-    { id: 'p4', nome: 'Sem coordenada', lat: null, lng: null }
-  ];
-
-  const eixos = c.eixosDaSemana(HOJE_I, ancoras, contas);
-  igual(eixos.length, 1, 'um eixo: so o dia futuro produz');
-  igual(eixos[0].dataISO, AMANHA, 'e e o de amanha');
-  igual(eixos[0].compromissos, 1, 'a ancora sem coordenada nao conta como compromisso do eixo');
-  igual(eixos[0].contas.map(x => x.nome), ['Vizinha 300m', 'Vizinha 1,5km'],
-    'so as que estao dentro do raio, mais perto primeiro');
-  verdade(!eixos[0].contas.some(x => x.nome === 'Longe 6km'), '6 km nao e "no caminho"');
-  verdade(!eixos[0].contas.some(x => x.nome === 'Sem coordenada'), 'sem coordenada nao entra');
-  verdade(eixos[0].kms[0] < eixos[0].kms[1], 'os kms acompanham a ordem');
-  verdade(eixos[0].kms.every(k => k <= 2), 'nenhum km declarado acima do raio: ' + eixos[0].kms.join(', '));
-  igual(eixos[0].ancora.cliente, 'Cervejaria Fratelli', 'a ancora nomeada tem coordenada');
-
-  igual(c.eixosDaSemana(HOJE_I, [], contas).length, 0, 'sem compromisso, sem eixo');
-  igual(c.eixosDaSemana(HOJE_I, ancoras, []).length, 0, 'sem conta-alvo, sem eixo');
-  igual(c.eixosDaSemana(HOJE_I, ancoras, [contas[2]]).length, 0, 'so conta longe: nao inventa eixo');
-  igual(c.eixosDaSemana(HOJE_I, null, contas).length, 0, 'entrada invalida devolve lista vazia');
-
-  const hojeEixo = c.eixosDaSemana(HOJE_I,
-    [{ dataISO: HOJE_I, cliente: 'Hoje mesmo', lat: base.lat, lng: base.lng }], contas);
-  igual(hojeEixo.length, 1, 'o proprio dia de hoje ainda e acionavel');
-});
 
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);

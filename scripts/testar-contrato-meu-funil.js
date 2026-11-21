@@ -47,21 +47,16 @@ function checar(nome, cond, dica) {
    Cada um é um caminho que o executivo tem hoje. Emitir sem ler é clique morto; deixar de
    emitir é gesto perdido — e esta lista pega as duas coisas, porque exige emissão E
    leitura de cada um. */
-const GESTOS = [   /* 32 vivos; os 2 mortos estao explicados abaixo da lista */
+const GESTOS = [   /* 16 vivos — a lista encolheu em 20/11/26, ver a nota abaixo */
   'data-fn2-acao', 'data-fn2-etapa', 'data-fn2-lead', 'data-fn2-mov', 'data-fn2-ordem',
-  'data-fn2-pulsa', 'data-fn2-reabrir', 'data-fn2-reciclar',
-  'data-fn3-aba', 'data-fn3-alimentar', 'data-fn3-alvo', 'data-fn3-avancar', 'data-fn3-card',
-  'data-fn3-de', 'data-fn3-destino', 'data-fn3-menu', 'data-fn3-mover', 'data-fn3-passo',
-  'data-fn3-passo-hora', 'data-fn3-passo-in', 'data-fn3-passo-ok', 'data-fn3-passo-set',
-  'data-fn3-perder', 'data-fn3-set-valor', 'data-fn3-set-valor-livre', 'data-fn3-tog',
-  'data-fn3-valor', 'data-fn3-valor-in',
-  /* TRES ENTRARAM em 11/09/26 com o bloco 'Acoes desta sessao' da prancha FINAL. Lista
-     que so encolhe deixa de medir o que a repaginacao ACRESCENTOU — e gesto novo sem
-     contrato e o proximo a se perder na repaginacao seguinte. */
-  'data-fn3-sessao', 'data-fn3-voltar', 'data-fn3-voltar-para',
-  /* e o quarto, na etapa 4: o pedido de contas ao lider, no pe da Prospeccao. */
-  'data-fn3-pedir'
+  'data-fn2-pulsa', 'data-fn2-reabrir', 'data-fn2-reciclar', 'data-fn3-aba', 'data-fn3-card',
+  'data-fn3-menu', 'data-fn3-mover', 'data-fn3-tog', 'data-fn3-sessao', 'data-fn3-voltar',
+  'data-fn3-voltar-para'
 ];
+/* SAÍRAM EM 20/11/26 (16), com o motivo: eram do cartão do Meu funil v3 (fn3Card,
+   fn3Coluna, o registro rápido e o arraste das colunas .fn3-col). O kanban v6 (kb7) os
+   substituiu em 01/10 e nenhum markup os emitia mais — a faxina final tirou os geradores
+   mortos e os ouvintes que esperavam por eles: data-fn3-alimentar, data-fn3-alvo, data-fn3-avancar, data-fn3-de, data-fn3-destino, data-fn3-passo, data-fn3-passo-hora, data-fn3-passo-in, data-fn3-passo-ok, data-fn3-passo-set, data-fn3-perder, data-fn3-set-valor, data-fn3-set-valor-livre, data-fn3-valor, data-fn3-valor-in, data-fn3-pedir. */
 /* DOIS SAIRAM DESTA LISTA no mesmo commit que a criou, com o motivo — e a mensagem de
    falha desta suite manda fazer exatamente isso:
 
@@ -83,7 +78,7 @@ GESTOS.forEach(function (a) {
     || tpl.indexOf('[' + a) > -1;
   if (!lido) semLeitor.push(a);
 });
-checar('os 32 gestos vivos da aba continuam sendo EMITIDOS', semEmissor.length === 0,
+checar('os '+GESTOS.length+' gestos vivos da aba continuam sendo EMITIDOS', semEmissor.length === 0,
   'sumiram do markup: ' + semEmissor.join(', '));
 checar('e todos continuam sendo LIDOS por alguém', semLeitor.length === 0,
   'emitidos e sem leitor (clique morto): ' + semLeitor.join(', '));
@@ -98,7 +93,6 @@ const MOTORES = {
   fn3AbrirRegistro: 'o registro rápido que o arrasto abre — soltar NÃO move sozinho',
   fn3PodeMover: 'a régua do arrasto, espelho do servidor',
   fn2PodeMover: 'a mesma régua no kanban antigo',
-  fn3ProximaEtapa: 'o destino dos atalhos → e ✕ do cartão',
   etapaPedeProximoPasso: 'quem decide se a etapa exige passo datado',
   gravarPassagemDeEtapa: 'a escrita da etapa com as propriedades',
   gravarPropriedadesDoNegocio: 'a escrita de propriedade sem mover etapa',
@@ -143,7 +137,7 @@ checar('Ganho continua sem ser destino de arrasto — quem move é o ASAAS',
   tpl.indexOf('ETAPAS_DESTINO') > -1 || /Ganho/.test(tpl),
   'a régua de destino saiu da tela');
 checar('o cartão de Onboarding continua não arrastável',
-  /const arrastavel = !e\.onb/.test(tpl) || /onb\b[^\n]*arrast/i.test(tpl),
+  /const arrasta = et !== KB7_ONB\b/.test(tpl),
   'Onboarding é espelho: cartão que se arrasta ali promete o que a tela não faz');
 checar('e Perdido continua exigindo motivo',
   tpl.indexOf('motivo_do_perdido') > -1,
@@ -160,4 +154,4 @@ if (falhas.length) {
   console.error('  com o motivo escrito: lista que nao encolhe deixa de medir o que sobrou.');
   process.exit(1);
 }
-console.log('contrato do Meu funil: ' + ok + ' checagens — os 32 gestos, os 12 motores e as 11 listas de regra seguem de pé.');
+console.log('contrato do Meu funil: ' + ok + ' checagens — os ' + GESTOS.length + ' gestos, os ' + Object.keys(MOTORES).length + ' motores e as 11 listas de regra seguem de pé.');

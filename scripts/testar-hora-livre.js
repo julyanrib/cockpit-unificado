@@ -48,9 +48,9 @@ checar('aplica ao sair do campo, não a cada tecla',
 checar('a ficha tem os atalhos de dia', tpl.indexOf('${fpAtalhosHTML()}') > -1 && /data-fp-dia=/.test(recortar('fpAtalhosHTML')));
 checar('e um campo de hora só, com a lista para escolher',
   tpl.indexOf('class="ficha-passo-hora" list="fpHorasLista"') > -1
-    /* a lista é UMA na página, criada uma vez; o Meu funil aponta para a mesma */
+    /* a lista é UMA na página, criada uma vez (o campo do Meu funil v3, que também apontava
+       para ela, saiu com o cartão v3 em 20/11/26) */
     && /dl\.id = 'fpHorasLista';/.test(tpl)
-    && tpl.indexOf('list="fpHorasLista" inputmode="numeric" autocomplete="off" placeholder="hora" class="fn3-passo-in fn3-passo-hora"') > -1
     && tpl.indexOf('data-fp-h=') < 0 && tpl.indexOf('class="fp-livre"') < 0,
   'três jeitos de escolher a mesma hora foi o que ele reprovou');
 checar('a hora digitada na ficha passa pela mesma regra, no campo e no salvar',
