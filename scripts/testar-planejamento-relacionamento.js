@@ -124,8 +124,7 @@ const LIVRES = [
 const ctxProp = { String: String, Number: Number, Array: Array, Date: Date, Math: Math, isNaN: isNaN };
 vm.createContext(ctxProp);
 vm.runInContext(tpl.match(/const PL6_ETAPA_AG_PGTO = '\d+';/)[0], ctxProp);
-vm.runInContext(tpl.match(/const PL6_PROPOSITOS = \[[\s\S]*?\n\];/)[0], ctxProp);
-['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead'].forEach(function (f) {
+['pl6AtrasoDoPasso', 'pl6PropositoDoLead'].forEach(function (f) {
   vm.runInContext(recortar(tpl, f), ctxProp);
 });
 const doProposito = vm.runInContext('pl6PropositoDoLead', ctxProp);
@@ -184,12 +183,17 @@ checar('só a rua é oferecida como bloco sem negócio',
      esta checagem citava saiu em 23/09, quando a rua deixou de ser um botão solto e
      passou a vir do próprio propósito. Medir a AUSÊNCIA de PL6_REL como coisa
      escolhível é o que protege a regra, e sobrevive ao desenho. */
-  !/'bloco:' \+ PL6_REL/.test(tpl) && !/bloco:\$\{PL6_REL\}/.test(tpl)
-    && /ruaPegar: 'bloco:' \+ PL6_RUA/.test(tpl),
+  /* 20/11/26: desde que a v2 saiu, o único bloco sem negócio que a tela grava é o da v3
+     (PLV3.porRua, `{ id: PL6_RUA, ... }`). Nenhum caminho grava `{ id: PL6_REL }`. */
+  !/'bloco:' \+ PL6_REL/.test(tpl) && !/bloco:\$\{PL6_REL\}/.test(tpl) && !/\{ id: PL6_REL\b/.test(tpl)
+    && /g\[di\]\[si\] = Object\.assign\(\{ id: PL6_RUA, hora: hora, p: 'rua' \}/.test(tpl),
   'relacionamento virou filtro porque agora tem negócio; a rua não tem conta definida '
     + 'de verdade');
+/* o leitor da semana gravada (pl6ItensDoDia, o que a v3 usa para montar o dia) ainda entende o
+   bloco antigo — sem isso a semana já gravada com ele viraria slot vazio */
 checar('mas o bloco de relacionamento continua LEGÍVEL',
-  /if \(s === PL6_REL\) \{/.test(tpl),
+  /if \(pl6SlotRel\(v\)\) \{ itens\.push\(\{ si: si, hora: hora, tipo: 'rel', p: 'relac', r: r \}\); continue; \}/.test(tpl)
+    && /pl6ItensDoDia\(/.test(tpl.slice(tpl.indexOf('\nPLV3.dados = function'))),
   'semana já gravada com o bloco antigo viraria slot vazio na segunda de manhã');
 
 console.log('');

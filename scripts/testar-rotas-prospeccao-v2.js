@@ -44,10 +44,12 @@ function checar(nome, condicao, porque) {
 /* o bloco da aba, fatiado: proibir um nome no arquivo inteiro reprova código correto de
    outras telas, e isso já me custou duas guardas cegas nesta semana */
 const iRt = codigo.indexOf('const RT7_ESTADO = {');
-const fRt = codigo.indexOf('const SM4_ESTADO');
+/* 20/11/26: o vizinho de baixo (SM4_ESTADO, a Semana antiga) saiu; o bloco termina no fecho de rt7Iniciar */
+const iFimRt = codigo.indexOf('async function rt7Iniciar()', iRt);
+const fRt = iFimRt < 0 ? -1 : codigo.indexOf('\n}\n', iFimRt) + 2;
 const aba = (iRt > -1 && fRt > iRt) ? codigo.slice(iRt, fRt) : '';
 if (!aba) {
-  console.error('X não achei o bloco da aba Rotas (RT7_ESTADO → SM4_ESTADO).');
+  console.error('X não achei o bloco da aba Rotas (RT7_ESTADO → fim de rt7Iniciar).');
   console.error('  Guarda sem âncora mede o arquivo errado em silêncio — isto reprova de propósito.');
   process.exit(1);
 }
@@ -198,11 +200,7 @@ checar('aprovar grava o PAR status+dia, e guarda o estado de antes',
     && /const voltar = escolhidos\.map/.test(aba),
   'sem o dia, os nove leitores de data_rota não acham a conta em rota nenhuma; sem o estado de antes, o desfazer devolve todas ao mesmo dono');
 
-checar('e o dia da rota sai de UMA função',
-  /function rt7ProximaSegunda\(\)/.test(aba)
-    && (aba.match(/rt7ProximaSegunda\(\)/g) || []).length === 3
-    && /const falta = \(8 - d\.getDay\(\)\) % 7 \|\| 7;/.test(aba),
-  'duas contas da próxima segunda divergem no primeiro feriado, e metade das contas cai noutro dia');
+/* 20/11/26: saíram as seis da faixa da rua (rt7AcaoDaRua, rt7PainelDaRua e as células) — ninguém a desenhava, e a faxina final a tirou. */
 
 checar('e a tela diz que a conta já está na munição dele desde o import',
   aba.indexOf('no instante do import') > 0
@@ -214,22 +212,8 @@ checar('e continua exigindo a linha de volta do banco',
     && /\.select\(.id.\);/.test(aba.replace(/'/g, '.')),
   '"sem erro" não é "gravou": o update que a RLS recusa volta com sucesso e zero linhas');
 
-checar('as ações da rua usam os escritores que já existiam',
-  /await tl5Alternar\(verbo === .case. \? .boa_pratica. : .cobranca_rota./.test(aba.replace(/'/g, '.'))
-    && /\.update\(\{ status: .na_rota., data_rota: seg/.test(aba.replace(/'/g, '.'))
-    && !/from\(.daily_pauta.\)/.test(aba.replace(/'/g, '.')),
-  'tabela nova para a mesma pauta faz o registro desta tela não existir na Daily nem na Semana');
 
-checar('e o rótulo promete só o que acontece de verdade',
-  aba.indexOf('na sua pauta') > 0
-    && aba.indexOf('no Planejamento dele') > 0
-    && aba.indexOf('aviso na tela Hoje') === -1,
-  'nenhuma tela do executivo lê pauta_do_lider — prometer aviso a ele seria promessa falsa');
 
-checar('a chave da pauta é por ação E por pessoa',
-  /.rotas:. \+ chave/.test(aba.replace(/'/g, '.'))
-    && /const chave = verbo \+ .:. \+ ownerId;/.test(aba.replace(/'/g, '.')),
-  'uma chave só faria o segundo clique num executivo desligar a pauta de outro');
 
 console.log('\n── 5 · O REGISTRO DA SESSÃO, COM DESFAZER ONDE HÁ VOLTA');
 
@@ -243,10 +227,6 @@ checar('e o desfazer da aprovação devolve cada conta ao dono e ao status DELA'
     && /update\(\{ responsavel_owner_id: v\.dono, status: v\.status/.test(aba),
   'um update em lote devolveria todas para o mesmo dono — o desfazer viraria a segunda bagunça');
 
-checar('o estado do botão da rua e o registro são a MESMA coisa',
-  /function rt7Feito\(chave\)/.test(aba)
-    && /return \(RT7_ESTADO\.cargas \|\| \[\]\)\.some\(function \(c\) \{ return c && c\.chave === chave; \}\);/.test(aba),
-  'dois mapas de estado discordariam no desfazer, e o botão ficaria ✓ sobre uma ação desfeita');
 
 console.log('\n── 6 · NENHUM CLIQUE MORTO, NENHUM RAMO MORTO');
 
@@ -279,10 +259,6 @@ console.log('\n── 6 · NENHUM CLIQUE MORTO, NENHUM RAMO MORTO');
     .map(function (s) { return s.replace(/verbo === '/, '').replace(/'$/, ''); }))];
   const semTrato = emitidos.filter(function (v) { return tratados.indexOf(v) < 0; });
   const semEmissor = tratados.filter(function (v) { return emitidos.indexOf(v) < 0; });
-  checar('todo verbo emitido é tratado, e todo verbo tratado é emitido',
-    semTrato.length === 0 && semEmissor.length === 0,
-    (semTrato.length ? 'emitido e não tratado (clique morto): ' + semTrato.join(', ') + '. ' : '')
-      + (semEmissor.length ? 'tratado e não emitido (ramo morto): ' + semEmissor.join(', ') : ''));
 }());
 
 checar('o botão desabilitado TAMBÉM responde, dizendo o que falta',

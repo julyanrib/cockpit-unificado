@@ -141,25 +141,13 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
   zerar();
   checar('o modelo da v3 monta com a carteira de exemplo', !!D() && D().semL.length === 3, D().semL.map((l) => l.ref).join(','));
 
-  /* ── 1 · a saída à vista: v3 → v2 e de volta ── */
+  /* ── 1 · a saída para a v2 saiu (20/11/26): a v3 é a única tela, e não sobra link para lugar nenhum ── */
   {
     const h = colher(html());
-    checar('o cabeçalho da v3 tem o link "Usar o planejamento anterior"', /data-pv3-acao="usarv2"[^>]*>Usar o planejamento anterior</.test(h));
-    LS = {};
-    await acao('usarv2');
-    checar('o link grava planejamento-v2 = 1 e repinta a aba', LS['planejamento-v2'] === '1' && !!ultima('renderProspeccaoExecutivo') && P.usar() === false);
-    chamadas.length = 0;
-    checar('a volta tira a chave e repinta', P.trocarVersao(false) === true && !('planejamento-v2' in LS) && !!ultima('renderProspeccaoExecutivo') && P.usar() === true);
-    lsQuebrado = true; chamadas.length = 0;
-    const r = P.trocarVersao(true);
-    lsQuebrado = false;
-    checar('navegador que não deixa guardar: a tela diz e não finge que trocou', r === false && !ultima('renderProspeccaoExecutivo') && !!ultima('toast'));
-    const tela2 = tpl.slice(tpl.indexOf('function pl6TelaFinalHTML'), tpl.indexOf('function renderPlanejamento6a'));
-    checar('a v2 tem o link "Voltar ao planejamento novo"', /data-pl6-acao="voltarv3"[^>]*>Voltar ao planejamento novo</.test(tela2));
-    checar('e o ouvinte da v2 chama GV2.PLV3.trocarVersao(false)', /verbo === 'voltarv3'[\s\S]{0,300}GV2\.PLV3\.trocarVersao\(false\)/.test(tpl));
-    checar('a chave de reserva continua sendo a mesma (localStorage planejamento-v2)', /localStorage\.getItem\('planejamento-v2'\) === '1'/.test(codigo) && /renderPlanejamento6a\(meuRep6a\)/.test(tpl));
+    checar('o cabeçalho da v3 não tem mais o link "Usar o planejamento anterior"', h.length > 500 && !/usarv2|Usar o planejamento anterior/.test(h));
+    checar('nem a troca de versão nem a chave de reserva sobraram', typeof P.trocarVersao !== 'function' && typeof P.usar !== 'function'
+      && !/localStorage\.getItem\('planejamento-v2'\)/.test(codigo) && !/renderPlanejamento6a|voltarv3/.test(tpl));
   }
-
   /* ── 2 · a busca: carteira inteira, o que já está num dia, o vazio com saída ── */
   {
     zerar();
@@ -341,7 +329,8 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     zerar();
     await acao('tirar', '1:1');
     checar('tirar o resto continua um clique só', !ultima('pl6TravaDoNascido') && ultima('pl6Gravar') && GRADE[1][1] == null);
-    checar('a trava da v2 é a mesma função nas duas telas', /return pl6TravaDoNascido\(nascido, di, si, mutar\);/.test(tpl) && /^function pl6TravaDoNascido\(nascido, di, si, mutar\)/m.test(tpl));
+    /* 20/11/26: a tela v2 saiu; a trava é a mesma função, agora chamada só pelo PLV3.tirar */
+    checar('a trava é a função de sempre, uma vez só', (tpl.match(/^function pl6TravaDoNascido\(nascido, di, si, mutar\)/mg) || []).length === 1 && /return pl6TravaDoNascido\(nascido, di, si, async function/.test(tpl));
     zerar();
     await acao('bairro', '2');
     checar('o painel do bairro tem o campo para escrever um bairro', /data-pv3-btxt="2"/.test(colher(html())));
@@ -363,8 +352,10 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
 
   /* ── 7b · a hora a acertar e o conflito de hora fixa (pl6AvisosDaHora, a mesma conta da v2) ── */
   {
-    checar('a conta da hora a acertar é UMA função, e a v2 passou a usá-la', typeof global.pl6AvisosDaHora === 'function'
-      && /const pl6Av = pl6AvisosDaHora\(ordem\);/.test(tpl) && /const horaAcertar = pl6Av\.doItem\(it, ox, passou\);/.test(tpl) && /conflito: conflito \? esc\(pl6Av\.conflito\)/.test(tpl));
+    /* 20/11/26: a v2 (que também a chamava) saiu; a conta continua uma função só, e a v3 a usa */
+    checar('a conta da hora a acertar é UMA função', typeof global.pl6AvisosDaHora === 'function'
+      && (tpl.match(/\nfunction pl6AvisosDaHora\(/g) || []).length === 1
+      && /const avisos = typeof pl6AvisosDaHora === 'function' \? pl6AvisosDaHora\(conta\) : null;/.test(tpl));
     zerar();
     /* qua 11/11: a rota do app tem duas paradas com hora fixa colada (09:00 e 09:05): a 2ª chega atrasada */
     global.sessaoAtual = { ownerId: '1' };
@@ -429,5 +420,5 @@ const colher = (h) => { (h.match(/data-pv3-acao="[^"]*"/g) || []).forEach((m) =>
     falhas.forEach((f) => console.error('  ' + f));
     process.exit(1);
   }
-  console.log('OK planejamento v3 · paridade com a v2 — ' + ok + ' conferências: saída para a tela anterior e volta, busca na carteira inteira, quentes sempre à vista, Todo o funil e faixas, lead novo, bloco de rua, hora, ficha, mudar de dia, trava, bairro escrito, mapa do dia, e nenhuma ação sem ouvinte.');
+  console.log('OK planejamento v3 · paridade com a v2 — ' + ok + ' conferências: sem saída para a v2 (que saiu em 20/11/26), busca na carteira inteira, quentes sempre à vista, Todo o funil e faixas, lead novo, bloco de rua, hora, ficha, mudar de dia, trava, bairro escrito, mapa do dia, e nenhuma ação sem ouvinte.');
 })().catch((er) => { console.error('a suíte quebrou: ' + (er && er.stack || er)); process.exit(1); });

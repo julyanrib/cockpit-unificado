@@ -56,8 +56,8 @@ checar('a prova diz o "porque" no acerto (ela ensina, não só mede)',
 /* ── 2. teto de 2/dia, mantido do sistema atual ──────────────────────────────────── */
 checar('PBV6_LEITURAS_POR_DIA continua 2', /const PBV6_LEITURAS_POR_DIA = 2;/.test(template));
 checar('PBV6_PTS_LEITURA continua 10', /const PBV6_PTS_LEITURA = 10;/.test(template));
-checar('a tela mostra o estado de hoje, não só o regulamento',
-  /hoje <b>' \+ hoje \+ ' de ' \+ PBV6_LEITURAS_POR_DIA/.test(template));
+/* 20/11/26: saíram as três checagens do hero da v7 (o estado de hoje, o total no placar e as lidas sem prova): o hero não era desenhado por ninguém desde a estante v8, e a faxina final o tirou. */
+
 
 /* ── 3. níveis por páginas provadas, nas faixas da prancha ───────────────────────── */
 const faixas = template.match(/const PB7_NIVEIS = \[([\s\S]*?)\];/);
@@ -68,11 +68,8 @@ if (faixas) {
       new RegExp("nome: '" + n + "', min: " + a + ", max: " + b).test(faixas[1]));
   });
 }
-checar('o nível conta provadas E as lidas antes da prova existir (ninguém perde ponto ganho)',
-  /function pb7TotalNoPlacar\(\)/.test(template) &&
-  /pb7Provadas\(\)\.forEach\(x => s\.add\(x\)\);[\s\S]{0,80}?playbookLidos\(\)\.forEach\(x => s\.add\(x\)\);/.test(template));
-checar('a tela distingue "provada" de "lida antes da prova"',
-  /antes da prova existir/.test(template) && /function pb7LidasSemProva\(\)/.test(template));
+
+
 
 /* ── 4. capítulo 100% = selo ─────────────────────────────────────────────────────── */
 /* A v8 trocou a barra do capitulo pela CAPA da estante, e o selo passou a aparecer em
@@ -204,10 +201,12 @@ checar('as respostas certas se espalham nas 3 posições',
 /* ── 8. a busca é full-text e os exemplos do placeholder EXISTEM ─────────────────── */
 checar('a busca varre o campo `busca` (texto inteiro), não só o título',
   /playbookNormalizar\(\(p\.busca \|\| ''\) \+ ' ' \+ p\.titulo \+ ' ' \+ p\.resumo\)/.test(template));
-const ph = template.match(/placeholder="buscar em tudo — ([^"]*(?:&quot;[^"]*)*)"/);
+/* 20/11/26: o placeholder antigo ("buscar em tudo — &quot;…&quot;") morava no hero da v7, que saiu
+   na faxina final. O que está na tela é o da estante: "Buscar no manual: a, b, c". A regra é a mesma. */
+const ph = template.match(/placeholder="Buscar no manual: ([^"]*)"/);
 checar('o placeholder da busca existe', !!ph);
 if (ph) {
-  const termos = [...ph[1].matchAll(/&quot;([^&]+)&quot;/g)].map(m => m[1]);
+  const termos = ph[1].split(',').map(t => t.trim()).filter(Boolean);
   checar('o placeholder sugere pelo menos 3 termos', termos.length >= 3, 'achado ' + termos.length);
   const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const vazios = termos.filter(t => !compilado.paginas.some(p =>

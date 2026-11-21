@@ -127,9 +127,15 @@ conferir('e devolve null quando não há o que desfazer',
   'cartão da carteira que veio do robô não tem o que desfazer, e o ✕ dele tem de'
   + ' continuar sendo um clique só');
 
+/* 20/11/26: o ✕ da v2 (pl6Ligar) saiu com a tela anterior; o ✕ que sobra é o PLV3.tirar. */
+const tirarV3 = (function () {
+  const i = codigo.indexOf('PLV3.tirar = async function (di, si) {');
+  return i < 0 ? '' : codigo.slice(i, codigo.indexOf('\n};\n', i));
+})();
 conferir('o ✕ abre a trava só quando há negócio nascido aqui',
-  /const nascido = \(typeof pl6NegocioNascidoAqui === 'function'\) \? pl6NegocioNascidoAqui\(era\) : null;/.test(codigo)
-    && /if \(nascido && typeof abrirModalConfirmacao === 'function'\) \{/.test(codigo),
+  /const nascido = typeof pl6NegocioNascidoAqui === 'function' \? pl6NegocioNascidoAqui\(era\) : null;/.test(tirarV3)
+    && /if \(nascido && typeof abrirModalConfirmacao === 'function' && typeof pl6TravaDoNascido === 'function'\) \{\s*return pl6TravaDoNascido\(nascido, di, si,/.test(tirarV3)
+    && /\n  g\[di\]\[si\] = null;/.test(tirarV3),
   'trava em todo ✕ transforma o gesto mais comum da tela em duas perguntas');
 
 /* TAMBÉM NASCEU CEGA: eu media o id do botão e a frase dele, e as duas sobrevivem a um

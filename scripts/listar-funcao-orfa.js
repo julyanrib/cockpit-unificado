@@ -42,26 +42,11 @@ const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
 
 /* Órfãs que FICAM, com o motivo. Lista vazia é o estado desejado. */
-const DIVIDA = {
-  /* AS DUAS QUE FICAM SAO AS QUE A SUITE EXECUTA: ela as chama como motor puro e mede o
-     RESULTADO. Isso e cobertura de verdade, ainda que nenhuma tela as invoque — apagar
-     seria trocar um teste que roda por bytes. */
-  rotuloDeRegistroDaVisita: 'testar-nucleo.js a chama direto, como motor puro',
-  pl5Realce: 'testar-busca-lugar.js a executa como função pura',
-
-  /* ══ AS DUAS DE BAIXO SAO PERDA DE CHAMADOR, E NAO RESTO (13/09/26) ═══════════════
-     A limpeza de 13/09 tirou 28 orfas. Estas DUAS eu nao apaguei, porque o caso delas e
-     o outro que este arquivo descreve: o reskin da aba Desenvolvimento deixou os dois
-     blocos sem chamador, e a checagem que deveria impedir isso — 'O QUE JA EXISTIA E
-     NAO PODE SUMIR', em testar-desenvolvimento.js — media `template.indexOf('function
-     ' + fn)`, ou seja, se a funcao EXISTE, nao se ela ALCANCA a tela. Ficou verde com a
-     capacidade ja perdida.
-
-     Apagar as duas agora cimentaria a perda. Religar e decisao do Julyan: sao blocos que
-     ele pediu para nao sumirem. Ficam aqui nomeando quem decide. */
-  focoDeHabilidadeHTML: 'PERDA DE CHAMADOR — o reskin do Desenvolvimento a deixou sem quem a chame; religar ou apagar e decisao do Julyan',
-  buildIndicadoresExecutivoHTML: 'PERDA DE CHAMADOR — mesma varredura, mesma decisao pendente'
-};
+/* A DÍVIDA ZEROU EM 20/11/26. As quatro que moravam aqui (rotuloDeRegistroDaVisita, pl5Realce,
+   focoDeHabilidadeHTML, buildIndicadoresExecutivoHTML) saíram na faxina final, com o ok do Julyan
+   ("não quero nada antigo morto"): as duas de motor puro com as suítes que as chamavam, e as duas de
+   perda de chamador porque religar não foi pedido. Órfã nova entra aqui só com o motivo escrito. */
+const DIVIDA = {};
 
 const codigo = blocosDeCodigo(html).map(cortarJs).join('\n');
 const orfas = [];

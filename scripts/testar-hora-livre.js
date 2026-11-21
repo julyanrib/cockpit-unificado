@@ -34,23 +34,20 @@ Object.keys(casos).forEach(function (c) {
   checar('"' + c + '" é recusado', horaLivre(c) === null, 'hora inventada num compromisso com cliente é pior que hora nenhuma');
 });
 
-/* o Planejamento: campo no relógio, verbo próprio, aplica no Enter/saída (não a cada tecla) */
-const relogio = recortar('pfRelogioHTML');
-checar('o relógio do Planejamento tem o campo "ou digite"', /data-relogio-livre="' \+ attr \+ '"/.test(relogio));
-checar('o Planejamento entende a hora digitada',
-  /if \(verbo === 'horalivre'\) \{\s*const hm = horaLivre\(arg\);/.test(tpl));
-checar('aplica ao sair do campo, não a cada tecla',
-  /document\.addEventListener\('change', function \(ev\) \{\s*const el = ev\.target && ev\.target\.closest \? ev\.target\.closest\('\[data-relogio-livre\]'\)/.test(tpl),
-  'a tela repinta ao escolher; a cada tecla o campo perderia o foco');
+/* o Planejamento: o relógio com "ou digite" era da tela v2, que saiu em 20/11/26 (a v3 não tem
+   seletor de hora — testar-planejamento-v3). Fica medido que não sobrou ouvinte órfão dele. */
+checar('o relógio da v2 saiu inteiro: sem pfRelogioHTML, sem o verbo horalivre e sem ouvinte de data-relogio-livre',
+  recortar('pfRelogioHTML') === '' && tpl.indexOf("'horalivre'") < 0 && tpl.indexOf('data-relogio-livre') < 0,
+  'ouvinte de um campo que nenhuma tela desenha é código que parece vivo');
 
 /* a ficha: UM campo de hora ("precisa de tanto relógio assim?", Julyan) — digita ou escolhe
    da lista que abre no campo; os atalhos de DIA ficam, porque são data, não relógio */
 checar('a ficha tem os atalhos de dia', tpl.indexOf('${fpAtalhosHTML()}') > -1 && /data-fp-dia=/.test(recortar('fpAtalhosHTML')));
 checar('e um campo de hora só, com a lista para escolher',
   tpl.indexOf('class="ficha-passo-hora" list="fpHorasLista"') > -1
-    /* a lista é UMA na página, criada uma vez; o Meu funil aponta para a mesma */
+    /* a lista é UMA na página, criada uma vez (o campo do Meu funil v3, que também apontava
+       para ela, saiu com o cartão v3 em 20/11/26) */
     && /dl\.id = 'fpHorasLista';/.test(tpl)
-    && tpl.indexOf('list="fpHorasLista" inputmode="numeric" autocomplete="off" placeholder="hora" class="fn3-passo-in fn3-passo-hora"') > -1
     && tpl.indexOf('data-fp-h=') < 0 && tpl.indexOf('class="fp-livre"') < 0,
   'três jeitos de escolher a mesma hora foi o que ele reprovou');
 checar('a hora digitada na ficha passa pela mesma regra, no campo e no salvar',

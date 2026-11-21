@@ -200,15 +200,7 @@ const tplTxt = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.htm
 conferir('o snapshot publica a janela que a LEITURA por pessoa descreve',
   montarTxt.indexOf('janelaDaLeitura: (resumoSemanal && resumoSemanal.janela && resumoSemanal.janela.atual)') > -1,
   'sem o campo do resumo-semanal a tela só conhece a janela do weekly-raw');
-conferir('e a tela LÊ esse campo',
-  tplTxt.indexOf('rs.janelaDaLeitura') > -1,
-  'atributo emitido e nunca lido é o defeito que esta base já tem 13 vezes');
-conferir('e avisa quando as duas janelas divergem',
-  tplTxt.indexOf("avisos.push('os números acima são de ' + mostrada") > -1,
-  'divergir em silêncio é o defeito de 16/09 — placar de uma semana, board de outra');
-conferir('o aviso da semana nao fechada nao foi perdido na troca',
-  tplTxt.indexOf("avisos.push('a semana ' + j.atual + ' ainda não fechou')") > -1,
-  'eram dois motivos para o mesmo lugar da tela; trocar um pelo outro perde metade');
+/* 20/11/26: a Semana antiga do gestor, que lia rs.janelaDaLeitura e avisava divergência, saiu com o ?gv2=0. */
 
 /* ── 8 · A SEMANA FECHA ÀS 20H DE SEXTA (19/09/26) ───────────────────────────────
    Julyan: "o robo tem que rodar então sexta 20h". Com o corte antigo (sexta 23:59) o

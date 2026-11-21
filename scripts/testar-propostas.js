@@ -79,9 +79,7 @@ const checar = (nome, cond, detalhe) => { if (cond) { ok++; return; } falhas.pus
   checar('o cartão usa o nome comercial da operação, não o rótulo curto',
     cartao.indexOf('esc(String(tipo.nome))') > -1 && cartao.indexOf('rotuloOficial') === -1,
     'com rotuloOficial no cartão, a peça que sai da empresa diz "COMPLETO" em vez do nome do produto');
-  checar('e o botão de operação continua com o rótulo curto',
-    /const curto = \(tp\.rotuloOficial \|\| tp\.nome\)\.split\(',',?\)\[0\]/.test(template),
-    'o nome inteiro não cabe num segmented de duas colunas — foi por isso que o curto existe');
+/* 20/11/26: saíram as checagens do desenho da Propostas antiga (prcBlocoPlanoHTML, prcBlocoPeriodoHTML, prcAncoraObjecao e a grade de 4 colunas): ninguém chamava esses blocos desde a Calculadora (pc9), e a faxina final os tirou. */
 }());
 
 /* ── 3. QUEM RECEBE E QUEM ASSINA, NA MESMA LINHA ────────────────────────────────── */
@@ -134,48 +132,7 @@ checar('e o parcelado continua dizendo cartão de crédito',
 checar('a forma de pagamento continua marcada com o ▭ da prancha',
   /▭ \$\{nParcelas > 1/.test(template));
 
-/* ── 6. TODO PERÍODO COM DESCONTO MOSTRA O DESCONTO ──────────────────────────────
-   O selo ficava só no de maior desconto. Quem escolhe período compara os três; ver
-   −10% e −15% é o que faz o de 12 meses parecer o que ele é. */
-/* A classe .p4-selo não existe mais; o selo é o pill verde inline da prancha. A regra
-   é a mesma: ele aparece em TODO período com desconto, e não só no de maior desconto —
-   quem escolhe compara os três, e ver −10% e −15% é o que faz o de 12 meses parecer o
-   que ele é. */
-/* A REGRA É A CONDIÇÃO, NÃO A COR. Esta checagem exigia `background:#1E9E7B` cravado e o
-   selo terminando exatamente em `−${per.desconto}%` — e reprovou a oferta de 30% (23/09),
-   que pinta o selo de vermelho e escreve "OFERTA" antes do número, sem mexer na regra.
-   O que ela existe para proteger está escrito duas vezes acima: o selo aparece em TODO
-   período com desconto, e não só no de maior. Isso é a condição `per.desconto ?` e o
-   número saindo de `per.desconto` — o resto é desenho.
-   A checagem logo abaixo já tinha aprendido esta lição em outro dia, presa ao NOME do
-   período; esta ficou presa à cor. */
-checar('o selo aparece em todo período com desconto',
-  /\$\{per\.desconto \?[\s\S]{0,400}?\$\{per\.desconto\}%<\/span>`/.test(template)
-    && !/per\.desconto === |Math\.max\([^)]*desconto/.test(template));
-checar('e a nota diz quanto economiza no período',
-  /economiza ' \+ prcMoeda\(c\.economia\) \+ '\/período'/.test(template));
-/* FRAÇÃO PEQUENA NÃO VIRA "MÊS GRÁTIS": o trimestral dá 0,3 mês, e chamar isso de
-   fração de mês grátis soa a truque na frente do dono.
-   ESTA CHECAGEM JÁ ME REPROVOU UMA VEZ, COM RAZÃO: ela prendia em per.id ===
-   'trimestral', e no dia em que entrou 'trimestral-parcelado' o cartão novo passou a
-   anunciar "≈ 0,3 mês grátis" — a regra estava presa ao NOME e o nome mudou. Agora ela
-   mede o corte numérico, que é o que a regra sempre quis dizer. */
-/* A checagem procurava a palavra "truque" perto do corte, porque era assim que o
-   comentário justificava o piso. O comentário foi reescrito na repaginação; o que ela
-   tem de garantir é que o corte exista e saia do NÚMERO — nunca do id do período, que
-   foi o defeito de 05/09 (entrou 'trimestral-parcelado' e o cartão novo passou a
-   anunciar "≈ 0,3 mês grátis"). */
-checar('a fração de mês grátis tem piso, e ele sai do número',
-  /meses < 0\.5/.test(template)
-  && !/per\.id === 'trimestral'/.test(template),
-  'preso ao id do período, o corte não alcança um período novo com o mesmo prazo');
 
-/* ── 7. A OPERAÇÃO DIZ O QUE ELA É ──────────────────────────────────────────────
-   O botão lia "COMPLETO" e, embaixo, "Completo": duas linhas para a mesma palavra,
-   no lugar da única informação que faz o dono escolher junto. */
-checar('a segunda linha da operação é legenda, não o rótulo repetido',
-  template.indexOf("${tp.id === 'mesas' ? 'salão + delivery + caixa' : 'só operação de entrega'}") > -1
-  && template.indexOf('${esc(curto)}<span>${esc(tp.rotuloOficial || tp.nome)}</span>') < 0);
 
 /* ── 8. A MENSAGEM QUE VAI JUNTO ────────────────────────────────────────────────
    O PNG não viaja sozinho: o WhatsApp leva imagem + texto, e o texto é o que faz o
@@ -252,10 +209,6 @@ checar('abrir a resposta não empurra a coluna',
   /\.p4-so-voce-resp\{[^}]*max-height:\d+px/.test(template)
   && /\.p4-so-voce-resp\{[^}]*overflow-y:auto/.test(template),
   'sem teto de altura, a resposta mais longa empurra os cinco passos e a rolagem volta');
-checar('a resposta e a âncora saem do mesmo bloco do playbook',
-  template.indexOf('function prcBlocoObjecao(') > -1
-  && /function prcAncoraObjecao\([\s\S]{0,160}prcBlocoObjecao\(/.test(template),
-  'duas buscas separadas divergem em silêncio — foi assim que a âncora devolveu null nas cinco');
 /* O AVISO DA DOR NÃO FOI JUNTO: "o plano na tela não cobre X" é aviso sobre a proposta
    montada agora, não resposta a objeção — atrás de um botão ele deixa de ser aviso. */
 checar('o aviso da dor continua visível na coluna',
@@ -316,13 +269,6 @@ checar('a configuração fica com a sobra, e planos e períodos em 2 colunas que
   /\.pc9-esq\{flex:1 1 0;min-width:0;/.test(template)
     && /\.pc9-g2\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\);/.test(template),
   'em colunas demais o cartão de plano fica com 68px e o nome do plano corta');
-/* As grades de plano e período agora são inline (a prancha), então a checagem mede o
-   par que resolve o corte onde ele está: quatro trilhas com piso ZERO e min-width:0 no
-   cartão. Sem esse par, dividir a largura não cria espaço — troca altura por corte. */
-checar('planos e períodos em 4 colunas que podem encolher',
-  (template.match(/grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/g) || []).length >= 2
-  && (template.match(/cursor:pointer;min-width:0;">/g) || []).length >= 2,
-  'minmax(0,1fr) e min-width:0 são o par que deixa o cartão encolher em vez de cortar');
 
 /* ── 15. O CHIP DO PRÓXIMO PASSO LEVA A UM PASSO VÁLIDO ──────────────────────────
    ESTA CHECAGEM NASCEU DE UM DEFEITO QUE ESTAVA EM PRODUÇÃO (06/09/26), achado clicando

@@ -32,21 +32,22 @@ const fs = require('fs');
 const path = require('path');
 
 const T = path.join(__dirname, '..', 'template', 'cockpit.template.html');
-const tpl = fs.readFileSync(T, 'utf8');
+const tpl = fs.readFileSync(T, 'utf8').replace(/\r/g, ''); // CRLF do checkout no Windows não muda a conta
 
 // AS FUNÇÕES VIGIADAS: as que montam tela a partir de muitos locais, que é onde a forma
 // aparece. Não é a lista de todas as funções do arquivo — é a lista das que já quebraram
 // assim ou têm o mesmo tamanho e a mesma natureza.
 const VIGIADAS = [
-  'renderPlanejamento6a',
-  /* minhaDaily7aHTML saiu em 24/09/26 com a Minha Daily do executivo. O lugar dela nesta
-     lista e pl6DadosFinal: e a funcao que monta o dia do executivo a partir de muitos
-     locais — o mesmo tamanho e a mesma natureza, e agora a unica que faz esse trabalho. */
-  'pl6DadosFinal',
-  /* dailyGestor14aHTML saiu em 11/09/26 com a Daily 14a morta. O lugar dela na lista e
-     dg4Dados: e a funcao que monta a Daily do gestor a partir de muitos locais, que e onde
-     este defeito aparece. */
-  'dg4Dados',
+  /* renderPlanejamento6a e pl6DadosFinal (a tela v2 do Planejamento, onde o `semRecic` de
+     04/09 morou) saíram em 20/11/26. O lugar delas é das duas da v3 que fazem o mesmo
+     trabalho: PLV3.dados monta o modelo da semana a partir de muitos locais, e PLV3.diaHTML
+     desenha o dia a partir dele. Método de objeto fecha em "};" na coluna zero. */
+  'PLV3.dados',
+  'PLV3.diaHTML',
+  /* dailyGestor14aHTML saiu em 11/09/26 com a Daily 14a morta, e dg4Dados (a Daily antiga
+     do gestor) em 20/11/26 com o ?gv2=0. O lugar é de GV2.render.time: a Hoje do gestor no
+     cockpit novo, que monta a tela a partir de muitos locais. */
+  'GV2.render.time',
   'fn2ShellHTML',
   'pl6Reciclagem',
   'pl6Carteira',
@@ -71,12 +72,15 @@ function mascarar(txt) {
 }
 
 VIGIADAS.forEach(function (fn) {
-  const re = new RegExp('\\n(?:async )?function ' + fn + '\\(');
+  const metodo = fn.indexOf('.') > 0;
+  const re = metodo
+    ? new RegExp('\\n' + fn.replace(/\./g, '\\.') + ' = (?:async )?function \\(')
+    : new RegExp('\\n(?:async )?function ' + fn + '\\(');
   const m = re.exec(tpl);
   if (!m) { falhar('não achei a função ' + fn + ' — a lista desta guarda envelheceu'); return; }
   const ini = m.index + 1;
-  // o fecho da função: a primeira linha que é exatamente "}" na coluna zero
-  const fim = tpl.indexOf('\n}\n', ini);
+  // o fecho: a primeira linha que é exatamente "}" (função) ou "};" (método) na coluna zero
+  const fim = tpl.indexOf(metodo ? '\n};\n' : '\n}\n', ini);
   if (fim < 0) { falhar(fn + ': não achei o fecho'); return; }
   const corpo = mascarar(tpl.slice(ini, fim));
 

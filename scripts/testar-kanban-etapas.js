@@ -193,8 +193,7 @@ checar('fn2PodeMover libera Perdido nos dois sentidos',
   /if \(pr === FN2_ETAPA_PERDIDO \|\| d === FN2_ETAPA_PERDIDO\) return true;/.test(template));
 checar('fn2PodeMover permite avançar só um degrau (e voltar para qualquer anterior)',
   /return iPara <= iDe \+ 1;/.test(template));
-checar('o drop consulta fn3PodeMover ANTES de abrir o registro rápido',
-  template.indexOf("if (!fn3PodeMover(voo.de, para)) {") > 0);
+/* 20/11/26: saíram as checagens do kanban v3 do Meu funil (colunas .fn3-col, cabeçalho, arraste, registro rápido, recém-movido, gavetas de data e valor): o kanban v6 (kb7) o substituiu em 01/10 e a faxina final tirou o v3 morto. */
 checar('soltar NÃO move: abre o registro rápido',
   template.indexOf("fn3AbrirRegistro(lead, para, redesenhar);") > 0);
 /* A GUARDA QUE PEGOU O DEFEITO DE VERDADE (02/09/26). A primeira versão do registro
@@ -314,30 +313,10 @@ checar('nenhuma chamada nova a /api/negocio-acao fora das duas conhecidas',
   (template.match(/op: 'mudar-etapa'/g) || []).length);
 
 
-/* ══ O GESTO INSTANTÂNEO TEM DE SER VISÍVEL (04/09/26) ═══════════════════════════════
-   MEDIDO: confirmei "→ avançar" e o cartão DESAPARECEU da tela. Não era o motor otimista —
-   o dado moveu certo (DATA e fn2Leads devolviam o lead em Visita) —, mas a coluna Visita do
-   Bruno tem 31 cartões e FN2_VISIVEIS_POR_COLUNA é 3: o recém-chegado caía na 31ª posição,
-   atrás do "ver os 31 →".
-
-   É o defeito do BLOCO 16 deste produto outra vez, escrito lá sobre o primeiro cache
-   otimista: "o botão virava ✓ ... parecia que não tinha funcionado, e dava vontade de clicar
-   de novo (criando duplicata)". Instantâneo que não se vê é pior que a ampulheta — a
-   ampulheta pelo menos dizia que algo estava acontecendo. */
-checar('o recém-movido existe e sobe na coluna de destino',
-  template.indexOf('const FN3_RECEM = new Set();') > 0
-  && template.indexOf('const recem = a => (typeof FN3_RECEM') > 0
-  && template.indexOf('const dR = recem(a) - recem(b);') > 0);
 checar('o motor marca o recém-movido junto com o movimento',
   /FN_GRAVANDO\.add\(id\);[\s\S]{0,400}FN3_RECEM\.add\(id\);/.test(template));
 checar('e a reversão tira a marca (ele não se moveu)',
   template.indexOf('FN3_RECEM.delete(id);') > 0);
-/* TRACEJADO ENQUANTO ESCREVE: a convenção deste arquivo para "existe mas ainda não
-   confirmado" (a mesma do recemAgendado na agenda). Sem ela a tela afirma uma gravação que
-   pode ser recusada, e o card voltando sem aviso parece a tela se mexendo sozinha. */
-checar('o cartão em voo é tracejado e diz que pode voltar',
-  /\.fn3-card\.is-gravando\{border-style:dashed/.test(template)
-  && template.indexOf('se recusar, o cartão volta') > 0);
 /* O SELO DO TOPO NÃO PODE PROMETER REALTIME. Medido no produto: `.channel(`,
    `postgres_changes` e `.subscribe(` aparecem ZERO vezes. E realtime na FOTO do HubSpot
    (cockpit_snapshot) dispararia uma vez por rodada do robô — o oposto de tempo real. A
@@ -402,22 +381,9 @@ checar('o kanban desenha uma coluna por item de FN3_COLUNAS (hoje ' + nColunas +
   nColunas >= 7
   && template.indexOf("'<div class=\"kb7-quadro\" role=\"list\">' + FN3_COLUNAS.map(c => kb7Coluna(c, vistos, acesos)).join('') + '</div>'") > 0,
   'o quadro deixou de sair de FN3_COLUNAS — coluna nova na lista não apareceria no kanban');
-checar('a coluna rola VERTICALMENTE, com altura em vh',
-  /\.fn3-col\{[\s\S]{0,400}?max-height:min\(68vh,780px\);overflow-y:auto/.test(template));
-checar('e o cabeçalho da coluna fica fixo enquanto ela rola',
-  template.indexOf('.fn3-col > .fn3-cab{position:sticky;top:0;') > 0,
-  'sem o sticky ele rola a coluna e perde de vista qual etapa está lendo');
 checar('o corte por coluna deixou de esconder cartão',
   template.indexOf('const FN2_VISIVEIS_POR_COLUNA = 60;') > 0,
   'voltou a esconder cartão atrás de um botão numa coluna que rola');
-/* NO TOQUE A COLUNA NÃO ROLA POR DENTRO: ela empilha e a PÁGINA rola. Caixa de 68vh dentro
-   de uma tela de 68vh é rolagem dentro de rolagem, e o dedo não sabe qual das duas move. */
-/* EXIGIA position:static no cabecalho do toque ate 04/09/26 — e static era o defeito:
-   rolando os 8.000px da coluna de Visita o executivo perdia de vista qual etapa lia. A
-   metade certa dela (no toque a coluna NAO rola por dentro; quem rola e a pagina) fica;
-   o sticky do cabecalho e conferido no bloco do toque, la embaixo. */
-checar('o acordeão do toque desfaz a rolagem por coluna',
-  /.fn3-col{max-height:none;overflow-y:visible/.test(template));
 
 /* ── 6. as colunas são o pipeline oficial ────────────────────────────────────────── */
 const idsColunas = (template.match(/const FN2_ETAPAS = \[([\s\S]*?)\n\];/) || [])[1] || '';
@@ -608,32 +574,18 @@ checar('Perdido é trilho no rodapé, com o corte declarado',
   template.indexOf('nada saiu da sua carteira') > 0);
 checar('o alternador Ativos/Perdidos existe',
   template.indexOf('data-fn3-aba="ativos"') > 0 && template.indexOf('data-fn3-aba="perdidos"') > 0);
-checar('o card de Onboarding não se arrasta (o que saiu da sua mão não volta por gesto)',
-  template.indexOf('const arrastavel = !e.onb;') > 0);
 checar('o CTA do card perdido é reabrir, e cai no menu de etapas',
   template.indexOf("cta: 'Reabrir →', acao: 'mover'") > 0);
 
 /* ── 10. a conversão: a correção que o Julyan pediu ─────────────────────────────── */
 checar('fn2Conversao lê porOwner (dele) e agregado (do time)',
   template.indexOf('const doTime = h.agregado || [];') > 0);
-checar('n pequeno é declarado em vez de virar porcentagem',
-  template.indexOf('poucos: m.chegaram < FN2_N_MINIMO') > 0 &&
-  template.indexOf("if (c.poucos) return 'passou '") > 0);
 checar('o degrau do hero usa conversão, não estoque parado',
   template.indexOf('const pior = candidatos.slice().sort((a, b) => a.c.meu - b.c.meu)[0];') > 0);
 checar('o degrau compara com o time para separar "etapa dura" de "minha passagem"',
   template.indexOf('a etapa não é o problema, a sua passagem por ela é') > 0);
 checar('sem histórico suficiente o degrau não inventa etapa',
   template.indexOf('histórico curto para apontar onde o funil vaza') > 0);
-/* A CONVERSÃO SAIU DO HEADER e foi para o title do hover: três linhas de estatística no
-   header afogavam o nome da etapa, que é o defeito nº 2 do print que o Julyan mandou. */
-/* GANHO ENTROU NA ISENÇÃO (10/09/26): etapa ganha não tem próxima etapa para converter, e
-   taxa em cima de venda fechada é número que não responde pergunta nenhuma — o mesmo
-   motivo de Ag. Pagamento e Onboarding já estarem de fora. */
-checar('a conversão não ocupa linha do header — vive no title do hover',
-  /* Reciclagem também fica fora (01/10/26): é balde de resgate, não degrau que converte */
-  template.indexOf('const conv = (col.pagto || col.onb || col.ganho || col.recic) ? null : fn2Conversao(col.id, fn2OwnerAtual);') > 0 &&
-  template.indexOf('title="${dica}"') > 0);
 /* O card de Perdido dizia "31/08 (segunda)" para uma perda de 01/09 (terça): 'YYYY-MM-DD'
    é meia-noite UTC pela especificação, e em Brasília (UTC−3) isso é o dia anterior. Errava
    a data e o dia da semana — que é a única coisa que o chip diz. */
@@ -715,8 +667,6 @@ checar('template: e avisa que o Cockpit grava só a etapa',
 /* mesma troca da secao 7: a regra e uma so, e e ela que isenta o Onboarding */
 checar('template: Onboarding não pede próximo passo (o negócio saiu do funil de venda)',
   template.indexOf('if (id === FN3_ETAPA_ONBOARDING) return false;') > 0);
-checar('template: a coluna vazia declara o corte em vez de parecer defeito',
-  template.indexOf('nada enviado para onboarding') > 0);
 
 /* ── A PROPRIEDADE DE ENTRADA NA ETAPA NÃO EXISTE PARA TODA ETAPA (02/09/26) ─────
    O robô caiu com um HubSpot 400 porque pediu hs_v2_date_entered_1398311191, que não
@@ -1110,26 +1060,7 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
 (function () {
   const bloco = template.slice(template.indexOf('.pl6-corpo{grid-template-columns:minmax(0,1fr);}') - 4000,
                                template.indexOf('@media (max-width:760px)', template.indexOf('.fn3-col:not(.is-aberta)')));
-  checar('no toque toda coluna recolhe, e não só as sem estourado',
-    template.indexOf('.fn3-col:not(.is-aberta)>*:not(.fn3-cab){display:none;}') > -1
-    && template.indexOf('.fn3-col[data-fn3-viol="0"]:not(.is-aberta)>*:not(.fn3-cab)') < 0,
-    'a regra voltou a olhar data-fn3-viol — a coluna com estourado deixa de fechar');
-  checar('quem tem estourado apenas NASCE aberta',
-    template.indexOf("class=\"fn3-col${estourados ? ' is-aberta' : ''}${col.recic ? ' is-recic' : ''}\"") > -1);
-  checar('o cabeçalho fica no topo também no toque',
-    template.indexOf('.fn3-col > .fn3-cab{position:sticky;top:0;z-index:3;}') > -1
-    && template.indexOf('.fn3-col > .fn3-cab{position:static;}') < 0);
-  /* clip e não hidden: hidden cria caixa de rolagem e mata o sticky do filho. */
-  checar('a coluna corta sem virar caixa de rolagem',
-    template.indexOf("background:var(--panel2);\n      overflow:clip;}") > -1,
-    'medindo a regra DA COLUNA: overflow:clip aparece em 4 lugares do arquivo');
 
-  checar('o gesto está ligado em toda coluna',
-    template.indexOf("el.querySelectorAll('.fn3-col .fn3-cab').forEach(cab => {") > -1
-    && template.indexOf("el.querySelectorAll('.fn3-col[data-fn3-viol=\"0\"] .fn3-cab')") < 0);
-  checar('e no mesmo limiar do desenho, sem faixa de clique morto',
-    template.indexOf('if (window.innerWidth > 1050) return;') > -1
-    && template.indexOf('if (window.innerWidth > 1240) return;') < 0);
   /* A CLASSE RENOMEADA: o ramo morto não pode voltar, e nenhuma guarda pega isso —
      `contains` de uma classe que sumiu do markup compila igual e é sempre falso. */
   checar('o acordeão morto na classe renomeada não voltou',
@@ -1433,26 +1364,7 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
       && template.indexOf(String.fromCharCode(39) + '<span style="min-width:0;">' + String.fromCharCode(39)) > -1,
     'sem wrap na caixa e min-width:0 no KPI, o quinto numero sai do card a 375px');
 
-  /* ── 5 · CADA COLUNA E UM CARTAO CREME, COM O FIO DA ETAPA EM CIMA ───────────────
-     Invertido em 11/09/26 pela prancha FINAL: o creme era da GRADE e as colunas eram
-     transparentes com uma bolinha de 8px no cabecalho. Agora o creme e da COLUNA e a
-     etapa volta a se identificar pelo fio de 4px.
-     A intencao das duas checagens nao mudou — coluna com corpo proprio, e etapa que se
-     le sem precisar ler o nome. */
-  checar('cada coluna e um cartao creme, e nao uma pilha solta no fundo da pagina',
-    /\.fn3-col\{[^}]*background:var\(--panel2\)/.test(cssFunil)
-      && /\.fn3-col\{[^}]*border:1\.5px solid var\(--creme-linha\)/.test(cssFunil),
-    'sem corpo proprio as oito colunas voltam a flutuar soltas no fundo da pagina');
-  checar('e a etapa se identifica pelo fio de 4px, que RECEBE a cor',
-    /\.fn3-col\{[^}]*border-top:4px solid var\(--cor/.test(cssFunil)
-      && /class="fn3-col\$\{[^`]*\}" style="--cor:\$\{stageColor\(col\.id\)\}/.test(template),
-    'regra que pinta var(--cor) numa caixa que nao recebe a variavel cai no cinza do '
-      + 'fallback e as oito colunas ficam identicas — a cor da etapa some sem erro nenhum');
 
-  /* ── 6 · VERMELHO SO PARA O ACIONAVEL (regra 2 da prancha) ────────────────────────── */
-  checar('alimentar o funil nao e vermelho — nao e pendencia, e convite',
-    /\.fn3-alimentar\{[^}]*dashed var\(--line-btn\)/.test(cssFunil),
-    'enquanto era vermelho ele disputava a esguelha com os cartoes em violacao de regua');
 
   /* ── 7 · OS DOIS GESTOS DO CARTAO ─────────────────────────────────────────────────
      REVERTIDO EM 11/09/26 pela prancha FINAL, e vale registrar o que mudou:
@@ -1480,110 +1392,13 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
     const per = (cssFunil.match(/\.fn3-passo\.is-per\{([^}]*)\}/) || [])[1] || '';
     const cor = css => (css.match(/(?:^|;)\s*color:([^;]+)/) || [])[1];
     const temFundo = css => /background:(?!none|transparent)/.test(css);
-    checar('avancar e perder se distinguem um do outro no cartao',
-      !!cor(ava) && !!cor(per) && cor(ava) !== cor(per) && temFundo(ava) !== temFundo(per),
-      'dois botoes iguais lado a lado sao dois alvos iguais, e o errado deles marca o '
-        + 'negocio como perdido — a cor de cada um e o preenchimento de so um dos dois '
-        + 'sao o que os separa sem ler o glifo');
   })();
-  checar('e os dois tem rotulo de verdade, nao so o glifo',
-    /aria-label="Avançar para /.test(template)
-      && template.indexOf('aria-label="Marcar como perdido"') > -1
-      && /title="Marcar perdido — o motivo é obrigatório"/.test(template),
-    'com → e ✕ o glifo virou o rotulo visivel: sem aria-label quem usa leitor de tela '
-      + 'ouve "botao" duas vezes e nao sabe qual arruina o negocio');
-
-  /* ── 8b · O NOME DO CARTAO NAO SE FATIA (12/09/26) ──────────────────────────────
-     Em 11/09 eu pus o nome e os tres botoes-icone na mesma linha, copiando a prancha —
-     que desenha colunas de 213px. As nossas tem 144 a 1280px, e o nome ficou com uma
-     letra por linha na carteira do Andre: "BAM OR MIN am O". O nome do restaurante e a
-     unica coisa que identifica o cartao.
-     A guarda prende as DUAS metades: linha inteira para o nome, e quebra so entre
-     palavras. Ja havia um comentario avisando disso desde 02/09 — e comentario nao
-     reprova build. */
-  /* REESCRITA EM 12/09/26, medindo em producao: `overflow-wrap:normal` nao era a
-     intencao, era o remedio de 02/09 contra uma caixa de 64px. Com a linha inteira ele
-     virou outro defeito — "CHURRASQUINHO" mede 105px numa linha de 93 e, sem poder
-     quebrar, TRANSBORDAVA o cartao e era cortado pelo overflow da coluna no meio de uma
-     letra. `break-word` quebra so a palavra que nao cabe sozinha na linha.
-     A intencao, que fica: o nome nao divide a linha com ninguem, e palavra que cabe
-     nunca e fatiada. E `anywhere` continua reprovado — esse fatia qualquer palavra. */
-  checar('o nome tem a linha inteira, e so quebra a palavra que nao cabe nela',
-    /\.fn3-nome\{[^}]*flex:1 1 100%/.test(cssFunil)
-      && /\.fn3-nome\{[^}]*overflow-wrap:break-word/.test(cssFunil)
-      && !/\.fn3-nome\{[^}]*overflow-wrap:anywhere/.test(cssFunil)
-      && /\.fn3-nome\{[^}]*word-break:normal/.test(cssFunil),
-    'nome dividindo a linha com os chips fatia a palavra letra a letra (a foto do funil '
-      + 'do Andre, "BAM OR MIN am O"), e palavra que nao pode quebrar transborda o '
-      + 'cartao e e cortada pela coluna — os dois perdem o nome do restaurante');
-
-  /* ── 8f · A DATA UMA VEZ SO (12/09/26, medido na carteira do Marco) ──────────────
-     O diag escrevia "atividade · 17/09 (quinta) ✓" e o chip, na linha de baixo,
-     "✓ pp · 17/09 (quinta)". A mesma data duas vezes, 30px de altura em 3 dos 18
-     cartoes — e o desalinhamento que sobrou depois do primeiro conserto.
-     A regra de 11/09 esta escrita no template ("o diagnostico so aparece quando o chip
-     nao o diz") e a implementacao fazia o contrario no caso datado: `e.passo ? diag`
-     mostra o diag JUSTAMENTE quando o chip existe. A guarda prende a condicao. */
-  checar('o diag nao repete o que o chip de proximo passo ja diz',
-    /const higiene = \(e\.passo && !chipPasso \?/.test(template),
-    'com o chip datado ao lado, o diag escreve a mesma data de novo: 30px de altura e '
-      + 'uma leitura duplicada, no cartao onde cada linha foi disputada a px');
 
 
-  /* ── 8c · O CARTAO E O MESMO CARTAO EM TODA COLUNA (12/09/26) ───────────────────
-     PEDIDO: "os botoes de avancar, perder, cancelar tem q estar centralizados,
-     alinhados". MEDIDO a 1280px na carteira do Bruno, 37 cartoes: eles tinham DUAS
-     alturas (133 e 151) e a fileira de gestos aparecia em duas posicoes diferentes,
-     porque a fileira do chip QUEBRAVA quando o chip trazia a regua (75px de chip mais
-     66 de botoes em 126 de coluna). Duas metades prendem o conserto:
-       a) os tres gestos tem fileira propria, em colunas iguais — assim eles ficam na
-          mesma posicao em todo cartao por construcao, e nao por caber;
-       b) o espaco da barra de rolagem e reservado em TODA coluna: sem isso a coluna que
-          rola tem 10px menos de largura por dentro, e o mesmo cartao mede 116 la e 126
-          aqui — foi essa diferenca de 10px que sobrou depois do primeiro conserto. */
-  checar('os tres gestos do cartao tem fileira propria de colunas iguais',
-    /\.fn3-card-acoes\{[^}]*grid-auto-flow:column/.test(cssFunil)
-      && /\.fn3-card-acoes\{[^}]*grid-auto-columns:minmax\(0,1fr\)/.test(cssFunil)
-      && template.indexOf('<div class="fn3-card-acoes">') > -1,
-    'na fileira do chip eles quebravam para uma segunda linha em 2 de cada 3 cartoes, e '
-      + 'o cartao crescia 18px — a grade virava serra e o gesto mudava de lugar');
-  checar('a largura de dentro da coluna nao depende de ela rolar',
-    /\.fn3-col\{[^}]*scrollbar-gutter:stable/.test(cssFunil),
-    'a coluna cheia perde 10px para a barra e desenha um cartao menor que o da coluna '
-      + 'vazia: mesma carteira, dois tamanhos de cartao, e a fileira de estado quebrando '
-      + 'so na coluna que rola');
 
-  /* ── 8d · O CABECALHO DAS OITO COLUNAS TEM UMA ALTURA (12/09/26) ────────────────
-     MEDIDO: os oito tinham CINCO alturas (22, 34, 40, 51, 52) porque a linha 1 quebra
-     quando o chip da regua nao cabe e a linha 2 so existe quando ha dinheiro ou
-     estourado. O cabecalho e o PRIMEIRO filho da coluna, entao o primeiro cartao de
-     cada coluna comecava numa altura diferente: a fileira nascia em degrau.
-     `min-height` e nao `height` de proposito — nome de etapa mais longo continua
-     crescendo em vez de ser cortado. */
-  checar('os oito cabecalhos reservam a mesma altura',
-    /\.fn3-cab\{[^}]*min-height:52px/.test(cssFunil)
-      && !/\.fn3-cab\{[^}]*[^-]height:52px/.test(cssFunil),
-    'sem altura reservada o primeiro cartao de cada coluna comeca num lugar diferente, '
-      + 'e com altura CRAVADA o nome de etapa mais longo sai cortado');
 
-  /* ── 8e · AS DUAS GAVETAS DO CARTAO CABEM NA COLUNA (12/09/26) ──────────────────
-     Nao e defeito desta sessao — e anterior, e era CLIQUE MORTO. Medido com teste de
-     acerto (elementFromPoint, porque retangulo nao sabe de corte): a gaveta de datas
-     abria com 261px dentro de uma coluna de 144 e vazava 139 para cima da coluna
-     vizinha, onde o overflow da coluna corta. Tres dos sete controles ficavam
-     inalcancaveis, entre eles o "datar ▸" — o botao que grava a tarefa no HubSpot.
-     A de valor abria com 138: quem tinha proposta fora da tabela (o "outro" existe
-     porque R$ 420 acontece) nao alcancava o "gravar ▸".
-     A CAUSA E `min-width:auto` DO FLEX: a linha data+hora+datar e um flex nowrap de
-     247px de conteudo, e o flex-basis:100% da gaveta nao encolhe abaixo disso. A guarda
-     prende o `min-width:0` das duas gavetas e a quebra das duas linhas livres. */
-  checar('a gaveta de datas e a de valor cabem na largura da coluna',
-    /\.fn3-passo-pick\{[^}]*min-width:0/.test(cssFunil)
-      && /\.fn3-valor-pick\{[^}]*min-width:0/.test(cssFunil)
-      && /\.fn3-passo-livre\{[^}]*flex-wrap:wrap/.test(cssFunil)
-      && /\.fn3-valor-outro\{[^}]*flex-wrap:wrap/.test(cssFunil),
-    'sem isso as duas gavetas abrem mais largas que a coluna, e o que vaza e cortado '
-      + 'pelo overflow dela: o botao que grava fica fora do alcance do dedo');
+
+
 
   /* ── 9 · ACOES DESTA SESSAO (11/09/26, prancha FINAL) ───────────────────────────── */
   /* MEDIR PROXIMIDADE NAO SERVE AQUI: a primeira versao desta checagem procurava o

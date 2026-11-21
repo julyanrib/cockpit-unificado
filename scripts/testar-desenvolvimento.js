@@ -31,7 +31,11 @@ let ok = 0;
 const APOSENTADAS = [
   'a fiação trata os três tipos', 'os destinos reusam os caminhos que já existem', 'as três prioridades saem do funil ao vivo',
   'o CTA só é desenhado quando existe destino', 'a fala pronta não aparece sem gargalo', 'toda pergunta do rodapé nasce com resposta',
-  'a resposta não vai buscar dado no clique'
+  'a resposta não vai buscar dado no clique',
+  /* 20/11/26: a faxina final tirou o que estas protegiam — o Desenvolvimento antigo do executivo
+     (contrastesDoExecutivo, o acordo do 1:1 dentro dele, os indicadores e o destravar do núcleo),
+     que ninguém chamava desde a prancha DESE. */
+  'contraste com gap zero não entra', 'acordo marcado fica aguardando o gestor'
 ];
 function checar(nome, condicao, porque) {
   if (APOSENTADAS.some(function (n) { return String(nome).indexOf(n) === 0; })) return;
@@ -165,7 +169,9 @@ checar('acordo marcado fica aguardando o gestor',
 (function () {
   const i = template.indexOf('RESKIN · ABA DESENVOLVIMENTO DO EXECUTIVO');
   if (i < 0) { checar('o bloco do reskin existe', false); return; }
-  const bloco = template.slice(i, template.indexOf('/* ═══', i + 400) > -1 ? template.indexOf('@media (max-width:1240px)', i) : template.length);
+  /* o fim é o começo da seção seguinte (a dos KPIs da Semana): o @media do fim do bloco saiu na faxina de 20/11/26 */
+  const fimR = template.indexOf('/* --- Semana: KPIs com faísca', i);
+  const bloco = template.slice(i, fimR > i ? fimR : template.length);
   const linhasDeRegra = bloco.split('\n').filter(l => /^\s{2}[.#a-zA-Z]/.test(l) && l.indexOf('{') > -1);
   /* '#viewPDIs' em qualquer forma serve: o fundo da pagina e por body:has(#viewPDIs
      .active), que tambem esta preso a aba. O que nao pode e regra sem a aba no seletor. */
@@ -179,26 +185,7 @@ checar('o fundo da página só muda nesta aba',
   template.indexOf('body.exec-v3:has(#viewPDIs.active){background:var(--bg);}') > -1,
   'sem o :has, o cockpit inteiro trocaria de fundo');
 
-/* ── 9. O QUE JÁ EXISTIA E NÃO PODE SUMIR ────────────────────────────────────────── */
-['focoDeHabilidadeHTML', 'buildIndicadoresExecutivoHTML', 'compromissosComPrazo', 'destravarFunil']
-  .forEach(fn => checar('continua existindo: ' + fn, template.indexOf('function ' + fn) > -1));
-
-/* ── 10. O TREINO DA SEMANA ──────────────────────────────────────────────────────
-   Coluna aditiva em pdi_compromissos (treino_feito_em, treino_foco), autorizada pelo
-   Julyan em 05/09. Duas regras que nao podem cair: */
-/* A primeira versão desta checagem media a FUNÇÃO inteira e reprovava sozinha: o corpo
-   tem `{ checked: [], data: '' }` como valor padrão do cache, que não é o upsert. O que
-   importa é o PAYLOAD que sobe — é ele que o Postgres aplica. */
-checar('o treino grava sem apagar os acordos', (function () {
-  const i = template.indexOf('function savePdiTreino(');
-  if (i < 0) return false;
-  const u = template.indexOf(".upsert({", i);
-  if (u < 0 || u > i + 900) return false;
-  const fim = template.indexOf('}, {', u);
-  if (fim < 0) return false;
-  return template.slice(u, fim).indexOf('checked') === -1;
-}()),
-  'mandar checked no payload faria o treino sobrescrever os acordos do 1:1 com o que estivesse no cache');
+/* 20/11/26: savePdiTreino saiu com a página do espelho do 1:1 (só por chave local); ninguém mais grava o treino da semana pelo Cockpit. */
 /* E aqui o que importa é o GUARDA: sem ele a linha do treino aparece para todo mundo,
    inclusive para quem nunca marcou — que é o oposto do que a coluna significa. */
 checar('o gestor ve o treino, e só quando ele existe', (function () {

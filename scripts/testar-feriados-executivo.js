@@ -71,16 +71,33 @@ const sem = ctx.pl6Dias('2026-11-02');
 checar('a semana de 02/11 marca a segunda como feriado e tem 4 dias úteis', sem[0].feriado === true && sem.filter(function (d) { return !d.feriado; }).length === 4);
 checar('a semana de 09/11 não tem feriado', ctx.pl6Dias('2026-11-09').every(function (d) { return !d.feriado; }));
 
-/* as contas do Planejamento e da promessa (por texto: dependem do resto da tela) */
-checar('a meta de visitas da semana é por dia útil', tpl.indexOf('const meta = pl6MetaVisitasDia() * diasUteisSemana;') > -1 && tpl.indexOf('pl6MetaVisitasDia() * 5') < 0);
-checar('dias cobertos não contam o feriado', tpl.indexOf("grade.filter((col, i) => !(dias[i] && dias[i].feriado) && col.some(v => pl6SlotId(v))).length") > -1);
+/* as contas do Planejamento: desde 20/11/26 só a v3 (PLV3) — as funções puras dela rodam aqui */
+const pegaPLV3 = function (nome) {
+  const a = tpl.indexOf('\nPLV3.' + nome + ' = function');
+  if (a < 0) return '';
+  let d = 0, j = tpl.indexOf('{', a), viu = false;
+  while (j < tpl.length) { const c = tpl[j]; if (c === '{') { d++; viu = true; } else if (c === '}') { d--; if (viu && d === 0) break; } j++; }
+  return tpl.slice(a, j + 1) + ';';
+};
+const ctxP = { PLV3: { META_PADRAO: 6 } };
+vm.createContext(ctxP);
+vm.runInContext(pegaPLV3('metaDaSemana') + pegaPLV3('topo') + pegaPLV3('aceitaSoltar') + pegaPLV3('elegivel'), ctxP);
+const P3 = ctxP.PLV3;
+const semFin = sem.map(function (d) { return { iso: d.iso, feriado: d.feriado ? 'Finados' : '' }; });
+const mSem = typeof P3.metaDaSemana === 'function' ? P3.metaDaSemana(6, semFin, null, 0, 1) : {};
+checar('a meta de visitas da semana é por dia útil', mSem.visitas === 24 && mSem.uteis === 4, JSON.stringify(mSem));
+const tSem = typeof P3.topo === 'function' ? P3.topo(semFin, [[{}], [{}], [], [{}], []]) : {};
+checar('dias cobertos não contam o feriado', tSem.cobertos === 2 && tSem.uteis === 4 && tSem.naGrade === 2, JSON.stringify(tSem));
 checar('a promessa da semana usa os dias úteis da semana', tpl.indexOf('fechamentos, visitas: metaDia * uteisSem, prospeccao: 4,') > -1);
 checar('os atalhos de data pulam o feriado', /if \(w === 0 \|\| w === 6 \|\| ehFeriadoBR\(d\)\) continue;/.test(tpl));
 checar('nenhuma conta de "dia útil" do executivo ficou sem o feriado', !/if \(w !== 0 && w !== 6\) n\+\+;/.test(tpl) && !/if \(dow !== 0 && dow !== 6\) n\+\+;/.test(tpl));
 
 /* sem expediente (domingo 01/11/26): nenhum quadro do executivo cobra o plano do dia */
-checar('Planejamento: o quadro Hoje diz "sem expediente" no fim de semana e no feriado', tpl.indexOf("if (!dv5.y && (isWeekend(iso))) return { plano: 'sem expediente'") > -1);
-checar('Desenvolvimento: o cartão Hoje diz "sem expediente", não "sem rota"', tpl.indexOf("GV2.temRua(p) ? GV2.visHoje(p) : GV2.util(b.agora.iso) ? 'sem rota' : 'sem expediente'") > -1);
+/* 20/11/26: o quadro Hoje era da tela v2. Na v3 o feriado não recebe cartão nem sugestão. */
+checar('Planejamento: o feriado não recebe cartão nem sugestão', typeof P3.aceitaSoltar === 'function'
+  && P3.aceitaSoltar({ feriado: 'Finados' }) === false && P3.elegivel({ feriado: 'Finados' }, true) === false
+  && P3.aceitaSoltar({ iso: '2026-11-03' }) === true);
+/* 20/11/26: saiu com o espelho do 1:1 (GV2.DV, desenvolvimento-v1), que só abria por chave local; a faxina final tirou a página e os cartões dela. */
 checar('o mês do executivo conta o último dia útil (fim às 23:59:59)', tpl.indexOf('new Date(h.getFullYear(), h.getMonth() + 1, 0, 23, 59, 59)') > -1);
 checar('data inválida não é feriado e não lança erro', ctx.ehFeriadoBR('NaN-NaN-NaN') === false && ctx.feriadosDoAnoBR(NaN).length === 0);
 

@@ -159,9 +159,7 @@ checar('e os dois caminhos chamam estadoDaRegua',
 checar('a etapa conta quem está aguardando',
   /aguardando: ls\.filter\(l => l\.aguardando === true\)\.length,/.test(tpl),
   'sem contar, o gestor não tem como saber que eles existem');
-checar('e a linha da etapa diz isso em palavras',
-  /aguardando data combinada/.test(tpl),
-  'o número sem a frase vira mais um contador que ninguém sabe ler');
+/* 20/11/26: a frase 'aguardando data combinada' era da linha de etapa da Time antiga. */
 
 console.log('');
 console.log('régua · três estados: ' + ok + ' verificações');

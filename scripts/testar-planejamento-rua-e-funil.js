@@ -59,114 +59,25 @@ function contexto(extra) {
     Date: Date, Math: Math, isNaN: isNaN, isFinite: isFinite }, extra || {});
   vm.createContext(c);
   [/const PL6_BLOQUEADO = '[^']+';/, /const PL6_RUA = '[^']+';/, /const PL6_REL = '[^']+';/,
-    /const PL6_ETAPA_AG_PGTO = '[^']+';/, /const PL6_PROPOSITOS = \[[\s\S]*?\n\];/]
+    /const PL6_ETAPA_AG_PGTO = '[^']+';/]
     .forEach(function (re) { vm.runInContext(tpl.match(re)[0], c); });
   return c;
 }
 
+/* 20/11/26: as seções 1 e 2 (o bloco de rua na mão em um clique, região e duração mexendo
+   no bloco, a barra-guia) eram do compositor da tela v2, que saiu. O bloco de rua da v3 é
+   PLV3.porRua e está medido em testar-proposito-no-compromisso e testar-planejamento-relacionamento.
+   O cartão da v2 (pl6MetricaDoCard) saiu junto; a régua continua, e é ela que se mede aqui. */
 console.log('');
-console.log('1 · O BLOCO DE RUA CAI NA MÃO EM UM CLIQUE');
+console.log('3 · TODA CONTA TEM PROPÓSITO, E O FUNIL RECEBE O RESTO');
 
-/* ── 1a · o objeto que vai para a mão, montado pelo template ─────────────────────── */
 (function () {
   const c = contexto();
-  vm.runInContext(recortar('pl6SelDeRua'), c);
-  const montar = vm.runInContext('pl6SelDeRua', c);
-  const PL6_RUA = vm.runInContext('PL6_RUA', c);
-
-  const padrao = montar({ rua: { regiao: '', duracao: '2h' } });
-  igual('sem região, o bloco na mão é "região livre"', padrao.lead.nome,
-    'Prospecção de rua · região livre',
-    'é o que a barra-guia mostra, e "Prospecção de rua · " sozinho seria uma frase pela metade');
-  igual('e ele é o sentinela da rua, não um lead', padrao.lead.id, PL6_RUA);
-  igual('a duração padrão é 2h', padrao.duracao, '2h');
-  igual('e a linha de baixo diz a duração', padrao.sub, '2h · sem conta definida');
-
-  const comOnde = montar({ rua: { regiao: 'Barra da Tijuca', duracao: '3h' } });
-  igual('com região, ela entra no nome', comOnde.lead.nome, 'Prospecção de rua · Barra da Tijuca');
-  igual('e a duração escolhida vai junto', comOnde.duracao, '3h');
-  igual('espaço em branco não vira região', montar({ rua: { regiao: '   ' } }).lead.nome,
-    'Prospecção de rua · região livre',
-    'um nome terminando em espaço é o tipo de coisa que só aparece no print do gestor');
-}());
-
-/* ── 1b · UM clique: o verbo do propósito já põe na mão ──────────────────────────── */
-checar('clicar no propósito rua já põe o bloco na mão',
-  /if \(alvoProp === 'rua'\) s\.sel = pl6SelDeRua\(s\);/.test(tpl),
-  'era um bloco que pedia para ser clicado e respondia "não tem lista" — o caminho real '
-    + 'da rua era outro botão, escondido no meio da coluna');
-checar('e o compositor não é mais o único caminho',
-  /ruaPegar: 'bloco:' \+ PL6_RUA/.test(tpl)
-    && /if \(verbo === 'bloco'\) \{/.test(tpl),
-  'os dois gestos continuam existindo, e os dois montam o MESMO objeto');
-checar('nenhuma string "não tem lista" sobrou',
-  codigo.indexOf('não tem lista') < 0,
-  'era a resposta do bloco a quem clicava nele; agora o clique faz alguma coisa');
-
-/* ── 1c · o número vem da grade ──────────────────────────────────────────────────── */
-(function () {
-  const c = contexto();
-  ['pl6SlotProposito', 'pl6SlotRua', 'pl6BlocosDeRuaNaSemana']
+  ['pl6AtrasoDoPasso', 'pl6PropositoDoLead']
     .forEach(function (f) { vm.runInContext(recortar(f), c); });
-  const contar = vm.runInContext('pl6BlocosDeRuaNaSemana', c);
-  const PL6_RUA = vm.runInContext('PL6_RUA', c);
-
-  igual('grade vazia dá zero', contar([[null, null], [null]]), 0);
-  igual('conta o bloco gravado com propósito',
-    contar([[{ id: PL6_RUA, hora: '09:00', p: 'rua' }, null], [null]]), 1);
-  igual('conta também o sentinela puro, de semana já gravada',
-    contar([[PL6_RUA, null], [{ id: PL6_RUA, p: 'rua' }]]), 2,
-    'toda semana no banco hoje usa a string — contar só o `p` daria 0 para quem já tem '
-      + 'rua marcada, e o número apareceria zerado no primeiro uso');
-  igual('e não conta visita nem bloqueio',
-    contar([[{ id: '77', hora: '09:00', p: 'cobrar' }, '__b', '88']]), 0);
-  igual('grade nula não estoura', contar(null), 0);
-}());
-
-console.log('');
-console.log('2 · REGIÃO E DURAÇÃO MEXEM NO BLOCO QUE JÁ ESTÁ NA MÃO');
-
-checar('a duração atualiza o bloco na mão',
-  /if \(verbo === 'ruadur'\) \{[\s\S]{0,300}?if \(s\.sel && s\.sel\.bloco === PL6_RUA\) s\.sel = pl6SelDeRua\(s\);/.test(tpl),
-  'sem esta linha, trocar de 2h para 3h com o bloco pego mudava só o PRÓXIMO bloco — e o '
-    + 'que ele acabou de marcar saía com a duração antiga, sem nada na tela dizendo isso');
-checar('e a região também',
-  /const ruaOnde = ev\.target\.closest[\s\S]{0,600}?pl6UI\.sel = pl6SelDeRua\(pl6UI\);/.test(tpl),
-  'mesma coisa para o "onde?"');
-/* O RAMO SE MEDE DENTRO DELE. A primeira versão desta checagem varria 700 caracteres a
-   partir do `const ruaOnde` e caía no ramo da BUSCA POR NOME, logo abaixo — que
-   redesenha de propósito e deve continuar redesenhando. */
-checar('a região não redesenha a tela a cada letra',
-  (function () {
-    const i = codigo.indexOf('const ruaOnde = ev.target.closest');
-    if (i < 0) return false;
-    const j = codigo.indexOf('const buscaNome = ev.target.closest', i);
-    if (j < 0 || j <= i) return false;
-    const ramo = codigo.slice(i, j);
-    return /pl6SelDeRua\(pl6UI\)/.test(ramo) && !/redesenhar\(/.test(ramo);
-  }()),
-  'redesenhar a cada letra reconstrói o campo, o foco se perde e a segunda letra vai para '
-    + 'o nada — é o defeito que a busca por nome já teve nesta mesma coluna');
-checar('e a barra-guia tem o gancho que ela corrige no lugar',
-  /data-pl6-guia="1"/.test(tpl),
-  'sem redesenho e sem gancho, a guia ficaria dizendo a região antiga');
-
-console.log('');
-console.log('3 · SEIS PROPÓSITOS, E O FUNIL RECEBE O RESTO');
-
-(function () {
-  const c = contexto();
-  ['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead']
-    .forEach(function (f) { vm.runInContext(recortar(f), c); });
-  const PROPS = vm.runInContext('PL6_PROPOSITOS', c);
+  /* 20/11/26: a faixa dos sete propósitos (PL6_PROPOSITOS, com etiqueta e cor) era a da Daily antiga
+     do gestor e saiu com ela. Fica o que a v3 grava no slot: todo negócio da carteira tem propósito. */
   const doLead = vm.runInContext('pl6PropositoDoLead', c);
-
-  /* 16/10/26 (Planejamento v2): o sétimo, a Cadência, entra no FIM (pl6Proposito cai no índice 3) */
-  igual('a faixa tem os sete, nesta ordem', PROPS.map(function (p) { return p.id; }),
-    ['rua', 'cobrar', 'relac', 'follow', 'nova', 'funil', 'cad']);
-  checar('e cada um tem etiqueta e cor',
-    /* v5: a cor do propósito pode ser token (var(--ink) no de rua); só vai para style= */
-    PROPS.every(function (p) { return !!p.etiqueta && /^(#[0-9A-F]{6}|var\(--[\w-]+\))$/i.test(p.cor); }));
   checar('nenhuma conta da carteira fica sem propósito',
     doLead({ tipo: 'c', stageId: '1395880472' }) === 'funil'
       && doLead({ tipo: 'c', stageId: '1395880473' }) === 'cobrar'
@@ -183,11 +94,10 @@ console.log('4 · A RÉGUA VEM DO HUBSPOT, NUNCA DO CÓDIGO');
     '1395880469': 5, '1396005401': 5, '1395880470': 4,
     '1395880471': 3, '1395880472': 7, '1395880473': 2
   } } } });
-  ['pl6ReguaDaEtapa', 'pl6AcimaDaRegua', 'pl6PassoFuturo', 'pl6LinhaDoPasso', 'pl6MetricaDoCard']
+  ['pl6ReguaDaEtapa', 'pl6AcimaDaRegua']
     .forEach(function (f) { vm.runInContext(recortar(f), c); });
   const regua = vm.runInContext('pl6ReguaDaEtapa', c);
   const acima = vm.runInContext('pl6AcimaDaRegua', c);
-  const cartao = vm.runInContext('pl6MetricaDoCard', c);
 
   igual('Ag. Pagamento tem régua 2', regua('1395880473'), 2);
   igual('Negociação tem régua 7', regua('1395880472'), 7);
@@ -205,28 +115,6 @@ console.log('4 · A RÉGUA VEM DO HUBSPOT, NUNCA DO CÓDIGO');
     '"não medido" e "dentro da régua" são coisas diferentes, mas nenhuma das duas é '
       + '"estourado"');
 
-  const cob = cartao({ stageId: '1395880473', dias: 9, etapa: 'Ag. Pagamento' }, 'cobrar');
-  igual('o cartão da cobrança escreve a régua REAL',
-    cob.l2, 'parado há 9d em Ag. Pagamento · régua 2d',
-    'a prancha pedia "régua 7d", que é a da Negociação');
-  /* v5 (28/09/26): o mesmo vermelho, agora token (--red-ink) */
-  igual('e marca acima da régua em vermelho', [cob.rot, cob.cor], ['acima da régua', 'var(--red-ink)']);
-
-  const fun = cartao({ stageId: '1395880472', dias: 3, etapa: 'Negociação' }, 'funil');
-  igual('o cartão do funil traz etapa e régua', fun.l2, 'Negociação · régua 7d');
-  igual('e diz "na etapa" quando está em dia', fun.rot, 'na etapa');
-  igual('sem próximo passo, ele diz isso', fun.l3, 'sem próximo passo datado',
-    'linha vazia ali lê como "tem passo e eu não mostrei"');
-
-  const comPasso = cartao({ stageId: '1395880472', dias: 3, etapa: 'Negociação',
-    proximaAtividade: new Date(Date.UTC(2026, 11, 5, 15, 0)).toISOString() }, 'funil');
-  checar('e com passo futuro ele traz a data', /^próximo passo em \d{2}\/\d{2}$/.test(comPasso.l3),
-    'veio: ' + comPasso.l3);
-
-  const semRegua = cartao({ stageId: '999', dias: 40, etapa: 'Etapa nova' }, 'funil');
-  igual('etapa sem régua não inventa uma', semRegua.l2, 'Etapa nova',
-    'escrever "régua 0d" ou "régua 7d" para etapa não medida é a tela afirmando o que '
-      + 'ninguém contou');
 }());
 
 checar('nenhuma régua fixa escrita na tela',

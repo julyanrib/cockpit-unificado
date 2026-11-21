@@ -163,16 +163,6 @@ igual('fração arredonda para baixo', ctx.comissaoTotalDe(6.9), 1800,
   ctx.DATA.comissionamento = guardado;
 }());
 
-/* REVISÃO GERAL (05/10/26): a faixa do variável virou o número "+R$ na próxima venda" do
-   herói do Hoje. A regra é a mesma: sem o quadro, nada é desenhado. */
-/* HOJE v3 (09/10/26): o "+R$ na próxima venda" foi para a legenda do cartão Mês, que lê o
-   resultado da Pessoas do gestor (p.resultado.proxima) e só escreve o valor quando ele existe. */
-checar('e a tela não desenha o número sem o quadro',
-  /'clientes' \+ \(r\.proxima != null \? ' · a próxima vale \+' \+ GV2\.rsCheio\(r\.proxima\) : ''\)/.test(tpl),
-  'sem esta saída, a caixa apareceria com undefined onde vai o valor');
-
-checar('a tabela do gestor também não aparece sem config',
-  /if \(typeof comissaoDe !== 'function' \|\| !comissaoConfig\(\)\) return '';/.test(tpl));
 
 /* ══ 7. O FORMATO DO DINHEIRO ═══════════════════════════════════════════════════════ */
 /* SEGURO: trocar a formatação por tm10Rs (que não existe neste vm) fazia a SUÍTE morrer
@@ -213,13 +203,6 @@ checar('e o arquivo não guarda salário fixo',
   'decisão dele em 22/09: a tela mostra só a variável, e nenhum dado de remuneração fixa '
     + 'entra neste repositório');
 
-/* ══ 10. AS DUAS TELAS LEEM O MESMO ═════════════════════════════════════════════════
-   Se o gestor e o executivo mostrassem contagens diferentes, a primeira conversa sobre
-   pagamento quebraria a confiança na tela inteira. */
-checar('gestor e executivo usam a mesma função',
-  (tpl.match(/comissaoDe\(comissaoClientesDoRep\(/g) || []).length >= 1
-    && /const cli = typeof comissaoClientesDoRep === 'function' \? comissaoClientesDoRep\(rep\.ownerId\) : 0;/.test(tpl) && /const cm = typeof comissaoDe === 'function' \? comissaoDe\(cli\) : null;/.test(tpl),
-  'duas contas para o mesmo pagamento é como as duas telas divergem');
 
 /* ══ 11. A IDENTIDADE: SEÇÃO DO CARD, E NÃO CARD DENTRO DE CARD ═══════════════════
    Julyan, 22/09/26: "quero TUDO NA MSM IDENTIDADE VISUAL". As duas telas do variável
@@ -233,60 +216,8 @@ checar('gestor e executivo usam a mesma função',
    Estas checagens medem a REGRA (seção não tem raio nem borda de quatro lados), não a
    grafia de um valor. Se alguém reescrever o bloco com outros números continua válido;
    se transformar a seção em card de novo, reprova. */
-function regraCss(sel) {
-  const i = tpl.indexOf('\n  ' + sel + '{');
-  if (i < 0) return null;
-  const j = tpl.indexOf('}', i);
-  return j < 0 ? null : tpl.slice(i, j + 1);
-}
-/* .cm1 saiu em 05/10/26 (revisão geral): o variável do executivo virou o número "+R$ na
-   próxima venda" do herói do Hoje. Fica a seção do time (.cmt), que continua no card. */
-const REGRAS = { '.cmt': regraCss('.cmt') };
-
-/* A ÂNCORA VIVA PRIMEIRO: sem isto, um rename faria as três checagens abaixo medirem o
-   vazio e passarem em verde — o modo mais comum de uma guarda morrer calada. */
-Object.keys(REGRAS).forEach(function (sel) {
-  checar('a regra ' + sel + ' existe no template', !!REGRAS[sel],
-    'sem a âncora as checagens de identidade medem o vazio e passam sozinhas');
-});
-
-Object.keys(REGRAS).forEach(function (sel) {
-  const r = REGRAS[sel] || '';
-  checar(sel + ' não tem raio — seção de card não arredonda',
-    !!REGRAS[sel] && !/border-radius/.test(r),
-    'as vizinhas dentro do mesmo card têm raio 0; quem arredonda vira caixa boiando');
-  checar(sel + ' não se cerca de borda nos quatro lados',
-    !!REGRAS[sel] && !/(^|[;{\s])border\s*:/.test(r),
-    'o card já tem a borda; a seção separa-se da vizinha por UM fio (border-top ou border-bottom), como .h9-dia faz');
-});
-
-/* OS TONS DO BLOCO DO GESTOR são os do card que o abriga, e não os tokens frios do resto
-   do app: dentro daquele card quem manda é aquele card. O verde entra por token porque é
-   semântico (dinheiro que entra) e vale no app inteiro. */
-const PALETA_DO_CARD = ['#E7E3DA', '#FBFAF6', '#FDFEFF', '#2B3440', '#7A8494', '#8B93A3',
-  '#5B667A', '#E4E0D6'];
-const iCmt = tpl.indexOf('\n  .cmt{');
-/* o fim do bloco é o comentário da seção seguinte (17/11/26: o Hoje antigo saiu inteiro, e com ele o marco anterior) */
-const iFimCmt = tpl.indexOf('/* ══ O HERO ESCURO', iCmt);
-checar('o bloco de css do variável do time foi encontrado inteiro',
-  iCmt > -1 && iFimCmt > iCmt,
-  'sem o recorte a checagem de paleta abaixo não mede nada');
-const cssCmt = (iCmt > -1 && iFimCmt > iCmt) ? tpl.slice(iCmt, iFimCmt) : '';
-const forasteiros = [...new Set((cssCmt.match(/#[0-9A-Fa-f]{6}/g) || [])
-  .map(function (h) { return h.toUpperCase(); }))]
-  .filter(function (h) { return PALETA_DO_CARD.indexOf(h) < 0; });
-checar('a tabela do time usa só a paleta do card que a abriga',
-  cssCmt.length > 0 && forasteiros.length === 0,
-  'tom de fora: ' + (forasteiros.join(', ') || '(nenhum, mas o recorte veio vazio)'));
-
-/* O ESPAÇO NO CABEÇALHO. Enquanto ele era flex, o `gap` separava o nome do resumo; virou
-   seção, o gap foi embora e na tela lia "VARIÁVEL DO TIME2 CLIENTES NO MÊS". Nenhuma
-   medição de estilo computado diria uma palavra sobre isso — só olhar a foto. */
-const iCab = tpl.indexOf("'<div class=\"cmt-cab\">'");
-const cabMarkup = iCab > -1 ? tpl.slice(iCab, iCab + 400) : '';
-checar('o cabeçalho separa o nome do resumo',
-  iCab > -1 && /<\/b>(\s|&nbsp;|—)+'/.test(cabMarkup),
-  'sem gap e sem espaço no markup as duas partes encostam e viram uma palavra só');
+/* 20/11/26: a seção do variável do TIME (.cmt, comissaoTimeHTML) era da Time antiga do gestor e saiu com
+   ela; as checagens de identidade dela (raio, borda, paleta, cabeçalho) saíram junto. */
 
 console.log('');
 console.log('variável: ' + ok + ' verificações');

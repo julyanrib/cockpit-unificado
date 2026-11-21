@@ -183,24 +183,23 @@ async function main() {
        ausencia de erro — o stub do preview local devolve { data: [], error: null } sem
        chamar a rede, e a tela chegou a escrever "registrado" com a tabela vazia. */
   const tpl = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
-  checar('datar tarefa passa pela porta unica, com data e tipoAcao de proximo passo',
-    /daily-datar-tarefa/.test(tpl) && /op: 'nota', dealId: dealId/.test(tpl)
-      && /tipoAcao: 'proximo-passo'/.test(tpl));
+  /* 20/11/26: o painel de ação da rodada antiga (daily-datar-tarefa, o gravador próprio de
+     registros_rodada e o desfazer dele) saiu com a Daily do ?gv2=0. Quem grava a rodada hoje
+     é a Daily do cockpit novo (GV2.dv3Reconhecer / GV2.dv3PedirPlano), e é nela que a regra
+     se mede: assina com a sessão, é idempotente pelo UNIQUE e declara sucesso por evidência. */
+  const dv3 = (function () { const i = tpl.indexOf('\nGV2.dv3Reconhecer = async function'); return i < 0 ? '' : tpl.slice(i, tpl.indexOf('\n};\n', i)); })();
   checar('sugerir troca usa tarefa-rota com sugeridoPorGestor, que e o marcador do ◆',
     /op: 'tarefa-rota'/.test(tpl) && /sugeridoPorGestor: true/.test(tpl));
-  checar('as duas escritas do HubSpot NAO montam URL do HubSpot no navegador',
-    !/api\.hubapi\.com/.test(tpl.slice(tpl.indexOf('daily-datar-tarefa') - 3000, tpl.indexOf('daily-datar-tarefa') + 3000)));
   checar('cobranca e reconhecimento gravam em registros_rodada assinando com a sessao',
-    /from\('registros_rodada'\)/.test(tpl) && /gestor_email: email/.test(tpl)
-      && /sessaoAtual && sessaoAtual\.email/.test(tpl));
+    /from\('registros_rodada'\)\.upsert\(\{ tipo: 'reconhecimento'/.test(dv3)
+      && /gestor_email: \(typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual\.email\) \|\| null/.test(dv3)
+      && /from\('registros_rodada'\)\.upsert\(\{ tipo: 'cobranca_plano'/.test(tpl));
   checar('a escrita e idempotente pelo onConflict do UNIQUE (tipo, owner, dia)',
-    /onConflict: 'tipo,owner_id,data'/.test(tpl));
+    /onConflict: 'tipo,owner_id,data'/.test(dv3));
   checar('sucesso por evidencia: pede a linha de volta e exige que ela venha',
-    /\.select\('id'\)/.test(tpl) && /não devolveu a linha gravada/.test(tpl));
-  checar('o desfazer tambem exige evidencia do que apagou',
-    /não havia registro para desfazer/.test(tpl));
+    /if \(!data \|\| !data\.length\) throw new Error\('o banco não devolveu a linha'\);/.test(dv3));
   checar('a falha vai para a tela, nunca ✓ silencioso',
-    /não gravou: /.test(tpl));
+    /GV2\.toast\('Não gravou o reconhecimento: '/.test(dv3));
 
   if (falhas.length) {
     console.error('FALHAS (' + falhas.length + '):');
