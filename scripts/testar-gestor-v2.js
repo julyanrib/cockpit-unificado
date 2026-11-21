@@ -32,8 +32,9 @@ checar('Prospecção é aba do cockpit novo',
 checar('nenhum botão sai para Rotas/Playbook do antigo (menu:rotas some; Playbook e Praça usam GV2.visitar)',
   !/acao: 'menu:rotas'/.test(codigo) && /if \(o === 'rotas' \|\| o === 'playbook'\) return GV2\.visitar\(o\);/.test(codigo)
   && /GV2\.pxPlaybook = function[\s\S]{0,200}GV2\.visitar\('playbook'\)/.test(codigo));
-checar('o menu não oferece "Abrir o cockpit antigo" (só a tela de erro guarda a saída)',
-  (codigo.match(/Abrir o cockpit antigo/g) || []).length === 1 && (codigo.match(/GV2\.botaoVoltar\(\);/g) || []).length === 1);
+/* 20/11/26: o menu "antigo" e o botão "Voltar ao cockpit novo" saíram com a faxina final */
+checar('o menu não oferece "Abrir o cockpit antigo" nem o botão de voltar',
+  !/GV2\.botaoVoltar/.test(codigo) && !/o === 'antigo'/.test(codigo));
 checar('aplicarVisaoPorPapel chama GV2.ligar', tpl.indexOf("if (typeof GV2 !== 'undefined' && GV2.ligar) GV2.ligar();") > 0);
 
 /* ── o mundo falso ── */
@@ -246,41 +247,8 @@ tabelas.gv2_falta_etapa = [
     GV2.rotaComando('ruasel', ['ruasel', ana.id]);
     checar('rua: trocar de pessoa volta a rota para esta semana e hoje', GV2.estado.rotaSem === 0 && GV2.estado.rotaDia === null);
   })();
-  /* DESENVOLVIMENTO DO EXECUTIVO (07/10/26): o teste de aceite 1 — os 4 números do topo são os
-     do resumo da Pessoas v4 para a mesma pessoa, da mesma base; e a frase segue a ordem das regras */
-  (function () {
-    const DV = GV2.DV;
-    DV.estado.base = GV2.base; DV.estado.medias = { pessoas: 3, reunioes30: 3, portas7: 10, portasSemFicha: 1, fichasMes: 10, decisorMes: 5, fila7: 1, diasComPlano: 6, diasUteisAteHoje: 3 };
-    const nums = function (html, re) { const m = []; let x; while ((x = re.exec(html))) m.push(x[1].replace(/<[^>]+>/g, '')); return m; };
-    GV2.base.pessoas.forEach(function (p) {
-      DV.estado.p = p; DV.estado.fizEm = {};
-      const h = DV.com(function () { return DV.html(p); });
-      /* v3 (09/10/26, ws.zip): os 5 cartões do topo são os da Pessoas v5 do gestor (GV2.render.v5Pessoa),
-         mesma base. Porta → decisor: o gestor mostra a %, o executivo a escada; a % sai da escada. */
-      const dv = nums(h, /class="dv-c5"><small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g);
-      const pg = GV2.render.v5Pessoa ? GV2.render.v5Pessoa(p) : '';
-      const ge = nums(pg, /class="gv2-v5-res"[^>]*><small>[^<]*<\/small><b[^>]*>([^<]*)<\/b>/g);
-      const so = function (t) { return (String(t).match(/[0-9]+(,[0-9]+)?|—/g) || []).join(' '); };
-      const fm = p.funil_mes || {};
-      const pdEscada = fm.portas >= 3 ? Math.round(fm.decisor / fm.portas * 100) + '%' : '—';
-      const iguais = dv.length === 5 && ge.length === 5
-        && so(dv[0]) === so(ge[0]) && dv[0].replace(/[0-9 de]/g, '') === ge[0].replace(/[0-9 de]/g, '')
-        && so(dv[1]) === so(ge[1]) && so(dv[2]) === so(ge[2]); /* v8 (13/10/26): os dois últimos do gestor viraram Quentes e Travados (o resumo da gaveta); Hoje, Semana e Mês seguem iguais aos do executivo */
-      checar('desenvolvimento: Hoje, Semana e Mês de ' + p.nome + ' são os mesmos da Pessoas do gestor (mesma base)', iguais, JSON.stringify({ dv: dv, gestor: ge, pdEscada: pdEscada }));
-    });
-    const p = GV2.base.pessoas[0], d = p.disc;
-    const um = { dia: '2026-10-13', hora: '08:30', dias: 5, hoje: false };
-    const salva = { n: d.nReunioes, u: p.ultimo1a1 };
-    d.nReunioes = 25; p.ultimo1a1 = p.ultimo1a1 || { data: '2026-10-05', combinados: [] };
-    const f1 = DV.com(function () { return DV.frase(p, um, [], null); });
-    p.ultimo1a1 = null;
-    const f2 = DV.com(function () { return DV.frase(p, um, null, null); });
-    const f3 = DV.com(function () { return DV.frase(p, { dia: '2026-10-08', hora: '08:30', dias: 1, hoje: false }, [{ r: 'em_aberto' }, { r: 'cumprido' }], null); });
-    d.nReunioes = salva.n; p.ultimo1a1 = salva.u;
-    checar('desenvolvimento: a frase do topo segue a ordem das regras (véspera > primeiro 1:1 > ... > reuniões)', /^Feche as reuniões que passaram: 25 esperando desfecho\.$/.test(f1.t) && f1.ir === 'disc' && /^Seu primeiro 1:1 é terça 13\/10\./.test(f2.t) && /^Amanhã às 08:30: 1 combinado em aberto\.$/.test(f3.t), [f1.t, f2.t, f3.t].join(' | '));
-    const um2 = DV.proximo1a1({ iso: '2026-10-07', min: 600, dow: 3 });
-    checar('desenvolvimento: 1:1 de segunda que cai em feriado vai para o próximo dia útil, mesma hora', um2.dia === '2026-10-13' && um2.hora === '08:30', JSON.stringify(um2));
-  })();
+  /* 20/11/26: saiu o aceite do espelho do 1:1 (GV2.DV.html/frase/proximo1a1): a página só abria por chave
+     local (desenvolvimento-v1) e a faxina final a tirou. A Pessoas do gestor segue medida acima. */
   checar('sidebar: o selo do Hoje conta as linhas de "Quem precisa de você" que pedem ação (não conta "Ainda não saiu") e some com 0', (function () {
     const n = GV2.v5Grupos().grupos.filter(function (g) { return g.sev < 3; }).length, h = GV2.navHTML();
     const m = h.match(/class="gv2-badge">(\d+)</);
@@ -386,9 +354,9 @@ tabelas.gv2_falta_etapa = [
       && ['gaveta:comissao', 'gaveta:carreira', 'gaveta:bonus', 'conta:mes', 'conta:turma', 'exp:projecao'].every(function (c) { return h.indexOf('data-mc="' + c + '"') > 0; }));
     const zero = MC.html(MC.modelo(Object.assign({}, F, { vendas: { mes: '2026-11', porRep: [{ ownerId: '7', count: 0, clientes: [] }, { ownerId: '8', count: 14 }] } }), '2026-11-16'), null, F.nome);
     checar('Minha conversão: sem venda no mês não projeta pela taxa dele (diz isso) e mostra a referência do playbook', /não há taxa sua para projetar/.test(zero) && /Pelo playbook: 120 portas e 20 demos/.test(zero) && zero.indexOf('data-mc="exp:projecao"') < 0);
-    checar('a aba do executivo chama "Minha conversão" e a tela nova entra antes do Desenvolvimento v2 (que volta pela chave local)',
+    checar('a aba do executivo chama "Minha conversão" e é a única tela da aba (as chaves de volta saíram em 20/11/26)',
       tpl.indexOf('<span class="tab-btn-label">Minha conversão</span>') > 0 && tpl.indexOf("souGestorSessao ? 'Pessoas' : 'Minha conversão'") > 0
-      && tpl.indexOf('return GV2.MC.render(el);') > 0 && tpl.indexOf('return GV2.MC.render(el);') < tpl.indexOf('return GV2.DV2.render(el);') && tpl.indexOf("localStorage.getItem('minha-conversao-v0') === '1'") > 0);
+      && tpl.indexOf('return GV2.MC.render(el);') > 0 && tpl.indexOf("getItem('minha-conversao-v0')") < 0 && tpl.indexOf('return GV2.DV.render(el);') < 0);
   }
   GV2.estado.p3rotacao = true;
   checar('Pessoas v3: a rotação abre numa folha lateral, com o mesmo componente', /class="gv2-p3-folha"/.test(GV2.render.pessoas()) && /Sua rotação de campo/.test(GV2.render.pessoas()));
@@ -955,7 +923,7 @@ tabelas.gv2_falta_etapa = [
     p1.quentes = [{ id: 'z2', nome: 'NegociacaoSemPasso', etapa_idx: 4, mrr: 500, dias: 3, travado: false, agPag: false, proximo_passo: null }];
     GV2.estado.daily = GV2.base.ordem.indexOf(p1);
     let dl = ''; try { dl = GV2.render.daily(); } catch (e) { falhas.push('daily: ' + e.message); }
-    checar('daily › Pra destravar: Negociação com MRR antes de Prospecção parada', dl.indexOf('NegociacaoSemPasso') > 0 && dl.indexOf('NegociacaoSemPasso') < dl.indexOf('ProspeccaoParada'));
+    /* "Pra destravar" era bloco da daily v8, que saiu em 20/11/26 */
     p1.travados = tr; p1.quentes = qs; GV2.estado.daily = ord;
     /* 1 · ficha da pessoa: o feriado aparece como feriado */
     GV2.FERIADOS.push(GV2.base.semana[0].iso);
@@ -1107,26 +1075,12 @@ tabelas.gv2_falta_etapa = [
       global.localStorage = ls0;
     }
     checar('v8 Daily: a fila vai de sem plano → furou → travados → no ritmo', fila.every(function (x, i) { return i === 0 || rank[GV2.v8dMotivo(fila[i - 1]).k] <= rank[GV2.v8dMotivo(x).k]; }), fila.map(function (x) { return GV2.v8dMotivo(x).k; }).join());
-    let erros = [], htmls = [];
-    for (let i = 0; i < fila.length; i++) { GV2.estado.daily = i; try { htmls.push(GV2.render.daily()); } catch (e) { erros.push(i + ': ' + e.message); } }
-    const blocos = ['1 · O mês', '2 · Onde o funil trava', '3 · Último dia útil', '4 · Quentes', '5 · Pra destravar', '6 · A semana', '7 · Compromisso'];
-    checar('v8 Daily: cada pessoa da fila abre com os 6 blocos, sem erro', !erros.length && htmls.every(function (h) { return blocos.every(function (x) { return h.indexOf(x) > 0; }); }), erros.join(' | ') || blocos.filter(function (x) { return htmls[0].indexOf(x) < 0; }).join());
-    checar('v8 Daily: a faixa diz por que a pessoa abre a daily, e o nome abre a gaveta', htmls.every(function (h, i) { return h.indexOf(GV2.e(GV2.v8dMotivo(fila[i]).t)) > 0 && h.indexOf('data-gv2="pessoa:' + fila[i].id + '"') > 0; }));
-    const comD = b.pessoas.find(function (x) { return GV2.v8dDestravar(x).length >= 2; });
-    if (comD) { const d = GV2.v8dDestravar(comD); const ids = d.map(function (n) { return n.id; });
-      checar('v8 Daily: pra destravar vem pelo dinheiro, sem repetir negócio e sem Ag. Pagamento', d.every(function (n, i) { return !n.agPag && (i === 0 || (d[i - 1].mrr || 0) >= (n.mrr || 0)); }) && new Set(ids).size === ids.length, d.map(function (n) { return n.mrr; }).join()); }
-    else checar('v8 Daily: o mundo de teste tem alguém com 2+ negócios para destravar', false);
-    /* o plano do dia aparece no bloco Hoje: mesma leitura da Rua (rotas_da_semana) */
-    const segR = GV2.segundaDe(b.agora.iso), rc0 = GV2.rota.cache[segR], pp = fila[0];
-    GV2.rota.cache[segR] = { estado: 'ok', itens: [{ owner_id: pp.id, dia: b.agora.iso, hora: '09:30', nome: 'Bar Teste Plano', proposito: 'Demo', client_id: 'c1', lat: -23.5, lng: -46.6 }, { owner_id: pp.id, dia: b.agora.iso, hora: '14:00', nome: 'Sem Endereco Teste', client_id: 'c2', lat: null, lng: null }], visitas: [{ provada: true, owner_id: pp.id, client_id: 'c1', dia: b.agora.iso, visited_at: b.agora.iso + 'T12:40:00Z' }] };
-    GV2.estado.daily = 0; const hp = GV2.render.daily();
-    checar('v8 Daily: o plano do dia aparece no bloco Hoje, com o feito e o sem lugar', /Bar Teste Plano/.test(hp) && /is-feita/.test(hp) && /Sem Endereco Teste/.test(hp) && /sem lugar no mapa/.test(hp));
-    GV2.rota.cache[segR] = rc0;
+    /* 20/11/26: saíram as checagens do DESENHO da daily v8 (os 7 blocos, a faixa, o pra destravar, o plano
+       e o compromisso no bloco Hoje): a v8 só abria por localStorage daily-v8 e a faxina final a tirou. A fila
+       e as gravações (marcar, encerrar), que a v3 reaproveita, seguem medidas aqui embaixo. */
     const p0 = fila[0];
     const linha = { id: 'dl1', owner_id: p0.id, data: b.ontemIso, created_at: b.ontemIso + 'T12:00:00Z', canal: 'video', resumo: 'Daily ' + GV2.ddmm(b.ontemIso), compromissos: ['montar o plano até 12h'], combinados: null };
     b.cru = b.cru || { umAUm: [], idas: [], visitas4: null }; b.cru.umAUm.unshift(linha);
-    GV2.estado.daily = 0; const hc = GV2.render.daily();
-    checar('v8 Daily: o compromisso do último dia útil aparece com cumpriu / em parte / não cumpriu', hc.indexOf('montar o plano até 12h') > 0 && hc.indexOf('daily:marca:' + p0.id + ':parcial') > 0);
     const so0 = b.cru.umAUm; b.cru.umAUm = [linha]; GV2.pessoasMontar(b); const u1 = p0.ultimo1a1; b.cru.umAUm = so0; GV2.pessoasMontar(b);
     checar('v8 Daily: a linha "Daily" do um_a_um não vira o último 1:1 da Pessoas', u1 === null);
     let upd = null;
@@ -1138,7 +1092,8 @@ tabelas.gv2_falta_etapa = [
     GV2.estado.compromissos = {}; GV2.estado.compromissos[p0.id] = 'duas demos marcadas até sexta';
     await GV2.v8dEncerrar();
     const res = GV2.render.daily();
-    checar('v8 Daily: encerrar grava o compromisso e mostra o resumo do time', GV2.estado.daily === 'fim' && /Resumo do time/.test(res) && res.indexOf('duas demos marcadas até sexta') > 0 && b.cru.umAUm[0].resumo === 'Daily ' + GV2.ddmm(b.agora.iso), b.cru.umAUm[0].resumo);
+    /* o resumo desenhado agora é o da daily v3 (a v8 saiu em 20/11/26): aqui fica só a gravação */
+    checar('v8 Daily: encerrar grava o compromisso', GV2.estado.daily === 'fim' && !!res && b.cru.umAUm[0].resumo === 'Daily ' + GV2.ddmm(b.agora.iso), b.cru.umAUm[0].resumo);
     checar('v8 Daily: o resumo copiado tem uma linha por pessoa', GV2.v8dTexto().split('\n').length === fila.length + 1);
     b.cru.umAUm = b.cru.umAUm.filter(function (x) { return x.id !== 'dl1' && x.id !== 'novo'; }); GV2.pessoasMontar(b);
     GV2.v6Rk.cache[seg] = cache0; GV2.estado.daily = null; GV2.estado.compromissos = {}; GV2.v8dFeitos = null;
@@ -1369,9 +1324,7 @@ tabelas.gv2_falta_etapa = [
         J.faltam === 4 && J.portas === 58 && J.demos === 7 && J0.faltam === 2 && J0.semTaxa === true && J0.portas === undefined && J1.faltam === 0 && GV2.cvProjecao({}, 0) === null, JSON.stringify([J, J0, J1]));
     }
     GV2.estado.daily = 0;
-    let dl = ''; try { dl = GV2.render.daily(); } catch (e) { falhas.push('acab daily: ' + e.message); }
-    checar('v9 Acabamento · Daily: o bloco 2 é o funil curto (visitas → demos → clientes, com as duas taxas) e a barra de Clientes não se repete',
-      !dl || ((dl.match(/class="gv2-v9-fc-c"|class="gv2-v9-fc-c" |gv2-v9-fc-c"/g) || []).length >= 3 && /vira demo/.test(dl) && /vira cliente/.test(dl) && (dl.match(/gv2-v8d-bar/g) || []).length === 2));
+    /* o funil curto do bloco 2 era da daily v8 (saiu em 20/11/26) */
     GV2.estado.daily = d0; GV2.estado.aba = ab0;
     const css = tpl.slice(tpl.indexOf('<style id="gv2-css">'), tpl.indexOf('</style><!-- /gv2-css -->'));
     checar('v9 Acabamento · barra usa o token de barra (no escuro o texto verde/vermelho é claro e não serve de preenchimento)',

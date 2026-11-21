@@ -163,13 +163,7 @@ igual('fração arredonda para baixo', ctx.comissaoTotalDe(6.9), 1800,
   ctx.DATA.comissionamento = guardado;
 }());
 
-/* REVISÃO GERAL (05/10/26): a faixa do variável virou o número "+R$ na próxima venda" do
-   herói do Hoje. A regra é a mesma: sem o quadro, nada é desenhado. */
-/* HOJE v3 (09/10/26): o "+R$ na próxima venda" foi para a legenda do cartão Mês, que lê o
-   resultado da Pessoas do gestor (p.resultado.proxima) e só escreve o valor quando ele existe. */
-checar('e a tela não desenha o número sem o quadro',
-  /'clientes' \+ \(r\.proxima != null \? ' · a próxima vale \+' \+ GV2\.rsCheio\(r\.proxima\) : ''\)/.test(tpl),
-  'sem esta saída, a caixa apareceria com undefined onde vai o valor');
+/* 20/11/26: saiu com o espelho do 1:1 (GV2.DV, desenvolvimento-v1), que só abria por chave local; a faxina final tirou a página e os cartões dela. */
 
 checar('a tabela do gestor também não aparece sem config',
   /if \(typeof comissaoDe !== 'function' \|\| !comissaoConfig\(\)\) return '';/.test(tpl));

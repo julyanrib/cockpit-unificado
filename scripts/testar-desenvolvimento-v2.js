@@ -106,8 +106,7 @@ checar('a celebração dura 0,6 s e some com "reduzir movimento"',
   /\.dv2-cel-c\{[^}]*animation:dv2-entra \.6s/.test(tpl) && /@media \(prefers-reduced-motion:reduce\)\{\.dv2-cel-c,\.dv2-toast,\.dv2-med\.is-nova \.dv2-med-c\{animation:none !important;\}\}/.test(tpl));
 checar('alvo de clique ≥ 40 px nos botões da aba', /\.dv2-bt\{min-height:40px/.test(tpl) && /\.dv2-link\{min-height:40px/.test(tpl));
 checar('nenhum bloco vazio: com tudo fora, cada bloco diz a fonte', ['placar_da_semana', 'HubSpot', 'rampa_quadro', 'conquistas'].every(f => DV2.html(V('fora')).indexOf(f) > 0));
-checar('a volta ao v1: localStorage desenvolvimento-v1 = 1 desenha o DV antigo',
-  /if \(GV2\.DV2 && !GV2\.DV2\.querV1\(\)\) return GV2\.DV2\.render\(el\);\n    return GV2\.DV\.render\(el\);/.test(tpl) && /localStorage\.getItem\('desenvolvimento-v1'\) === '1'/.test(codigo));
+/* 20/11/26: saiu com o espelho do 1:1 (GV2.DV, desenvolvimento-v1), que só abria por chave local; a faxina final tirou a página e os cartões dela. */
 
 /* ── as entradas ── */
 checar('selo no menu: "1 nova" ao lado de Desenvolvimento, e some quando a coleção grava a vista',

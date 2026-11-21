@@ -80,7 +80,7 @@ checar('nenhuma conta de "dia útil" do executivo ficou sem o feriado', !/if \(w
 
 /* sem expediente (domingo 01/11/26): nenhum quadro do executivo cobra o plano do dia */
 checar('Planejamento: o quadro Hoje diz "sem expediente" no fim de semana e no feriado', tpl.indexOf("if (!dv5.y && (isWeekend(iso))) return { plano: 'sem expediente'") > -1);
-checar('Desenvolvimento: o cartão Hoje diz "sem expediente", não "sem rota"', tpl.indexOf("GV2.temRua(p) ? GV2.visHoje(p) : GV2.util(b.agora.iso) ? 'sem rota' : 'sem expediente'") > -1);
+/* 20/11/26: saiu com o espelho do 1:1 (GV2.DV, desenvolvimento-v1), que só abria por chave local; a faxina final tirou a página e os cartões dela. */
 checar('o mês do executivo conta o último dia útil (fim às 23:59:59)', tpl.indexOf('new Date(h.getFullYear(), h.getMonth() + 1, 0, 23, 59, 59)') > -1);
 checar('data inválida não é feriado e não lança erro', ctx.ehFeriadoBR('NaN-NaN-NaN') === false && ctx.feriadosDoAnoBR(NaN).length === 0);
 
