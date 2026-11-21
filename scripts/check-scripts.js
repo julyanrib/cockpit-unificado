@@ -402,8 +402,8 @@ function checarSeletoresDeFiacao() {
        primeiro if, e nenhum erro para investigar. */
     /* PAGA EM 04/09/26: a divida era a fiacao dos inputs `.d-prom` rodando em vazio.
        Ela saiu de verdade, junto com as tres telas antigas da Daily — nao foi consertada,
-       foi apagada, o que resolve igual. `d-salvar` fica: aquele ainda aparece na tela. */
-    'd-salvar': 'Minha Daily — fiacao orfa de desenho aposentado',
+       foi apagada, o que resolve igual. */
+    /* PAGA EM 20/11/26: `d-salvar` saiu com a Daily antiga do gestor (salvarDaily, ?gv2=0). */
     'prospeccao-btn-rota': 'Prospeccao — fiacao orfa de desenho aposentado',
     'prospeccao-btn-semfit': 'Prospeccao — fiacao orfa de desenho aposentado',
     'prospeccao-btn-criar': 'Prospeccao — fiacao orfa de desenho aposentado'
@@ -861,17 +861,11 @@ function checarPromessaManualNaoVolta() {
       const volta = codigo.slice(Math.max(0, m.index - 220), m.index);
       if (/daily_snapshot\s*:\s*\{/.test(volta)) continue;
       const sentenca = codigo.slice(m.index, m.index + 90).split('\n')[0].trim();
-      /* ══ PRESERVAR NAO E GRAVAR (24/09/26) ═══════════════════════════════════════
-         `salvarDaily` faz UPSERT da linha inteira, e o gestor ainda a chama para gravar
-         os `realizado_*` medidos no HubSpot. As quatro linhas
-             prometido_x: existente.prometido_x ?? null
-         existem para o upsert NAO ZERAR a promessa historica — sem elas, salvar um
-         realizado apagaria o prometido de todas as linhas antigas, que e justamente o
-         historico que a Semana, a Pessoas e o Time leem.
-         A guarda nasceu acusando essas quatro. Ela estava certa em olhar, e errada em
-         nao distinguir: escrever um valor NOVO e o que nao pode voltar; ecoar o que ja
-         esta na linha e o que impede a destruicao do passado. */
-      if (new RegExp('^' + c + '\\s*:\\s*existente\\.' + c + '\\s*\\?\\?\\s*null,?$').test(sentenca)) continue;
+      /* 20/11/26: a exceção do "preservar não é gravar" (as quatro linhas
+         `prometido_x: existente.prometido_x ?? null` do upsert de `salvarDaily`) saiu com
+         salvarDaily, junto com a Daily antiga do gestor. O Cockpit não grava mais linha
+         de `dailies` em lugar nenhum (só lê), então QUALQUER `prometido_*:` é escrita nova
+         e reprova — inclusive o eco, que voltaria a existir só com um gravador novo. */
       escritas.push(sentenca.slice(0, 60));
     }
   });
@@ -907,7 +901,8 @@ if (!checarPromessaManualNaoVolta()) process.exit(1);
    "A Minha Daily nao tem clique morto" — quatro checagens de regressao, uma por defeito
    reproduzido na sessao do Marco Filho: a visita sem negocio que mostrava "Ficha", a
    acao "criar" que precisava reusar abrirNovaContaProspeccao, o regex da hora que nasceu
-   sem as barras invertidas, e a segunda trava de 9h30 esquecida dentro de d4FaseDoDia.
+   sem as barras invertidas, e a segunda trava de 9h30 esquecida dentro de d4FaseDoDia
+   (d4FaseDoDia saiu de vez em 20/11/26, com a Daily antiga do gestor).
 
    OS QUATRO DEFEITOS ERAM DA TELA, e a tela saiu em 24/09/26 — o executivo nao tem mais
    Minha Daily. Nenhuma das quatro tem onde acontecer.
@@ -1311,110 +1306,12 @@ function checarHojeDaAgenda() {
 }
 if (!checarHojeDaAgenda()) process.exit(1);
 
-/* == 18. A DAILY DO GESTOR NAO INVENTA ZERO (04/09/26, reancorada em 11/09/26) ====
-   Nasceu de um defeito MEU, achado ao olhar a tela recem-construida: a leitura da grade
-   devolvia grade VAZIA quando o executivo nao tinha linha em planos_semanais. A tela
-   somava 0 visitas e anunciava, ao lado do numero, "derivado do roteiro de cada um" —
-   zero com procedencia de dado medido. Numa reuniao isso nao e bug de exibicao: e o
-   gestor cobrando sete pessoas por um numero que ninguem mediu.
-
-   O pedido, literal: "nao posso apresentar nenhum dado errado na tela".
-
-   REANCORADA EM 11/09/26, quando a Daily 14a morta foi removida: as ancoras eram
-   g14GradeDe, g14KpiHTML e duas frases daquela tela. A tela saiu; a exigencia fica, e
-   agora ela mede a Daily que esta no ar (familia dg4):
-
-     (a) leitura de grade que falha ou nao existe NAO vira dia vazio — a bandeira
-         `planosLidos`/`gradeLida` tem de chegar na tela e produzir "nao medido";
-     (b) todo KPI diz de onde vem — cada item do array `kpis` tem `rot` E `de`;
-     (c) os caminhos de "nao medido" continuam existindo, por frase.
-
-   E ela reprova se PERDER o alvo, em vez de passar medindo nada — foi assim que a versao
-   anterior morreu em silencio por dois dias. */
-function checarGestorSemZeroInventado() {
-  const arquivo = 'template/cockpit.template.html';
-  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
-  const falhas = [];
-
-  /* (a) O CASO "NAO MONTOU A SEMANA" e o caso "a consulta falhou", que sao diferentes.
-     dg4SlotsDaGrade devolve a MESMA forma sempre, com a bandeira `daGrade` dizendo se
-     aquilo veio da grade ou e o vazio — e dg4Dados carrega `planosLidos` para que erro de
-     leitura nao vire acusacao. Os dois tem de estar la. */
-  const iG = cru.indexOf('function dg4SlotsDaGrade(');
-  if (iG < 0) {
-    falhas.push('dg4SlotsDaGrade nao existe - a guarda perdeu o alvo. Se a leitura da grade');
-    falhas.push('  mudou de lugar, esta checagem tem de mudar com ela.');
-  } else {
-    const corpo = cru.slice(iG, cru.indexOf('\n}', iG));
-    if (corpo.indexOf('daGrade: false') < 0 || corpo.indexOf('return vazio;') < 0) {
-      falhas.push('dg4SlotsDaGrade nao distingue "sem linha na grade" de "grade vazia" -'
-        + ' a tela volta a somar 0 visitas dizendo que o numero vem do roteiro');
-    }
-  }
-  const iD = cru.indexOf('function dg4Dados(');
-  if (iD < 0) {
-    falhas.push('dg4Dados nao existe - a guarda perdeu o alvo do provedor da Daily');
-  } else if (cru.indexOf('const planosLidos = c.planosLidos === undefined ? true : !!c.planosLidos;', iD) < 0) {
-    falhas.push('a bandeira planosLidos nao chega mais ao provedor - erro de leitura volta'
-      + ' a ser impresso como "ninguem travou", que e uma acusacao produzida por RLS');
-  }
-
-  /* (b) TODO KPI DIZ DE ONDE VEM. Na tela viva os KPIs sao literais de objeto num array
-     `kpis`, e a procedencia e o campo `de`. A conta e simples e dura: dentro dos arrays
-     de KPI, quantos `rot:` existem e quantos `de:` existem — se um KPI nascer sem `de`,
-     os dois numeros divergem. Contar `rot:`/`de:` em vez de parsear o array porque os
-     valores tem ternarios e concatenacao dentro, e qualquer split quebraria neles. */
-  const iK = cru.indexOf('const kpis = !planosLidos ? [', iD);
-  if (iK < 0) {
-    falhas.push('nao achei o array de KPIs da Daily do gestor - eles sairam de outro lugar'
-      + ' e esta guarda parou de olhar onde nascem');
-  } else {
-    /* recorta do inicio do array ate o `];` que o fecha */
-    const fimK = cru.indexOf('\n  ];', iK);
-    const bloco = fimK > iK ? cru.slice(iK, fimK) : '';
-    const nRot = (bloco.match(/\brot:/g) || []).length;
-    const nDe = (bloco.match(/\bde:/g) || []).length;
-    if (!nRot) {
-      falhas.push('o array de KPIs da Daily do gestor esta vazio para esta guarda -'
-        + ' ancora perdida, e guarda sem ancora mede o arquivo errado em silencio');
-    } else if (nDe < nRot) {
-      falhas.push((nRot - nDe) + ' KPI(s) da Daily do gestor sem FONTE (campo `de`) -'
-        + ' numero sem procedencia na TV vira discussao sobre o numero');
-    }
-  }
-
-  /* (c) OS CAMINHOS DE "NAO MEDIDO", por frase. As duas primeiras sao do placar de ontem
-     (prancha daily-gestor-final): promessa que ninguem registrou e feito que nao deu para
-     medir. (A terceira, "planos nao lidos", saiu em 20/11/26 com a faixa que a usava:
-     ninguem a chamava mais, e a guarda casava so o comentario dela.) */
-  [
-    ['promessa nao registrada', 'sem promessa registrada'],
-    ['feito nao medido', 'feito não medido']
-  ].forEach(function (par) {
-    if (cru.indexOf(par[1]) < 0) {
-      falhas.push('sumiu o caminho de "' + par[0] + '" - sem ele o vazio volta a ser'
-        + ' impresso como zero, e zero numa rodada e uma acusacao');
-    }
-  });
-
-  /* (d) E O FURO EXIGE PROMESSA. A regra que o placar inteiro protege: quem nao prometeu
-     nao furou. Sem isto, oito das dez pessoas aparecem devendo a palavra por causa de um
-     campo vazio — medido em 10/09/26, 2 dos 10 tinham promessa registrada. */
-  if (cru.indexOf('furou: medido ? f < p : false') < 0) {
-    falhas.push('o furo de ontem deixou de exigir promessa registrada - vazio virando furo'
-      + ' e a pior acusacao que esta tela pode fazer, e ela acontece na frente do time');
-  }
-
-  if (falhas.length) {
-    console.error('DAILY DO GESTOR COM ZERO INVENTADO em ' + arquivo + ':');
-    falhas.forEach(function (f) { console.error('  ' + f); });
-    console.error('  "Nao posso apresentar nenhum dado errado na tela" - Julyan, 04/09/26.');
-    return false;
-  }
-  console.log('OK daily do gestor - grade nao lida nao e dia vazio, todo KPI tem fonte, nao medido nao e zero.');
-  return true;
-}
-if (!checarGestorSemZeroInventado()) process.exit(1);
+/* == 18. APOSENTADA COM A DAILY ANTIGA DO GESTOR (20/11/26) ==========================
+   "A Daily do gestor nao inventa zero" media a familia dg4 (dg4Dados, dg4SlotsDaGrade e o
+   array de KPIs dela): leitura de grade que falha nao vira dia vazio, todo KPI diz de onde
+   vem. A tela saiu com o ?gv2=0. A exigencia ("nao posso apresentar nenhum dado errado na
+   tela", Julyan, 04/09/26) continua no cockpit novo, medida em testar-gestor-v2 (o "—" de
+   fonte que nao respondeu, "nao medido" em vez de 0). */
 
 /* == 19. TODA PROPRIEDADE QUE A TELA COLETA, A ROTA ACEITA (04/09/26) =============
    A Kelly escolheu o motivo, escreveu a frase do cliente, clicou em "Mover para

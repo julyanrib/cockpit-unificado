@@ -54,8 +54,7 @@ function ctxBase(extra) {
     Date: Date, Math: Math, isNaN: isNaN, isFinite: isFinite, Set: Set,
     console: { error: function () {} } }, extra || {});
   vm.createContext(c);
-  [/const PL6_BLOQUEADO = '[^']+';/, /const PL6_RUA = '[^']+';/, /const PL6_REL = '[^']+';/,
-    /const PL6_RESULTADOS = \{[\s\S]*?\n\};/, /const PL6_MOTIVOS = \[[\s\S]*?\n\];/]
+  [/const PL6_BLOQUEADO = '[^']+';/, /const PL6_RUA = '[^']+';/, /const PL6_REL = '[^']+';/]
     .forEach(function (re) {
       const m = tpl.match(re);
       if (!m) { console.error('FALHA: não achei ' + re); process.exit(1); }
@@ -64,86 +63,10 @@ function ctxBase(extra) {
   return c;
 }
 
-console.log('');
-console.log('5a · A PERGUNTA SÓ APARECE DEPOIS DA HORA');
-
-(function () {
-  /* O RELÓGIO CONGELADO em 23/09/2026 14:10 de Brasília = 17:10 UTC. As funções de hora
-     desta casa deslocam o UTC em 3h e leem a Date em UTC; recortá-las de verdade é o que
-     separa esta suíte de uma que repetiria a conta em vez de medi-la. */
-  const c = ctxBase({ AGORA_ISO: '2026-09-23T17:10:00.000Z' });
-  ['agendaParaBRT', 'agendaP2', 'agendaChave', 'agendaHhmm'].forEach(function (f) {
-    vm.runInContext(recortar(f), c);
-  });
-  vm.runInContext('function agendaAgora() { return agendaParaBRT(AGORA_ISO); }', c);
-  vm.runInContext(recortar('pl6HoraJaPassou'), c);
-  const passou = vm.runInContext('pl6HoraJaPassou', c);
-
-  igual('o relógio congelou às 14:10 de Brasília',
-    vm.runInContext('agendaHhmm(agendaAgora())', c), '14:10',
-    'se esta linha falhar, todas as de baixo estão medindo outro horário');
-
-  checar('compromisso das 09:00 de hoje já passou', passou('2026-09-23', '09:00') === true);
-  checar('o das 14:00 já passou (a hora chegou)', passou('2026-09-23', '14:00') === true);
-  checar('o das 14:10 já passou, no minuto exato', passou('2026-09-23', '14:10') === true);
-  checar('o das 16:00 NÃO passou', passou('2026-09-23', '16:00') === false,
-    'perguntar "como foi?" às 14:10 de um compromisso das 16h é perguntar de uma coisa '
-      + 'que não aconteceu');
-  checar('o de amanhã não passou', passou('2026-09-24', '08:00') === false);
-  checar('qualquer um de ontem passou', passou('2026-09-22', '23:00') === true);
-  checar('sem hora, HOJE ainda não passou', passou('2026-09-23', '') === false,
-    'o dia dele não acabou; cobrar às 9h um compromisso sem hora marcada é cobrar cedo');
-  checar('sem hora, ONTEM passou', passou('2026-09-22', null) === true,
-    'ele existe, ficou sem registro, e não perguntar seria perder justamente o que '
-      + 'ninguém anotou');
-  checar('dia nulo não estoura', passou(null, '09:00') === false);
-}());
-
-/* 20/11/26: as checagens do DESENHO do "como foi?" (a pergunta no cartão, o remarcar e o
-   registro no slot) eram da tela v2 do Planejamento, que saiu. A v3 não pergunta "como foi?":
-   quem registra é o app (EXH.paradaApp), e o que sobra aqui são as regras puras. */
-console.log('');
-console.log('5b · CADA PROPÓSITO TEM AS SUAS OPÇÕES, ESCRITAS UMA POR UMA');
-
-(function () {
-  const c = ctxBase();
-  ['pl6ResultadosDe', 'pl6ResultadoInfo', 'pl6MotivoRotulo'].forEach(function (f) {
-    vm.runInContext(recortar(f), c);
-  });
-  const de = vm.runInContext('pl6ResultadosDe', c);
-  const rot = function (p) { return de(p).map(function (o) { return o.id; }); };
-
-  igual('follow', rot('follow'), ['proposta', 'avancou', 'remarcar', 'nao_rolou']);
-  igual('funil', rot('funil'), ['avancou', 'proposta', 'remarcar', 'nao_rolou']);
-  igual('cobrar', rot('cobrar'), ['pagou', 'nova_data', 'nao_rolou']);
-  igual('relac', rot('relac'), ['feita', 'indicacao', 'remarcar', 'nao_rolou']);
-  igual('nova', rot('nova'), ['virou_negocio', 'voltar_depois', 'sem_interesse']);
-  igual('rua', rot('rua'), ['fui', 'nao_fui']);
-
-  checar('"pagou" não aparece num follow-up',
-    rot('follow').indexOf('pagou') < 0 && rot('funil').indexOf('pagou') < 0,
-    'montar as opções de uma lista genérica é como "pagou" chega a um negócio que ninguém '
-      + 'mandou cobrar');
-  checar('"proposta" não aparece numa visita de relacionamento',
-    rot('relac').indexOf('proposta') < 0);
-  checar('a rua não oferece nada que mexa no CRM',
-    de('rua').every(function (o) { return !o.efeito || o.efeito === 'motivo'; }),
-    'o bloco de rua não tem negócio: qualquer efeito ali seria tarefa órfã');
-
-  /* CADA PROPÓSITO TEM UM CAMINHO PARA O "NÃO" — e é dele que o motivo volta. */
-  ['follow', 'funil', 'cobrar', 'relac', 'nova', 'rua'].forEach(function (p) {
-    checar('o propósito ' + p + ' tem uma saída para o que não aconteceu',
-      de(p).filter(function (o) { return o.ruim; }).length === 1,
-      'sem ela, o único jeito de tirar o compromisso do dia seria apagá-lo — e apagar é '
-        + 'como a semana fica limpa sem ninguém saber o que houve');
-  });
-
-  igual('os motivos são uma lista fechada',
-    vm.runInContext('PL6_MOTIVOS.map(function (m) { return m.id; })', c),
-    ['dono_ausente', 'fechado', 'sem_tempo', 'sem_interesse', 'outro'],
-    'texto livre no corpo de uma tarefa do CRM é campo aberto para qualquer coisa');
-}());
-
+/* 20/11/26: as seções 5a, 5b (a pergunta e as opções do "como foi?") e 8 (os estados da evidência do
+   app no slot) mediam pl6HoraJaPassou, pl6ResultadosDe e pl6EvidenciaDoSlot, que só a Daily antiga do
+   gestor chamava; saíram com ela. Fica a 7: o slot gravado (com registro ou em string) continua sendo
+   lido por pl6ItensDoDia, que é quem monta o dia no Planejamento v3. */
 console.log('');
 console.log('7 · O SLOT COM REGISTRO É LIDO, E O SLOT EM STRING TAMBÉM');
 
@@ -190,85 +113,6 @@ checar('nenhum leitor de slot enumera campos',
     });
   }()),
   'leitor que enumera campos do slot transforma um campo novo em tela branca na outra aba');
-
-console.log('');
-console.log('8 · OS QUATRO ESTADOS DA EVIDÊNCIA, NUNCA DOIS JUNTOS');
-
-(function () {
-  const base = {
-    agendaParaBRT: function (iso) { const d = new Date(iso); return new Date(d.getTime() - 3 * 3600 * 1000); },
-    agendaChave: function (d) { return d.toISOString().slice(0, 10); },
-    agendaHhmm: function (d) { return d.toISOString().slice(11, 16); }
-  };
-  const monta = function (evs, fila) {
-    const c = ctxBase(Object.assign({}, base, {
-      DATA: { agenda: evs },
-      agendaNormalizar: function (x) { return x; },
-      filaPwaResumo: function () { return fila || { porOwner: {} }; }
-    }));
-    ['pl6CheckinsDoDia', 'pl6ChecksNaJanela', 'pl6EvidenciaSemCheck', 'pl6EvidenciaDoSlot']
-      .forEach(function (f) { vm.runInContext(recortar(f), c); });
-    return vm.runInContext('pl6EvidenciaDoSlot', c);
-  };
-
-  const ev = function (dealId, isoUtc) {
-    return { registro: true, inicio: isoUtc, ownerId: '9', dealId: dealId };
-  };
-
-  /* 1 · check-in daquele negócio, com a hora */
-  const e1 = monta([ev('77', '2026-09-23T13:41:00.000Z')]);
-  igual('check-in do negócio traz a hora de Brasília',
-    e1({ tipo: 'visita', id: '77' }, '2026-09-23', '9').txt, 'check-in 10:41 ✓');
-
-  /* 2 · contagem no bloco de rua, dentro da janela */
-  const e2 = monta([
-    ev(null, '2026-09-23T11:10:00.000Z'),   /* 08:10 — dentro */
-    ev(null, '2026-09-23T12:30:00.000Z'),   /* 09:30 — dentro */
-    ev(null, '2026-09-23T13:20:00.000Z'),   /* 10:20 — dentro */
-    ev(null, '2026-09-23T19:00:00.000Z')    /* 16:00 — fora da janela */
-  ]);
-  igual('a rua conta os check-ins DA JANELA que reservou',
-    e2({ tipo: 'rua', hora: '08:00', duracao: '3h' }, '2026-09-23', '9').txt,
-    '3 check-ins no bloco',
-    'contar o dia inteiro daria crédito de rua ao que aconteceu às quatro da tarde');
-  igual('e o singular não sai errado',
-    monta([ev(null, '2026-09-23T11:10:00.000Z')])(
-      { tipo: 'rua', hora: '08:00', duracao: '2h' }, '2026-09-23', '9').txt,
-    '1 check-in no bloco');
-
-  /* 3 · fila do app */
-  const e3 = monta([], { porOwner: { 9: { pendentes: 2 } } });
-  igual('coisa presa na fila do app é "não sabemos"',
-    e3({ tipo: 'visita', id: '77' }, '2026-09-23', '9').txt,
-    'check-in na fila do app — não subiu');
-  checar('e ela sai em âmbar, não em verde nem em cinza',
-    /* v5 (28/09/26): o mesmo âmbar escuro, agora token (--amber-ink), que clareia no escuro */
-    e3({ tipo: 'visita', id: '77' }, '2026-09-23', '9').cor === 'var(--amber-ink)');
-
-  /* 4 · sem check-in */
-  const e4 = monta([]);
-  igual('sem nada, a tela diz "sem check-in"',
-    e4({ tipo: 'visita', id: '77' }, '2026-09-23', '9').txt, 'sem check-in');
-  checar('e em cinza, sem fundo: é ausência, não acusação',
-    /* v5: o cinza de ausência virou --ter (o texto terciário da casa, legível nos dois temas) */
-    e4({ tipo: 'visita', id: '77' }, '2026-09-23', '9').cor === 'var(--ter)'
-      && e4({ tipo: 'visita', id: '77' }, '2026-09-23', '9').bg === 'transparent');
-
-  /* OS DOIS ÚLTIMOS SÃO EXCLUDENTES — e é isso que o prompt pede em letras. */
-  checar('"sem check-in" e "na fila do app" nunca aparecem juntos',
-    e3({ tipo: 'visita', id: '77' }, '2026-09-23', '9').txt
-      !== e4({ tipo: 'visita', id: '77' }, '2026-09-23', '9').txt
-      && !/sem check-in/.test(e3({ tipo: 'visita', id: '77' }, '2026-09-23', '9').txt),
-    'com a fila pendente, "sem check-in" seria uma afirmação sobre o celular da pessoa');
-
-  /* COMPROMISSO DE OUTRO DONO E DE OUTRO DIA NÃO CONTAM. */
-  igual('check-in de outro dia não conta',
-    monta([ev('77', '2026-09-22T13:41:00.000Z')])(
-      { tipo: 'visita', id: '77' }, '2026-09-23', '9').txt, 'sem check-in');
-  igual('e o de outro negócio também não',
-    monta([ev('88', '2026-09-23T13:41:00.000Z')])(
-      { tipo: 'visita', id: '77' }, '2026-09-23', '9').txt, 'sem check-in');
-}());
 
 console.log('');
 console.log('como foi: ' + ok + ' verificações');

@@ -22,8 +22,9 @@ const fim = tpl.indexOf('</script><!-- /gv2-js -->');
 checar('o bloco gv2 está no template entre os marcadores', ini > 0 && fim > ini);
 const codigo = tpl.slice(ini + '<script id="gv2-js">'.length, fim).replace('GV2.instalar();', '');
 checar('o bloco não tem crase (guarda 26)', codigo.indexOf('`') < 0);
-checar('a versão nova é o padrão do gestor, sempre: só ?gv2=0 na URL desliga (o "0" gravado não vale mais)',
-  /return q !== '0';/.test(codigo) && !/localStorage\.getItem\('gv2'\)/.test(codigo));
+checar('a versão nova é a única tela do gestor: não há ?gv2=0 nem "0" gravado que volte para a antiga (20/11/26)',
+  /GV2\.ligado = function \(\) \{\s*try \{ localStorage\.removeItem\('gv2'\); \} catch \(e\) \{\}\s*return true;\s*\};/.test(codigo)
+    && !/localStorage\.getItem\('gv2'\)/.test(codigo) && !/get\('gv2'\)/.test(codigo) && !/menu:antigo/.test(codigo));
 /* UM COCKPIT SÓ (Julyan, 07/10: "não quero nada indo pro cockpit antigo"): Prospecção e Playbook
    abrem dentro do novo (GV2.visitar); nenhum botão desliga a tela nova para visitar uma aba antiga. */
 // o botão "Tomada de contas e Radar" vivia na Rua antiga, sobrescrita pela v5 (limpeza de 16/10/26)
@@ -2157,7 +2158,7 @@ tabelas.gv2_falta_etapa = [
   {
     /* 02/11/26: a Grade v4 (render.ruaSemana) saiu como código morto; a Rua v5 (render.v5Semana) é a que mostra a semana */
     checar('rua da semana · feriado aparece como feriado e fica fora da meta', /s = d\.todas \? 'feriado · fez ' \+ d\.todas : 'feriado · não conta'/.test(codigo) && /const uteis = b\.semana\.filter\(function \(d\) \{ return GV2\.util\(d\.iso\); \}\)\.length;/.test(codigo));
-    checar('time · a legenda das metas sai do ranking, não do "8 e 2" escrito à mão', /metaPorPat/.test(tpl) && !/2 para quem está em rampa/.test(tpl));
+    /* 20/11/26: a legenda "8 e 2" da Time antiga (metaPorPat) saiu com ela; as metas do cockpit novo são medidas nas checagens de ranking desta suíte. */
     checar('rua da semana do gestor · semana fechada diz "ficaram faltando"', /\(aberta \? 'faltam ' : 'ficaram faltando '\) \+ \(meta - feito - falta\)/.test(codigo) && /const aberta = b\.semana\.some\(function \(d\) \{ return GV2\.util\(d\.iso\) && d\.iso >= b\.agora\.iso; \}\);/.test(codigo));
     {
       const m = tpl.match(/function repsSemMetaInventada\(\) \{[\s\S]*?\n\}/);

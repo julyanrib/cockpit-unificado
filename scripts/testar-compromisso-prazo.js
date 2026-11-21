@@ -231,10 +231,6 @@ checar('compromissos continua sendo array de STRING',
   'gravar o objeto faria o PDI do executivo, os combinados do gestor e a aba Pessoas '
     + 'imprimirem [object Object]');
 
-checar('e os leitores da tela continuam tratando o item como texto',
-  /sel\.compromissos\.map\(function \(txt, i\)/.test(tpl)
-    && /r\.compromissos\.map\(\(c, ci\)/.test(tpl),
-  'se algum deles passar a esperar objeto, o outro quebra — eles leem o MESMO array');
 
 /* ══ 4. O PROMPT ══════════════════════════════════════════════════════════════════════ */
 checar('o prompt pede a data no campo, em AAAA-MM-DD',

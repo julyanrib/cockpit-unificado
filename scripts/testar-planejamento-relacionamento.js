@@ -124,8 +124,7 @@ const LIVRES = [
 const ctxProp = { String: String, Number: Number, Array: Array, Date: Date, Math: Math, isNaN: isNaN };
 vm.createContext(ctxProp);
 vm.runInContext(tpl.match(/const PL6_ETAPA_AG_PGTO = '\d+';/)[0], ctxProp);
-vm.runInContext(tpl.match(/const PL6_PROPOSITOS = \[[\s\S]*?\n\];/)[0], ctxProp);
-['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead'].forEach(function (f) {
+['pl6AtrasoDoPasso', 'pl6PropositoDoLead'].forEach(function (f) {
   vm.runInContext(recortar(tpl, f), ctxProp);
 });
 const doProposito = vm.runInContext('pl6PropositoDoLead', ctxProp);

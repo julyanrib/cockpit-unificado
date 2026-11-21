@@ -447,23 +447,7 @@ console.log('');
     'dois montadores do mesmo cartão foi o que fez a mesma manhã ser descrita em dois'
       + ' idiomas — e nenhum dos dois parecia errado sozinho');
 
-  checar('e a tela que mostra o dia de OUTRA pessoa não oferece o ✕ dele',
-    (function () {
-      /* a Daily do gestor desenha compromisso de terceiros; ela não pode emitir o
-         remover nem as opções de registro, que são atos do dono do dia */
-      const dg = semCom(tpl);
-      const i = dg.search(/function dg4TelaHTML\(/);
-      if (i < 0) return false;
-      let d = 0, j = i, viu = false;
-      while (j < dg.length) {
-        const c = dg[j];
-        if (c === '{') { d++; viu = true; } else if (c === '}') { d--; if (viu && d === 0) { j++; break; } }
-        j++;
-      }
-      const corpo = dg.slice(i, j);
-      return corpo.indexOf('data-pl6-remover') < 0 && corpo.indexOf('data-pl6-acao="res:') < 0;
-    }()),
-    'sem esse portão, a tela que mostra a promessa de outra pessoa oferece o ✕ dela');
+  /* 20/11/26: a Daily do gestor (dg4TelaHTML), que mostrava o dia de outra pessoa, saiu com o ?gv2=0. */
 
   /* A VAGA LIVRE DO ROTEIRO DO GESTOR saiu com a 14a (11/09/26). A checagem irmã, logo
      abaixo, é a que continua valendo e ficou MAIS forte: as classes .d7-linha* e
@@ -519,8 +503,8 @@ console.log('');
       /* d7DadosFinal, d7Ligar e pl6ColunaDaData saíram em 24/09/26 com a Minha Daily.
          Os outros cinco continuam falando do dia de HOJE e continuam proibidos de
          enxergar o foco da tela de Planejamento. */
-      const donos = ['espelharPassoNoPlanoSemanal',
-        'pm8Segunda', 'sm9Segunda', 'tl5Semana', 'renderDaily'];
+      /* 20/11/26: sm9Segunda, tl5Semana e renderDaily saíram com as telas antigas do gestor. */
+      const donos = ['espelharPassoNoPlanoSemanal', 'pm8Segunda'];
       return donos.every(function (nome) {
         const i = cod.search(new RegExp('(?:async )?function ' + nome + '\\('));
         if (i < 0) return false;   /* âncora perdida reprova */
@@ -550,7 +534,8 @@ console.log('');
          semana do RELÓGIO, que é o ponto. A TERCEIRA (06/11/26) é a do Hoje do executivo v4
          (HJ4.render), que lê a grade desta semana para o "Pôr em [dia]": também do relógio. */
       /* 07/11/26: a do Hoje v4 ganhou { soGrade: true } (só a linha da semana, sem os pinos); a semana segue do relógio */
-      && (cod.match(/pl6Carregar\([a-zA-Z]+, pl6SegundaDaSemana\(\)(, \{ soGrade: true \})?\)/g) || []).length === 2, /* 17/11/26: ficaram a pré-carga da Minha Daily e a do Hoje do executivo v5 (H5.render); as dos Hojes antigos saíram com eles */
+      /* 20/11/26: a pré-carga da Daily antiga do gestor saiu; fica a do Hoje do executivo v5 */
+      && (cod.match(/pl6Carregar\([a-zA-Z]+, pl6SegundaDaSemana\(\)(, \{ soGrade: true \})?\)/g) || []).length === 1, /* 17/11/26: ficaram a pré-carga da Minha Daily e a do Hoje do executivo v5 (H5.render); as dos Hojes antigos saíram com eles */
     'sem o argumento, um passo de hoje entraria na linha da semana que vem, no dia errado');
 
   /* TROCAR DE SEMANA RECARREGA. pl6Plano é a linha de UMA semana; desenhar com a linha

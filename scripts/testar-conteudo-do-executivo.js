@@ -65,16 +65,8 @@ conferir('meusNegociosAbertos não ganhou filtro de etapa',
   !/function meusNegociosAbertos[\s\S]{0,900}ETAPAS_ABERTAS/.test(tpl),
   'filtrar na fonte esvazia a lista de perdidos do Meu funil e erra o contador da fila — medido em 08/09');
 
-/* ── 2 · OS DOIS CONSUMIDORES QUE PRECISAM DO CORTE ───────────────────────────────── */
+/* 20/11/26: a fila do dia (filaDeFollowUp) e o irParaFila não tinham mais quem chamasse depois que as telas antigas do gestor saíram; foram junto. */
 
-conferir('a fila do dia não recebe negócio fechado',
-  /const FILA_ETAPAS_ABERTAS = \[/.test(tpl) &&
-  /meusNegociosAbertos\(ownerId\)\s*\n\s*\.filter\(l => FILA_ETAPAS_ABERTAS\.indexOf\(String\(l\.stageId\)\) > -1\)/.test(tpl),
-  'o perdido caía no balde "visitada e sem próximo passo" — tarefa falsa no dia do executivo');
-
-conferir('a lista de etapa aberta da fila tem as seis, e só elas',
-  (tpl.match(/'1395880469', '1396005401', '1395880470',\s*\n\s*'1395880471', '1395880472', '1395880473'/g) || []).length >= 1,
-  'etapa a mais ou a menos aqui muda silenciosamente todos os números da tela');
 
 /* ── 3 · O DINHEIRO ───────────────────────────────────────────────────────────────── */
 const valor = corpoDe('fn2Valor');
@@ -107,9 +99,6 @@ conferir('e NÃO soma total de contrato como se fosse mensalidade',
 });
 
 const ir = corpoDe('irParaFila');
-conferir('irParaFila abre o Hoje (a fila do executivo é o "O que cobrar" de lá)',
-  /activateTab\('viewMeuPainel'\)/.test(ir) && /renderMeuPainel\(\)/.test(ir) && !/data-h8-filtro/.test(ir),
-  'ela ia para o Meu funil e procurava #filaFollowUp, que nunca existiu; depois, para os filtros da fila antiga, que saíram');
 
 /* ESTA CHECAGEM DIZIA O CONTRÁRIO, e estava errada desde que foi escrita.
    Ela exigia que `.fila-cta` SOBREVIVESSE "porque tem uso vivo" — e os usos que ela

@@ -115,37 +115,8 @@ checar('o abandonado passou a sair do piso, em vez do 1 cravado',
   /const abandonadoNoPrimeiroToque = abaixoDoMinimo && !passo &&/.test(tpl)
     && tpl.indexOf('const abandonadoNoPrimeiroToque = toques.total <= 1') < 0,
   'dois números de "pouco toque" no produto — o 1 daqui e o 4 da política — são duas verdades');
-checar('a fila do dia nomeia a política no rótulo do balde',
-  tpl.indexOf("rotulo: 'Clientes abaixo do mínimo de contatos'") > 0,
-  '"Clientes para segunda tentativa" não diz que existe um número a cumprir');
-checar('e o motivo do balde carrega o número',
-  /st\.toques\.total \+ ' de ' \+ st\.minimoToques \+ ' toques — faltam ' \+ faltam/.test(tpl),
-  'este texto vai para a fila do dia E para o 1:1 — é onde a cobrança acontece');
+/* 20/11/26: a fila do dia (filaDeFollowUp) e o bloco 4 da Time antiga saíram com as telas do ?gv2=0. */
 
-/* ── 6. A TELA DO GESTOR ────────────────────────────────────────────────────────── */
-checar('o bloco 4 corta pelo piso, e não por 1',
-  /const fora = minimoTq > 0/.test(tpl)
-    && /ativos\.filter\(function \(x\) \{ return tm10Tq\(x\.l\.id\)\.n < minimoTq; \}\)/.test(tpl),
-  'era n <= 1 — o corte tem de ser o mesmo número da política');
-/* O EMISSOR E O LEITOR. A primeira versão desta checagem olhava só /fora: fora.length/ —
-   sabotei acrescentando um campo ao objeto e ela passou verde, porque o que quebra de
-   verdade é o número não CHEGAR ao rótulo. */
-checar('e a tela diz QUANTOS estão abaixo do piso',
-  /fora: fora\.length/.test(tpl) && /cob\.fora \+ ' de ' \+ cob\.ativos/.test(tpl),
-  'mostrar os 5 maiores sem dizer 137 faz parecer que o problema são cinco leads');
-checar('e quanto MRR está parado abaixo do piso',
-  /foraMrr: fora\.reduce/.test(tpl) && /tm10Rs\(cob\.foraMrr\)/.test(tpl),
-  'contagem sem dinheiro não prioriza — ele cobra pelo maior, não pelo primeiro');
-checar('e marca quem PROMETEU e não foi',
-  /prometeu: tq\.abertos > 0/.test(tpl),
-  '"alguém marcou e não foi" é uma cobrança mais direta do que "ninguém foi"');
-checar('a frase de cobertura cita a política em vez do 2 inventado',
-  /' — a política pede ' \+ cob\.minimo/.test(tpl)
-    && tpl.indexOf('abaixo de 2 toques o lead') < 0,
-  'aquele 2 não saía da régua nem das faixas do histograma — era um número sem fonte');
-checar('e a lista vazia distingue "está tudo certo" de "regra desligada"',
-  /piso de pontos de contato desligado em data\/cadencias\.json/.test(tpl),
-  'com a política desligada, "o time está tocando a carteira ✓" seria um elogio falso');
 
 /* ── 7. O PISO CHEGA AOS DOIS PAPÉIS ────────────────────────────────────────────── */
 checar('cadencias passa intacta para os dois papéis',

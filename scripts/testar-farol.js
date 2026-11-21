@@ -79,13 +79,7 @@ conferir('campo em foco faz o dado esperar',
   /a\.isContentEditable/.test(janela),
   'um repinte apaga o que está no campo, e o campo pode ser o motivo do perdido');
 
-/* A REGEX PEDE O ID EXATO. `/conducaoOverlay/` casava dentro de `conducaoOverlayXX`, e a
-   sabotagem que trocou o id passou verde — guarda cega que eu só descobri porque testei
-   as dez sabotagens uma por uma. */
-conferir('a condução da rodada faz o dado esperar',
-  /getElementById\('conducaoOverlay'\)/.test(janela) &&
-  /cond\.classList\.contains\('show'\)/.test(janela),
-  'a tela está projetada para o time; ela não muda no meio da fala de alguém');
+/* 20/11/26: a condução da rodada (overlay da Daily antiga) saiu; não há mais tela projetada para o dado esperar. */
 
 conferir('a janela é conferida DE NOVO depois da busca',
   (tpl.match(/if \(!farolPodeAplicar\(\)\)/g) || []).length >= 2 &&

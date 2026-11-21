@@ -44,10 +44,10 @@ const VIGIADAS = [
      desenha o dia a partir dele. Método de objeto fecha em "};" na coluna zero. */
   'PLV3.dados',
   'PLV3.diaHTML',
-  /* dailyGestor14aHTML saiu em 11/09/26 com a Daily 14a morta. O lugar dela na lista e
-     dg4Dados: e a funcao que monta a Daily do gestor a partir de muitos locais, que e onde
-     este defeito aparece. */
-  'dg4Dados',
+  /* dailyGestor14aHTML saiu em 11/09/26 com a Daily 14a morta, e dg4Dados (a Daily antiga
+     do gestor) em 20/11/26 com o ?gv2=0. O lugar é de GV2.render.time: a Hoje do gestor no
+     cockpit novo, que monta a tela a partir de muitos locais. */
+  'GV2.render.time',
   'fn2ShellHTML',
   'pl6Reciclagem',
   'pl6Carteira',

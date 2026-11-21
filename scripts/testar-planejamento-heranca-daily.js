@@ -172,12 +172,13 @@ checar('nenhum ouvinte data-d7-* ficou sem emissor',
   (codigo.match(/data-d7-[a-z-]+/g) || []).length === 0,
   'atributo de tela morta no CSS ou num closest é clique que nunca chega · achados: '
     + JSON.stringify([...new Set(codigo.match(/data-d7-[a-z-]+/g) || [])].slice(0, 5)));
+/* 20/11/26: a porta ficava no topo de renderDaily; renderDaily, #viewDaily e o botão saíram com a
+   Daily antiga do gestor. A porta passou para o endereço: #/daily leva o executivo ao Planejamento. */
 checar('o executivo que chega na rota antiga cai no Planejamento',
-  /if \(sessaoAtual && sessaoAtual\.role === 'rep'\) \{[\s\S]{0,260}?activateTab\('viewAgenda'\)/.test(codigo),
-  'hash salvo, link antigo em conversa e aba restaurada pelo navegador caem todos em '
-    + 'renderDaily — sem a porta, veriam uma tela que ninguém mais mantém');
-checar('e a aba some do menu dele',
-  /\(emOnboarding \|\| souRep\) \? 'none' : 'flex'/.test(codigo),
+  /'#\/daily': 'tabBtnAgenda',/.test(codigo) && /id="tabBtnAgenda"/.test(codigo),
+  'link antigo em conversa (#/daily) cairia numa aba que não existe mais e ele ficaria onde estava');
+checar('e a aba antiga não existe mais em lugar nenhum',
+  !/id="tabBtnDaily"/.test(codigo) && !/id="viewDaily"/.test(codigo) && !/function renderDaily\(/.test(codigo),
   'aba visível que redireciona é pior que aba ausente: ele clica e a tela pula');
 
 console.log('');

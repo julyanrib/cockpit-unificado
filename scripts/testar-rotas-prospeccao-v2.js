@@ -44,10 +44,12 @@ function checar(nome, condicao, porque) {
 /* o bloco da aba, fatiado: proibir um nome no arquivo inteiro reprova código correto de
    outras telas, e isso já me custou duas guardas cegas nesta semana */
 const iRt = codigo.indexOf('const RT7_ESTADO = {');
-const fRt = codigo.indexOf('const SM4_ESTADO');
+/* 20/11/26: o vizinho de baixo (SM4_ESTADO, a Semana antiga) saiu; o bloco termina no fecho de rt7Iniciar */
+const iFimRt = codigo.indexOf('async function rt7Iniciar()', iRt);
+const fRt = iFimRt < 0 ? -1 : codigo.indexOf('\n}\n', iFimRt) + 2;
 const aba = (iRt > -1 && fRt > iRt) ? codigo.slice(iRt, fRt) : '';
 if (!aba) {
-  console.error('X não achei o bloco da aba Rotas (RT7_ESTADO → SM4_ESTADO).');
+  console.error('X não achei o bloco da aba Rotas (RT7_ESTADO → fim de rt7Iniciar).');
   console.error('  Guarda sem âncora mede o arquivo errado em silêncio — isto reprova de propósito.');
   process.exit(1);
 }

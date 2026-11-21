@@ -59,7 +59,7 @@ function contexto(extra) {
     Date: Date, Math: Math, isNaN: isNaN, isFinite: isFinite }, extra || {});
   vm.createContext(c);
   [/const PL6_BLOQUEADO = '[^']+';/, /const PL6_RUA = '[^']+';/, /const PL6_REL = '[^']+';/,
-    /const PL6_ETAPA_AG_PGTO = '[^']+';/, /const PL6_PROPOSITOS = \[[\s\S]*?\n\];/]
+    /const PL6_ETAPA_AG_PGTO = '[^']+';/]
     .forEach(function (re) { vm.runInContext(tpl.match(re)[0], c); });
   return c;
 }
@@ -69,21 +69,15 @@ function contexto(extra) {
    PLV3.porRua e está medido em testar-proposito-no-compromisso e testar-planejamento-relacionamento.
    O cartão da v2 (pl6MetricaDoCard) saiu junto; a régua continua, e é ela que se mede aqui. */
 console.log('');
-console.log('3 · SEIS PROPÓSITOS, E O FUNIL RECEBE O RESTO');
+console.log('3 · TODA CONTA TEM PROPÓSITO, E O FUNIL RECEBE O RESTO');
 
 (function () {
   const c = contexto();
-  ['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead']
+  ['pl6AtrasoDoPasso', 'pl6PropositoDoLead']
     .forEach(function (f) { vm.runInContext(recortar(f), c); });
-  const PROPS = vm.runInContext('PL6_PROPOSITOS', c);
+  /* 20/11/26: a faixa dos sete propósitos (PL6_PROPOSITOS, com etiqueta e cor) era a da Daily antiga
+     do gestor e saiu com ela. Fica o que a v3 grava no slot: todo negócio da carteira tem propósito. */
   const doLead = vm.runInContext('pl6PropositoDoLead', c);
-
-  /* 16/10/26 (Planejamento v2): o sétimo, a Cadência, entra no FIM (pl6Proposito cai no índice 3) */
-  igual('a faixa tem os sete, nesta ordem', PROPS.map(function (p) { return p.id; }),
-    ['rua', 'cobrar', 'relac', 'follow', 'nova', 'funil', 'cad']);
-  checar('e cada um tem etiqueta e cor',
-    /* v5: a cor do propósito pode ser token (var(--ink) no de rua); só vai para style= */
-    PROPS.every(function (p) { return !!p.etiqueta && /^(#[0-9A-F]{6}|var\(--[\w-]+\))$/i.test(p.cor); }));
   checar('nenhuma conta da carteira fica sem propósito',
     doLead({ tipo: 'c', stageId: '1395880472' }) === 'funil'
       && doLead({ tipo: 'c', stageId: '1395880473' }) === 'cobrar'

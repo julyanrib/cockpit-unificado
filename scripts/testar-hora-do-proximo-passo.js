@@ -89,11 +89,7 @@ checar('a data sugerida de passo anda para a FRENTE, nunca para trás',
   'no domingo a sugestão caía em sexta: régua encurtada, negócio já em atraso, e o '
     + 'espelho do plano recusando a data que a própria tela sugeriu');
 
-checar('e a Daily continua andando para trás, que é o certo lá',
-  /function nearestBusinessDay\(dateISO\) \{\s*\n\s*let d = dateISO;\s*\n\s*while \(isWeekend\(d\)\) d = addDays\(d, -1\);/.test(tpl)
-    && /let dailyRefDate = nearestBusinessDay\(isoDate\(new Date\(\)\)\);/.test(tpl),
-  'a Daily mostra o último dia útil FECHADO — trocar o sentido lá abriria um dia que '
-    + 'ainda não aconteceu');
+/* 20/11/26: a Daily antiga do gestor (que andava para trás de dia útil em dia útil) saiu. */
 
 /* A REGRA RODANDO, com os sete dias da semana: sabado e domingo tem de sair na segunda,
    e dia util tem de sair nele mesmo (senao a sugestao de D+2 viraria D+3). */

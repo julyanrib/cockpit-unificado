@@ -205,11 +205,7 @@ conferir('rebase que falha SEM conflito para e diz por quê',
     conferir('o rodapé não fixa os horários da grade', !fixou,
       'scripts/montar-dados.js volta a escrever o horário à mão no footerText');
   }
-  conferir('o limite de dado velho olha a hora', tpl.indexOf('syncDentroDoExpediente()') >= 0,
-    'sem isso, um limite fixo confunde "rodada falhou" com "é sábado de manhã"');
-  conferir('o limite do expediente é menor que o de fora',
-    tpl.indexOf('SYNC_LIMITE_EXPEDIENTE_MIN = 150') >= 0
-    && tpl.indexOf('SYNC_LIMITE_FORA_MIN = 26 * 60') >= 0);
+  /* 20/11/26: o limite de dado velho por horário (frescorDosDados/syncDentroDoExpediente) era do rodapé da Daily antiga do gestor e saiu com ela. */
 }
 
 /* ── 7. O SNAPSHOT SAIU DO REPOSITORIO (02/09/26) ────────────────────────────────────

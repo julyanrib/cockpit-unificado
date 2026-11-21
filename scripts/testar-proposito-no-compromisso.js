@@ -66,13 +66,13 @@ const ctx = { String: String, Number: Number, Array: Array, Object: Object, Date
   Math: Math, isNaN: isNaN, console: { error: function () {} } };
 vm.createContext(ctx);
 [/const PL6_BLOQUEADO = '[^']+';/, /const PL6_RUA = '[^']+';/, /const PL6_REL = '[^']+';/,
-  /const PL6_ETAPA_AG_PGTO = '[^']+';/, /const PL6_PROPOSITOS = \[[\s\S]*?\n\];/]
+  /const PL6_ETAPA_AG_PGTO = '[^']+';/]
   .forEach(function (re) {
     const m = tpl.match(re);
     if (!m) { console.error('FALHA: não achei ' + re); process.exit(1); }
     vm.runInContext(m[0], ctx);
   });
-['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead', 'pl6SlotProposito', 'pl6ResultadoDoSlot',
+['pl6AtrasoDoPasso', 'pl6PropositoDoLead', 'pl6SlotProposito', 'pl6ResultadoDoSlot',
   'pl6SlotId', 'pl6SlotRua', 'pl6SlotRel', 'pl6SlotBloqueado', 'pl6SlotHora',
   'pl6PorHora', 'pl6ItensDoDia']
   .forEach(function (f) { vm.runInContext(recortar(f), ctx); });
@@ -143,8 +143,7 @@ console.log('3 · QUEM ESCREVE — o trecho do template, rodando');
       Math: Math, isNaN: isNaN, l: l, horaEscolhida: horaEscolhida, valorDoSlot: null };
     vm.createContext(c);
     vm.runInContext(tpl.match(/const PL6_ETAPA_AG_PGTO = '[^']+';/)[0], c);
-    vm.runInContext(tpl.match(/const PL6_PROPOSITOS = \[[\s\S]*?\n\];/)[0], c);
-    ['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead'].forEach(function (f) {
+    ['pl6AtrasoDoPasso', 'pl6PropositoDoLead'].forEach(function (f) {
       vm.runInContext(recortar(f), c);
     });
     vm.runInContext(trecho, c);
@@ -195,17 +194,6 @@ checar('o espelho do próximo passo grava follow-up',
 console.log('');
 console.log('4 · O CARD MOSTRA');
 
-/* 20/11/26: o selo do propósito no cartão (e o trilho na cor dele) era do desenho da v2. O
-   cartão da v3 diz o ESTADO (feito, ficou para trás, fixo no app, rua) e não o propósito; o
-   propósito continua gravado no slot (seção 3) e lido por quem monta o dia (seções 1 e 2). */
-checar('o dado do card monta o selo a partir do propósito',
-  /selo: prop \? esc\(prop\.etiqueta\) : ''/.test(tpl)
-    && /seloCor: prop \? prop\.selo/.test(tpl) && /seloBg: prop \? prop\.seloBg/.test(tpl),
-  'markup ligado a campo que ninguém preenche é o selo sempre vazio, com tudo verde');
-checar('bloqueio não ganha selo',
-  /it\.tipo !== 'bloqueado'/.test(tpl),
-  'compromisso fora da rua não é propósito de venda — um selo nele diria que o dentista '
-    + 'faz parte do funil');
 
 console.log('');
 console.log('5 · NINGUÉM QUEBRA COM O CAMPO NOVO');
