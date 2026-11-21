@@ -57,46 +57,33 @@ function recortarFuncao(fonte, nome) {
   return fonte.slice(i, j + 1);
 }
 
-/* ══ O TRECHO DO FILTRO, TIRADO DO TEMPLATE E EXECUTADO ══════════════════════════════
-   Recorta do `const filtro =` até o `const municaoOrd`, que é onde a munição termina de
-   ser peneirada. Não é uma cópia do filtro: é o filtro. */
-function recortarFiltro() {
-  /* A ÂNCORA MUDOU COM O EIXO (23/09/26): a munição não se peneira mais por origem
-     ('todas · carteira · casa dos dados') e sim por PROPÓSITO. O recorte começa onde
-     o propósito é calculado e termina onde a munição acaba de ser peneirada. */
-  const ini = tpl.indexOf('  const comProposito = livres.map(');
-  const fim = tpl.indexOf('  const municaoOrd = ', ini);
-  if (ini < 0 || fim < 0) {
-    console.error('FALHA: não achei o trecho do filtro da munição (âncora perdida).');
-    process.exit(1);
-  }
-  return tpl.slice(ini, fim);
+/* ══ A BUSCA E O FILTRO DA FILA, TIRADOS DO TEMPLATE E EXECUTADOS ═══════════════════
+   20/11/26: a munição da v2 (o trecho `comProposito`… `municaoOrd`) saiu com a tela v2. A
+   regra que ela protegia continua, agora na v3: PLV3.linhasDoFiltro, PLV3.linhasBase e a
+   busca (PLV3.chave, casaBusca, chaveDaLinha, chaveDaConta). Não é cópia: são elas. */
+function recortarPLV3(nome) {
+  const a = tpl.indexOf('\nPLV3.' + nome + ' = function');
+  if (a < 0) { console.error('FALHA: PLV3.' + nome + ' não existe no template.'); process.exit(1); }
+  let d = 0, j = tpl.indexOf('{', a), viu = false;
+  while (j < tpl.length) { const c = tpl[j]; if (c === '{') { d++; viu = true; } else if (c === '}') { d--; if (viu && d === 0) break; } j++; }
+  return tpl.slice(a + 1, j + 1) + ';';
 }
-const TRECHO = recortarFiltro();
-
-checar('o trecho do filtro foi encontrado', TRECHO.length > 200,
+const TRECHO = ['chave', 'casaBusca', 'chaveDaConta', 'chaveDaLinha', 'linhasBase', 'linhasDoFiltro'].map(recortarPLV3).join('\n');
+checar('o trecho da fila foi encontrado', TRECHO.length > 800,
   'sem o recorte as checagens abaixo mediriam o vazio');
 
-function rodarFiltro(livres, s) {
-  const ctx = {
-    livres: livres, s: s, String: String, Number: Number, Array: Array, Object: Object,
-    Date: Date, Math: Math, isNaN: isNaN, Map: Map, Set: Set,
-    DATA: { stageMeta: { slaDays: {} } },
-    /* a MESMA normalização do template, recortada dele */
-    resultado: null
-  };
+/* a fila como PLV3.dados a entrega: carteira (semL/funil), contas-alvo, reciclagem */
+function rodarFiltro(BASEX, s) {
+  const lin = function (l) { return { ref: l.id, nome: l.nome, bairro: l.regiao, bairroNome: l._bruto.bairro || '' }; };
+  const carteira = BASEX.filter(function (l) { return l.tipo === 'c'; }).map(lin);
+  const D = { semL: carteira, cobrar: [], relac: [], recicl: [], funil: carteira,
+    alvos: BASEX.filter(function (l) { return l.tipo === 'n'; }).map(lin), busca: [],
+    porId: new Map(BASEX.map(function (l) { return [l.id, l]; })) };
+  const ctx = { Map: Map, String: String, Object: Object, PLV3: { st: { filtro: s.filtro, q: s.q, faixa: null, linhas: {}, bSel: s.terr ? [s.terr] : [] } } };
   vm.createContext(ctx);
-  vm.runInContext(recortarFuncao(tpl, 'pl6ChaveBairro'), ctx);
-  vm.runInContext(tpl.match(/const PL6_ETAPA_AG_PGTO = '\d+';/)[0], ctx);
-  vm.runInContext(tpl.match(/const PL6_PROPOSITOS = \[[\s\S]*?\n\];/)[0], ctx);
-  /* pl6FaixasDo passou a chamar a régua da etapa e o passo futuro (prancha final):
-     sem eles no contexto, a suíte estoura em vez de reprovar, e suíte que estoura não
-     diz o que quebrou. */
-  ['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead', 'pl6Prioridade',
-    'pl6ReguaDaEtapa', 'pl6AcimaDaRegua', 'pl6PassoFuturo']
-    .forEach(function (f) { vm.runInContext(recortarFuncao(tpl, f), ctx); });
-  vm.runInContext(TRECHO + '\n resultado = { daOrigem: daOrigem, porBairro: porBairro, munFilt: munFilt, comProposito: comProposito };', ctx);
-  return ctx.resultado;
+  vm.runInContext(TRECHO, ctx);
+  ctx.PLV3.faixas = function () { return []; };
+  return { munFilt: ctx.PLV3.linhasDoFiltro(D) };
 }
 
 /* ══ A BASE: como a produção realmente é ═══════════════════════════════════════════
@@ -114,78 +101,54 @@ const BASE = [
 
 /* ══ 1. O BAIRRO NÃO ESCONDE A CARTEIRA ═════════════════════════════════════════════ */
 (function () {
-  const r = rodarFiltro(BASE, { proposito: 'funil', terr: 'b:barra da tijuca', q: '' });
+  const r = rodarFiltro(BASE, { filtro: 'funil', terr: 'b:barra da tijuca', q: '' });
   const nomes = r.munFilt.map(function (l) { return l.nome; });
-  /* O BAIRRO NÃO TEM MAIS PODER NENHUM SOBRE A LISTA (23/09/26). Antes ele não podia
-     esconder a carteira; agora ele não esconde nada — o bloco de Território saiu e o
-     recorte por lugar é o "onde". `terr` continua sendo passado aqui de propósito: é
-     a prova de que um estado sobrevivente não volta a filtrar pelas costas. */
-  checar('com um bairro no estado, a carteira inteira continua na munição',
+  /* `terr` (o bairro escolhido no dia) vai no estado de propósito: é a prova de que ele não
+     volta a filtrar a fila pelas costas — na v3 o bairro do dia só orienta as sugestões. */
+  checar('com um bairro no estado, a carteira inteira continua na fila',
     ['Na Brasa', 'Salseiro brasa e lenha', 'Coliseu Taquara', 'Aloha']
       .every(function (n) { return nomes.indexOf(n) >= 0; }),
     'medido na produção: 235 dos 239 negócios não têm bairro · veio ' + JSON.stringify(nomes));
-  const rn = rodarFiltro(BASE, { proposito: 'nova', terr: 'b:barra da tijuca', q: '' });
+  const rn = rodarFiltro(BASE, { filtro: 'alvo', terr: 'b:barra da tijuca', q: '' });
   const nomesN = rn.munFilt.map(function (l) { return l.nome; }).sort();
-  checar('e a prospecção de outro bairro TAMBÉM continua, agora que o chip saiu',
+  checar('e a conta-alvo de outro bairro TAMBÉM continua',
     JSON.stringify(nomesN) === JSON.stringify(['Bololo Olegario', 'Portenita Restaurante', 'Sunomono']),
-    'o Sunomono é da Tijuca e a Barra estava escolhida: com o filtro antigo ele sumia '
-      + '· veio ' + JSON.stringify(nomesN));
+    'o Sunomono é da Tijuca e a Barra estava escolhida · veio ' + JSON.stringify(nomesN));
 }());
 
 /* ══ 2. A BUSCA POR NOME OLHA TUDO ══════════════════════════════════════════════════
    Este é o caso exato que gerou o duplicado do "Na Brasa": bairro escolhido, nome
    digitado, zero resultado, e o executivo criando de novo. */
 (function () {
-  const r = rodarFiltro(BASE, { proposito: 'funil', terr: 'b:barra da tijuca', q: 'na brasa' });
-  igual('procurar pelo nome acha a conta mesmo com outro bairro escolhido',
+  const r = rodarFiltro(BASE, { filtro: 'alvo', terr: 'b:barra da tijuca', q: 'na brasa' });
+  igual('procurar pelo nome acha a conta da carteira mesmo com outro filtro e outro bairro escolhidos',
     r.munFilt.map(function (l) { return l.nome; }), ['Na Brasa'],
     'era assim que a tela dizia "0 contas" para uma conta que existia, e o executivo criava '
       + 'a segunda');
-  /* E A CONTA DE PROSPECÇÃO DE OUTRO BAIRRO TAMBÉM. Este caso é o que separa os dois
-     consertos: a carteira já é poupada pelo filtro, mas quem digita "sunomono" com a
-     Barra escolhida está procurando o Sunomono, e ele é da Tijuca. Sem este caso, a
-     sabotagem que devolve a busca para dentro do bairro passa verde. */
-  const rp = rodarFiltro(BASE, { proposito: 'nova', terr: 'b:barra da tijuca', q: 'sunomono' });
-  igual('procurar pelo nome acha conta de prospecção de outro bairro',
+  const rp = rodarFiltro(BASE, { filtro: 'funil', terr: 'b:barra da tijuca', q: 'sunomono' });
+  igual('procurar pelo nome acha conta-alvo de outro bairro, com o filtro da carteira aberto',
     rp.munFilt.map(function (l) { return l.nome; }), ['Sunomono'],
-    'a busca tem de olhar a munição inteira, e não a fatia do chip');
-  const semNada = rodarFiltro(BASE, { proposito: 'funil', terr: null, q: 'coliseu' });
+    'a busca tem de olhar a fila inteira, e não a fatia do filtro');
+  const semNada = rodarFiltro(BASE, { filtro: 'sem', terr: null, q: 'coliseu' });
   igual('e sem bairro escolhido continua achando', semNada.munFilt.map(l => l.nome), ['Coliseu Taquara']);
-  const nadaMesmo = rodarFiltro(BASE, { proposito: 'funil', terr: null, q: 'restaurante que nao existe' });
+  const rua = rodarFiltro(BASE, { filtro: 'sem', terr: null, q: 'tijuca sunomono' });
+  igual('palavra por palavra, em qualquer ordem, no nome e no bairro', rua.munFilt.map(l => l.nome), ['Sunomono']);
+  const nadaMesmo = rodarFiltro(BASE, { filtro: 'sem', terr: null, q: 'restaurante que nao existe' });
   igual('o que não existe continua devolvendo vazio', nadaMesmo.munFilt.length, 0,
     'se a busca passasse a achar tudo, ela deixaria de ser busca');
 }());
 
-/* ══ 3. NINGUÉM SOME DA MUNIÇÃO (23/09/26, prancha v7) ══════════════════════════════
-   A v7 troca os chips de origem por seis propósitos. O risco novo é o oposto do
-   antigo: conta que não cai em propósito nenhum desaparece da tela sem aviso.
-   MEDIDO EM data/hubspot.json com os CINCO da prancha: 119 dos 140 negócios abertos
-   do time ficavam de fora — só a Kelly perdia 45 de vista. Daí o sexto, "Avançar o
-   funil". Esta seção é o que impede que ele seja removido por parecer redundante. */
+/* ══ 3. NINGUÉM SOME DA FILA ═══════════════════════════════════════════════════════
+   Na v2 eram seis propósitos e o sexto ("Avançar o funil") existia para nenhuma conta
+   da carteira sumir. Na v3 o papel é do filtro "Todo o funil" (D.funil). */
 (function () {
-  const r = rodarFiltro(BASE, { proposito: 'funil', terr: null, q: '' });
-  const todos = r.comProposito.map(function (l) { return l.nome; });
-  checar('toda conta da base recebe um propósito',
-    BASE.every(function (b) { return todos.indexOf(b.nome) >= 0; }),
-    'conta sem propósito some da munição — e foi assim que 119 dos 140 negócios do time '
-      + 'sairiam da tela · ficaram de fora: '
-      + JSON.stringify(BASE.map(function (b) { return b.nome; })
-          .filter(function (n) { return todos.indexOf(n) < 0; })));
-
-  igual('a carteira sem promessa vencida cai em "avançar o funil"',
+  const r = rodarFiltro(BASE, { filtro: 'funil', terr: null, q: '' });
+  igual('"Todo o funil" traz a carteira inteira',
     r.munFilt.map(function (l) { return l.nome; }).sort(),
     ['Aloha', 'Coliseu Taquara', 'Na Brasa', 'Salseiro brasa e lenha'],
     'é o gesto sem nome da prancha, e é a maior parte do trabalho do dia');
-
-  const soNova = rodarFiltro(BASE, { proposito: 'nova', terr: null, q: '' });
-  igual('e a prospecção fica no propósito dela', soNova.munFilt.map(l => l.nome).sort(),
-    ['Bololo Olegario', 'Portenita Restaurante', 'Sunomono']);
-
-  /* E O PROPÓSITO É O ÚNICO RECORTE QUE SOBROU no estado: o bairro não soma mais nada. */
-  const novaComTerr = rodarFiltro(BASE, { proposito: 'nova', terr: 'b:tijuca', q: '' });
-  igual('o bairro no estado não recorta nada', novaComTerr.munFilt.map(l => l.nome).sort(),
-    ['Bololo Olegario', 'Portenita Restaurante', 'Sunomono'],
-    'estado sobrevivente que ainda filtra é a pior forma de remover bloco');
+  checar('e o "Todo o funil" da v3 é a carteira sem a base, fora da grade',
+    /const funil = todos\.filter\(function \(l\) \{ return l\.tipo === 'c' && !l\.base && !naGradeFutura\[l\.id\]; \}\)/.test(tpl));
 }());
 
 /* ══ 4. CRIAR LEAD ENXERGA A CARTEIRA ═══════════════════════════════════════════════ */

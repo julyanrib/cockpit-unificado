@@ -34,14 +34,11 @@ Object.keys(casos).forEach(function (c) {
   checar('"' + c + '" é recusado', horaLivre(c) === null, 'hora inventada num compromisso com cliente é pior que hora nenhuma');
 });
 
-/* o Planejamento: campo no relógio, verbo próprio, aplica no Enter/saída (não a cada tecla) */
-const relogio = recortar('pfRelogioHTML');
-checar('o relógio do Planejamento tem o campo "ou digite"', /data-relogio-livre="' \+ attr \+ '"/.test(relogio));
-checar('o Planejamento entende a hora digitada',
-  /if \(verbo === 'horalivre'\) \{\s*const hm = horaLivre\(arg\);/.test(tpl));
-checar('aplica ao sair do campo, não a cada tecla',
-  /document\.addEventListener\('change', function \(ev\) \{\s*const el = ev\.target && ev\.target\.closest \? ev\.target\.closest\('\[data-relogio-livre\]'\)/.test(tpl),
-  'a tela repinta ao escolher; a cada tecla o campo perderia o foco');
+/* o Planejamento: o relógio com "ou digite" era da tela v2, que saiu em 20/11/26 (a v3 não tem
+   seletor de hora — testar-planejamento-v3). Fica medido que não sobrou ouvinte órfão dele. */
+checar('o relógio da v2 saiu inteiro: sem pfRelogioHTML, sem o verbo horalivre e sem ouvinte de data-relogio-livre',
+  recortar('pfRelogioHTML') === '' && tpl.indexOf("'horalivre'") < 0 && tpl.indexOf('data-relogio-livre') < 0,
+  'ouvinte de um campo que nenhuma tela desenha é código que parece vivo');
 
 /* a ficha: UM campo de hora ("precisa de tanto relógio assim?", Julyan) — digita ou escolhe
    da lista que abre no campo; os atalhos de DIA ficam, porque são data, não relógio */

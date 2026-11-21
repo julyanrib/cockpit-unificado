@@ -210,16 +210,15 @@ const B = ['b:meier', 'b:tijuca', 'b:madureira', 'b:vila isabel', 'b:penha'];
   checar('topo coerente: na grade = soma dos dias úteis (o feriado fora), cobertos = dias úteis com cartão, feitas = com check-in', t.naGrade === 6 && t.cobertos === 3 && t.uteis === 4 && t.feitas === 1, JSON.stringify(t));
 }
 
-/* ── 8 · a fiação: a v3 é o padrão, a v2 continua atrás da flag, e o ao vivo não mostra mais o aviso nesta aba ── */
+/* ── 8 · a fiação: a v3 é a única tela (a v2 e a flag localStorage['planejamento-v2'] saíram em 20/11/26),
+   e o ao vivo não mostra mais o aviso nesta aba ── */
 {
-  checar('v3 é o padrão do executivo', P.usar() === true);
-  const lsAntes = global.localStorage;
-  global.localStorage = { getItem: (k) => (k === 'planejamento-v2' ? '1' : null), setItem: () => {} };
-  checar('localStorage["planejamento-v2"] = "1" devolve a tela anterior', P.usar() === false);
-  global.localStorage = lsAntes;
+  checar('não há caminho de volta para a v2: sem PLV3.usar, sem PLV3.trocarVersao, sem a flag nem o botão',
+    typeof P.usar !== 'function' && typeof P.trocarVersao !== 'function'
+      && tpl.indexOf("getItem('planejamento-v2')") < 0 && tpl.indexOf('data-pv3-acao="usarv2"') < 0);
   const ini2 = tpl.indexOf('async function renderProspeccaoExecutivo()');
   const corpo = tpl.slice(ini2, tpl.indexOf('\nfunction prosp2Toast', ini2));
-  checar('renderProspeccaoExecutivo desenha a v3 e, sem ela, a tela v2 de sempre', /GV2\.PLV3\.render\(box, meuRep6a\)/.test(corpo) && /box\.innerHTML = renderPlanejamento6a\(meuRep6a\)/.test(corpo) && /pl6Ligar\(box, meuRep6a\)/.test(corpo));
+  checar('renderProspeccaoExecutivo desenha só a v3', ini2 > -1 && /GV2\.PLV3\.render\(box, meuRep6a\)/.test(corpo) && !/renderPlanejamento6a|pl6Ligar\(/.test(corpo));
   const tela = codigo.slice(codigo.indexOf('/* ══ A TELA DA v3'), codigo.indexOf('/* FIM DO BLOCO GV2'));
   checar('a tela v3 não tem "Enviar o plano ao gestor", editor da palavra da semana nem seletor de hora', tela.length > 1000 && !/Enviar o plano|pl7enviar|ajustar a promessa|data-pl6-acao="hora|horalivre/.test(tela));
   checar('a tela v3 não tem o bloco grande "Cadência da carteira" (só a linha de chips)', !/blocoHTML|CADÊNCIA DA CARTEIRA/.test(tela) && /chipsCadenciaHTML/.test(tela));

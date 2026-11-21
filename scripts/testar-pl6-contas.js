@@ -311,355 +311,10 @@ console.log('');
    pl6RegraCSS saiu com elas: nenhuma checagem restante lê regra de classe, porque a tela
    nova é inline. */
 
-/* ══════════════════════════════════════════════════════════════════════════════════════
-   A PRANCHA FINAL DO PLANEJAMENTO (09/09/26)
-   ══════════════════════════════════════════════════════════════════════════════════════
-   Prancha planejamento-final-v2 + prompt. Julyan: "REVISÃO FINAL NA TELA DO EXECUTIVO...
-   FAÇA COM PERFEIÇÃO".
-
-   ══ O QUE SAIU DAQUI, E POR QUÊ ════════════════════════════════════════════════════
-   Quarenta e duas checagens desta suíte cravavam o desenho ANTERIOR: a grade de 15
-   posições, a barra de capacidade, o contador N/15, os sete chips de janela, o mostrador
-   de relógio, a camada de rolagem da munição, o ✕ de 20px, o crachá na linha 1. O desenho
-   saiu inteiro; guarda que continua exigindo o desenho velho reprova o trabalho novo, e
-   guarda que aponta para função removida ESTOURA — e crash não é medição.
-
-   Elas não foram apagadas: cada REGRA que sobreviveu está aqui embaixo, escrita contra o
-   código novo. As que morreram com o desenho estão nomeadas na mensagem de commit.
-
-   ══ O QUE ESTA SEÇÃO PROTEGE ═══════════════════════════════════════════════════════
-   A primeira checagem é a que teria evitado o pior defeito do dia: a Daily do gestor
-   ficou INTEIRA em branco porque o markup lia um nome que o contrato não entregava. Aqui
-   isso é medido por comparação de conjuntos, e não por leitura. */
-(function () {
-  const dados = pegarFn('pl6DadosFinal');
-  const tela = pegarFn('pl6TelaFinalHTML');
-  const ligar = pegarFn('pl6Ligar');
-  const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ');
-  /* O MARKUP É A TELA MAIS O QUE ELA DELEGA (10/09/26). pl6TelaFinalHTML passou a
-     chamar pl6FichaPainelHTML com o mesmo `d`, e ler só o corpo da tela fez esta guarda
-     acusar sete nomes bons (fichaNome, fichaSub, fichaTag…). Contrato que atravessa duas
-     funções tem de ser medido nas duas.
-     SE UMA DELAS DEIXAR DE EXISTIR, pegarFn aborta a suíte dizendo o nome — é o
-     comportamento que se quer: âncora perdida reprova, não passa. */
-  const painelFicha = pegarFn('pl6FichaPainelHTML');
-  const telaCod = semCom(tela) + semCom(painelFicha);
-  const dadosCod = semCom(dados);
-  const ligarCod = semCom(ligar);
-  /* O TEMPLATE SEM COMENTÁRIO, com o nome desta suíte. Eu escrevi `codigo` — que é o nome
-     da variável na suíte da Daily do gestor — e esta seção estourou depois de 39
-     checagens verdes: ReferenceError no meio do arquivo. Verde parcial seguido de crash é
-     o pior relatório possível, porque o número no topo parece bom. */
-  const codigo = semCom(tpl);
-
-  /* ── 1 · O CONTRATO É FECHADO ─────────────────────────────────────────────────────
-     Todo `d.X` que o markup lê tem de ser chave devolvida por pl6DadosFinal. Foi assim
-     que a Daily do gestor morreu hoje: `avisoForaDoCampo` era calculado numa função e
-     lido no markup de outra, e nenhuma suíte executava aquele render. */
-  const lidos = [...new Set([...telaCod.matchAll(/\bd\.([A-Za-z][A-Za-z0-9_]*)/g)].map(m => m[1]))];
-  /* O RETURN DE TOPO, e não o último `return {` do arquivo: a primeira versão desta
-     checagem pegava `lastIndexOf('return {')`, que cai dentro de um dos map() — o de
-     municao devolve objeto — e então o conjunto "entregues" saía vazio e ela acusava as
-     23 chaves boas. Guarda que acusa o arquivo correto é tão ruim quanto a que passa no
-     errado: as duas fazem a próxima pessoa desconfiar da guarda. */
-  const iRet = dadosCod.lastIndexOf('\n  return {');
-  const retorno = iRet > -1 ? dadosCod.slice(iRet) : '';
-  const entregues = new Set([...retorno.matchAll(/^\s{4}([A-Za-z][A-Za-z0-9_]*):/gm)].map(m => m[1]));
-  const semEntrega = lidos.filter(n => !entregues.has(n));
-  checar('todo nome que o markup da prancha lê é entregue pelo contrato',
-    lidos.length > 20 && semEntrega.length === 0,
-    'o markup lê ' + semEntrega.join(', ') + ' e o contrato não entrega — ReferenceError'
-    + ' leva a aba inteira para "Carregando...", como aconteceu com a Daily do gestor hoje');
-
-  /* e o contrário: nome entregue que ninguém lê é peso morto no contrato, e a próxima
-     pessoa acha que a tela usa aquilo */
-  const naoLidos = [...entregues].filter(function (n) {
-    return telaCod.indexOf('d.' + n) < 0;
-  });
-  checar('e todo nome entregue é lido pelo markup',
-    naoLidos.length === 0,
-    'o contrato entrega ' + naoLidos.join(', ') + ' e ninguém lê — contrato aberto é o'
-    + ' começo de dois desenhos discordando de qual dado existe');
-
-  /* ── 2 · SEM DENOMINADOR: A RÉGUA DE SLOTS SAIU DA TELA ──────────────────────────
-     "Contador do dia: livre (cinza) ou N visita(s) (verde). Sem denominador — não existe
-     teto de slots." O contador anterior dizia 11/15. */
-  /* REVISÃO GERAL (Claude Design, 05/10/26, aprovada): o contador passa a ser "N de M" contra
-     a META DA FASE (rampDoOwner), verde quando bate. Continua proibido o teto de vagas
-     (PL6_SLOTS) como denominador: vaga não é produto. */
-  /* PLANEJAMENTO v3 (09/10/26, ws.zip): o "12 de 6" (paradas contra a meta) confundia paradas com
-     visitas. Nos dias que já começaram o cabeçalho é "Plano x de y · Visitas x de 6", da mesma
-     conta do gestor (pl6ResumoApp); no futuro, "N paradas". O teto de vagas continua proibido. */
-  checar('o cabeçalho do dia é Plano e Visitas (o mesmo do gestor) e, no futuro, N paradas — nunca contra as vagas',
-    dadosCod.indexOf("cnt: n === 0 ? (d.feriado ? 'feriado' : 'vazio') : (n === 1 ? '1 parada' : n + ' paradas'),") > -1
-      && dadosCod.indexOf('resumoApp: d.iso <= hojeISOPl6 ? pl6ResumoApp(d.iso) : null') > -1
-      && dadosCod.indexOf("' + PL6_SLOTS") < 0,
-    'o design v3 manda Plano x de y · Visitas x de 6; o teto de vagas não é denominador');
-
-  checar('e a barra de capacidade não voltou',
-    telaCod.indexOf('pl6-cap-seg') < 0 && telaCod.indexOf('capSegs') < 0,
-    'a barra media vaga contra teto — o teto deixou de ser produto');
-
-  /* ── 3 · O SELETOR DE HORA ───────────────────────────────────────────────────────
-     "grade de 12 chips de hora (08–19), linha de 4 chips de minuto (:00 :15 :30 :45)...
-     QUALQUER hora é válida — nunca grade obrigatória, nunca input[type=time] nativo." */
-  checar('doze horas e quatro minutos, e nenhum input de relógio',
-    /const PF_HORAS_OPT = \['08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19'\];/.test(codigo)
-      && /const PF_MINS_OPT = \['00', '15', '30', '45'\];/.test(codigo)
-      && telaCod.indexOf('type="time"') < 0,
-    'digitar quatro dígitos onde um toque resolve — e o relógio nativo do sistema é o que'
-    + ' a prancha proíbe por nome');
-
-  /* ══ DIA QUE PASSOU NÃO CONVIDA ═══════════════════════════════════════════════════
-     Medido dirigindo a tela: escolhi uma conta, cliquei em "+ colocar aqui" na terça (que
-     já passou), escolhi 16:15, apertei o botão vermelho — e nada aconteceu. O verbo
-     recusou certo, e a recusa ficou INVISÍVEL, porque o aviso do topo mostra a seleção
-     enquanto há conta escolhida. Três cliques e silêncio.
-     A sabotagem que me contou que faltava esta guarda: devolver o convite ao dia passado
-     passava com as outras 60 verdes. */
-  checar('dia que passou não oferece o convite nem o seletor',
-    /convite: !!s\.sel && s\.diaAtivo !== di && !passouDoDia,/.test(dadosCod)
-      && /colocando: !!s\.sel && s\.diaAtivo === di && !passouDoDia,/.test(dadosCod)
-      && /const passouDoDia = \(typeof pl6DiaPassou === 'function'\) \? pl6DiaPassou\(d\.iso\) : false;/.test(dadosCod),
-    'oferecer o botão para depois recusar é clique morto — e a recusa nem aparece, porque'
-    + ' a faixa de aviso está ocupada pela seleção');
-
-  /* ══ A FICHA ABERTA TEM UMA FONTE ══════════════════════════════════════════════════
-     `pl6Ficha` é a variável de módulo que os ramos de fechar e de etapa leem e escrevem.
-     Eu declarei um `ficha` dentro de pl6UI e fiz o contrato ler DELE: clicar no card
-     gravava o id numa variável e a tela lia a outra. A gaveta não abria, e nada
-     estourava — a mesma raiz que eu persegui em cinco telas hoje, cometida por mim na
-     última. */
-  checar('a ficha aberta vem de pl6Ficha, e não de um segundo lugar',
-    /const ficha = \(typeof pl6Ficha !== 'undefined' && pl6Ficha\) \? porId\.get\(pl6Ficha\) : null;/.test(dadosCod)
-      && codigo.indexOf('pl6UI.ficha') < 0
-      && !/sel: null, diaAtivo: null, hSel: '09', mSel: '00', ficha:/.test(codigo),
-    'duas fontes para "qual ficha está aberta" e o clique no card não abre gaveta nenhuma,'
-    + ' sem erro nenhum');
-
-  checar('o seletor abre em UM dia por vez',
-    /colocando: !!s\.sel && s\.diaAtivo === di/.test(dadosCod)
-      && /convite: !!s\.sel && s\.diaAtivo !== di/.test(dadosCod),
-    'regra inviolável 2 da prancha: cinco seletores abertos é cinco decisões pedidas de'
-    + ' uma vez, e nenhuma delas é a próxima');
-
-  /* ── 4 · AGENDAR PASSA PELA REGRA COMPARTILHADA ──────────────────────────────────
-     pl6AgendarNoSlot é quem cria o negócio da conta-alvo, cria a tarefa no HubSpot na
-     data e hora, e só então grava a grade. A Minha Daily agenda pela mesma função. */
-  checar('agendar vai por pl6AgendarNoSlot, com a hora escolhida',
-    /return agendarNoSlot\(idSel, di, destino, hora\);/.test(ligarCod)
-      && /return pl6AgendarNoSlot\(rep, id, di, si, \{\s*mutar: mutar, redesenhar: redesenhar, box: box, hora: hora\s*\}\);/.test(ligarCod),
-    'um segundo caminho de agendar perderia um efeito colateral — a tarefa, o negócio da'
-    + ' conta nova, ou o toast que diz onde gravou — e a divergência só apareceria no fim'
-    + ' do mês, com metade das visitas sem tarefa no CRM');
-
-  checar('e o dia que passou continua barrado',
-    /pl6DiaPassou\(dias0\[di\]\.iso\)/.test(ligarCod),
-    'tarefa datada no passado não volta atrás: fica na fila do gestor como compromisso'
-    + ' que ninguém vai cumprir');
-
-  /* ── 5 · MOVER LIMPA A ORIGEM ────────────────────────────────────────────────────
-     Sem isto a visita apareceria duas vezes na semana e a Daily do dia antigo continuaria
-     com ela. */
-  /* A REGRA É A ORDEM, e não as duas linhas coladas: limpar a origem ANTES de escrever
-     o destino. Entre elas hoje há a leitura do propósito do slot antigo, e a versão
-     cravada nas duas linhas adjacentes reprovou isso. */
-  (function () {
-    const iLimpa = ligarCod.indexOf('g[s.sel.deDi][s.sel.deSi] = null;');
-    const iEscreve = ligarCod.indexOf('g[di][destino] =');
-    checar('mover limpa a origem antes de escrever o destino',
-      iLimpa > 0 && iEscreve > iLimpa,
-      'a mesma visita em dois dias, e a Daily do dia antigo ainda a mostrando');
-    checar('e o que ele já tinha planejado não se perde na mudança de horário',
-      /const pEra = pl6SlotProposito\(era\);/.test(ligarCod)
-        && /g\[di\]\[destino\] = Object\.assign\(\{ id: id, hora: hora \}, pEra/.test(ligarCod),
-      'remontar o slot do zero apagava o propósito: mover o card de terça para quarta'
-      + ' tirava a etiqueta dele, e só dessa vez');
-  }());
-
-  checar('e o toast diz que a tarefa do CRM ficou na data antiga',
-    /a tarefa no HubSpot ficou na data antiga/.test(ligar),
-    'este produto não edita tarefa fora da Agenda; prometer que editou é pior que avisar');
-
-  /* ── 6 · O ✕ MANTÉM A TRAVA DE HOJE ──────────────────────────────────────────────
-     O ramo do ✕ é o mesmo de antes, com a trava que oferece arquivar o negócio criado por
-     engano. O markup novo emite data-pl6-remover exatamente para cair nele. */
-  checar('o ✕ do card agendado cai no ramo que tem a trava',
-    /data-pl6-remover="\$\{sl\.rm\}"/.test(tela)
-      && /if \(d\.pl6Remover\)/.test(ligarCod)
-      && /pl6NegocioNascidoAqui\(era\)/.test(ligarCod),
-    'sem cair neste ramo, tirar do plano volta a deixar o negócio no funil para sempre');
-
-  /* ── 7 · A REGIÃO É TEXTO LIVRE ──────────────────────────────────────────────────
-     "TEXTO LIVRE — nunca bloquear/validar. Vale o que ele digitar." */
-  checar('a região aceita o que ele digitar, e grava como território dele',
-    /const nova = doMapa \? doMapa\.chave : \(PL6_TERR_PREFIXO \+ chaveDigitada\);/.test(codigo),
-    'bairro fora do mapa é bairro que existe na rua — bloquear o campo é a tela dizendo'
-    + ' que a cidade dele está errada');
-
-  checar('e digitar não redesenha a tela',
-    /const reg = ev\.target\.closest && ev\.target\.closest\('\[data-pl6-reg-in\]'\);/.test(ligarCod)
-      && /o\.hidden = !casa;/.test(ligarCod),
-    'redesenhar recria o campo e o cursor sai dele a cada letra — ele digita isso com uma'
-    + ' mão, no carro, com o motor ligado');
-
-  checar('e grava só quando muda, no sair do campo',
-    /if \(String\(antes \|\| ''\) === String\(nova\)\) return;/.test(codigo),
-    'sem esta comparação é um upsert por cada vez que ele clica em qualquer outra coisa');
-
-  /* ── 8 · O BAIRRO SAIU DA MUNIÇÃO, E SAIU INTEIRO (23/09/26) ─────────────────────
-     O bloco "Território — bairros mapeados" era a pergunta ONDE feita duas vezes, ao
-     lado do "onde ▾" da v7 — e o que ele mostrava não eram bairros: na produção a
-     `regiao` do negócio vem escrita como rua ("Rua Fernandes Vieira e região") ou como
-     CEP. As quatro checagens que mediam aquele filtro viram estas três.
-
-     A PRIMEIRA É A QUE IMPORTA: remover bloco deixando o estado, o closest ou a regra
-     de estilo para trás é como esta tela já foi derrubada três vezes — e resto de
-     estado que ainda filtra pelas costas é a pior das sobras, porque some com contas
-     sem nenhum botão na tela para desfazer. */
-  checar('nenhum resto do filtro de bairro ficou na tela',
-    tpl.indexOf('data-pl6-terr') < 0 && tpl.indexOf('data-pl6-bairros') < 0
-      && tpl.indexOf('data-pl6-busca-bairro') < 0
-      && !/pl6UI\.terr\b/.test(tpl) && !/\bs\.terr\b/.test(tpl)
-      && !/verTodosTerr:/.test(tpl),
-    'estado, ouvinte ou regra de estilo sobrevivendo ao bloco é código morto que ainda age');
-
-  checar('e a munição não é mais peneirada por região',
-    /const porBairro = daOrigem;/.test(dadosCod),
-    'a carteira do executivo não tem bairro em 235 dos 239 negócios: qualquer peneira '
-      + 'por região aqui volta a esconder o que ele já tem na mão');
-
-  checar('o recorte por lugar é o "onde", e ele conhece quem não tem endereço',
-    /const ondeHTML = d\.ondeAberto/.test(tpl) && /ondeOpts:/.test(tpl)
-      && /semEnderecoTxt:/.test(tpl) && /function pl6LugarDo\(l\)/.test(tpl),
-    'sem ele, tirar o bairro deixaria a munição sem pergunta de lugar nenhuma; e é o '
-      + 'recorte por lugar que sabe dizer quantas contas não têm endereço, em vez de sumir com elas');
-
-  /* ── 9 · A ORDEM DA MUNIÇÃO É A MEDIDA ───────────────────────────────────────────── */
-  /* A REGRA É "A LISTA TEM ORDEM DECLARADA", E NÃO UMA LINHA DE CÓDIGO (23/09/26).
-     A v7 ordena por propósito — vencido, parado, régua — e a checagem cravada na
-     linha única reprovou isso. O que não pode faltar: municaoOrd ordena, pl6Prioridade
-     continua sendo o fundo do poço (é a única ordem que foi medida), e a tela ESCREVE
-     embaixo da lista qual ordem está rodando. */
-  checar('a munição sai ordenada, e pl6Prioridade continua sendo o padrão',
-    /const municaoOrd = [\s\S]{0,900}?\.sort\(/.test(dadosCod)
-      /* b - a desde 06/10/26: "número alto = mais urgente" (pl6Prioridade), e a - b punha a
-         conta sem nota na frente da de 4,8★. Esta guarda exigia a - b, protegendo o defeito. */
-      && /return pl6Prioridade\(b\) - pl6Prioridade\(a\);/.test(dadosCod),
-    'lista sem ordem é a ordem do HubSpot, que não quer dizer nada para quem planeja');
-  checar('e a tela escreve qual ordem está rodando',
-    /pagOrdem: esc\(/.test(dadosCod) && /\$\{d\.pagOrdem\}/.test(codigo),
-    'ordem que muda sozinha e não se anuncia vira a suspeita "por que esta conta está'
-    + ' no topo?" — e ninguém confia no topo da lista de novo');
-
-  /* ── 10 · A AGENDA DO DIA SE LÊ POR HORA, E A GRADE NÃO SE REORDENA ─────────────── */
-  /* A ORDEM E O si MUDARAM DE CASA (09/09/26): as duas telas do executivo passaram a ler
-     o dia pela MESMA função, pl6ItensDoDia. Antes o kanban ordenava por hora e a Minha
-     Daily lia em ordem de POSIÇÃO — a mesma manhã em duas ordens, nas duas telas de quem
-     vai para a rua. A regra é a mesma; agora ela existe uma vez, e a checagem exige que
-     as duas chamem. */
-  const leitor = semCom(pegarFn('pl6ItensDoDia'));
-  checar('o dia se lê por uma função só, e as duas telas a chamam',
-    /function pl6ItensDoDia\(coluna, porId\)/.test(codigo)
-      && /const itens = pl6ItensDoDia\(col, porId\)/.test(dadosCod)
-      /* A TERCEIRA CLÁUSULA COMPARAVA COM A MINHA DAILY, que saiu em 24/09/26. Ela
-         exigia que as DUAS telas chamassem a mesma função; hoje há uma, e o que protege
-         a regra é contar: um leitor declarado, e nenhum outro montando o dia. */
-      && (codigo.match(/function pl6ItensDoDia\(/g) || []).length === 1,
-    'duas leituras do mesmo dia é duas rotas: ele monta o dia numa tela e trabalha na outra');
-
-  /* O COMPARADOR TEM NOME E DOIS USUÁRIOS (10/09/26). Enquanto a ordem morava dentro do
-     leitor, a Minha Daily concatenava as vagas livres DEPOIS de tudo — e a prospecção de
-     rua das 16:00 aparecia acima da vaga das 13:30, embaixo de um título que diz "em
-     ordem de hora". Visto na tela, não medido. */
-  const ordem = semCom(pegarFn('pl6PorHora'));
-  checar('a ordem é hora ascendente, e sem hora no fim',
-    /if \(!a\.hora\) return 1;/.test(ordem) && /if \(!b\.hora\) return -1;/.test(ordem)
-      && /return a\.hora < b\.hora \? -1 :/.test(ordem),
-    '14:20 na casa 0 e 09:00 na casa 3 mostrariam a tarde antes da manhã');
-
-  checar('e há UM comparador, e uma cópia só da regra de ordem',
-    /itens\.sort\(pl6PorHora\);/.test(leitor)
-      /* citava o uso na Minha Daily; com uma tela só, o que vale é a CÓPIA ÚNICA */
-      && (codigo.match(/function pl6PorHora\(/g) || []).length === 1
-      && (codigo.match(/if \(!a\.hora && !b\.hora\) return a\.si - b\.si;/g) || []).length === 1,
-    'duas cópias da ordem do dia é como uma tela mostra a tarde antes da manhã e a outra'
-    + ' não — e nenhuma das duas parece errada sozinha');
-
-  /* A REGRA É QUE `si` VIAJE, e não a pontuação do objeto: o slot ganhou o campo `p`
-     em 23/09 e a versão cravada no objeto inteiro reprovou. Exige `si` em TODOS os
-     ramos do leitor — bloqueio, rua, relacionamento e visita —, porque é a posição que
-     a Daily do gestor e o g14 usam para achar o mesmo compromisso na grade gravada. */
-  checar('e o si viaja com o item, porque a grade gravada não se reordena',
-    (leitor.match(/itens\.push\(\{ si: si,/g) || []).length
-      === (leitor.match(/itens\.push\(\{/g) || []).length
-      && (leitor.match(/itens\.push\(\{/g) || []).length >= 4,
-    'reordenar a grade mudaria o que a Daily do gestor e o g14 leem por posição');
-
-  /* ── 11 · CONTA FORA DA CARGA É VAGA, NÃO CARTÃO ─────────────────────────────────
-     Decisão dele, de hoje: "nao quero esse nome conta saiu da sua base nao precisa, só os
-     slots vazios". A prancha não fala dela — e prancha silenciosa não revoga ordem dele. */
-  checar('conta fora desta carga não desenha cartão',
-    /\.filter\(x => x\.tipo !== 'orfa'\)/.test(dadosCod)
-      && telaCod.indexOf('conta fora desta carga') < 0,
-    'a casca do cartão ocupava a altura de uma visita para dizer que ali não há visita');
-
-  /* BLOQUEIO E RUA APARECEM NO KANBAN desde que as duas telas leem a mesma função. Um dia
-     com três bloqueios dizendo "livre" era a tela escondendo compromisso que ele marcou.
-     Mas bloqueio NÃO conta como visita: dizer "3 visitas" incluindo um dentista faria o
-     gestor cobrar visita que ninguém prometeu. */
-  checar('bloqueio aparece no dia e não conta como visita',
-    /const n = itens\.filter\(x => x\.tipo === 'visita' \|\| x\.tipo === 'rua'\)\.length;/.test(dadosCod)
-      && /it\.tipo === 'bloqueado' \? 'bloqueado'/.test(dadosCod),
-    'dia com bloqueio dizendo "livre" esconde o que ele já combinou');
-
-  /* ── 12 · A PRÓXIMA MELHOR AÇÃO TEM UMA FONTE ────────────────────────────────────── */
-  checar('o card e a ficha leem pl6Motivo, e não uma cópia da frase',
-    /pl6Motivo\(l\)/.test(semCom(pegarFn('pl6SubDoCard')))
-      && /fichaAcao: esc\(ficha \? pl6Motivo\(ficha\) : ''\)/.test(dadosCod),
-    'duas cópias da mesma frase divergem no primeiro ajuste, e aí a tela dá dois conselhos'
-    + ' diferentes para a mesma conta');
-
-  /* ── 13 · A FICHA ─────────────────────────────────────────────────────────────────
-     A casca é a da prancha (rótulo de 76px, chips de etapa, aviso âmbar, botão vermelho);
-     o conteúdo é o que ele pediu duas horas antes ("mais informação"), com a regra que
-     impede isso de virar mais altura. */
-  const fic = semCom(pegarFn('pl6FichaCamposFinal'));
-  checar('a ficha monta os campos por lista, e o vazio cai fora',
-    /return linhas\.filter\(Boolean\);/.test(fic)
-      && /function pfCampo\(rot, valor, cor, html\)/.test(codigo),
-    'campo de preenchimento baixo com linha fixa enche a ficha de "não veio da fonte" e'
-    + ' empurra para baixo o telefone e o próximo passo, que é o que ele usa');
-
-  checar('e o telefone vazio carrega os dois cliques que resolvem',
-    /pfCampo\('telefone', 'não veio da fonte · ' \+ pl6FichaLinks\(l, bruto\), '#8A6516', true\)/.test(fic),
-    'o telefone falta em 86% das contas-alvo porque a API da fonte não devolve número —'
-    + ' "preencher na visita" sozinho descreve o problema e deixa ele sem saída');
-
-  checar('o link só não é escapado quando quem chama declara',
-    /return \{ rot: esc\(rot\), v: html \? String\(valor\) : esc\(String\(valor\)\), cor: cor \|\| 'var\(--ink\)' \};/.test(codigo),
-    'escapar por padrão é o que impede o nome do lead de virar HTML; e não escapar o link'
-    + ' é o que impede o markup de sair como texto cru, que já aconteceu hoje');
-
-  /* ── 14 · O PISO DE TOQUE SEGUE A TELA ──────────────────────────────────────────────
-     A prancha desenha chips de 24px. No telefone, com uma mão, 24px é alvo que ele erra.
-     E a lista cita ATRIBUTO porque lista de classe já envelheceu calada aqui. */
-  checar('o piso de 44px cita os atributos que o markup emite',
-    /#agendaContent \[data-pl6-acao\],/.test(tpl)
-      && /#agendaContent \[data-pl6-reg-in\],/.test(tpl)
-      && !/\.pl6-fi-etapa,/.test(tpl),
-    'lista de toque cheia de seletor morto e vazia dos botões da tela nova — já aconteceu'
-    + ' uma vez neste arquivo, e está na memória com estas palavras');
-
-  /* ── 15 · O ARRASTE NÃO AGENDA SOZINHO ────────────────────────────────────────────
-     "Soltar num dia → abre o seletor de hora SÓ naquele dia." Soltar e já agendar poria a
-     visita numa hora que ele não escolheu. */
-  checar('soltar no dia abre o seletor, e não agenda',
-    /pl6UI\.diaAtivo = Number\(dia\.getAttribute\('data-pl6-dia-drop'\)\);/.test(ligarCod)
-      && !/drop[\s\S]{0,400}agendarNoSlot/.test(ligarCod),
-    'soltar agendando escolheria a hora por ele — e a hora é a única coisa que esta tela'
-    + ' existe para ele escolher');
-}());
+/* ══ A TELA DO PLANEJAMENTO v2 (pl6DadosFinal, pl6TelaFinalHTML, pl6Ligar) SAIU EM 20/11/26 ══
+   O executivo usa a v3 (PLV3) desde 01/11, e a v2 só abria pelo botão "Usar o planejamento anterior";
+   a faxina final a tirou, e com ela a seção que media o contrato tela × dados dela. A cadeia de contas
+   acima (pl6TodasAsContas e companhia), que a v3 usa, continua executada aqui. */
 
 
 /* ══════════════════════════════════════════════════════════════════════════════════════
@@ -681,7 +336,7 @@ console.log('');
   };
   const escritor = semCom(pegarAsync('gravarPropriedadesDoNegocio'));
   const ficha = semCom(pegarFn('pl6FichaCamposFinal'));
-  const ligarPl6 = semCom(pegarFn('pl6Ligar'));
+
   const props = semCom(pegarFn('ligarPropsFichaEditaveis'));
 
   checar('as tres funcoes novas existem com corpo',
@@ -727,22 +382,14 @@ console.log('');
   /* ── 5 · A RUA E OBRIGATORIA ─────────────────────────────────────────────────────
      A falta da rua e o que traz o formulario. Gravar so o bairro deixaria o negocio
      ainda sem rua e a ficha dizendo que esta resolvido. */
-  checar('gravar sem a rua nao chama o HubSpot',
-    /const ruaEnd = valorDe\('data-pl6-end-rua'\);/.test(ligarPl6)
-      && /if \(!ruaEnd\) \{/.test(ligarPl6)
-      && ligarPl6.indexOf('gravarPropriedadesDoNegocio') > ligarPl6.indexOf('if (!ruaEnd) {'),
-    'sem a trava, o botao grava bairro e a ficha passa a dizer que o endereco existe');
-
-  checar('e o negocio tem de estar na carga desta sessao',
-    /if \(!lEnd \|\| !lEnd\.stageId\) \{/.test(ligarPl6),
-    'sem etapa a rota recebe novaEtapa vazio e responde 400 — erro de tela virando erro'
-    + ' de HubSpot na frente dele');
+  /* 20/11/26: as duas travas do gravador da v2 (rua obrigatória, negócio na carga) saíram com pl6Ligar.
+     Na v3 o endereço é gravado por PLV3.gravarEndereco, medido abaixo. */
 
   /* ── 6 · UM ESCRITOR SO ──────────────────────────────────────────────────────────
      Duas telas gravam propriedade de negocio. Se cada uma montar o fetch, uma fica sem
      o espelho local e mostra o valor velho depois de gravar com sucesso. */
   checar('as duas telas gravam pelo mesmo escritor',
-    /await gravarPropriedadesDoNegocio\(/.test(ligarPl6)
+    /PLV3\.gravarEndereco = [\s\S]{0,2500}?gravarPropriedadesDoNegocio\(/.test(tpl)
       && /await gravarPropriedadesDoNegocio\(/.test(props)
       && props.indexOf("fetch('/api/negocio-acao'") < 0,
     'a ficha do funil voltou a montar o proprio fetch: uma das duas vai perder o espelho'
@@ -791,8 +438,11 @@ console.log('');
      a que sempre importou — QUEM VÊ A PROMESSA DE OUTRA PESSOA NÃO GANHA O ✕ DELA —, e
      ela mudou de dono: quem mostra o dia de outro é a Daily do GESTOR, que é só
      leitura, e é isso que esta checagem passa a exigir. */
+  /* 20/11/26: o cartão da v2 (o `const agendaHTML =` de pl6TelaFinalHTML) saiu com ela; o
+     único cartão de dia do Planejamento é o da v3, PLV3.cartaoHTML. */
   checar('o cartão do dia é um só, e é o do Planejamento',
-    (semCom(tpl).match(/const agendaHTML = /g) || []).length === 1
+    (semCom(tpl).match(/\nPLV3\.cartaoHTML = function/g) || []).length === 1
+      && semCom(tpl).indexOf('const agendaHTML = ') < 0
       && semCom(tpl).indexOf('function d7CartaoDoDiaHTML') < 0,
     'dois montadores do mesmo cartão foi o que fez a mesma manhã ser descrita em dois'
       + ' idiomas — e nenhum dos dois parecia errado sozinho');
@@ -904,35 +554,26 @@ console.log('');
     'sem o argumento, um passo de hoje entraria na linha da semana que vem, no dia errado');
 
   /* TROCAR DE SEMANA RECARREGA. pl6Plano é a linha de UMA semana; desenhar com a linha
-     da outra mostra a grade errada com o rótulo certo. */
+     da outra mostra a grade errada com o rótulo certo. Desde 20/11/26 o único seletor de
+     semana é o da v3 (data-pv3-acao="semana:N"). */
   checar('trocar de semana recarrega a linha antes de desenhar',
-    /if \(d\.pl6Semana\) \{[\s\S]{0,500}?const leu = await pl6Carregar\(rep\);/.test(cod)
-      && /PL6_SEMANA = 0;[\s\S]{0,300}?Continuo na semana atual/.test(cod),
-    'a grade de uma semana embaixo do rótulo da outra é o pior dos dois mundos; e leitura que falha não pode deixar a tela num foco que ela não conseguiu ler');
+    /if \(verbo === 'semana'\) \{[\s\S]{0,300}?PL6_SEMANA = Number\(arg\) \|\| 0;[\s\S]{0,200}?await pl6Carregar\(PLV3\.rep\);\s*return PLV3\.pintar\(\);/.test(cod),
+    'a grade de uma semana embaixo do rótulo da outra é o pior dos dois mundos');
 
   /* HOJE É UMA DATA, NÃO UMA POSIÇÃO — visto na foto: com a semana que vem aberta, a
      sexta aparecia marcada como HOJE, porque sexta é a quinta coluna nas duas semanas. */
   checar('a marca de HOJE compara a data, não a coluna',
-    /hoje: d\.iso === hojeISOPl6,/.test(cod)
+    /passou: d\.iso < hojeIso, hoje: d\.iso === hojeIso/.test(cod)
       && cod.indexOf('hoje: di === diHoje') < 0,
     'comparar índice marca a sexta da semana que vem como hoje, em vermelho, na tela dele');
 
   /* E A TELA AVISA. Montar a segunda que vem achando que é hoje é o erro caro aqui. */
-  checar('e a tela diz em voz alta quando não é a semana atual',
-    cod.indexOf('Você está montando a semana de ') > 0
-      /* 28/09: o executivo não tem mais Daily; o aviso diz o que continua na semana atual */
-      && cod.indexOf('O Hoje e o mapa continuam na semana atual.') > 0
-      && /semanaFora: \(Number\(PL6_SEMANA\) \|\| 0\) !== 0,/.test(cod),
+  checar('e a tela diz em voz alta qual semana está aberta',
+    /data-pv3-acao="semana:' \+ estaOff \+ '" aria-pressed="' \+ \(off === estaOff\) \+ '">esta semana<\/button>/.test(cod)
+      && cod.indexOf('planejando: próxima semana · virou sex 17h') > 0
+      && cod.indexOf('esta semana · só leitura: plano × feitas') > 0,
     'sem o aviso, o dia montado no lugar errado só aparece na segunda-feira seguinte');
-
-  checar('e o botão mostra o intervalo, não só a palavra',
-    /function pl6RotuloSemana\(offset\)/.test(cod)
-      && /rot: \(off === 0 \? .esta semana. : .próxima.\) \+ . · . \+ pl6RotuloSemana\(off\)/
-        .test(cod.replace(/'/g, '.')),
-    'planejar o dia errado é o erro caro desta tela, e a data resolve isso antes do clique');
 }());
-
-
 /* ══════════════════════════════════════════════════════════════════════════════════════
    CRIAR LEAD NOVO NO PLANEJAMENTO (11/09/26)
    ══════════════════════════════════════════════════════════════════════════════════════
@@ -951,36 +592,25 @@ console.log('');
   const semCom2 = s => String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' ');
   const cod = semCom2(tpl);
 
-  /* ── 1 · NENHUM HANDLER DESTA TELA CHAMA FUNÇÃO QUE NÃO EXISTE ──────────────────── */
+  /* ── 1 · NENHUM HANDLER DESTA TELA CHAMA FUNÇÃO QUE NÃO EXISTE ────────────────────
+     20/11/26: o ouvinte da v2 (pl6Ligar) saiu; o que sobra é o despachante da v3, PLV3.acao. */
   checar('todo handler do Planejamento chama função que existe',
     (function () {
-      const i = cod.indexOf('function pl6Ligar(box, rep) {');
+      const i = cod.indexOf('\nPLV3.acao = async function');
       if (i < 0) return false;
-      let d = 0, j = i, viu = false;
-      while (j < cod.length) {
-        const c = cod[j];
-        if (c === '{') { d++; viu = true; }
-        else if (c === '}') { d--; if (viu && d === 0) { j++; break; } }
-        j++;
-      }
-      const corpo = cod.slice(i, j);
-      /* as funções que o corpo CHAMA, pelo padrão `nome(` */
-      const chamadas = [...new Set((corpo.match(/\b([a-z][A-Za-z0-9_]{3,})\(/g) || [])
-        .map(function (s) { return s.slice(0, -1); }))];
-      /* o que é declarado em algum lugar do arquivo, ou é local do próprio bloco, ou é
-         API do navegador — a lista de ignorados é curta de propósito */
+      const corpo = cod.slice(i, cod.indexOf('\n};\n', i));
+      if (corpo.length < 3000) return false;
+      /* as funções soltas que o corpo CHAMA, pelo padrão `nome(` sem ponto antes */
+      const chamadas = [...new Set((corpo.match(/(^|[^.\w$])([a-z][A-Za-z0-9_]{3,})\(/g) || [])
+        .map(function (s) { return s.replace(/^[^a-z]/, '').slice(0, -1); }))];
       const nativas = ['function', 'catch', 'return', 'typeof', 'await', 'String', 'Number',
         'Boolean', 'Array', 'Object', 'Math', 'Date', 'JSON', 'parseInt', 'parseFloat',
         'setTimeout', 'clearTimeout', 'confirm', 'alert', 'prompt', 'console', 'isNaN',
-        'decodeURIComponent', 'encodeURIComponent', 'requestAnimationFrame',
-        /* isFinite entrou em 11/09/26: a guarda acusou o meu proprio handler novo. Falso
-           positivo dela, nao defeito do codigo — global legitimo que faltava na lista. */
-        'isFinite'];
+        'decodeURIComponent', 'encodeURIComponent', 'requestAnimationFrame', 'isFinite'];
       const faltando = chamadas.filter(function (nome) {
         if (nativas.indexOf(nome) > -1) return false;
         if (new RegExp('(?:async )?function ' + nome + '\\s*\\(').test(cod)) return false;
         if (new RegExp('(?:const|let|var) ' + nome + '\\s*=').test(cod)) return false;
-        if (new RegExp('\\.' + nome + '\\(').test(corpo)) return false;   /* método de objeto */
         return true;
       });
       if (faltando.length) console.log('      ↳ sem declaração: ' + faltando.join(', '));
@@ -988,21 +618,20 @@ console.log('');
     }()),
     'o botão de criar lead chamou `criarLead` por sete dias, e criarLead nunca existiu — ReferenceError no ouvinte é clique morto que nenhuma guarda de markup enxerga');
 
-  /* ── 2 · O FORMULÁRIO EXISTE, E PEDE O MÍNIMO ───────────────────────────────────── */
+  /* ── 2 · O FORMULÁRIO EXISTE, E PEDE O MÍNIMO (o da v3) ─────────────────────────── */
   checar('o botão abre um formulário com nome, bairro, telefone e fonte',
-    /pl6UI\.novoLead = \{ nome: '', bairro: '', telefone: '', fonte: 'rua'/.test(cod)
-      && cod.indexOf('data-pl6-novo-campo="nome"') > 0
-      && cod.indexOf('data-pl6-novo-campo="bairro"') > 0
-      && cod.indexOf('data-pl6-novo-campo="telefone"') > 0
+    /st\.novo = \{ nome: arg === 'busca' \? String\(st\.q \|\| ''\) : '', bairro: '', telefone: '', fonte: 'rua'/.test(cod)
+      && cod.indexOf('data-pv3-novo="nome"') > 0
+      && cod.indexOf('data-pv3-novo="bairro"') > 0
+      && cod.indexOf('data-pv3-novo="telefone"') > 0
       && /\[\['instagram', 'Instagram'\], \['mapa', 'Maps'\], \['rua', 'rua'\]\]/.test(cod),
     'a fonte é chip e não texto livre porque ela é medida depois — "novas → lead" por origem só existe com origem de nome fechado');
 
   /* ── 3 · O QUE ELE DIGITOU SOBREVIVE AO REDESENHO ───────────────────────────────── */
   checar('o que ele digitou sobrevive ao clique no chip',
-    /const lerCamposNovoLead = function \(\) \{/.test(cod)
-      && /if \(d\.pl6NovoFonte\) \{[\s\S]{0,120}?lerCamposNovoLead\(\);/.test(cod)
-      && /if \(d\.pl6NovoGravar\) \{[\s\S]{0,200}?lerCamposNovoLead\(\);/.test(cod),
-    'o chip redesenha a coluna e o redesenho reconstrói os inputs pelo estado: sem isto, digitar o nome e clicar em Instagram apaga o nome');
+    /if \(t && t\.getAttribute && t\.getAttribute\('data-pv3-novo'\) && PLV3\.st\.novo\) PLV3\.st\.novo\[t\.getAttribute\('data-pv3-novo'\)\] = t\.value;/.test(cod)
+      && /if \(verbo === 'novofonte'\) \{ if \(st\.novo\) st\.novo\.fonte = arg \|\| 'rua'; return PLV3\.pintarFila\(\); \}/.test(cod),
+    'o chip redesenha a fila e o redesenho reconstrói os inputs pelo estado: sem isto, digitar o nome e clicar em Instagram apaga o nome');
 
   /* ── 4 · UM ESCRITOR SÓ, COM DOIS DESTINOS ──────────────────────────────────────── */
   checar('a conta nova nasce pelo MESMO insert do mapa',
@@ -1060,217 +689,56 @@ console.log('');
   const corpoCriar = (function () {
     const i = cod.indexOf('async function pl6CriarLead(rep, campos) {');
     if (i < 0) return '';
-    const f = cod.indexOf('\nasync function pl6Carregar(', i);
-    return f < 0 ? '' : cod.slice(i, f);
+    /* 20/11/26: pl6Carregar não é mais a vizinha de baixo; o corpo vai até o fecho na coluna 0 */
+    const f = cod.indexOf('\n}\n', i);
+    return f < 0 ? '' : cod.slice(i, f + 2);
   }());
   checar('a munição recarrega depois de criar, dentro do escritor',
     corpoCriar.length > 200
       && /if \(typeof carregarProspeccao === 'function'\) \{[\s\S]{0,200}?await carregarProspeccao\(\);/.test(corpoCriar)
-      && /está na sua munição/.test(cod),
+      && /onde: 'na sua munição'/.test(corpoCriar),
     'sem recarregar, a conta gravada não aparece na lista e ele cria a mesma de novo');
 }());
 
 
-/* ══════════════════════════════════════════════════════════════════════════════════════
-   BUSCA POR NOME NA MUNIÇÃO (11/09/26)
-   ══════════════════════════════════════════════════════════════════════════════════════
-   Bruno, planejando: "montei terça com leads novos na Taquara mas queria colocar uma
-   visita no Coliseu, era só colocar o nome que ia aparecer o lead e eu levava o card até
-   lá".
-
-   A TELA JÁ TINHA UM CAMPO DE BUSCA, e ele não servia: `data-pl6-busca-bairro` filtra os
-   CHIPS de bairro escondendo nós no DOM, e não toca na lista de contas.
-
-   E ESCONDER NÓS NÃO SERVIRIA AQUI: a coluna desenha `municaoOrd.slice(0, 60)` de uma
-   munição que hoje tem 254. Filtrar o DOM alcançaria só os 60 já desenhados — e a conta
-   procurada é, quase por definição, uma que não está à vista. */
-(function () {
-  const semCom3 = s => String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' ');
-  const cod = semCom3(tpl);
-
-  /* O CORTE MUDOU DE TAMANHO E DE NOME (23/09/26): eram 60 numa rolagem, hoje são 6
-     numa página. A regra é a mesma e é a que importa: a busca peneira ANTES do corte,
-     seja ele qual for. Por isso a checagem procura O CORTE, e não o número. */
-  const iCorte = cod.indexOf('const municaoPag =');
-  checar('a munição tem busca por nome, e ela filtra ANTES do corte da lista',
-    cod.indexOf('data-pl6-busca-nome="1"') > 0
-      && /const alvoBusca = pl6ChaveBairro\(String\(s\.q \|\| ''\)\.trim\(\)\);/.test(cod)
-      /* De QUAL lista a busca parte é outra decisão — em 23/09 ela passou a partir de
-         `daOrigem` justamente para achar a conta de outro bairro, e a guarda cravada
-         em `porBairro.filter` reprovou o conserto. */
-      && /const munFilt = !alvoBusca \? porBairro : \w+\.filter/.test(cod)
-      && iCorte > 0 && cod.indexOf('const alvoBusca') < iCorte,
-    'filtrar depois do corte acharia só o que já estava desenhado — e o que ele procura é justamente o que não está');
-
-  /* ══ A PÁGINA 2 TEM DE TRAZER OUTRAS CONTAS ═══════════════════════════════════
-     Achado por sabotagem: trocar o recorte por `municaoOrd.slice(0, 6)` deixava as
-     duas setas desenhadas, o verbo `pag` no switch e o estado mudando — e a lista
-     parada na primeira página. Toda checagem de presença dava verde. Por isso esta
-     RODA o recorte do template, com 14 contas, em vez de lê-lo. */
-  (function () {
-    const vm = require('vm');
-    /* comparacao por valor: esta suite so tem checar() */
-    const igual = function (nome, veio, esp, porque) {
-      checar(nome, JSON.stringify(veio) === JSON.stringify(esp),
-        (porque ? porque + ' · ' : '') + 'esperava ' + JSON.stringify(esp) + ', veio ' + JSON.stringify(veio));
-    };
-    const ini = tpl.indexOf('  const POR_PAGINA = ');
-    const fim = tpl.indexOf('\n', tpl.indexOf('  const municaoPag = ', ini));
-    if (ini < 0 || fim < 0) {
-      checar('o recorte da paginação existe', false, 'âncora perdida — as checagens abaixo mediriam o vazio');
-      return;
-    }
-    const trechoPag = tpl.slice(ini, fim);
-    const rodar = function (pagina) {
-      const ctx = { Math: Math, Number: Number, s: { pagina: pagina }, resultado: null,
-        municaoOrd: Array.from({ length: 14 }, function (_, i) { return { nome: "c" + (i + 1) }; }) };
-      vm.createContext(ctx);
-      vm.runInContext(trechoPag + '\n resultado = { pag: municaoPag.map(function (x) { return x.nome; }), total: totalPaginas, atual: pagina };', ctx);
-      return ctx.resultado;
-    };
-    igual('a página 1 traz as seis primeiras', rodar(1).pag,
-      ['c1', 'c2', 'c3', 'c4', 'c5', 'c6']);
-    igual('a página 2 traz OUTRAS seis', rodar(2).pag,
-      ['c7', 'c8', 'c9', 'c10', 'c11', 'c12'],
-      'setas vivas com lista parada é o clique morto mais caro desta tela: ele acha que'
-      + ' viu a carteira inteira');
-    igual('a última página traz o resto, e não seis', rodar(3).pag, ['c13', 'c14']);
-    igual('14 contas dão 3 páginas', rodar(1).total, 3);
-    igual('página maior que a última cai na última', rodar(99).pag, ['c13', 'c14'],
-      'a lista encolhe entre um clique e outro — página fora do fim mostraria coluna vazia');
-    igual('e página 0 ou negativa cai na primeira', rodar(0).pag,
-      ['c1', 'c2', 'c3', 'c4', 'c5', 'c6']);
-  }());
-
-  /* E O CORTE TEM DE SER NAVEGÁVEL. Cortar em 6 sem setas esconderia 136 contas sem
-     dizer nada — pior do que a rolagem de 60 que ele substituiu. */
-  checar('e o corte tem página, contagem e setas',
-    /const POR_PAGINA = \d+;/.test(cod) && /\$\{d\.pagRot\}/.test(cod)
-      && /data-pl6-acao="pag:1"/.test(cod) && /data-pl6-acao="pag:-1"/.test(cod)
-      && /verbo === 'pag'/.test(cod),
-    'corte sem navegação é a metade da carteira sumindo em silêncio');
-
-  checar('ela casa por pedaço do nome, sem acento e sem caixa',
-    /pl6ChaveBairro\(l\.nome \|\| ''\)\.indexOf\(alvoBusca\) >= 0/.test(cod)
-      && /pl6ChaveBairro\(\(l\._bruto && l\._bruto\.bairro\) \|\| ''\)\.indexOf\(alvoBusca\) >= 0/.test(cod),
-    '"coliseu" tem de achar "Restaurante Coliseu"; e quem digita o bairro quer a rua inteira');
-
-  checar('o texto buscado vive no estado, não só no DOM',
-    /^\s*q: '',$/m.test(cod) && /pl6UI\.q = buscaNome\.value \|\| '';/.test(cod)
-      && /buscaQ: String\(s\.q \|\| ''\),/.test(cod),
-    'sem estado, o redesenho da coluna apagaria o que ele digitou');
-
-  /* A GUARDA QUE CUSTOU MAIS CARO PARA APRENDER ─────────────────────────────────────
-     A primeira versão devolvia o foco encadeada na promessa do redesenho:
-         Promise.resolve(redesenhar()).then(function () { ... focus() ... })
-     e o `then` NUNCA executava. O redesenho desta casa espera um requestAnimationFrame,
-     e em aba de segundo plano o navegador não dispara frame nenhum: o DOM trocava, o
-     campo perdia o foco, e a segunda letra ia para o nada. Medido com MutationObserver +
-     focusin: uma mutação, zero focusin. */
-  checar('o foco volta ao campo por tempo, e NÃO por frame de animação',
-    /const devolverFoco = function \(\) \{/.test(cod)
-      && /setTimeout\(devolverFoco, 0\);/.test(cod)
-      && /setTimeout\(devolverFoco, 80\)/.test(cod)
-      && !/Promise\.resolve\(redesenhar\(\)\)\.then/.test(cod),
-    'requestAnimationFrame não dispara em aba oculta: o foco nunca voltava e a 2a letra sumia');
-
-  checar('e ele para de insistir quando o campo já está com o foco',
-    /if \(tentativas < 6 && \(!novo \|\| document\.activeElement !== novo\)\) setTimeout/.test(cod),
-    'insistir para sempre roubaria o foco de quem já clicou em outro lugar');
-
-  checar('a coluna diz quantas contas a busca achou',
-    /buscaN: municaoOrd\.length,/.test(cod)
-      && cod.indexOf('conta${d.buscaN === 1') > 0,
-    'o total da munição some quando ele digita; sem a contagem a coluna passa a mentir sobre o tamanho dela');
-}());
-
-
-/* ══ O VAZIO DA BUSCA EXPLICA O VAZIO (11/09/26) ══════════════════════════════════════
+/* 20/11/26: a BUSCA POR NOME NA MUNIÇÃO (o campo, a paginação de 6, o foco que volta ao campo)
+   era da tela v2, que saiu. A regra — a busca olha a fila inteira, antes de qualquer recorte —
+   continua na v3 e é executada em testar-planejamento-carteira (PLV3.linhasDoFiltro). */
+/* ══ O VAZIO DA BUSCA EXPLICA O VAZIO, E A BUSCA ACHA O QUE JÁ ESTÁ NO PLANO (11/09/26) ══
    Julyan: "marco cadastrou no cockpit o lead barraca do biel e eu tento pesquisar ele e
-   nao aparece".
-
-   MEDIDO, e a busca NAO estava quebrada: o negocio existia (Barraca Dubiel, dono
-   86100505, Conversa com Decisor, criado as 14:28), ESTAVA no snapshot que a producao
-   serve, e reproduzindo a regra da carteira sobre esse snapshot ele aparece — 26 contas,
-   uma casa com "barr".
-
-   O que falhou foi o FRESCOR: o negocio nasceu as 14:28 e entrou no snapshot as 15:45.
-   Quem tinha a aba aberta antes disso procurou numa carga onde ele nao podia estar — e a
-   tela dizia "0 contas com barr", uma afirmacao sobre o MUNDO, quando a verdade era "nao
-   esta NESTA carga". */
+   nao aparece". Medido: o negócio existia e JÁ ESTAVA NA GRADE — a busca herdava o corte
+   de quem falta planejar e dizia que a conta não existia.
+   20/11/26: o desenho da v2 (data-pl6-ir-no-plano, o vazio da munição) saiu com a tela; as
+   duas regras continuam, agora na v3 (PLV3.vazioHTML, D.noPlano, PLV3.noPlanoHTML). */
 (function () {
-  const semCom4 = function (s) { return String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' '); };
-  const cod = semCom4(tpl);
+  const cod = tpl.replace(/[/][*][\s\S]*?[*][/]/g, ' ');
+  const corpo = function (nome) { const i = cod.indexOf('\nPLV3.' + nome + ' = '); return i < 0 ? '' : cod.slice(i, cod.indexOf('\n};\n', i)); };
+  const vazio = corpo('vazioHTML'), dados = corpo('dados'), noPlano = corpo('noPlanoHTML'), acao = corpo('acao');
 
   checar('a busca sem resultado diz de quando e a carga',
-    cod.indexOf('cargaDe: String(') > 0
-      /* AMARRADA NA CONDICAO, e nao so na presenca do texto: sabotagem que trocava
-         `d.buscaQ` por `false` deixava a frase no arquivo e o vazio mudo de novo. */
-      && cod.indexOf('d.municaoVazia ? (d.buscaQ') > 0
-      && cod.indexOf('hubspotUpdatedAtFmt') > 0
-      && cod.indexOf('Nenhuma conta com') > 0
-      && cod.indexOf('nesta carga') > 0,
+    /DATA\.hubspotUpdatedAtFmt \? ' \(carga de ' \+ DATA\.hubspotUpdatedAtFmt \+ '\)'/.test(vazio)
+      && vazio.indexOf('Conta criada depois desta leitura entra na próxima.') > 0,
     'zero sem data afirma que a conta nao existe, quando ela so nasceu depois desta leitura');
-
-  checar('e oferece o gesto que resolve, ligado no farol que ja existe',
-    cod.indexOf('data-pl6-buscar-dado-novo="1"') > 0
-      && /if \(d\.pl6BuscarDadoNovo\) \{/.test(cod)
-      && /await farolBuscarEAplicar\(\);/.test(cod),
+  checar('e oferece o gesto que resolve, ligado num verbo que existe',
+    vazio.indexOf('data-pv3-acao="dadonovo"') > 0 && vazio.indexOf('data-pv3-acao="novo:busca"') > 0
+      && /if \(verbo === 'dadonovo'\) return PLV3\.dadoNovo\(\);/.test(acao)
+      && /\nPLV3\.dadoNovo = /.test(cod),
     'botao no vazio sem ouvinte seria o clique morto que esta tela existe para nao ter');
-
-  /* A REGRA É QUE OS DOIS VAZIOS SEJAM DIFERENTES, e não a frase de um deles. O vazio
-     da BUSCA tem de explicar a carga e oferecer o botão que resolve; o vazio de quem só
-     trocou de propósito tem de ser curto — a frase longa ali é ruído.
-     E desde a prancha final ele diz QUAL zero é: no funil, lista vazia quer dizer que a
-     carteira inteira já tem outro propósito, que é uma boa notícia e estava saindo como
-     "nada neste filtro". */
   checar('e o vazio SEM busca continua curto, e diz qual zero é',
-    cod.indexOf('zero de verdade') > 0 && /vazioTxt: esc\(/.test(cod)
-      && cod.indexOf('Toda a carteira já tem outro propósito.') > 0
-      && !/zero de verdade[sS]{0,300}buscar dado novo do HubSpot/.test(cod),
-    'quando ele so trocou de filtro, a frase longa seria ruido — e um zero sem nome é o'
-      + ' zero que tranquiliza');
-}());
-
-
-/* ══ A BUSCA ACHA TAMBEM O QUE JA ESTA NO PLANO (11/09/26) ═══════════════════════════
-   A causa do "nao acha a Barraca Dubiel", medida NA TELA do Marco com a sessao dele:
-
-     barracaNaCarteira : ["Barraca Dubiel · c-64890304628"]   ← esta na carteira
-     barracaEmTodas    : ["Barraca Dubiel"]                   ← esta em pl6TodasAsContas
-     naGradeAgora      : true                                 ← E JA ESTA NA GRADE
-
-   A municao e `todos` MENOS quem esta na grade — por desenho, e o desenho esta certo:
-   ela e o que ainda falta planejar. Mas a BUSCA herdou o corte sem herdar a explicacao.
-   Ele digitou o nome, leu "0 contas", e concluiu que a conta sumiu do sistema; ela
-   estava no plano dele, tres colunas ao lado.
-
-   (Diferente do vazio que nao dizia de quando era a carga — aquele tambem era real e
-   continua consertado. A causa DESTE caso e esta.) */
-(function () {
-  const semCom5 = function (s) { return String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' '); };
-  const cod = semCom5(tpl);
+    /PLV3\.VAZIOS\[st\.filtro\] \|\| 'Nada neste filtro\.'/.test(vazio) && /\nPLV3\.VAZIOS = \{/.test(cod),
+    'quando ele so trocou de filtro, a frase longa seria ruido — e um zero sem nome é o zero que tranquiliza');
 
   checar('a busca olha TODAS as contas, e nao so as que faltam planejar',
-    cod.indexOf('buscaNoPlano: !alvoBusca ? [] : (function () {') > 0
-      && cod.indexOf('if (naGrade.indexOf(l.id) < 0) return;') > 0,
-    'a municao corta quem ja esta na grade; a busca herdava o corte e dizia que a conta nao existe');
-
-  checar('e diz o dia e a hora em que ela ja esta',
-    /quando: esc\(\(dias\[di\] \? \(dias\[di\]\.rot \+ ' ' \+ dias\[di\]\.data\)/.test(cod)
-      && cod.indexOf('pl6SlotHora(grade[di][si], si)') > 0
-      && cod.indexOf('já no seu plano') > 0,
+    /if \(!naGrade\[l\.id\] \|\| !PLV3\.casaBusca\(qk, PLV3\.chaveDaConta\(l\)\)\) return;/.test(dados)
+      && /todos\.forEach\(function \(l\) \{/.test(dados),
+    'a fila corta quem ja esta na grade; a busca herdava o corte e dizia que a conta nao existe');
+  checar('e diz o dia e a hora em que ela ja esta, e leva até o dia',
+    noPlano.indexOf('já no seu plano') > 0 && /data-pv3-acao="irdia:' \+ p\.di \+ ':'/.test(noPlano)
+      && /p\.quando/.test(noPlano) && /if \(verbo === 'irdia'\)/.test(acao),
     '"esta no plano" sem dia e hora manda ele procurar na grade inteira');
-
   checar('o card achado no plano NAO volta para a lista de arrastar',
-    cod.indexOf('const livres = todos.filter(l => naGrade.indexOf(l.id) < 0);') > 0,
+    /const busca = st\.q \? todos\.filter\(function \(l\) \{ return !naGradeFutura\[l\.id\]; \}\)/.test(dados),
     'arrastar de novo o que ja esta no dia e que seria o erro');
-
-  checar('e a linha leva os olhos ate o dia, em vez de so informar',
-    cod.indexOf('data-pl6-ir-no-plano=') > 0
-      && /if \(d\.pl6IrNoPlano\) \{/.test(cod)
-      && cod.indexOf('scrollIntoView') > 0,
-    'texto que informa e nao resolve e exatamente o que esta tela existe para nao ter');
 }());
 
 
@@ -1320,57 +788,21 @@ console.log('');
      que a carga desta sessao nao conhece, o painel interno continua sendo a resposta — e
      isso e o oposto de abrir uma ficha vazia. */
   checar('o card de negócio do Planejamento abre a ficha de verdade',
-    /* 28/09/26: o cliente (r-<negócio>, relacionamento) também tem ficha de negócio */
-    cod.indexOf("const dealId = (arg.indexOf('c-') === 0 || arg.indexOf('r-') === 0) ? arg.slice(2) : null;") > -1
+    /* 28/09/26: o cliente (r-<negócio>, relacionamento) também tem ficha de negócio.
+       20/11/26: o verbo é o da v3 (data-pv3-acao="ficha:"); o da v2 saiu com a tela. */
+    cod.indexOf("const dealId = /^[cr]-/.test(arg) ? arg.slice(2) : null;") > -1
       && cod.indexOf("if (doFunil && typeof abrirFichaLeadFunilDrawer === 'function')") > -1,
     'o painel interno não data próximo passo nem move etapa — quem vem do Meu funil '
       + 'procura um botão que existe em outro lugar');
 
-  checar('e a conta nova, que não tem negócio, continua no painel interno',
-    (function () {
-      const i = cod.indexOf("if (verbo === 'ficha') {");
-      if (i < 0) return false;
-      const corpo = cod.slice(i, i + 900);
-      return corpo.indexOf('pl6Ficha = arg;') > corpo.indexOf('abrirFichaLeadFunilDrawer(');
-    }()),
-    'abrir uma ficha vazia para conta sem negócio seria pior que o painel');
+  checar('e a conta nova, que não tem negócio, não abre ficha vazia',
+    cod.indexOf("const abre = c.tipoC && !c.fora && c.ref ? ' data-pv3-acao=\"ficha:' + e(c.ref) + '\"") > -1
+      && cod.indexOf("(l.dealId ? '<div class=\"pv3-mini\"><button type=\"button\" data-pv3-acao=\"ficha:'") > -1,
+    'abrir uma ficha vazia para conta sem negócio seria pior que nada');
 }());
 
-
-/* ══ O PAINEL DA MUNIÇÃO CONHECE A TELA (14/09/26) ═════════════════════════════════
-   Julyan pediu "o mesmo tratamento" que a Daily recebeu. Eu NÃO apliquei, e a medição
-   é a razão: o truque da Daily foi a lista absorver a altura da coluna irmã, e aqui a
-   irmã tem 328px NATURAIS (cinco dias em grade + a faixa de bairros) contra 2.313px de
-   munição. Absorver daria um painel de 38px — medido na tela real, com a carteira do
-   Marco. Aplicar o pedido ao pé da letra destruiria a tela.
-
-   O QUE O 1200px CRAVADO TEM DE ERRADO é outra coisa: ele não sabe o tamanho da tela.
-   Num 1440x900, que é notebook comum, deixava 687px do painel ABAIXO DA DOBRA, com a
-   barra de rolagem interna disputando com a da página. Com min(), 267px.
-
-   `min()` nunca fica pior que o número cravado: em monitor alto escolhe os 1200px, em
-   tela baixa escolhe o que cabe. */
-(function () {
-  const semComentario = String(tpl).replace(/\/\*[\s\S]*?\*\//g, ' ');
-  const i = semComentario.indexOf('data-pl6-municao="1"');
-  const painel = i < 0 ? '' : semComentario.slice(i, i + 420);
-
-  checar('o painel da munição é limitado pela TELA, não por um número cravado',
-    /max-height:min\(1200px, calc\(100vh - 120px\)\)/.test(painel),
-    'max-height cravado não sabe o tamanho da tela: num 1440x900 deixava 687px do painel '
-      + 'abaixo da dobra, e a barra interna disputava com a da página');
-
-  /* A ROLAGEM CONTINUA NO PRÓPRIO ELEMENTO, e isso não é detalhe: `[data-pl6-municao]`
-     é a âncora de redesenharPreservandoRolagem — é dele que o código lê o scrollTop para
-     a tela não pular 44px no redesenho — e é ele que a folha estiliza com a barra fina.
-     Mover a rolagem para uma div interna, como foi feito na Daily, quebraria as duas
-     coisas em silêncio. */
-  checar('e a rolagem continua no elemento que serve de âncora',
-    /data-pl6-municao="1"[^>]*overflow:auto;/.test(painel)
-      && semComentario.indexOf("'[data-pl6-municao]'") > -1,
-    'mover a rolagem para dentro tira o scrollTop da âncora: o salto de 44px no redesenho '
-      + 'volta e a barra fina estilizada desaparece — as duas em silêncio');
-}());
+/* 20/11/26: O PAINEL DA MUNIÇÃO CONHECE A TELA (14/09/26) media a altura do painel da v2;
+   a v3 cabe em 1280 × 768 por desenho (só a fila e o corpo de cada dia rolam) e saiu dela. */
 
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');

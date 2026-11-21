@@ -169,22 +169,24 @@ console.log('3 · QUEM ESCREVE — o trecho do template, rodando');
       + 'maior parte dos cards fica sem etiqueta');
 }());
 
-/* OS OUTROS TRÊS CAMINHOS DE ESCRITA. Não dá para rodá-los sem a tela inteira, mas a
-   ausência do campo é o que precisa ser reprovada — e ela se vê no código. */
-checar('mover de horário preserva o propósito do slot antigo',
-  /const pEra = pl6SlotProposito\(era\);/.test(tpl)
-    && /g\[di\]\[destino\] = Object\.assign\(\{ id: id, hora: hora \}, pEra/.test(tpl),
+/* OS OUTROS CAMINHOS DE ESCRITA. Desde 20/11/26 eles moram só na v3 (PLV3.moverCartoes,
+   PLV3.mudarHora, PLV3.porRua); os da v2 (o arraste de horário, o compositor do bloco) saíram
+   com a tela. Não dá para rodá-los sem a tela inteira, mas a ausência do campo se vê no código. */
+const corpoPLV3 = function (nome) {
+  const i = tpl.indexOf('\nPLV3.' + nome + ' = ');
+  return i < 0 ? '' : tpl.slice(i, tpl.indexOf('\n};\n', i));
+};
+checar('mudar de dia leva o slot inteiro (o propósito vai junto)',
+  /const v = g\[di\]\[c\.si\];[\s\S]{0,80}g\[di\]\[c\.si\] = null;\s*g\[para\]\.push\(v\);/.test(corpoPLV3('moverCartoes')),
   'remontar o slot do zero tirava a etiqueta de quem mudasse de terça para quarta');
-/* O BLOCO GRAVA PROPÓSITO — e, desde a prancha final, onde e quanto tempo junto. Sem
-   a duração, cinco blocos de rua na semana são cinco pontos iguais numa hora, e o que
-   faz o bloco OCUPAR o dia é justamente ela. */
-checar('o bloco de rua grava o próprio propósito',
-  /\{ id: bl\.id, hora: hora, p: bl\.id === PL6_RUA \? 'rua' : 'relac' \}/.test(tpl),
+checar('mudar de horário preserva o propósito do slot antigo',
+  /g\[di\]\[si\] = Object\.assign\(\{\}, typeof v === 'object' \? v : \{ id: v \}, \{ hora: hora \}\);/.test(corpoPLV3('mudarHora')),
+  'remontar o slot do zero tirava a etiqueta de quem mudasse a hora');
+/* O BLOCO GRAVA PROPÓSITO — e onde e quanto tempo junto. Sem a duração, cinco blocos de rua
+   na semana são cinco pontos iguais numa hora, e o que faz o bloco OCUPAR o dia é ela. */
+checar('o bloco de rua grava o próprio propósito, onde e quanto tempo',
+  /g\[di\]\[si\] = Object\.assign\(\{ id: PL6_RUA, hora: hora, p: 'rua' \}, r\.regiao \? \{ regiao: String\(r\.regiao\) \} : \{\}, \{ duracao: String\(r\.duracao \|\| '2h'\) \}\);/.test(corpoPLV3('porRua')),
   'a volta de rua ocupa hora como qualquer visita e tem de se anunciar igual');
-checar('e leva onde e quanto tempo do compositor',
-  /selRua\.regiao \? \{ regiao: String\(selRua\.regiao\) \} : \{\}/.test(tpl)
-    && /selRua\.duracao \? \{ duracao: String\(selRua\.duracao\) \} : \{\}/.test(tpl),
-  'bloco sem duração é um ponto solto numa hora, e nao um pedaço do dia ocupado');
 checar('o espelho do próximo passo grava follow-up',
   /grade\[di\]\[si\] = Object\.assign\(\{ id: idNaGrade \}[\s\S]{0,120}p: 'follow' \}\);/.test(tpl),
   'esse compromisso nasceu de uma data combinada no CRM — é follow-up por definição, e '
@@ -193,28 +195,13 @@ checar('o espelho do próximo passo grava follow-up',
 console.log('');
 console.log('4 · O CARD MOSTRA');
 
-/* REVISÃO GERAL (05/10/26, aprovada): o chip FUNIL sai do cartão — é o propósito da maioria
-   e não diz nada. Os outros continuam desenhados, e é isso que esta guarda segura. */
-checar('o selo é desenhado (menos o de Funil), e ele depende do propósito',
-  /\$\{sl\.selo && !sl\.seloFunil \? `<b style="flex:none;/.test(tpl)
-    /* um plano só (06/10/26): com o chip do pino (`it.a`) o selo aparece sempre, com o
-       rótulo do chip; sem ele, a regra do Funil continua a mesma */
-    && /seloFunil: it\.a \? false : \(!prop \|\| prop\.id === 'funil'\)/.test(tpl)
-    && /\$\{sl\.seloCor\}/.test(tpl) && /\$\{sl\.seloBg\}/.test(tpl)
-    && /\$\{sl\.selo\}<\/b>/.test(tpl),
-  'a sabotagem que troca `sl.selo ?` por `false ?` apaga a etiqueta de todos os cards e '
-    + 'não muda mais nada na tela — nenhuma das 69 suítes pegava isso');
+/* 20/11/26: o selo do propósito no cartão (e o trilho na cor dele) era do desenho da v2. O
+   cartão da v3 diz o ESTADO (feito, ficou para trás, fixo no app, rua) e não o propósito; o
+   propósito continua gravado no slot (seção 3) e lido por quem monta o dia (seções 1 e 2). */
 checar('o dado do card monta o selo a partir do propósito',
   /selo: prop \? esc\(prop\.etiqueta\) : ''/.test(tpl)
     && /seloCor: prop \? prop\.selo/.test(tpl) && /seloBg: prop \? prop\.seloBg/.test(tpl),
   'markup ligado a campo que ninguém preenche é o selo sempre vazio, com tudo verde');
-checar('e o propósito do card se deriva quando o slot não o tem',
-  /const propId = it\.p \|\| \(it\.lead && typeof pl6PropositoDoLead === 'function'/.test(tpl),
-  'sem a derivação, toda semana montada antes de 23/09 ficaria sem etiqueta nenhuma — e '
-    + 'um campo novo que só vale para o futuro é um campo que ninguém vê na segunda');
-checar('o trilho do card ganha a cor do propósito',
-  /etCor: prop \? prop\.cor : \(bl \? bl\.cor/.test(tpl),
-  'a faixa de cima ensina a cor de cada propósito; o card tem de falar a mesma língua');
 checar('bloqueio não ganha selo',
   /it\.tipo !== 'bloqueado'/.test(tpl),
   'compromisso fora da rua não é propósito de venda — um selo nele diria que o dentista '

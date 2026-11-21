@@ -99,17 +99,9 @@ console.log('5a · A PERGUNTA SÓ APARECE DEPOIS DA HORA');
   checar('dia nulo não estoura', passou(null, '09:00') === false);
 }());
 
-checar('e a tela só desenha a pergunta quando a hora passou e não há registro',
-  /const perg = passou && !reg;/.test(codigo)
-    && /comoFoi: perg && !motivosAqui/.test(codigo),
-  'perguntar de novo depois de registrado é não ter ouvido');
-checar('bloqueio não é perguntado',
-  /it\.tipo !== 'bloqueado' && pl6HoraJaPassou/.test(codigo),
-  'compromisso fora da rua não tem resultado de venda para dar');
-checar('e em dia anterior a pergunta muda de rótulo',
-  /FICOU SEM REGISTRO — COMO FOI\?/.test(codigo) && /'COMO FOI\?'/.test(codigo),
-  '"como foi?" numa terça-feira, na sexta, esconde que aquilo ficou para trás');
-
+/* 20/11/26: as checagens do DESENHO do "como foi?" (a pergunta no cartão, o remarcar e o
+   registro no slot) eram da tela v2 do Planejamento, que saiu. A v3 não pergunta "como foi?":
+   quem registra é o app (EXH.paradaApp), e o que sobra aqui são as regras puras. */
 console.log('');
 console.log('5b · CADA PROPÓSITO TEM AS SUAS OPÇÕES, ESCRITAS UMA POR UMA');
 
@@ -151,77 +143,6 @@ console.log('5b · CADA PROPÓSITO TEM AS SUAS OPÇÕES, ESCRITAS UMA POR UMA');
     ['dono_ausente', 'fechado', 'sem_tempo', 'sem_interesse', 'outro'],
     'texto livre no corpo de uma tarefa do CRM é campo aberto para qualquer coisa');
 }());
-
-checar('e as opções desenhadas saem da tabela do propósito daquele slot',
-  /const prop = pl6SlotProposito\(slot\) \|\| 'funil';/.test(codigo)
-    && /pl6ResultadosDe\(propId2\)\.map/.test(codigo),
-  'ler o propósito da FAIXA daria as opções de cobrança a um follow-up quando a faixa '
-    + 'estivesse em "Cobrar"');
-
-console.log('');
-console.log('6 · REMARCAR MOVE, LEVA A TAREFA E PRESERVA O PROPÓSITO');
-
-checar('remarcar não grava resultado',
-  (function () {
-    /* O RAMO, E SÓ ELE: do `if` até o `return redesenhar()` que o fecha. Varrer 400
-       caracteres a partir daqui cai no `return pl6RegistrarResultado` que encerra o
-       verbo `res` — e a checagem reprova o código certo. */
-    const i = codigo.indexOf("if (info.efeito === 'remarcar') {");
-    if (i < 0) return false;
-    const j = codigo.indexOf('return redesenhar();', i);
-    if (j < 0) return false;
-    const ramo = codigo.slice(i, j);
-    return /s\.sel = \{ lead:/.test(ramo) && !/pl6RegistrarResultado/.test(ramo);
-  }()),
-  'o compromisso não aconteceu, ele mudou de hora — gravar "remarcado" como resultado '
-    + 'faria o gestor ler um desfecho onde houve adiamento');
-checar('ele vai para a mão marcado como remarcando',
-  /deDi: di, deSi: si, remarcando: true/.test(codigo),
-  'é o que separa o remarcar do arraste comum, que só ajusta o plano');
-/* A SENTENÇA INTEIRA, e não o nome da função: `if (false) await criarTarefa...` deixa
-   a chamada escrita e desligada, e foi assim que esta checagem passou verde contra uma
-   sabotagem. Exige que a chamada seja o começo da sentença — nada de condição colada
-   na frente dela. */
-checar('e o próximo horário leva a tarefa junto',
-  /const remarcando = !!s\.sel\.remarcando;/.test(codigo)
-    && /if \(remarcando && leadRem && leadRem\._bruto/.test(codigo)
-    && /\n\s*await criarTarefaVisitaNoHubspot\(leadRem\._bruto/.test(codigo),
-  'a tarefa tem de ir junto: ele combinou outra hora com o cliente');
-checar('pela rota de sempre, que deduplica',
-  (tpl.match(/criarTarefaVisitaNoHubspot\(/g) || []).length >= 2
-    && !/criar-tarefa-remarcar|api\/remarcar/.test(tpl),
-  'a rota da tarefa já procura uma em aberto do mesmo assunto no mesmo dia e faz PATCH; '
-    + 'rota nova duplicaria o que ela já resolve');
-checar('e a agenda dele fica sabendo',
-  /if \(remarcando[\s\S]{0,700}?registrarAgendamentoLocal\(leadRem\._bruto/.test(codigo),
-  'escrever no CRM sem espelhar nas telas é a tela dizendo ✓ e o gestor lendo "não '
-    + 'prometeu" — a guarda testar-passo-chega-na-agenda me pegou exatamente aqui');
-checar('o propósito sobrevive à mudança de horário',
-  /const pEra = pl6SlotProposito\(era\);/.test(codigo)
-    && /Object\.assign\(\{ id: id, hora: hora \}, pEra/.test(codigo),
-  'remontar o slot do zero tiraria a etiqueta de quem remarcasse');
-checar('e o toast diz a verdade sobre a tarefa do dia antigo',
-  /a do dia antigo continua lá/.test(tpl) && /tarefa do HubSpot remarcada/.test(tpl),
-  'a rota deduplica por DIA: remarcar para outro dia cria no dia novo e deixa a antiga — '
-    + 'prometer uma limpeza que a tela não faz é pior que avisar');
-
-/* ══ O REGISTRO TEM DONO E HORA ═══════════════════════════════════════════════════
-   A Daily do gestor vai mostrar o registro do executivo ao lado do que foi medido no
-   CRM. Registro sem autor é afirmação sem dono, e sem hora não dá para saber se ele
-   anotou na porta do restaurante ou na sexta à noite, tapando buraco.
-   Achado por sabotagem: apagar o `por` não reprovava nada. */
-checar('o registro guarda quem anotou e quando',
-  /base\.r\.em = new Date\(\)\.toISOString\(\);/.test(codigo)
-    && /if \(rep && rep\.ownerId\) base\.r\.por = String\(rep\.ownerId\);/.test(codigo),
-  'registro sem autor é afirmação sem dono, e a Daily do gestor mostra os dois lado a lado');
-checar('e o slot antigo não perde a hora nem o propósito quando ganha registro',
-  /const base = \(typeof era === 'object'\) \? Object\.assign\(\{\}, era\) : \{ id: era \};/.test(codigo),
-  'remontar o slot do zero aqui apagaria a hora e a etiqueta — é o mesmo defeito que o'
-    + ' mover já teve, e está no commit dele');
-checar('e "alterar" apaga o registro, e só ele',
-  /if \(!tipo\) \{\s*delete base\.r;/.test(codigo),
-  'apagar o slot inteiro tiraria o compromisso do dia; o que ele pediu foi corrigir o'
-    + ' que anotou');
 
 console.log('');
 console.log('7 · O SLOT COM REGISTRO É LIDO, E O SLOT EM STRING TAMBÉM');

@@ -56,15 +56,19 @@ checar('sem repetir o cliente que já está na base ou na carteira',
 checar('a carga do Planejamento lê os pinos junto', /pl6CarregarPinosDoApp\(rep\)\.catch/.test(recortar('pl6Carregar')));
 checar('o PostgREST é paginado', /\.range\(de, de \+ 999\)/.test(carga));
 
-/* 4 · a ordem e as faixas da conta nova */
-checar('conta nova: maior prioridade primeiro', /return pl6Prioridade\(b\) - pl6Prioridade\(a\);/.test(tpl)
-  && !/return pl6Prioridade\(a\) - pl6Prioridade\(b\);/.test(tpl),
+/* 4 · a ordem e as faixas da conta nova — desde 20/11/26 na v3 (PLV3.dados / PLV3.faixas); a munição da v2 saiu */
+const dadosV3 = (function () { const i = tpl.indexOf('\nPLV3.dados = function (rep) {'); return i < 0 ? '' : tpl.slice(i, tpl.indexOf('\n};\n', i)); })();
+const faixasV3 = (function () { const i = tpl.indexOf('\nPLV3.faixas = function'); return i < 0 ? '' : tpl.slice(i, tpl.indexOf('\n};\n', i)); })();
+checar('conta nova: maior prioridade primeiro',
+  /const alvos = todos\.filter\(function \(l\) \{ return l\.tipo === 'n' && !naGrade\[l\.id\]; \}\)\s*\.sort\(function \(x, y\) \{ return pl6Prioridade\(y\) - pl6Prioridade\(x\); \}\)/.test(dadosV3)
+  && !/pl6Prioridade\(x\) - pl6Prioridade\(y\)/.test(tpl),
   'a - b punha as sem nota na frente das de 4,8★');
 checar('faixas por fonte: Google, Casa dos Dados, rua',
-  tpl.indexOf("{ id: 'g:aval', rot: 'Google avaliações'") > -1 && tpl.indexOf("{ id: 'g:casa', rot: 'Casa dos Dados'") > -1
-    && /faixaAtiva\.indexOf\('g:'\) === 0/.test(tpl));
-checar('relacionamento: faixa e prioridade de em queda',
-  tpl.indexOf("{ id: 'queda', rot: 'em queda'") > -1 && /if \(propAtivo === 'relac' && !!a\.emQueda !== !!b\.emQueda\)/.test(tpl));
+  faixasV3.indexOf("{ id: 'g:aval', rot: 'Google avaliações'") > -1 && faixasV3.indexOf("{ id: 'g:casa', rot: 'Casa dos Dados'") > -1
+    && faixasV3.indexOf("{ id: 'g:rua', rot: 'criados na rua'") > -1);
+checar('relacionamento: o cliente em queda entra e tem faixa própria',
+  /const relac = todos\.filter\(function \(l\) \{ return \(l\.base \|\| l\.emQueda\) && !naGradeFutura\[l\.id\]; \}\)/.test(dadosV3)
+    && /queda: !!l\.emQueda/.test(dadosV3) && faixasV3.indexOf("{ id: 'queda', rot: 'em queda', fn: function (x) { return !!x.queda; } }") > -1);
 
 if (falhas.length) {
   console.log('FALHOU: ' + falhas.length);

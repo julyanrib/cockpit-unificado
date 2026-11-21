@@ -61,7 +61,19 @@ checar('gravar mantém a 16ª desta tela', ids.indexOf('c-nova') >= 0, ids.join(
 checar('gravar não apaga a 16ª que o app pôs no meio tempo (dia cheio)', ids.indexOf('c-doapp') >= 0, ids.join());
 checar('e as 15 de antes ficam', ids.slice(0, 15).every(function (x, i) { return x === 'c-' + i; }));
 
-checar('o dia nunca fica "cheio" na tela', /const cheio = false; \/\/ sem limite de visitas/.test(tpl));
+/* 20/11/26: o "const cheio = false" era da tela v2, que saiu. Na v3 o dia aceita cartão por
+   aceitaSoltar (só feriado e dia passado recusam) e a capacidade é aviso de cor, não trava. */
+const aceita = (tpl.match(/\nPLV3\.aceitaSoltar = function \(d\) \{[^\n]*\};/) || [''])[0];
+const aceitaFn = aceita ? new Function('const PLV3 = {};' + aceita + '; return PLV3.aceitaSoltar;')() : null;
+checar('o dia nunca fica "cheio" na tela: aceitar um cartão não depende de quantos já há no dia',
+  !!aceitaFn && aceitaFn({ iso: '2026-11-23' }) === true && aceitaFn({ iso: '2026-11-23', n: 40 }) === true
+    && aceitaFn({ feriado: 'Finados' }) === false && aceitaFn({ passou: true }) === false
+    && !/\bn\b|cont|length/.test(aceita.replace('function (d)', '')), aceita.slice(0, 160));
+checar('acima da capacidade só muda a cor da pílula (avisa, não trava)',
+  /const ok = tarefa \? \(!d\.feriado && !d\.passou\) : PLV3\.aceitaSoltar\(d\);/.test(tpl)
+    && /PLV3\.acimaDaCapacidade\(n \+ 1, D\.mediaBase\) \? 'is-av'/.test(tpl));
+checar('o bloco de rua e o "Pôr no dia" da v3 entram no fim do dia cheio',
+  (tpl.match(/\n  if \(si < 0\) si = g\[di\]\.length;/g) || []).length >= 2);
 checar('o passo que chega por outra tela entra no fim do dia cheio', /if \(si < 0\) si = grade\[di\]\.length; \/\/ sem limite/.test(tpl));
 
 if (falhas.length) {

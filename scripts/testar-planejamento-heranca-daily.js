@@ -71,8 +71,11 @@ console.log('1 · A HORA EXIBIDA É A QUE ELE ESCOLHEU');
   igual('e o slot vazio também não', hora(null, 0), '');
 }());
 
+/* 20/11/26: o cartão da v2 (esc(it.hora || 'sem hora')) saiu. Na v3 o cartão só diz
+   "marcado HH:MM" quando o slot TEM hora, e o roteiro do dia escreve "sem hora". */
 checar('e a tela escreve "sem hora" quando não há',
-  /esc\(it\.hora \|\| 'sem hora'\)/.test(codigo),
+  /\(c\.hora && !c\.fixo && !c\.feita && !c\.rua \? PLV3\.tagHTML\('marcado ' \+ c\.hora, 'is-chip'\) : ''\)/.test(codigo)
+    && /e\(p\.hora \|\| 'sem hora'\)/.test(codigo),
   'hora em branco no cartão lê como "ainda vou marcar"; "sem hora" diz o que é');
 
 console.log('');
@@ -80,13 +83,14 @@ console.log('2 · O RELÓGIO E A FICHA SÃO COMPARTILHADOS');
 
 /* VINHA DE: "relógio e ficha compartilhados". Duas cópias do seletor de hora divergiam na
    régua de "ocupado" — que é justamente a que protege o dia de duas visitas na mesma hora. */
-checar('o seletor de hora é um só',
-  (codigo.match(/function pfRelogioHTML\(/g) || []).length === 1,
-  'duas cópias do seletor divergiam na régua de "ocupado", que é a que impede duas '
-    + 'visitas na mesma hora');
-checar('e a ficha do negócio também',
-  (codigo.match(/function pl6FichaPainelHTML\(/g) || []).length === 1
-    && /pl6FichaPainelHTML\(/.test(codigo),
+/* 20/11/26: o relógio (pfRelogioHTML) saiu com a tela v2 — a v3 não tem seletor de hora
+   (testar-planejamento-v3). A ficha continua uma só: a v3 lê os campos da mesma função. */
+checar('o seletor de hora da v2 não sobrou pela metade',
+  !/pfRelogioHTML\(/.test(codigo),
+  'meio relógio é uma segunda régua de "ocupado" esperando alguém religar');
+checar('e a ficha do negócio é uma só',
+  (codigo.match(/function pl6FichaCamposFinal\(/g) || []).length === 1
+    && /pl6FichaCamposFinal\(bruto\)/.test(codigo) && !/function pl6FichaPainelHTML\(/.test(codigo),
   'a ficha é onde ele move etapa e vê o telefone: duas seriam duas regras de etapa');
 
 console.log('');
