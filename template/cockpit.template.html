@@ -47945,13 +47945,14 @@ GV2.montar = async function (so, leituraPronta) {
     itens[4] = [];
     VM.porRep.forEach(function (r) {
       if (!doTime(r.ownerId)) return;
-      (r.clientes || []).forEach(function (c) { itens[4].push({ dono: String(r.ownerId), nome: c.nome || 'negócio ' + c.id, quando: c.closedate, deal: String(c.id), detalhe: 'venda do mês' + (c.mrr ? ' · R$ ' + c.mrr + '/mês' : '') }); });
+      /* upsell (27/11/26) soma MRR e não é venda: fica fora do fechado */
+      (r.clientes || []).forEach(function (c) { if (c && c.upsell) return; itens[4].push({ dono: String(r.ownerId), nome: c.nome || 'negócio ' + c.id, quando: c.closedate, deal: String(c.id), detalhe: 'venda do mês' + (c.mrr ? ' · R$ ' + c.mrr + '/mês' : '') }); });
     });
     fechadosPor = contaItens(itens[4]);
     /* VENDA DA CASA (auditoria 15/10/26): venda do gestor conta no placar do time (regra do robô:
        totalClientes = time + gestor), mas não é de nenhuma pessoa. Antes ela sumia: o gestor está em
        narrativas pelo login de teste, a venda caía em porRep e o servidor tirava essa linha. */
-    ((VM.gestor && VM.gestor.clientes) || []).forEach(function (c) { itens[4].push({ dono: 'casa', nome: c.nome || 'negócio ' + c.id, quando: c.closedate, deal: String(c.id), detalhe: 'venda da casa (' + (VM.gestor.name || 'gestor') + ')' }); });
+    ((VM.gestor && VM.gestor.clientes) || []).forEach(function (c) { if (c && c.upsell) return; itens[4].push({ dono: 'casa', nome: c.nome || 'negócio ' + c.id, quando: c.closedate, deal: String(c.id), detalhe: 'venda da casa (' + (VM.gestor.name || 'gestor') + ')' }); });
   }
   const propPM = pmOk ? contaItens(itens[3]) : null;
   /* A SEMANA ATRAVESSA O MÊS (auditoria 01/11/26): no domingo 01/11 a semana de 26/10 dizia "0
@@ -48184,7 +48185,7 @@ GV2.montar = async function (so, leituraPronta) {
     const pmV = pmOk && PM.porOwner[gestorDono] ? PM.porOwner[gestorDono] : null;
     const contaPM = function (k) { if (!pmV) return null; const vistos = {}; (pmV[k] || []).forEach(function (x) { const id = String(x.id); vistos[(GV2.aliasDeal || {})[id] || id] = 1; }); return Object.keys(vistos).length; };
     const portasV = L.visitasMes && !L.visitasMes.erro ? (L.visitasMes.data || []).filter(function (v) { return v.provada && String(v.owner_id) === gestorDono; }).length : null;
-    const fechV = VM && VM.gestor ? ((VM.gestor.clientes || []).length) : null;
+    const fechV = VM && VM.gestor ? ((VM.gestor.clientes || []).filter(function (c) { return !(c && c.upsell); }).length) : null;
     const quentesV = nv.filter(function (n) { return n.quente; });
     voce = {
       id: gestorDono, nome: 'Você', iniciais: 'VC', foraDaMeta: true,
@@ -51412,7 +51413,7 @@ GV2.rxGavConteudo = function () {
     b.pessoas.forEach(function (p) {
       if (o.dono && o.dono !== p.id) return;
       const r = v.find(function (x) { return String(x.ownerId) === p.id; });
-      ((r && r.clientes) || []).forEach(function (c) { fech.push({ nome: typeof c === 'string' ? c : (c.nome || c.name || c.empresa || 'cliente'), dono: p.id }); });
+      ((r && r.clientes) || []).forEach(function (c) { if (c && c.upsell) return; fech.push({ nome: typeof c === 'string' ? c : (c.nome || c.name || c.empresa || 'cliente'), dono: p.id }); });
     });
     const todos = ag.concat(neg).concat(fech.map(function (f) { return { dono: f.dono }; }));
     return { tit: 'O provável do mês', sub: 'fechados + Ag. Pagamento + 60% de Negociação: é daqui que sai a meta',
@@ -66391,7 +66392,7 @@ GV2.MC = (function () {
     }
     return { mes: mes, f: f, t: t, meta: meta, cli: cli, J: J, pior: pior, custo: custo, plenos: plenos, pmOk: pmOk, temQuadro: !!F.q,
       itens: { decisor: lista(F.me, 'decisor'), demo: lista(F.me, 'demo'), proposta: lista(F.me, 'proposta') },
-      clientes: (function () { const r = por && por.filter(function (x) { return String(x.ownerId) === String(F.me); })[0]; return r && Array.isArray(r.clientes) ? r.clientes : []; })() };
+      clientes: (function () { const r = por && por.filter(function (x) { return String(x.ownerId) === String(F.me); })[0]; return r && Array.isArray(r.clientes) ? r.clientes.filter(function (c) { return !(c && c.upsell); }) : []; })() };
   };
   MC.leitura = function (M) {
     if (M.f[0] == null) return null;
