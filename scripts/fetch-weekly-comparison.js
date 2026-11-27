@@ -116,10 +116,12 @@ async function ganhosNaJanela(startMs, endMs) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) }
       ]
     }],
-    properties: ['dealname', 'hubspot_owner_id', 'valor_de_mrr', 'closedate'],
+    properties: ['dealname', 'hubspot_owner_id', 'valor_de_mrr', 'closedate', 'pacote_contratado'],
     limit: 100
   });
-  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
+  /* upsell (27/11/26) não é venda: fica fora dos ganhos da semana — ver ehUpsell em lib/realizado.js */
+  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname)
+    && String(d.properties.pacote_contratado || '').trim().toLowerCase() !== 'upsell');
 }
 
 // PERDIDOS E RECICLAGEM — duas correções em 02/09/26, achadas medindo a tela da Semana.

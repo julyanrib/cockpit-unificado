@@ -299,6 +299,24 @@ function rodar(vendas, usuarios) {
     (r.porRep.find(x => x.ownerId === '339921752') || {}).name, 'Julyan Ribeiro (teste)');
 }
 
+/* ── UPSELL É SÓ MRR (27/11/26, Julyan: "Só o MRR, não venda") ─────────────────────
+   O upsell do Bruno no Melhor Parada contou como cliente novo. Agora ele soma no MRR e na
+   receita, e não conta como venda: nem no total de clientes, nem no pódio. */
+{
+  const r = rodar([
+    vender('Marco A', '86100505', 500, 1500),
+    vender('Upsell', '86100505', 119, 714, { upsell: true }),
+    vender('Upsell do gestor', '339921752', 99, 594, { upsell: true })
+  ]);
+  eIgual('upsell não conta como cliente no total', r.totalClientes, 1);
+  eIgual('mas o MRR do upsell soma', r.totalMrr, 500 + 119 + 99);
+  eIgual('e a receita também', r.totalReceita, 1500 + 714 + 594);
+  const marco = r.porRep.find(x => x.ownerId === '86100505') || {};
+  eIgual('no pódio o upsell não vira venda', marco.count, 1);
+  eIgual('mas soma no MRR dele', marco.mrrTotal, 619);
+  eIgual('e aparece marcado na lista', (marco.clientes || []).filter(c => c.upsell).map(c => c.nome), ['Upsell']);
+}
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('venda do gestor: FALHAS (' + falhas.length + ')');
