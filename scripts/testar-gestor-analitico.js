@@ -284,7 +284,7 @@ checar('o que abre lista no dossie cumpre o piso de 38px no desktop',
      e registrada negocio por negocio no arquivo, com motivo — e a tela DIZ que houve
      ajuste, em vez de divergir do CRM em silencio. */
   checar('a receita (amount) vem nas vendas do mes',
-    /properties: \[.dealname., .hubspot_owner_id., .valor_de_mrr., .amount., .closedate.\]/
+    /properties: \[.dealname., .hubspot_owner_id., .valor_de_mrr., .amount., .closedate.(, REALIZADO\.PROP_PACOTE)?\]/
       .test(robo.replace(/'/g, '.'))
       && /receita: Math\.round\(parseFloat\(d\.properties\.amount\) \|\| 0\)/.test(robo));
   checar('o ajuste de competencia e por negocio, vem do arquivo, e nao e uma regra chutada',
