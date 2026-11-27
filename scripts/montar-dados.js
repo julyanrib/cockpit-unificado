@@ -381,7 +381,7 @@ function montarDadosCompletos() {
         return;
       }
       if (ehGestor) {
-        doGestor.count += 1;
+        doGestor.count += d.upsell ? 0 : 1; // upsell soma MRR, não é venda (27/11/26)
         doGestor.mrrTotal += d.mrr || 0;
         doGestor.receitaTotal += d.receita || 0;
         doGestor.name = GESTORES_QUE_VENDEM[d.ownerId].name;
@@ -391,7 +391,7 @@ function montarDadosCompletos() {
         return;
       }
       if (ehExTime) {
-        doExTime.count += 1;
+        doExTime.count += d.upsell ? 0 : 1;
         doExTime.mrrTotal += d.mrr || 0;
         doExTime.receitaTotal += d.receita || 0;
         doExTime.clientes.push({ id: d.id || null, nome: d.nome, ownerId: d.ownerId,
@@ -400,11 +400,11 @@ function montarDadosCompletos() {
         return;
       }
       if (!porOwnerMes[d.ownerId]) porOwnerMes[d.ownerId] = { count: 0, mrrTotal: 0, receitaTotal: 0, clientes: [] };
-      porOwnerMes[d.ownerId].count += 1;
+      porOwnerMes[d.ownerId].count += d.upsell ? 0 : 1; // upsell soma MRR, não é venda (27/11/26)
       porOwnerMes[d.ownerId].mrrTotal += d.mrr || 0;
       porOwnerMes[d.ownerId].receitaTotal += d.receita || 0;
       porOwnerMes[d.ownerId].clientes.push({ id: d.id || null, nome: d.nome, mrr: d.mrr || 0,
-        receita: d.receita || 0, closedate: d.closedate || null });
+        receita: d.receita || 0, closedate: d.closedate || null, ...(d.upsell ? { upsell: true } : {}) });
     });
     const porRepMes = Object.entries(porOwnerMes).map(([ownerId, v]) => ({
       ownerId,

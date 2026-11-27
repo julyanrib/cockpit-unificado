@@ -1215,9 +1215,9 @@ async function stageTotal(stageId, extraFilters = []) {
         ...extraFilters
       ]
     }],
-    properties: ['dealname']
+    properties: ['dealname', REALIZADO.PROP_PACOTE]
   });
-  return results.filter(d => !isExcludedDeal(d)).length;
+  return results.filter(d => !isExcludedDeal(d) && !REALIZADO.ehUpsell(d)).length;
 }
 
 async function createdLast7Days() {
@@ -1295,9 +1295,9 @@ async function stageDealsLast7DaysComNomes(stageIdOuLista) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioSemana), highValue: String(now) }
       ]
     }],
-    properties: ['dealname', 'hubspot_owner_id']
+    properties: ['dealname', 'hubspot_owner_id', REALIZADO.PROP_PACOTE]
   });
-  return results.filter(d => !isExcludedDeal(d));
+  return results.filter(d => !isExcludedDeal(d) && !REALIZADO.ehUpsell(d));
 }
 async function stageTotalLast7Days(stageIdOuLista) {
   const results = await stageDealsLast7DaysComNomes(stageIdOuLista);
@@ -1877,9 +1877,9 @@ async function stageTotalThisMonth(stageIdOuLista) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioMes.getTime()), highValue: String(now.getTime()) }
       ]
     }],
-    properties: ['dealname']
+    properties: ['dealname', REALIZADO.PROP_PACOTE]
   });
-  return results.filter(d => !isExcludedDeal(d)).length;
+  return results.filter(d => !isExcludedDeal(d) && !REALIZADO.ehUpsell(d)).length;
 }
 
 // Propriedades automáticas do HubSpot que registram QUANDO o negócio entrou em cada etapa
@@ -2102,9 +2102,9 @@ async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioMes.getTime()), highValue: String(now.getTime()) }
       ]
     }],
-    properties: ['dealname']
+    properties: ['dealname', REALIZADO.PROP_PACOTE]
   });
-  return results.filter(d => !isExcludedDeal(d)).length;
+  return results.filter(d => !isExcludedDeal(d) && !REALIZADO.ehUpsell(d)).length;
 }
 
 // Todos os negócios FECHADOS no mês corrente (Negócio Fechado + Enviado Onboarding),
@@ -2131,7 +2131,7 @@ async function vendasDoMesDetalhe(desdeMesAnterior) {
        na passagem para Enviado Onboarding (palavra do Julyan, 10/09). Ela nao vinha,
        e por isso duas das tres metas nao tinham realizado nenhum na tela. MRR e receita
        nunca se somam: para o Sandro, R$ 800/mes viraram R$ 9.600 porque o plano e anual. */
-    properties: ['dealname', 'hubspot_owner_id', 'valor_de_mrr', 'amount', 'closedate']
+    properties: ['dealname', 'hubspot_owner_id', 'valor_de_mrr', 'amount', 'closedate', REALIZADO.PROP_PACOTE]
   });
   const doCrm = results.filter(d => !isExcludedDeal(d)).map(d => {
     const fechou = d.properties.closedate || null;
@@ -2147,7 +2147,9 @@ async function vendasDoMesDetalhe(desdeMesAnterior) {
       /* `mesDeCompetencia` e o mes em que esta venda CONTA, e `ajustado` diz que a
          decisao foi humana — a tela mostra o ajuste em vez de divergir do CRM calada. */
       mesDeCompetencia: conta,
-      ajustado: conta !== mesCru ? (COMPETENCIA[String(d.id)] || {}).motivo || 'ajuste de competência' : null
+      ajustado: conta !== mesCru ? (COMPETENCIA[String(d.id)] || {}).motivo || 'ajuste de competência' : null,
+      /* upsell (27/11/26): soma no MRR, não conta como venda — ver ehUpsell em lib/realizado.js */
+      ...(REALIZADO.ehUpsell(d) ? { upsell: true } : {})
     };
   });
   const mesIni = new Date(inicioMes.getTime() + 12 * 3600000).toISOString().slice(0, 7);
@@ -2192,10 +2194,10 @@ async function stageDealsHojeByOwner(stageIdOuLista, ownerId, diaISO) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioHoje.getTime()), highValue: String(now.getTime()) }
       ]
     }],
-    properties: ['dealname'],
+    properties: ['dealname', REALIZADO.PROP_PACOTE],
     limit: 50
   });
-  return (data.results || []).filter(d => !isExcludedDeal(d)).length;
+  return (data.results || []).filter(d => !isExcludedDeal(d) && !REALIZADO.ehUpsell(d)).length;
 }
 
 /* DEMO REALIZADA (03/10/26, ranking do time). Julyan: "pode pontuar só a demo realizada".
@@ -2255,10 +2257,10 @@ async function stageDealsLast7DaysByOwner(stageIdOuLista, ownerId) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioSemana), highValue: String(now) }
       ]
     }],
-    properties: ['dealname', 'closedate']
+    properties: ['dealname', 'closedate', REALIZADO.PROP_PACOTE]
   });
   return results
-    .filter(d => !isExcludedDeal(d))
+    .filter(d => !isExcludedDeal(d) && !REALIZADO.ehUpsell(d))
     .map(d => ({ name: d.properties.dealname }));
 }
 
